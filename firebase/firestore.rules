@@ -82,8 +82,23 @@ service cloud.firestore {
     
     // 通報コレクション
     match /reports/{reportId} {
-      // 作成のみ許可
-      allow create: if isAuthenticated() && isNotBanned();
+      // 作成のみ許可（Cloud Functionsで処理）
+      allow read: if false;
+      allow create: if false;
+    }
+    
+    // 徳ポイント履歴コレクション
+    match /virtueHistory/{historyId} {
+      // 読み取り: 本人のみ
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      // 書き込み: Cloud Functionsのみ
+      allow write: if false;
+    }
+    
+    // モデレーション済みコンテンツ（管理用）
+    match /moderatedContent/{contentId} {
+      // すべてCloud Functionsで管理
+      allow read, write: if false;
     }
   }
 }

@@ -10,7 +10,7 @@ import '../../../../shared/models/user_model.dart';
 import '../../../../shared/models/post_model.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
-import '../../../home/presentation/widgets/reaction_button.dart';
+import '../../../../shared/widgets/virtue_indicator.dart';
 
 /// プロフィール画面
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -223,14 +223,51 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               value: '${user.totalPraises}',
                               icon: Icons.favorite_outline,
                             ),
-                            _StatItem(
-                              label: '徳',
-                              value: '${user.virtue}',
-                              icon: Icons.stars_outlined,
-                              color: AppColors.virtue,
-                            ),
+                            // 自分のプロフィールの場合は詳細な徳ポイント表示
+                            if (_isOwnProfile)
+                              const VirtueIndicator(showLabel: true, size: 50)
+                            else
+                              _StatItem(
+                                label: '徳',
+                                value: '${user.virtue}',
+                                icon: Icons.stars_outlined,
+                                color: AppColors.virtue,
+                              ),
                           ],
                         ),
+
+                        // BAN状態の警告
+                        if (user.isBanned) ...[
+                          const SizedBox(height: 16),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AppColors.error.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: AppColors.error.withOpacity(0.3),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.warning_amber_rounded,
+                                  color: AppColors.error,
+                                ),
+                                const SizedBox(width: 8),
+                                const Expanded(
+                                  child: Text(
+                                    'アカウントが制限されています。投稿やコメントができません。',
+                                    style: TextStyle(
+                                      color: AppColors.error,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),

@@ -7,6 +7,36 @@ import {GoogleGenerativeAI} from "@google/generative-ai";
 admin.initializeApp();
 const db = admin.firestore();
 
+// ===============================================
+// 徳システム設定
+// ===============================================
+const VIRTUE_CONFIG = {
+  initial: 100,           // 初期徳ポイント
+  maxDaily: 50,           // 1日の最大獲得量
+  banThreshold: 0,        // BAN閾値
+  lossPerNegative: 15,    // ネガティブ発言1回あたりの減少
+  lossPerReport: 20,      // 通報1回あたりの減少
+  gainPerPraise: 5,       // 称賛1回あたりの増加
+  warningThreshold: 30,   // 警告表示閾値
+};
+
+// ネガティブ判定のカテゴリ
+type NegativeCategory =
+  | "harassment"      // 誹謗中傷
+  | "hate_speech"     // ヘイトスピーチ
+  | "profanity"       // 不適切な言葉
+  | "self_harm"       // 自傷行為の助長
+  | "spam"            // スパム
+  | "none";           // 問題なし
+
+interface ModerationResult {
+  isNegative: boolean;
+  category: NegativeCategory;
+  confidence: number;    // 0-1の確信度
+  reason: string;        // 判定理由（ユーザーへの説明用）
+  suggestion: string;    // 改善提案
+}
+
 // APIキーをSecretsから取得
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
 
@@ -489,5 +519,547 @@ export const createPostWithRateLimit = onCall(
     });
 
     return {success: true, postId: postRef.id};
+  }
+);
+
+// ===============================================
+// コンテンツモデレーション機能
+// ===============================================
+
+/**
+ * コンテンツをモデレーションする関数
+ * Gemini AIでネガティブ発言を検出
+ */
+export const moderateContent = onCall(
+  {region: "asia-northeast1", secrets: [geminiApiKey]},
+  async (request): Promise<ModerationResult> => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    const {content} = request.data;
+    if (!content || typeof content !== "string") {
+      throw new HttpsError("invalid-argument", "コンテンツが必要です");
+    }
+
+    const apiKey = geminiApiKey.value();
+    if (!apiKey) {
+      console.error("GEMINI_API_KEY is not set");
+      // APIキーがない場合はモデレーションをスキップ
+      return {
+        isNegative: false,
+        category: "none",
+        confidence: 0,
+        reason: "",
+        suggestion: "",
+      };
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({model: "gemini-2.0-flash"});
+
+    const prompt = `
+あなたはSNS「ほめっぷ」のコンテンツモデレーターです。
+「ほめっぷ」は「世界一優しいSNS」を目指しており、ネガティブな発言を排除しています。
+
+以下の投稿内容を分析して、ネガティブかどうか判定してください。
+
+【判定基準】
+- harassment: 誹謗中傷、人を傷つける発言
+- hate_speech: 差別、ヘイトスピーチ
+- profanity: 不適切な言葉、暴言、罵倒
+- self_harm: 自傷行為の助長
+- spam: スパム、宣伝
+- none: 問題なし
+
+【重要】
+- 「ほめっぷ」はポジティブなSNSなので、軽い愚痴や不満も「ネガティブ」と判定します
+- ただし、自分の頑張りや努力を共有する投稿は「none」です
+- 他人を批判する内容は「harassment」です
+- 判定は厳しめにお願いします
+
+【投稿内容】
+${content}
+
+【回答形式】
+必ず以下のJSON形式で回答してください。他の文字は含めないでください。
+{
+  "isNegative": true または false,
+  "category": "harassment" | "hate_speech" | "profanity" | "self_harm" | "spam" | "none",
+  "confidence": 0から1の数値,
+  "reason": "判定理由（ユーザーに見せる優しい説明）",
+  "suggestion": "より良い表現の提案"
+}
+`;
+
+    try {
+      const result = await model.generateContent(prompt);
+      const responseText = result.response.text().trim();
+
+      // JSONを抽出（マークダウンコードブロックを考慮）
+      let jsonText = responseText;
+      const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (jsonMatch) {
+        jsonText = jsonMatch[1];
+      }
+
+      const parsed = JSON.parse(jsonText) as ModerationResult;
+
+      // 結果をログに記録
+      console.log("Moderation result:", {
+        content: content.substring(0, 50) + "...",
+        result: parsed,
+      });
+
+      return parsed;
+    } catch (error) {
+      console.error("Moderation error:", error);
+      // エラー時は安全側に倒す（投稿を許可）
+      return {
+        isNegative: false,
+        category: "none",
+        confidence: 0,
+        reason: "",
+        suggestion: "",
+      };
+    }
+  }
+);
+
+/**
+ * 徳ポイントを減少させる（ネガティブ発言検出時）
+ */
+async function decreaseVirtue(
+  userId: string,
+  reason: string,
+  amount: number = VIRTUE_CONFIG.lossPerNegative
+): Promise<{newVirtue: number; isBanned: boolean}> {
+  const userRef = db.collection("users").doc(userId);
+  const userDoc = await userRef.get();
+
+  if (!userDoc.exists) {
+    throw new Error("User not found");
+  }
+
+  const userData = userDoc.data()!;
+  const currentVirtue = userData.virtue || VIRTUE_CONFIG.initial;
+  const newVirtue = Math.max(0, currentVirtue - amount);
+  const isBanned = newVirtue <= VIRTUE_CONFIG.banThreshold;
+
+  // 徳ポイントを更新
+  await userRef.update({
+    virtue: newVirtue,
+    isBanned: isBanned,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  // 徳ポイント変動履歴を記録
+  await db.collection("virtueHistory").add({
+    userId: userId,
+    change: -amount,
+    reason: reason,
+    newVirtue: newVirtue,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  console.log(`Virtue decreased for ${userId}: ${currentVirtue} -> ${newVirtue}, banned: ${isBanned}`);
+
+  return {newVirtue, isBanned};
+}
+
+/**
+ * モデレーション付き投稿作成
+ * ネガティブな内容は投稿を拒否し、徳を減少
+ */
+export const createPostWithModeration = onCall(
+  {region: "asia-northeast1", secrets: [geminiApiKey]},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    const userId = request.auth.uid;
+    const {content, userDisplayName, userAvatarIndex, postMode, circleId} = request.data;
+
+    // ユーザーがBANされているかチェック
+    const userDoc = await db.collection("users").doc(userId).get();
+    if (userDoc.exists && userDoc.data()?.isBanned) {
+      throw new HttpsError(
+        "permission-denied",
+        "申し訳ありませんが、現在投稿できません。運営にお問い合わせください。"
+      );
+    }
+
+    // コンテンツモデレーション
+    const apiKey = geminiApiKey.value();
+    if (apiKey) {
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({model: "gemini-2.0-flash"});
+
+      const prompt = `
+あなたはSNS「ほめっぷ」のコンテンツモデレーターです。
+「ほめっぷ」は「世界一優しいSNS」を目指しており、ネガティブな発言を排除しています。
+
+以下の投稿内容を分析して、ネガティブかどうか判定してください。
+
+【判定基準】
+- harassment: 誹謗中傷、人を傷つける発言
+- hate_speech: 差別、ヘイトスピーチ
+- profanity: 不適切な言葉、暴言、罵倒
+- self_harm: 自傷行為の助長
+- spam: スパム、宣伝
+- none: 問題なし
+
+【重要】
+- 「ほめっぷ」はポジティブなSNSなので、軽い愚痴や不満も「ネガティブ」と判定します
+- ただし、自分の頑張りや努力を共有する投稿は「none」です
+- 他人を批判する内容は「harassment」です
+- 疲れた、辛いなどの軽い愚痴は許容します（共感を求める投稿なので）
+- 判定は厳しすぎず、明らかにネガティブな場合のみ「isNegative: true」にしてください
+
+【投稿内容】
+${content}
+
+【回答形式】
+必ず以下のJSON形式で回答してください。他の文字は含めないでください。
+{
+  "isNegative": true または false,
+  "category": "harassment" | "hate_speech" | "profanity" | "self_harm" | "spam" | "none",
+  "confidence": 0から1の数値,
+  "reason": "判定理由（ユーザーに見せる優しい説明）",
+  "suggestion": "より良い表現の提案"
+}
+`;
+
+      try {
+        const result = await model.generateContent(prompt);
+        const responseText = result.response.text().trim();
+
+        let jsonText = responseText;
+        const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+        if (jsonMatch) {
+          jsonText = jsonMatch[1];
+        }
+
+        const modResult = JSON.parse(jsonText) as ModerationResult;
+
+        if (modResult.isNegative && modResult.confidence >= 0.7) {
+          // 徳ポイントを減少
+          const virtueResult = await decreaseVirtue(
+            userId,
+            `ネガティブ投稿検出: ${modResult.category}`,
+            VIRTUE_CONFIG.lossPerNegative
+          );
+
+          // 投稿を記録（非表示として）
+          await db.collection("moderatedContent").add({
+            userId: userId,
+            content: content,
+            type: "post",
+            category: modResult.category,
+            confidence: modResult.confidence,
+            reason: modResult.reason,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+
+          throw new HttpsError(
+            "invalid-argument",
+            `${modResult.reason}\n\n💡 提案: ${modResult.suggestion}\n\n(徳ポイント: ${virtueResult.newVirtue})`
+          );
+        }
+      } catch (error) {
+        if (error instanceof HttpsError) {
+          throw error;
+        }
+        console.error("Moderation error:", error);
+        // エラー時は投稿を許可
+      }
+    }
+
+    // レート制限チェック
+    const oneMinuteAgo = admin.firestore.Timestamp.fromDate(
+      new Date(Date.now() - 60000)
+    );
+    const recentPosts = await db
+      .collection("posts")
+      .where("userId", "==", userId)
+      .where("createdAt", ">", oneMinuteAgo)
+      .get();
+
+    if (recentPosts.size >= 5) {
+      throw new HttpsError(
+        "resource-exhausted",
+        "投稿が多すぎるよ！少し待ってからまた投稿してね"
+      );
+    }
+
+    // 投稿を作成
+    const postRef = db.collection("posts").doc();
+    await postRef.set({
+      userId: userId,
+      userDisplayName: userDisplayName,
+      userAvatarIndex: userAvatarIndex,
+      content: content,
+      postMode: postMode,
+      circleId: circleId || null,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      reactions: {love: 0, praise: 0, cheer: 0, empathy: 0},
+      commentCount: 0,
+      isVisible: true,
+    });
+
+    // ユーザーの投稿数を更新
+    await db.collection("users").doc(userId).update({
+      totalPosts: admin.firestore.FieldValue.increment(1),
+    });
+
+    return {success: true, postId: postRef.id};
+  }
+);
+
+/**
+ * モデレーション付きコメント作成
+ */
+export const createCommentWithModeration = onCall(
+  {region: "asia-northeast1", secrets: [geminiApiKey]},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    const userId = request.auth.uid;
+    const {postId, content, userDisplayName, userAvatarIndex} = request.data;
+
+    // ユーザーがBANされているかチェック
+    const userDoc = await db.collection("users").doc(userId).get();
+    if (userDoc.exists && userDoc.data()?.isBanned) {
+      throw new HttpsError(
+        "permission-denied",
+        "申し訳ありませんが、現在コメントできません。"
+      );
+    }
+
+    // コンテンツモデレーション
+    const apiKey = geminiApiKey.value();
+    if (apiKey) {
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({model: "gemini-2.0-flash"});
+
+      const prompt = `
+あなたはSNS「ほめっぷ」のコンテンツモデレーターです。
+以下のコメント内容を分析して、ネガティブかどうか判定してください。
+
+【判定基準】
+- harassment: 誹謗中傷
+- hate_speech: 差別
+- profanity: 暴言
+- none: 問題なし
+
+【コメント内容】
+${content}
+
+【回答形式】
+{
+  "isNegative": boolean,
+  "category": string,
+  "confidence": number,
+  "reason": "理由",
+  "suggestion": "提案"
+}
+`;
+
+      try {
+        const result = await model.generateContent(prompt);
+        const responseText = result.response.text().trim();
+
+        let jsonText = responseText;
+        const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+        if (jsonMatch) {
+          jsonText = jsonMatch[1];
+        }
+
+        const modResult = JSON.parse(jsonText) as ModerationResult;
+
+        if (modResult.isNegative && modResult.confidence >= 0.7) {
+          await decreaseVirtue(
+            userId,
+            `ネガティブコメント検出: ${modResult.category}`,
+            VIRTUE_CONFIG.lossPerNegative
+          );
+
+          throw new HttpsError(
+            "invalid-argument",
+            `${modResult.reason}\n\n💡 ${modResult.suggestion}`
+          );
+        }
+      } catch (error) {
+        if (error instanceof HttpsError) {
+          throw error;
+        }
+        console.error("Moderation error:", error);
+      }
+    }
+
+    // コメントを作成
+    const commentRef = db.collection("comments").doc();
+    await commentRef.set({
+      postId: postId,
+      userId: userId,
+      userDisplayName: userDisplayName,
+      userAvatarIndex: userAvatarIndex,
+      isAI: false,
+      content: content,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // 投稿のコメント数を更新
+    await db.collection("posts").doc(postId).update({
+      commentCount: admin.firestore.FieldValue.increment(1),
+    });
+
+    return {success: true, commentId: commentRef.id};
+  }
+);
+
+// ===============================================
+// 通報機能
+// ===============================================
+
+/**
+ * コンテンツを通報する
+ */
+export const reportContent = onCall(
+  {region: "asia-northeast1"},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    const reporterId = request.auth.uid;
+    const {contentId, contentType, reason, targetUserId} = request.data;
+
+    if (!contentId || !contentType || !reason || !targetUserId) {
+      throw new HttpsError("invalid-argument", "必要な情報が不足しています");
+    }
+
+    // 自分自身を通報できない
+    if (reporterId === targetUserId) {
+      throw new HttpsError("invalid-argument", "自分自身を通報することはできません");
+    }
+
+    // 既に同じ内容を通報していないかチェック
+    const existingReport = await db
+      .collection("reports")
+      .where("reporterId", "==", reporterId)
+      .where("contentId", "==", contentId)
+      .get();
+
+    if (!existingReport.empty) {
+      throw new HttpsError("already-exists", "既にこの内容を通報しています");
+    }
+
+    // 通報を記録
+    const reportRef = await db.collection("reports").add({
+      reporterId: reporterId,
+      targetUserId: targetUserId,
+      contentId: contentId,
+      contentType: contentType,  // "post" | "comment"
+      reason: reason,
+      status: "pending",  // pending, reviewed, resolved, dismissed
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // 対象ユーザーの通報カウントを増加
+    const targetUserRef = db.collection("users").doc(targetUserId);
+    await targetUserRef.update({
+      reportCount: admin.firestore.FieldValue.increment(1),
+    });
+
+    // 通報が3件以上溜まったら自動で徳を減少
+    const reportsCount = await db
+      .collection("reports")
+      .where("targetUserId", "==", targetUserId)
+      .where("status", "==", "pending")
+      .get();
+
+    if (reportsCount.size >= 3) {
+      const virtueResult = await decreaseVirtue(
+        targetUserId,
+        "複数の通報を受けたため",
+        VIRTUE_CONFIG.lossPerReport
+      );
+
+      // 通報をreviewedに更新
+      const batch = db.batch();
+      reportsCount.docs.forEach((doc) => {
+        batch.update(doc.ref, {status: "reviewed"});
+      });
+      await batch.commit();
+
+      console.log(`Auto virtue decrease for ${targetUserId}: ${virtueResult.newVirtue}`);
+    }
+
+    return {
+      success: true,
+      reportId: reportRef.id,
+      message: "通報を受け付けました。ご協力ありがとうございます。",
+    };
+  }
+);
+
+/**
+ * 徳ポイント履歴を取得
+ */
+export const getVirtueHistory = onCall(
+  {region: "asia-northeast1"},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    const userId = request.auth.uid;
+
+    const history = await db
+      .collection("virtueHistory")
+      .where("userId", "==", userId)
+      .orderBy("createdAt", "desc")
+      .limit(20)
+      .get();
+
+    return {
+      history: history.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || null,
+      })),
+    };
+  }
+);
+
+/**
+ * 徳ポイントの現在値と設定を取得
+ */
+export const getVirtueStatus = onCall(
+  {region: "asia-northeast1"},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    const userId = request.auth.uid;
+    const userDoc = await db.collection("users").doc(userId).get();
+
+    if (!userDoc.exists) {
+      throw new HttpsError("not-found", "ユーザーが見つかりません");
+    }
+
+    const userData = userDoc.data()!;
+
+    return {
+      virtue: userData.virtue || VIRTUE_CONFIG.initial,
+      isBanned: userData.isBanned || false,
+      warningThreshold: VIRTUE_CONFIG.warningThreshold,
+      maxVirtue: VIRTUE_CONFIG.initial,
+    };
   }
 );

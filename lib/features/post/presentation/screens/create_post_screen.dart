@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
-import 'package:uuid/uuid.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../shared/providers/auth_provider.dart';
+import '../../../../shared/providers/moderation_provider.dart';
+import '../../../../shared/services/moderation_service.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
+import '../../../../shared/widgets/report_dialog.dart';
+import '../../../../shared/widgets/virtue_indicator.dart';
 
 /// 投稿作成画面
 class CreatePostScreen extends ConsumerStatefulWidget {
@@ -37,36 +39,17 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final postId = const Uuid().v4();
-      
-      // 投稿を作成（Cloud Functionsトリガーが自動でAIコメントを生成）
-      await FirebaseFirestore.instance
-          .collection('posts')
-          .doc(postId)
-          .set({
-        'userId': user.uid,
-        'userDisplayName': user.displayName,
-        'userAvatarIndex': user.avatarIndex,
-        'content': content,
-        'postMode': user.postMode,
-        'createdAt': Timestamp.now(),
-        'reactions': {
-          'love': 0,
-          'praise': 0,
-          'cheer': 0,
-          'empathy': 0,
-        },
-        'commentCount': 0,
-        'isVisible': true,
-      });
+      // モデレーション付き投稿作成（Cloud Functions経由）
+      final moderationService = ref.read(moderationServiceProvider);
+      await moderationService.createPostWithModeration(
+        content: content,
+        userDisplayName: user.displayName,
+        userAvatarIndex: user.avatarIndex,
+        postMode: user.postMode,
+      );
 
-      // ユーザーの投稿数を更新
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .update({
-        'totalPosts': FieldValue.increment(1),
-      });
+      // 徳ポイント状態を更新
+      ref.invalidate(virtueStatusProvider);
 
       if (mounted) {
         // 成功メッセージ
@@ -77,6 +60,19 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           ),
         );
         context.pop();
+      }
+    } on ModerationException catch (e) {
+      if (mounted) {
+        // ネガティブコンテンツが検出された場合
+        await NegativeContentDialog.show(
+          context: context,
+          message: e.message,
+          onRetry: () {
+            // テキストフィールドにフォーカスを戻す
+          },
+        );
+        // 徳ポイント状態を更新
+        ref.invalidate(virtueStatusProvider);
       }
     } catch (e) {
       if (mounted) {
@@ -107,6 +103,11 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           icon: const Icon(Icons.close_rounded),
         ),
         actions: [
+          // 徳ポイントバッジ
+          const Padding(
+            padding: EdgeInsets.only(right: 8),
+            child: Center(child: VirtueBadge()),
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: ElevatedButton(

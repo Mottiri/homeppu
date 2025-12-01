@@ -3,14 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 import 'package:timeago/timeago.dart' as timeago;
-import 'package:uuid/uuid.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../shared/models/post_model.dart';
 import '../../../../shared/models/comment_model.dart';
 import '../../../../shared/providers/auth_provider.dart';
+import '../../../../shared/providers/moderation_provider.dart';
+import '../../../../shared/services/moderation_service.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
+import '../../../../shared/widgets/report_dialog.dart';
 import '../../../home/presentation/widgets/reaction_button.dart';
 
 /// 投稿詳細画面
@@ -43,30 +45,29 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     setState(() => _isSending = true);
 
     try {
-      final commentId = const Uuid().v4();
-      
-      await FirebaseFirestore.instance
-          .collection('comments')
-          .doc(commentId)
-          .set({
-        'postId': widget.postId,
-        'userId': user.uid,
-        'userDisplayName': user.displayName,
-        'userAvatarIndex': user.avatarIndex,
-        'isAI': false,
-        'content': content,
-        'createdAt': Timestamp.now(),
-      });
-
-      // 投稿のコメント数を更新
-      await FirebaseFirestore.instance
-          .collection('posts')
-          .doc(widget.postId)
-          .update({
-        'commentCount': FieldValue.increment(1),
-      });
+      // モデレーション付きコメント作成（Cloud Functions経由）
+      final moderationService = ref.read(moderationServiceProvider);
+      await moderationService.createCommentWithModeration(
+        postId: widget.postId,
+        content: content,
+        userDisplayName: user.displayName,
+        userAvatarIndex: user.avatarIndex,
+      );
 
       _commentController.clear();
+
+      // 徳ポイント状態を更新
+      ref.invalidate(virtueStatusProvider);
+    } on ModerationException catch (e) {
+      if (mounted) {
+        // ネガティブコンテンツが検出された場合
+        await NegativeContentDialog.show(
+          context: context,
+          message: e.message,
+        );
+        // 徳ポイント状態を更新
+        ref.invalidate(virtueStatusProvider);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

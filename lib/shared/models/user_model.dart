@@ -19,6 +19,7 @@ class UserModel {
   final List<String> followers; // フォロワーのユーザーID
   final int followingCount;
   final int followersCount;
+  final int reportCount;          // 通報された回数
 
   UserModel({
     required this.uid,
@@ -38,6 +39,7 @@ class UserModel {
     this.followers = const [],
     this.followingCount = 0,
     this.followersCount = 0,
+    this.reportCount = 0,
   });
 
   factory UserModel.fromFirestore(DocumentSnapshot doc) {
@@ -60,6 +62,7 @@ class UserModel {
       followers: List<String>.from(data['followers'] ?? []),
       followingCount: data['followingCount'] ?? 0,
       followersCount: data['followersCount'] ?? 0,
+      reportCount: data['reportCount'] ?? 0,
     );
   }
 
@@ -81,6 +84,7 @@ class UserModel {
       'followers': followers,
       'followingCount': followingCount,
       'followersCount': followersCount,
+      'reportCount': reportCount,
     };
   }
 
@@ -102,6 +106,7 @@ class UserModel {
     List<String>? followers,
     int? followingCount,
     int? followersCount,
+    int? reportCount,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -121,6 +126,7 @@ class UserModel {
       followers: followers ?? this.followers,
       followingCount: followingCount ?? this.followingCount,
       followersCount: followersCount ?? this.followersCount,
+      reportCount: reportCount ?? this.reportCount,
     );
   }
 }

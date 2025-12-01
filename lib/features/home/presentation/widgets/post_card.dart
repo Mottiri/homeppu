@@ -3,9 +3,9 @@ import 'package:go_router/go_router.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/constants/app_constants.dart';
 import '../../../../shared/models/post_model.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
+import '../../../../shared/widgets/report_dialog.dart';
 import 'reaction_button.dart';
 
 /// 投稿カード
@@ -51,6 +51,37 @@ class PostCard extends StatelessWidget {
                         ),
                       ],
                     ),
+                  ),
+                  // オプションメニュー（通報など）
+                  PopupMenuButton<String>(
+                    icon: Icon(
+                      Icons.more_horiz,
+                      color: AppColors.textHint,
+                      size: 20,
+                    ),
+                    onSelected: (value) {
+                      if (value == 'report') {
+                        ReportDialog.show(
+                          context: context,
+                          contentId: post.id,
+                          contentType: 'post',
+                          targetUserId: post.userId,
+                          contentPreview: post.content,
+                        );
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'report',
+                        child: Row(
+                          children: [
+                            Icon(Icons.flag_outlined, size: 18),
+                            SizedBox(width: 8),
+                            Text('この投稿を通報'),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
