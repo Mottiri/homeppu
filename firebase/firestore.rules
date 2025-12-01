@@ -1,0 +1,91 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ユーザー認証チェック
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // 本人かどうかチェック
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    // BANされていないかチェック
+    function isNotBanned() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isBanned == false;
+    }
+    
+    // ユーザーコレクション
+    match /users/{userId} {
+      // 読み取り: 認証済みユーザー
+      allow read: if isAuthenticated();
+      
+      // 作成: 本人のみ
+      allow create: if isAuthenticated() && isOwner(userId);
+      
+      // 更新: 本人のみ（特定フィールドは変更不可）
+      allow update: if isAuthenticated() && isOwner(userId) && 
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['virtue', 'isBanned', 'isAI', 'createdAt']);
+    }
+    
+    // 投稿コレクション
+    match /posts/{postId} {
+      // 読み取り: 認証済みユーザー
+      allow read: if isAuthenticated();
+      
+      // 作成: 認証済みでBANされていないユーザー
+      allow create: if isAuthenticated() && isNotBanned() && 
+        request.resource.data.userId == request.auth.uid;
+      
+      // 更新: 投稿者のみ（リアクションは誰でも更新可能）
+      allow update: if isAuthenticated() && (
+        isOwner(resource.data.userId) ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions', 'commentCount'])
+      );
+      
+      // 削除: 投稿者のみ
+      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+    }
+    
+    // コメントコレクション
+    match /comments/{commentId} {
+      // 読み取り: 認証済みユーザー
+      allow read: if isAuthenticated();
+      
+      // 作成: 認証済みでBANされていないユーザー
+      allow create: if isAuthenticated() && isNotBanned() && 
+        request.resource.data.userId == request.auth.uid;
+      
+      // 削除: コメント投稿者のみ
+      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+    }
+    
+    // サークルコレクション
+    match /circles/{circleId} {
+      // 読み取り: 公開サークルは誰でも、非公開はメンバーのみ
+      allow read: if isAuthenticated() && (
+        resource.data.isPublic == true ||
+        request.auth.uid in resource.data.memberIds
+      );
+      
+      // 作成: 認証済みでBANされていないユーザー
+      allow create: if isAuthenticated() && isNotBanned();
+      
+      // 更新: オーナーのみ（メンバー追加は別途）
+      allow update: if isAuthenticated() && isOwner(resource.data.ownerId);
+      
+      // 削除: オーナーのみ
+      allow delete: if isAuthenticated() && isOwner(resource.data.ownerId);
+    }
+    
+    // 通報コレクション
+    match /reports/{reportId} {
+      // 作成のみ許可
+      allow create: if isAuthenticated() && isNotBanned();
+    }
+  }
+}
+
+

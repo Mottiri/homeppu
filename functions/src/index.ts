@@ -1,0 +1,493 @@
+import {onDocumentCreated} from "firebase-functions/v2/firestore";
+import {onCall, HttpsError} from "firebase-functions/v2/https";
+import {defineSecret} from "firebase-functions/params";
+import * as admin from "firebase-admin";
+import {GoogleGenerativeAI} from "@google/generative-ai";
+
+admin.initializeApp();
+const db = admin.firestore();
+
+// APIキーをSecretsから取得
+const geminiApiKey = defineSecret("GEMINI_API_KEY");
+
+// AIペルソナ定義（より人間らしく）
+const AI_PERSONAS = [
+  {
+    id: "ai_yuuki",
+    name: "ゆうき",
+    avatarIndex: 0,
+    bio: "大学3年/心理学専攻📚 カフェ巡りとバスケが趣味🏀 毎日ポジティブに！✨",
+    personality: "明るく元気な大学生。絵文字を多用する。",
+    speechStyle: "カジュアルでフレンドリー。「〜だね！」「すごい！」をよく使う。絵文字を2〜3個使う。",
+    effort: "心理学の勉強とバスケ部の活動",
+  },
+  {
+    id: "ai_sakura",
+    name: "さくら",
+    avatarIndex: 1,
+    bio: "都内でWebデザイナーしてます🌸 休日は読書と料理。最近ヨガ始めました",
+    personality: "優しくて穏やかな社会人女性。共感力が高い。",
+    speechStyle: "丁寧だけど堅くない。「わかるよ〜」「素敵だね」をよく使う。絵文字は控えめに1個程度。",
+    effort: "Webデザインのスキルアップとヨガ",
+  },
+  {
+    id: "ai_kenta",
+    name: "けんた",
+    avatarIndex: 2,
+    bio: "IT企業で営業やってます！週末はジムで筋トレ💪 目指せベンチプレス100kg！",
+    personality: "熱血で応援好きな社会人男性。ポジティブ思考。",
+    speechStyle: "励まし上手。「がんばってるね！」「最高！」をよく使う。「！」を多用する。",
+    effort: "営業成績トップと筋トレ",
+  },
+  {
+    id: "ai_mio",
+    name: "みお",
+    avatarIndex: 3,
+    bio: "金融系で働いています。趣味は美術館巡りと紅茶。資格の勉強中です。",
+    personality: "知的で落ち着いた大人の女性。的確に褒める。",
+    speechStyle: "丁寧語を基本とする。具体的に褒める。絵文字はほぼ使わない。",
+    effort: "ファイナンシャルプランナーの資格取得",
+  },
+  {
+    id: "ai_souta",
+    name: "そうた",
+    avatarIndex: 4,
+    bio: "ゲーム配信してる22歳🎮 深夜ラーメンがやめられないw 推しはVtuber",
+    personality: "面白くて明るい若者。ノリが良い。",
+    speechStyle: "超フランク。「まじで」「やば」「草」「神」をよく使う。wや草を語尾に付ける。",
+    effort: "ゲーム配信のフォロワー増やす",
+  },
+  {
+    id: "ai_hana",
+    name: "はな",
+    avatarIndex: 5,
+    bio: "保育士5年目🌷 子どもたちに元気もらってます。お菓子作りが癒し時間",
+    personality: "癒し系で優しいお姉さん。包容力がある。",
+    speechStyle: "温かみのある言葉。「えらいね〜」「すごいなぁ」をよく使う。ひらがな多め。",
+    effort: "保育の仕事とお菓子作り",
+  },
+];
+
+/**
+ * システムプロンプトを生成
+ */
+function getSystemPrompt(
+  persona: typeof AI_PERSONAS[0],
+  posterName: string
+): string {
+  return `
+あなたは「ほめっぷ」というSNSのユーザー「${persona.name}」です。
+性格: ${persona.personality}
+話し方: ${persona.speechStyle}
+
+【投稿者の情報】
+投稿者の名前: ${posterName}
+
+【重要なルール】
+1. 投稿者「${posterName}」さんを褒めてください（あなた自身「${persona.name}」ではありません）
+2. 投稿内容を読んで、${posterName}さんの努力や良いところを具体的に称賛してください
+3. ネガティブなことは一切言わないでください
+4. 短めの返信（50〜100文字程度）にしてください
+5. 自然な日本語で、人間らしく返信してください
+6. 「AI」「ボット」という言葉は使わないでください
+7. 相手の気持ちに寄り添い、共感を示してください
+8. 投稿者の名前を呼ぶ場合は「${posterName}さん」と呼んでください
+`;
+}
+
+/**
+ * 新規投稿時にAIコメントを生成するトリガー
+ */
+export const onPostCreated = onDocumentCreated(
+  {
+    document: "posts/{postId}",
+    region: "asia-northeast1",
+    secrets: [geminiApiKey],
+  },
+  async (event) => {
+    const snap = event.data;
+    if (!snap) {
+      console.log("No data associated with the event");
+      return;
+    }
+
+    const postData = snap.data();
+    const postId = event.params.postId;
+
+    // 人間モードの投稿にはAIコメントを付けない
+    if (postData.postMode === "human") {
+      console.log("Human mode post, skipping AI comments");
+      return;
+    }
+
+    // APIキーを取得
+    const apiKey = geminiApiKey.value();
+    if (!apiKey) {
+      console.error("GEMINI_API_KEY is not set");
+      return;
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({model: "gemini-2.0-flash"});
+
+    // ランダムに1〜3人のAIを選択
+    const commentCount = Math.floor(Math.random() * 3) + 1;
+    const shuffledPersonas = [...AI_PERSONAS]
+      .sort(() => Math.random() - 0.5)
+      .slice(0, commentCount);
+
+    const batch = db.batch();
+    let totalComments = 0;
+
+    // 投稿者の名前を取得
+    const posterName = postData.userDisplayName || "投稿者";
+
+    for (const persona of shuffledPersonas) {
+      try {
+        const prompt = `
+${getSystemPrompt(persona, posterName)}
+
+【${posterName}さんの投稿】
+${postData.content}
+
+【あなた（${persona.name}）の返信】
+`;
+
+        const result = await model.generateContent(prompt);
+        const commentText = result.response.text()?.trim();
+
+        if (!commentText) continue;
+
+        // ランダムな遅延時間（1〜30分後）をシミュレート
+        const delayMinutes = Math.floor(Math.random() * 29) + 1;
+        const commentTime = new Date(Date.now() + delayMinutes * 60 * 1000);
+
+        const commentRef = db.collection("comments").doc();
+        batch.set(commentRef, {
+          postId: postId,
+          userId: persona.id,
+          userDisplayName: persona.name,
+          userAvatarIndex: persona.avatarIndex,
+          isAI: true,
+          content: commentText,
+          createdAt: admin.firestore.Timestamp.fromDate(commentTime),
+        });
+
+        totalComments++;
+        console.log(`AI comment created: ${persona.name} (delayed ${delayMinutes}m)`);
+      } catch (error) {
+        console.error(`Error generating comment for ${persona.name}:`, error);
+      }
+    }
+
+    // コメント数を更新
+    if (totalComments > 0) {
+      batch.update(snap.ref, {
+        commentCount: admin.firestore.FieldValue.increment(totalComments),
+      });
+      await batch.commit();
+    }
+  }
+);
+
+// AIの投稿テンプレート（頑張っていることに沿った内容）
+const AI_POST_TEMPLATES: Record<string, string[]> = {
+  ai_yuuki: [
+    "心理学のテスト終わった〜！！めっちゃ勉強したから手応えあり✨✨ 今日はご褒美にカフェ行く🎵",
+    "バスケの練習きつかったけど、シュート決まると最高に気持ちいい🏀💪",
+    "新しくできたカフェ行ってきた☕✨ ラテアートかわいすぎて写真撮りまくったww",
+    "明日レポート提出だけど、まだ手つけてない😇 今から頑張る...！！",
+    "バスケ部の先輩にフォーム褒められた〜！！嬉しすぎる😭✨ 練習頑張ってよかった！！",
+  ],
+  ai_sakura: [
+    "今日は新しいデザインツールに挑戦してみた。難しいけど、できることが増えると嬉しいな",
+    "朝ヨガ続けて3週間。少しずつ体が柔らかくなってきた気がする🧘‍♀️",
+    "クライアントさんに「素敵なデザインですね」って言ってもらえた。この仕事やっててよかった",
+    "休日は読書三昧。窓辺で紅茶を飲みながら本を読む時間が一番好き",
+    "新しいレシピに挑戦。見た目はいまいちだったけど、味は美味しくできた🍳",
+  ],
+  ai_kenta: [
+    "ベンチプレス85kg上がった！！100kgまであと少し！絶対達成するぞ💪🔥",
+    "今月の営業目標達成！！チームのみんなのおかげ！来月はもっと上を目指す！！",
+    "朝5時起きでジム行ってから出社！この習慣続けて半年！めっちゃ調子いい！",
+    "後輩の商談同行した！成長してて嬉しかったな〜！俺も負けてられない！",
+    "週末は久しぶりに山登り！頂上からの景色最高だった！疲れも吹っ飛ぶ！",
+  ],
+  ai_mio: [
+    "FPの勉強、今日は投資信託の章を終えました。複利の力は本当にすごいですね。",
+    "仕事帰りに美術館へ。モネの睡蓮を見ていると、心が穏やかになります。",
+    "資格の模擬試験を受けてみました。まだまだ課題はありますが、着実に前進している実感があります。",
+    "ダージリンのファーストフラッシュを手に入れました。香りが華やかで、贅沢な時間です。",
+    "今日学んだ金融知識を、友人にわかりやすく説明できました。人に教えることで自分の理解も深まりますね。",
+  ],
+  ai_souta: [
+    "今日の配信5時間やったわww 見てくれた人ありがとう〜！フォロワー増えてきて嬉しい",
+    "新作ゲームのレビュー動画上げたら結構伸びてる！やっぱ発売日に上げるの大事だな",
+    "深夜3時のラーメンうますぎて草 ダイエット？知らない子ですね",
+    "推しのVtuberの新衣装やばすぎるwww 限界化してる",
+    "配信機材新しくしたら画質めっちゃ良くなった！投資した甲斐あったわ",
+  ],
+  ai_hana: [
+    "今日は子どもたちとお絵描きした🎨 みんなの発想力ってすごいなぁ。元気もらえる",
+    "シフォンケーキ焼いてみた🍰 ふわふわにできて満足。誰かに食べてほしいな",
+    "園児さんが「せんせいだいすき」って言ってくれた。この仕事やっててよかった😢💕",
+    "新しいクッキーのレシピ試してみたよ🍪 ちょっと焦げちゃったけど、味は美味しくできた",
+    "今日はゆっくりお風呂に浸かって、明日も頑張ろう。みんなもお疲れ様だよ🌙",
+  ],
+};
+
+/**
+ * AIアカウントを初期化する関数（管理者用）
+ * 既存のアカウントも更新します
+ */
+export const initializeAIAccounts = onCall(
+  {region: "asia-northeast1"},
+  async () => {
+    let createdCount = 0;
+    let updatedCount = 0;
+
+    for (const persona of AI_PERSONAS) {
+      const docRef = db.collection("users").doc(persona.id);
+      const doc = await docRef.get();
+
+      const userData = {
+        email: `${persona.name}@ai.homeppu.local`,
+        displayName: persona.name,
+        bio: persona.bio,
+        avatarIndex: persona.avatarIndex,
+        postMode: "ai",
+        virtue: 100,
+        isAI: true,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        isBanned: false,
+      };
+
+      if (!doc.exists) {
+        await docRef.set({
+          ...userData,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          totalPosts: 0,
+          totalPraises: 0,
+          following: [],
+          followers: [],
+          followingCount: 0,
+          followersCount: 0,
+        });
+        createdCount++;
+        console.log(`Created AI account: ${persona.name}`);
+      } else {
+        // 既存アカウントのbioとavatarIndexを更新
+        await docRef.update({
+          bio: persona.bio,
+          avatarIndex: persona.avatarIndex,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        updatedCount++;
+        console.log(`Updated AI account: ${persona.name}`);
+      }
+    }
+
+    return {
+      success: true,
+      message: "AIアカウントを作成/更新しました",
+      created: createdCount,
+      updated: updatedCount,
+    };
+  }
+);
+
+/**
+ * AIアカウントの過去投稿を生成する関数（管理者用）
+ */
+export const generateAIPosts = onCall(
+  {region: "asia-northeast1", secrets: [geminiApiKey]},
+  async () => {
+    const apiKey = geminiApiKey.value();
+    if (!apiKey) {
+      return {success: false, message: "GEMINI_API_KEY is not set"};
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({model: "gemini-2.0-flash"});
+
+    let totalPosts = 0;
+    let totalComments = 0;
+    let totalReactions = 0;
+
+    for (const persona of AI_PERSONAS) {
+      // 既存の投稿数をチェック
+      const existingPosts = await db
+        .collection("posts")
+        .where("userId", "==", persona.id)
+        .get();
+
+      if (existingPosts.size >= 5) {
+        console.log(`${persona.name} already has ${existingPosts.size} posts, skipping`);
+        continue;
+      }
+
+      // 投稿テンプレートを取得
+      const templates = AI_POST_TEMPLATES[persona.id] || [];
+
+      // 過去1〜7日間にランダムな時間で投稿を作成
+      for (let i = 0; i < templates.length; i++) {
+        const daysAgo = Math.floor(Math.random() * 7) + 1;
+        const hoursAgo = Math.floor(Math.random() * 24);
+        const postTime = new Date(
+          Date.now() - daysAgo * 24 * 60 * 60 * 1000 - hoursAgo * 60 * 60 * 1000
+        );
+
+        // 投稿を作成
+        const postRef = db.collection("posts").doc();
+        const reactions = {
+          love: Math.floor(Math.random() * 10),
+          praise: Math.floor(Math.random() * 8),
+          cheer: Math.floor(Math.random() * 6),
+          empathy: Math.floor(Math.random() * 5),
+        };
+
+        await postRef.set({
+          userId: persona.id,
+          userDisplayName: persona.name,
+          userAvatarIndex: persona.avatarIndex,
+          content: templates[i],
+          postMode: "mix",
+          createdAt: admin.firestore.Timestamp.fromDate(postTime),
+          reactions: reactions,
+          commentCount: 0,
+          isVisible: true,
+        });
+
+        totalPosts++;
+        totalReactions += Object.values(reactions).reduce((a, b) => a + b, 0);
+
+        // 他のAIからコメントを生成（1〜2件）
+        const commentCount = Math.floor(Math.random() * 2) + 1;
+        const otherPersonas = AI_PERSONAS.filter((p) => p.id !== persona.id)
+          .sort(() => Math.random() - 0.5)
+          .slice(0, commentCount);
+
+        for (const commenter of otherPersonas) {
+          try {
+            const prompt = `
+あなたは「ほめっぷ」というSNSのユーザー「${commenter.name}」です。
+性格: ${commenter.personality}
+話し方: ${commenter.speechStyle}
+
+【投稿者の情報】
+投稿者の名前: ${persona.name}
+
+【重要なルール】
+1. ${persona.name}さんを褒めてください
+2. 短めの返信（30〜60文字程度）にしてください
+3. 自然な日本語で返信してください
+4. 「AI」「ボット」という言葉は使わないでください
+
+【${persona.name}さんの投稿】
+${templates[i]}
+
+【あなた（${commenter.name}）の返信】
+`;
+
+            const result = await model.generateContent(prompt);
+            const commentText = result.response.text()?.trim();
+
+            if (commentText) {
+              const commentTime = new Date(
+                postTime.getTime() + Math.floor(Math.random() * 60) * 60 * 1000
+              );
+
+              await db.collection("comments").add({
+                postId: postRef.id,
+                userId: commenter.id,
+                userDisplayName: commenter.name,
+                userAvatarIndex: commenter.avatarIndex,
+                isAI: true,
+                content: commentText,
+                createdAt: admin.firestore.Timestamp.fromDate(commentTime),
+              });
+
+              totalComments++;
+
+              // 投稿のコメント数を更新
+              await postRef.update({
+                commentCount: admin.firestore.FieldValue.increment(1),
+              });
+            }
+          } catch (error) {
+            console.error(`Error generating comment:`, error);
+          }
+        }
+      }
+
+      // ユーザーの投稿数を更新
+      await db.collection("users").doc(persona.id).update({
+        totalPosts: admin.firestore.FieldValue.increment(templates.length),
+        totalPraises: admin.firestore.FieldValue.increment(
+          Math.floor(Math.random() * 20)
+        ),
+      });
+    }
+
+    return {
+      success: true,
+      message: "AI投稿を生成しました",
+      posts: totalPosts,
+      comments: totalComments,
+      reactions: totalReactions,
+    };
+  }
+);
+
+/**
+ * レート制限付きの投稿作成（スパム対策）
+ */
+export const createPostWithRateLimit = onCall(
+  {region: "asia-northeast1"},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "ログインが必要です"
+      );
+    }
+
+    const userId = request.auth.uid;
+    const data = request.data;
+
+    // レート制限チェック（1分間に5投稿まで）
+    const oneMinuteAgo = admin.firestore.Timestamp.fromDate(
+      new Date(Date.now() - 60000)
+    );
+    const recentPosts = await db
+      .collection("posts")
+      .where("userId", "==", userId)
+      .where("createdAt", ">", oneMinuteAgo)
+      .get();
+
+    if (recentPosts.size >= 5) {
+      throw new HttpsError(
+        "resource-exhausted",
+        "投稿が多すぎるよ！少し待ってからまた投稿してね"
+      );
+    }
+
+    // 投稿を作成
+    const postRef = db.collection("posts").doc();
+    await postRef.set({
+      ...data,
+      userId: userId,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      reactions: {love: 0, praise: 0, cheer: 0, empathy: 0},
+      commentCount: 0,
+      isVisible: true,
+    });
+
+    // ユーザーの投稿数を更新
+    await db.collection("users").doc(userId).update({
+      totalPosts: admin.firestore.FieldValue.increment(1),
+    });
+
+    return {success: true, postId: postRef.id};
+  }
+);

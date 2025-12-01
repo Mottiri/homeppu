@@ -1,0 +1,46 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // 認証チェック
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // ファイルサイズ制限（5MB）
+    function isValidSize() {
+      return request.resource.size < 5 * 1024 * 1024;
+    }
+    
+    // 画像ファイルのみ許可
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+    
+    // ユーザープロフィール画像
+    match /users/{userId}/profile/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() 
+                   && request.auth.uid == userId 
+                   && isValidSize() 
+                   && isImage();
+    }
+    
+    // 投稿画像
+    match /posts/{postId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() 
+                   && isValidSize() 
+                   && isImage();
+    }
+    
+    // サークルアイコン
+    match /circles/{circleId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() 
+                   && isValidSize() 
+                   && isImage();
+    }
+  }
+}
+
+

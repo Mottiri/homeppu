@@ -1,0 +1,15 @@
+# Compiled JavaScript files
+lib/
+
+# Node modules
+node_modules/
+
+# Logs
+*.log
+
+# Environment files (APIキーを含むため絶対にコミットしない)
+.env
+.env.local
+.env*.local
+
+

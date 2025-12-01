@@ -1,0 +1,525 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_constants.dart';
+import '../../../../shared/providers/auth_provider.dart';
+import '../../../../shared/providers/ai_provider.dart';
+import '../../../../shared/widgets/avatar_selector.dart';
+
+/// 公開範囲モード
+enum PrivacyMode {
+  ai('ai', 'AIモード', 'AIのみに公開するよ'),
+  mix('mix', 'バランス', 'AIと人間の両方に公開するよ'),
+  human('human', '人間モード', '人間のみに公開するよ');
+
+  const PrivacyMode(this.value, this.label, this.description);
+  
+  final String value;
+  final String label;
+  final String description;
+}
+
+/// 設定画面
+class SettingsScreen extends ConsumerStatefulWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  final _displayNameController = TextEditingController();
+  final _bioController = TextEditingController();
+  int _selectedAvatarIndex = 0;
+  bool _isLoading = false;
+  bool _hasChanges = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  void _loadUserData() {
+    final user = ref.read(currentUserProvider).valueOrNull;
+    if (user != null) {
+      _displayNameController.text = user.displayName;
+      _bioController.text = user.bio ?? '';
+      _selectedAvatarIndex = user.avatarIndex;
+    }
+  }
+
+  @override
+  void dispose() {
+    _displayNameController.dispose();
+    _bioController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveChanges() async {
+    final user = ref.read(currentUserProvider).valueOrNull;
+    if (user == null) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final authService = ref.read(authServiceProvider);
+      await authService.updateUserProfile(
+        uid: user.uid,
+        displayName: _displayNameController.text.trim(),
+        bio: _bioController.text.trim(),
+        avatarIndex: _selectedAvatarIndex,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('保存できたよ！✨'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+        setState(() => _hasChanges = false);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppConstants.friendlyMessages['error_general']!),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _logout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('ログアウト'),
+        content: Text(AppConstants.friendlyMessages['logout_confirm']!),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('やっぱりやめる'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('ログアウト'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await ref.read(authServiceProvider).signOut();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          onPressed: () => context.pop(),
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
+        title: const Text('設定'),
+        actions: [
+          if (_hasChanges)
+            TextButton(
+              onPressed: _isLoading ? null : _saveChanges,
+              child: _isLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.primary,
+                      ),
+                    )
+                  : const Text('保存'),
+            ),
+        ],
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: AppColors.warmGradient,
+        ),
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            // プロフィール編集
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'プロフィール編集',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 20),
+
+                    // アバター
+                    Center(
+                      child: AvatarSelector(
+                        selectedIndex: _selectedAvatarIndex,
+                        onSelected: (index) {
+                          setState(() {
+                            _selectedAvatarIndex = index;
+                            _hasChanges = true;
+                          });
+                        },
+                        size: 70,
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // 表示名
+                    Text(
+                      'ニックネーム',
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _displayNameController,
+                      maxLength: AppConstants.maxDisplayNameLength,
+                      decoration: const InputDecoration(
+                        hintText: 'ニックネームを入力',
+                      ),
+                      onChanged: (_) => setState(() => _hasChanges = true),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // 自己紹介
+                    Text(
+                      '自己紹介',
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _bioController,
+                      maxLength: AppConstants.maxBioLength,
+                      maxLines: 3,
+                      decoration: const InputDecoration(
+                        hintText: '自己紹介を入力（任意）',
+                      ),
+                      onChanged: (_) => setState(() => _hasChanges = true),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // 公開範囲設定
+            Card(
+              child: ExpansionTile(
+                leading: const Icon(Icons.public_outlined),
+                title: const Text('公開範囲'),
+                subtitle: const Text('投稿が届く範囲を設定'),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    child: Consumer(
+                      builder: (context, ref, _) {
+                        final user = ref.watch(currentUserProvider).valueOrNull;
+                        if (user == null) return const SizedBox.shrink();
+                        
+                        return Column(
+                          children: PrivacyMode.values.map((mode) {
+                            final isSelected = user.postMode == mode.value;
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: _PrivacyOption(
+                                mode: mode,
+                                isSelected: isSelected,
+                                onTap: () async {
+                                  final authService = ref.read(authServiceProvider);
+                                  await authService.updateUserProfile(
+                                    uid: user.uid,
+                                    postMode: mode.value,
+                                  );
+                                },
+                              ),
+                            );
+                          }).toList(),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // アプリ情報
+            Card(
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.info_outline),
+                    title: const Text('アプリについて'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      showAboutDialog(
+                        context: context,
+                        applicationName: AppConstants.appName,
+                        applicationVersion: '1.0.0',
+                        children: [
+                          const SizedBox(height: 16),
+                          Text(
+                            AppConstants.appDescription,
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.help_outline),
+                    title: const Text('ヘルプ'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      // TODO: ヘルプ画面
+                    },
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.description_outlined),
+                    title: const Text('利用規約'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      // TODO: 利用規約画面
+                    },
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.privacy_tip_outlined),
+                    title: const Text('プライバシーポリシー'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      // TODO: プライバシーポリシー画面
+                    },
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // ログアウト
+            Card(
+              child: ListTile(
+                leading: const Icon(
+                  Icons.logout,
+                  color: AppColors.error,
+                ),
+                title: const Text(
+                  'ログアウト',
+                  style: TextStyle(color: AppColors.error),
+                ),
+                onTap: _logout,
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // 管理者設定（開発用）
+            Card(
+              child: ExpansionTile(
+                leading: const Icon(Icons.admin_panel_settings),
+                title: const Text('管理者設定'),
+                subtitle: const Text(
+                  '開発者専用',
+                  style: TextStyle(fontSize: 12, color: AppColors.textHint),
+                ),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    child: Column(
+                      children: [
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              try {
+                                final aiService = ref.read(aiServiceProvider);
+                                await aiService.initializeAIAccounts();
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('AIアカウントを作成しました！🤖'),
+                                      backgroundColor: AppColors.success,
+                                    ),
+                                  );
+                                }
+                              } catch (e) {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('エラー: $e'),
+                                      backgroundColor: AppColors.error,
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                            icon: const Icon(Icons.group_add),
+                            label: const Text('AIアカウントを初期化'),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              try {
+                                final aiService = ref.read(aiServiceProvider);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('AI投稿を生成中...（少し時間がかかります）'),
+                                    backgroundColor: AppColors.primary,
+                                    duration: Duration(seconds: 10),
+                                  ),
+                                );
+                                final result = await aiService.generateAIPosts();
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('AI投稿を生成しました！📝 ${result['posts']}件の投稿、${result['comments']}件のコメント'),
+                                      backgroundColor: AppColors.success,
+                                    ),
+                                  );
+                                }
+                              } catch (e) {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('エラー: $e'),
+                                      backgroundColor: AppColors.error,
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                            icon: const Icon(Icons.auto_awesome),
+                            label: const Text('AI過去投稿を生成'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 32),
+
+            // バージョン情報
+            Center(
+              child: Text(
+                'Version 1.0.0',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+
+            const SizedBox(height: 100),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PrivacyOption extends StatelessWidget {
+  final PrivacyMode mode;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _PrivacyOption({
+    required this.mode,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.primaryLight.withOpacity(0.5)
+              : AppColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(12),
+          border: isSelected
+              ? Border.all(color: AppColors.primary, width: 2)
+              : null,
+        ),
+        child: Row(
+          children: [
+            Icon(
+              _getModeIcon(mode),
+              size: 20,
+              color: isSelected ? AppColors.primary : AppColors.textSecondary,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    mode.label,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                    ),
+                  ),
+                  Text(
+                    mode.description,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            if (isSelected)
+              const Icon(
+                Icons.check_circle,
+                color: AppColors.primary,
+                size: 20,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconData _getModeIcon(PrivacyMode mode) {
+    switch (mode) {
+      case PrivacyMode.ai:
+        return Icons.auto_awesome;
+      case PrivacyMode.mix:
+        return Icons.groups;
+      case PrivacyMode.human:
+        return Icons.person;
+    }
+  }
+}
+
