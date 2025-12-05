@@ -41,7 +41,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     try {
       // モデレーション付き投稿作成（Cloud Functions経由）
       final moderationService = ref.read(moderationServiceProvider);
-      await moderationService.createPostWithModeration(
+      final result = await moderationService.createPostWithModeration(
         content: content,
         userDisplayName: user.displayName,
         userAvatarIndex: user.avatarIndex,
@@ -52,26 +52,36 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       ref.invalidate(virtueStatusProvider);
 
       if (mounted) {
-        // 成功メッセージ
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppConstants.friendlyMessages['post_success']!),
-            backgroundColor: AppColors.success,
-          ),
-        );
+        if (result.isNegative) {
+          // ネガティブコンテンツが検出された場合（投稿は作成済み、非表示）
+          await NegativeContentDialog.show(
+            context: context,
+            message: result.message ?? 'ネガティブな内容が検出されました',
+            newVirtue: result.newVirtue,
+            onRetry: () {
+              // テキストフィールドにフォーカスを戻す
+            },
+          );
+        } else {
+          // 成功メッセージ
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(AppConstants.friendlyMessages['post_success']!),
+              backgroundColor: AppColors.success,
+            ),
+          );
+        }
         context.pop();
       }
     } on ModerationException catch (e) {
       if (mounted) {
-        // ネガティブコンテンツが検出された場合
-        await NegativeContentDialog.show(
-          context: context,
-          message: e.message,
-          onRetry: () {
-            // テキストフィールドにフォーカスを戻す
-          },
+        // BANやレート制限などのエラー
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            backgroundColor: AppColors.error,
+          ),
         );
-        // 徳ポイント状態を更新
         ref.invalidate(virtueStatusProvider);
       }
     } catch (e) {

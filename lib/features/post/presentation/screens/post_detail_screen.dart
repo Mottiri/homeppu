@@ -47,7 +47,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     try {
       // モデレーション付きコメント作成（Cloud Functions経由）
       final moderationService = ref.read(moderationServiceProvider);
-      await moderationService.createCommentWithModeration(
+      final result = await moderationService.createCommentWithModeration(
         postId: widget.postId,
         content: content,
         userDisplayName: user.displayName,
@@ -58,14 +58,24 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
 
       // 徳ポイント状態を更新
       ref.invalidate(virtueStatusProvider);
-    } on ModerationException catch (e) {
-      if (mounted) {
-        // ネガティブコンテンツが検出された場合
+
+      if (result.isNegative && mounted) {
+        // ネガティブコンテンツが検出された場合（コメントは作成済み、非表示）
         await NegativeContentDialog.show(
           context: context,
-          message: e.message,
+          message: result.message ?? 'ネガティブな内容が検出されました',
+          newVirtue: result.newVirtue,
         );
-        // 徳ポイント状態を更新
+      }
+    } on ModerationException catch (e) {
+      if (mounted) {
+        // BANやエラーの場合
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            backgroundColor: AppColors.error,
+          ),
+        );
         ref.invalidate(virtueStatusProvider);
       }
     } catch (e) {

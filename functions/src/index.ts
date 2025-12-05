@@ -669,7 +669,7 @@ async function decreaseVirtue(
 
 /**
  * モデレーション付き投稿作成
- * ネガティブな内容は投稿を拒否し、徳を減少
+ * ネガティブな内容も投稿として保存し、その後に徳を減少
  */
 export const createPostWithModeration = onCall(
   {region: "asia-northeast1", secrets: [geminiApiKey]},
@@ -690,13 +690,59 @@ export const createPostWithModeration = onCall(
       );
     }
 
-    // コンテンツモデレーション
-    const apiKey = geminiApiKey.value();
-    if (apiKey) {
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({model: "gemini-2.0-flash"});
+    // レート制限チェック（インデックスがない場合はスキップ）
+    try {
+      const oneMinuteAgo = admin.firestore.Timestamp.fromDate(
+        new Date(Date.now() - 60000)
+      );
+      const recentPosts = await db
+        .collection("posts")
+        .where("userId", "==", userId)
+        .where("createdAt", ">", oneMinuteAgo)
+        .get();
 
-      const prompt = `
+      if (recentPosts.size >= 5) {
+        throw new HttpsError(
+          "resource-exhausted",
+          "投稿が多すぎるよ！少し待ってからまた投稿してね"
+        );
+      }
+    } catch (rateLimitError) {
+      // インデックスエラー等の場合はレート制限をスキップ
+      if (rateLimitError instanceof HttpsError) {
+        throw rateLimitError;
+      }
+      console.warn("Rate limit check skipped:", rateLimitError);
+    }
+
+    // まず投稿を作成（暫定的に表示）
+    const postRef = db.collection("posts").doc();
+    await postRef.set({
+      userId: userId,
+      userDisplayName: userDisplayName,
+      userAvatarIndex: userAvatarIndex,
+      content: content,
+      postMode: postMode,
+      circleId: circleId || null,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      reactions: {love: 0, praise: 0, cheer: 0, empathy: 0},
+      commentCount: 0,
+      isVisible: true,
+    });
+
+    // ユーザーの投稿数を更新
+    await db.collection("users").doc(userId).update({
+      totalPosts: admin.firestore.FieldValue.increment(1),
+    });
+
+    // 投稿作成後にモデレーションチェック（バックグラウンドで実行）
+    try {
+      const apiKey = geminiApiKey.value();
+      if (apiKey) {
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({model: "gemini-2.0-flash"});
+
+        const prompt = `
 あなたはSNS「ほめっぷ」のコンテンツモデレーターです。
 「ほめっぷ」は「世界一優しいSNS」を目指しており、ネガティブな発言を排除しています。
 
@@ -731,94 +777,89 @@ ${content}
 }
 `;
 
-      try {
-        const result = await model.generateContent(prompt);
-        const responseText = result.response.text().trim();
+        try {
+          const result = await model.generateContent(prompt);
+          const responseText = result.response.text().trim();
+          console.log("Gemini response:", responseText.substring(0, 200));
 
-        let jsonText = responseText;
-        const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-        if (jsonMatch) {
-          jsonText = jsonMatch[1];
+          let jsonText = responseText;
+          const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+          if (jsonMatch) {
+            jsonText = jsonMatch[1];
+          }
+
+          const modResult = JSON.parse(jsonText) as ModerationResult;
+          console.log("Moderation result:", modResult);
+
+          if (modResult.isNegative && modResult.confidence >= 0.7) {
+            // 投稿を非表示に更新
+            await postRef.update({
+              isVisible: false,
+              moderationResult: {
+                category: modResult.category,
+                confidence: modResult.confidence,
+                reason: modResult.reason,
+              },
+            });
+            console.log("Post marked as invisible");
+
+            // 投稿作成後に徳ポイントを減少
+            let newVirtue = 100;
+            try {
+              const virtueResult = await decreaseVirtue(
+                userId,
+                `ネガティブ投稿検出: ${modResult.category}`,
+                VIRTUE_CONFIG.lossPerNegative
+              );
+              newVirtue = virtueResult.newVirtue;
+              console.log("Virtue decreased:", newVirtue);
+            } catch (virtueError) {
+              console.error("Virtue decrease error:", virtueError);
+            }
+
+            // モデレーション記録（エラーでも続行）
+            try {
+              await db.collection("moderatedContent").add({
+                userId: userId,
+                postId: postRef.id,
+                content: content,
+                type: "post",
+                category: modResult.category,
+                confidence: modResult.confidence,
+                reason: modResult.reason,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
+              console.log("Moderation content recorded");
+            } catch (recordError) {
+              console.error("Moderation record error:", recordError);
+            }
+
+            // 投稿は作成されたがネガティブだったことを通知
+            return {
+              success: true,
+              postId: postRef.id,
+              isNegative: true,
+              message: `${modResult.reason}\n\n💡 提案: ${modResult.suggestion}`,
+              newVirtue: newVirtue,
+            };
+          }
+        } catch (parseError) {
+          console.error("Moderation parse error:", parseError);
+          // パースエラー時は投稿をそのまま表示
         }
-
-        const modResult = JSON.parse(jsonText) as ModerationResult;
-
-        if (modResult.isNegative && modResult.confidence >= 0.7) {
-          // 徳ポイントを減少
-          const virtueResult = await decreaseVirtue(
-            userId,
-            `ネガティブ投稿検出: ${modResult.category}`,
-            VIRTUE_CONFIG.lossPerNegative
-          );
-
-          // 投稿を記録（非表示として）
-          await db.collection("moderatedContent").add({
-            userId: userId,
-            content: content,
-            type: "post",
-            category: modResult.category,
-            confidence: modResult.confidence,
-            reason: modResult.reason,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-
-          throw new HttpsError(
-            "invalid-argument",
-            `${modResult.reason}\n\n💡 提案: ${modResult.suggestion}\n\n(徳ポイント: ${virtueResult.newVirtue})`
-          );
-        }
-      } catch (error) {
-        if (error instanceof HttpsError) {
-          throw error;
-        }
-        console.error("Moderation error:", error);
-        // エラー時は投稿を許可
       }
+    } catch (moderationError) {
+      console.error("Moderation outer error:", moderationError);
+      // モデレーションエラー時は投稿をそのまま表示
     }
 
-    // レート制限チェック
-    const oneMinuteAgo = admin.firestore.Timestamp.fromDate(
-      new Date(Date.now() - 60000)
-    );
-    const recentPosts = await db
-      .collection("posts")
-      .where("userId", "==", userId)
-      .where("createdAt", ">", oneMinuteAgo)
-      .get();
-
-    if (recentPosts.size >= 5) {
-      throw new HttpsError(
-        "resource-exhausted",
-        "投稿が多すぎるよ！少し待ってからまた投稿してね"
-      );
-    }
-
-    // 投稿を作成
-    const postRef = db.collection("posts").doc();
-    await postRef.set({
-      userId: userId,
-      userDisplayName: userDisplayName,
-      userAvatarIndex: userAvatarIndex,
-      content: content,
-      postMode: postMode,
-      circleId: circleId || null,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      reactions: {love: 0, praise: 0, cheer: 0, empathy: 0},
-      commentCount: 0,
-      isVisible: true,
-    });
-
-    // ユーザーの投稿数を更新
-    await db.collection("users").doc(userId).update({
-      totalPosts: admin.firestore.FieldValue.increment(1),
-    });
-
-    return {success: true, postId: postRef.id};
+    return {success: true, postId: postRef.id, isNegative: false};
   }
 );
 
 /**
  * モデレーション付きコメント作成
+ * コメント作成後にモデレーションチェックし、ネガティブなら徳を減少
  */
 export const createCommentWithModeration = onCall(
   {region: "asia-northeast1", secrets: [geminiApiKey]},
@@ -839,13 +880,32 @@ export const createCommentWithModeration = onCall(
       );
     }
 
-    // コンテンツモデレーション
-    const apiKey = geminiApiKey.value();
-    if (apiKey) {
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({model: "gemini-2.0-flash"});
+    // まずコメントを作成
+    const commentRef = db.collection("comments").doc();
+    await commentRef.set({
+      postId: postId,
+      userId: userId,
+      userDisplayName: userDisplayName,
+      userAvatarIndex: userAvatarIndex,
+      isAI: false,
+      content: content,
+      isVisible: true,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
 
-      const prompt = `
+    // 投稿のコメント数を更新
+    await db.collection("posts").doc(postId).update({
+      commentCount: admin.firestore.FieldValue.increment(1),
+    });
+
+    // コメント作成後にモデレーションチェック
+    try {
+      const apiKey = geminiApiKey.value();
+      if (apiKey) {
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({model: "gemini-2.0-flash"});
+
+        const prompt = `
 あなたはSNS「ほめっぷ」のコンテンツモデレーターです。
 以下のコメント内容を分析して、ネガティブかどうか判定してください。
 
@@ -868,56 +928,83 @@ ${content}
 }
 `;
 
-      try {
-        const result = await model.generateContent(prompt);
-        const responseText = result.response.text().trim();
+        try {
+          const result = await model.generateContent(prompt);
+          const responseText = result.response.text().trim();
+          console.log("Comment moderation response:", responseText.substring(0, 200));
 
-        let jsonText = responseText;
-        const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-        if (jsonMatch) {
-          jsonText = jsonMatch[1];
+          let jsonText = responseText;
+          const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+          if (jsonMatch) {
+            jsonText = jsonMatch[1];
+          }
+
+          const modResult = JSON.parse(jsonText) as ModerationResult;
+          console.log("Comment moderation result:", modResult);
+
+          if (modResult.isNegative && modResult.confidence >= 0.7) {
+            // コメントを非表示に更新
+            await commentRef.update({
+              isVisible: false,
+              moderationResult: {
+                category: modResult.category,
+                confidence: modResult.confidence,
+                reason: modResult.reason,
+              },
+            });
+            console.log("Comment marked as invisible");
+
+            // コメント作成後に徳ポイントを減少
+            let newVirtue = 100;
+            try {
+              const virtueResult = await decreaseVirtue(
+                userId,
+                `ネガティブコメント検出: ${modResult.category}`,
+                VIRTUE_CONFIG.lossPerNegative
+              );
+              newVirtue = virtueResult.newVirtue;
+              console.log("Comment virtue decreased:", newVirtue);
+            } catch (virtueError) {
+              console.error("Comment virtue decrease error:", virtueError);
+            }
+
+            // モデレーション記録（エラーでも続行）
+            try {
+              await db.collection("moderatedContent").add({
+                userId: userId,
+                commentId: commentRef.id,
+                postId: postId,
+                content: content,
+                type: "comment",
+                category: modResult.category,
+                confidence: modResult.confidence,
+                reason: modResult.reason,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
+              console.log("Comment moderation content recorded");
+            } catch (recordError) {
+              console.error("Comment moderation record error:", recordError);
+            }
+
+            return {
+              success: true,
+              commentId: commentRef.id,
+              isNegative: true,
+              message: `${modResult.reason}\n\n💡 ${modResult.suggestion}`,
+              newVirtue: newVirtue,
+            };
+          }
+        } catch (parseError) {
+          console.error("Comment moderation parse error:", parseError);
+          // パースエラー時はコメントをそのまま表示
         }
-
-        const modResult = JSON.parse(jsonText) as ModerationResult;
-
-        if (modResult.isNegative && modResult.confidence >= 0.7) {
-          await decreaseVirtue(
-            userId,
-            `ネガティブコメント検出: ${modResult.category}`,
-            VIRTUE_CONFIG.lossPerNegative
-          );
-
-          throw new HttpsError(
-            "invalid-argument",
-            `${modResult.reason}\n\n💡 ${modResult.suggestion}`
-          );
-        }
-      } catch (error) {
-        if (error instanceof HttpsError) {
-          throw error;
-        }
-        console.error("Moderation error:", error);
       }
+    } catch (moderationError) {
+      console.error("Comment moderation outer error:", moderationError);
+      // モデレーションエラー時はコメントをそのまま表示
     }
 
-    // コメントを作成
-    const commentRef = db.collection("comments").doc();
-    await commentRef.set({
-      postId: postId,
-      userId: userId,
-      userDisplayName: userDisplayName,
-      userAvatarIndex: userAvatarIndex,
-      isAI: false,
-      content: content,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    // 投稿のコメント数を更新
-    await db.collection("posts").doc(postId).update({
-      commentCount: admin.firestore.FieldValue.increment(1),
-    });
-
-    return {success: true, commentId: commentRef.id};
+    return {success: true, commentId: commentRef.id, isNegative: false};
   }
 );
 

@@ -33,18 +33,26 @@ class PostCard extends StatelessWidget {
               // ユーザー情報
               Row(
                 children: [
-                  AvatarWidget(
-                    avatarIndex: post.userAvatarIndex,
-                    size: 44,
+                  GestureDetector(
+                    onTap: () => context.push('/user/${post.userId}'),
+                    child: AvatarWidget(
+                      avatarIndex: post.userAvatarIndex,
+                      size: 44,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          post.userDisplayName,
-                          style: Theme.of(context).textTheme.titleMedium,
+                        GestureDetector(
+                          onTap: () => context.push('/user/${post.userId}'),
+                          child: Text(
+                            post.userDisplayName,
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              color: AppColors.primary,
+                            ),
+                          ),
                         ),
                         Text(
                           timeago.format(post.createdAt, locale: 'ja'),
