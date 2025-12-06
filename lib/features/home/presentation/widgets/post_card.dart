@@ -42,23 +42,23 @@ class PostCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        GestureDetector(
-                          onTap: () => context.push('/user/${post.userId}'),
-                          child: Text(
+                    child: GestureDetector(
+                      onTap: () => context.push('/user/${post.userId}'),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
                             post.userDisplayName,
                             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                               color: AppColors.primary,
                             ),
                           ),
-                        ),
-                        Text(
-                          timeago.format(post.createdAt, locale: 'ja'),
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
+                          Text(
+                            timeago.format(post.createdAt, locale: 'ja'),
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   // オプションメニュー（通報など）

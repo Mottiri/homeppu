@@ -283,27 +283,23 @@ class ReportButton extends StatelessWidget {
 /// ネガティブコンテンツ検出時のエラーダイアログ
 class NegativeContentDialog extends StatelessWidget {
   final String message;
-  final int? newVirtue;
   final VoidCallback? onRetry;
 
   const NegativeContentDialog({
     super.key,
     required this.message,
-    this.newVirtue,
     this.onRetry,
   });
 
   static Future<void> show({
     required BuildContext context,
     required String message,
-    int? newVirtue,
     VoidCallback? onRetry,
   }) {
     return showDialog(
       context: context,
       builder: (context) => NegativeContentDialog(
         message: message,
-        newVirtue: newVirtue,
         onRetry: onRetry,
       ),
     );
@@ -315,6 +311,7 @@ class NegativeContentDialog extends StatelessWidget {
     final parts = message.split('\n\n');
     final reason = parts.isNotEmpty ? parts[0] : message;
     final suggestion = parts.length > 1 ? parts[1] : null;
+    final virtueInfo = parts.length > 2 ? parts[2] : null;
 
     return AlertDialog(
       title: Row(
@@ -369,34 +366,18 @@ class NegativeContentDialog extends StatelessWidget {
               ),
             ),
           ],
-          if (newVirtue != null) ...[
+          if (virtueInfo != null) ...[
             const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.warning.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  const Text('😔', style: TextStyle(fontSize: 16)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '徳ポイントが減少しました（現在: $newVirtue）',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.warning,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
+            Text(
+              virtueInfo,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: AppColors.textHint,
               ),
             ),
           ],
           const SizedBox(height: 16),
           Text(
-            'ほめっぷは「世界一優しいSNS」を目指しているよ。\n次はポジティブな言葉で投稿してみてね！',
+            'ほめっぷは「世界一優しいSNS」を目指しているよ。\nポジティブな言葉で投稿し直してみてね！',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: AppColors.textSecondary,
             ),
@@ -404,6 +385,14 @@ class NegativeContentDialog extends StatelessWidget {
         ],
       ),
       actions: [
+        if (onRetry != null)
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              onRetry!();
+            },
+            child: const Text('書き直す'),
+          ),
         ElevatedButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('わかった'),

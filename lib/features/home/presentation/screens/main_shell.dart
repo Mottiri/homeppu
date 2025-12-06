@@ -13,7 +13,8 @@ class MainShell extends StatelessWidget {
     final location = GoRouterState.of(context).matchedLocation;
     if (location.startsWith('/home')) return 0;
     if (location.startsWith('/circles')) return 1;
-    if (location.startsWith('/profile')) return 2;
+    if (location.startsWith('/tasks')) return 2;
+    if (location.startsWith('/profile')) return 3;
     return 0;
   }
 
@@ -85,21 +86,13 @@ class MainShell extends StatelessWidget {
                   ),
                 ),
                 
-                // 通知（将来用）
+                // タスク
                 _NavItem(
-                  icon: Icons.notifications_outlined,
-                  activeIcon: Icons.notifications_rounded,
-                  label: 'お知らせ',
-                  isActive: false,
-                  onTap: () {
-                    // TODO: 通知画面
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('通知機能は準備中だよ！'),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  },
+                  icon: Icons.checklist_outlined,
+                  activeIcon: Icons.checklist_rounded,
+                  label: 'タスク',
+                  isActive: currentIndex == 2,
+                  onTap: () => context.go('/tasks'),
                 ),
                 
                 // マイページ
@@ -107,7 +100,7 @@ class MainShell extends StatelessWidget {
                   icon: Icons.person_outline,
                   activeIcon: Icons.person_rounded,
                   label: 'マイページ',
-                  isActive: currentIndex == 2,
+                  isActive: currentIndex == 3,
                   onTap: () => context.go('/profile'),
                 ),
               ],

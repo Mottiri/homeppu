@@ -13,6 +13,7 @@ import '../../features/profile/presentation/screens/profile_screen.dart';
 import '../../features/profile/presentation/screens/settings_screen.dart';
 import '../../features/circle/presentation/screens/circles_screen.dart';
 import '../../features/circle/presentation/screens/circle_detail_screen.dart';
+import '../../features/tasks/presentation/screens/tasks_screen.dart';
 import '../../shared/providers/auth_provider.dart';
 
 /// アプリのルーター設定
@@ -77,6 +78,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             name: 'profile',
             builder: (context, state) => const ProfileScreen(),
           ),
+          GoRoute(
+            path: '/tasks',
+            name: 'tasks',
+            builder: (context, state) => const TasksScreen(),
+          ),
+          // 他ユーザーのプロフィール（ナビゲーションバー付き）
+          GoRoute(
+            path: '/user/:userId',
+            name: 'userProfile',
+            builder: (context, state) {
+              final userId = state.pathParameters['userId']!;
+              return ProfileScreen(userId: userId);
+            },
+          ),
         ],
       ),
       
@@ -114,10 +129,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const SettingsScreen(),
       ),
       
-      // 他ユーザーのプロフィール
+      // 他ユーザーのプロフィール（ShellRoute外からのアクセス用）
       GoRoute(
-        path: '/user/:userId',
-        name: 'userProfile',
+        path: '/profile/:userId',
+        name: 'otherUserProfile',
         builder: (context, state) {
           final userId = state.pathParameters['userId']!;
           return ProfileScreen(userId: userId);

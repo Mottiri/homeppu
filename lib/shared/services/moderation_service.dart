@@ -98,36 +98,6 @@ enum ReportReason {
   final String label;
 }
 
-/// 投稿作成結果
-class PostResult {
-  final String postId;
-  final bool isNegative;
-  final String? message;
-  final int? newVirtue;
-
-  PostResult({
-    required this.postId,
-    required this.isNegative,
-    this.message,
-    this.newVirtue,
-  });
-}
-
-/// コメント作成結果
-class CommentResult {
-  final String commentId;
-  final bool isNegative;
-  final String? message;
-  final int? newVirtue;
-
-  CommentResult({
-    required this.commentId,
-    required this.isNegative,
-    this.message,
-    this.newVirtue,
-  });
-}
-
 /// モデレーションサービス
 /// Cloud Functionsを呼び出してコンテンツモデレーションを行う
 class ModerationService {
@@ -137,8 +107,8 @@ class ModerationService {
       : _functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
 
   /// モデレーション付き投稿作成
-  /// 投稿は必ず作成され、ネガティブな場合は非表示となり徳ポイントが減少する
-  Future<PostResult> createPostWithModeration({
+  /// ネガティブな内容の場合はエラーをスローし、徳ポイントが減少する
+  Future<String> createPostWithModeration({
     required String content,
     required String userDisplayName,
     required int userAvatarIndex,
@@ -159,25 +129,18 @@ class ModerationService {
         'circleId': circleId,
       });
 
-      final data = result.data as Map<String, dynamic>;
-      return PostResult(
-        postId: data['postId'] as String,
-        isNegative: data['isNegative'] as bool? ?? false,
-        message: data['message'] as String?,
-        newVirtue: data['newVirtue'] as int?,
-      );
+      return result.data['postId'] as String;
     } on FirebaseFunctionsException catch (e) {
-      // BANやレート制限などの場合
+      // モデレーションで拒否された場合
       throw ModerationException(
-        message: e.message ?? 'エラーが発生しました',
+        message: e.message ?? 'ネガティブな内容が検出されました',
         code: e.code,
       );
     }
   }
 
   /// モデレーション付きコメント作成
-  /// コメントは必ず作成され、ネガティブな場合は非表示となり徳ポイントが減少する
-  Future<CommentResult> createCommentWithModeration({
+  Future<String> createCommentWithModeration({
     required String postId,
     required String content,
     required String userDisplayName,
@@ -196,16 +159,10 @@ class ModerationService {
         'userAvatarIndex': userAvatarIndex,
       });
 
-      final data = result.data as Map<String, dynamic>;
-      return CommentResult(
-        commentId: data['commentId'] as String,
-        isNegative: data['isNegative'] as bool? ?? false,
-        message: data['message'] as String?,
-        newVirtue: data['newVirtue'] as int?,
-      );
+      return result.data['commentId'] as String;
     } on FirebaseFunctionsException catch (e) {
       throw ModerationException(
-        message: e.message ?? 'エラーが発生しました',
+        message: e.message ?? 'ネガティブな内容が検出されました',
         code: e.code,
       );
     }

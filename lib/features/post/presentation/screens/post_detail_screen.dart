@@ -47,7 +47,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     try {
       // モデレーション付きコメント作成（Cloud Functions経由）
       final moderationService = ref.read(moderationServiceProvider);
-      final result = await moderationService.createCommentWithModeration(
+      await moderationService.createCommentWithModeration(
         postId: widget.postId,
         content: content,
         userDisplayName: user.displayName,
@@ -58,24 +58,14 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
 
       // 徳ポイント状態を更新
       ref.invalidate(virtueStatusProvider);
-
-      if (result.isNegative && mounted) {
-        // ネガティブコンテンツが検出された場合（コメントは作成済み、非表示）
-        await NegativeContentDialog.show(
-          context: context,
-          message: result.message ?? 'ネガティブな内容が検出されました',
-          newVirtue: result.newVirtue,
-        );
-      }
     } on ModerationException catch (e) {
       if (mounted) {
-        // BANやエラーの場合
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.message),
-            backgroundColor: AppColors.error,
-          ),
+        // ネガティブコンテンツが検出された場合
+        await NegativeContentDialog.show(
+          context: context,
+          message: e.message,
         );
+        // 徳ポイント状態を更新
         ref.invalidate(virtueStatusProvider);
       }
     } catch (e) {
@@ -143,24 +133,32 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                 // ユーザー情報
                                 Row(
                                   children: [
-                                    AvatarWidget(
-                                      avatarIndex: post.userAvatarIndex,
-                                      size: 48,
+                                    GestureDetector(
+                                      onTap: () => context.push('/profile/${post.userId}'),
+                                      child: AvatarWidget(
+                                        avatarIndex: post.userAvatarIndex,
+                                        size: 48,
+                                      ),
                                     ),
                                     const SizedBox(width: 12),
                                     Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            post.userDisplayName,
-                                            style: Theme.of(context).textTheme.titleMedium,
-                                          ),
-                                          Text(
-                                            timeago.format(post.createdAt, locale: 'ja'),
-                                            style: Theme.of(context).textTheme.bodySmall,
-                                          ),
-                                        ],
+                                      child: GestureDetector(
+                                        onTap: () => context.push('/profile/${post.userId}'),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              post.userDisplayName,
+                                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                                color: AppColors.primary,
+                                              ),
+                                            ),
+                                            Text(
+                                              timeago.format(post.createdAt, locale: 'ja'),
+                                              style: Theme.of(context).textTheme.bodySmall,
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -357,7 +355,7 @@ class _CommentTile extends StatelessWidget {
   const _CommentTile({required this.comment});
 
   void _navigateToProfile(BuildContext context) {
-    context.push('/user/${comment.userId}');
+    context.push('/profile/${comment.userId}');
   }
 
   @override
