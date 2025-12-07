@@ -10,6 +10,7 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../shared/models/post_model.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
 import '../../../../shared/widgets/report_dialog.dart';
+import '../../../../shared/widgets/video_player_screen.dart';
 import 'reaction_button.dart';
 
 /// 投稿カード
@@ -514,9 +515,10 @@ class _MediaGrid extends StatelessWidget {
   }
 
   void _showVideoPlayer(BuildContext context, String url) {
-    // TODO: 動画プレイヤーを実装
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('動画再生機能は準備中です')),
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => VideoPlayerScreen(videoUrl: url),
+      ),
     );
   }
 

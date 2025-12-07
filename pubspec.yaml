@@ -41,6 +41,8 @@ dependencies:
   google_generative_ai: ^0.4.7
   cloud_functions: ^5.6.2
   file_picker: ^10.3.7
+  video_player: ^2.9.3
+  chewie: ^1.10.0
 
 dev_dependencies:
   flutter_test:
