@@ -923,6 +923,7 @@ export const createPostWithModeration = onCall(
     region: "asia-northeast1",
     secrets: [geminiApiKey],
     timeoutSeconds: 120, // メディアモデレーションのため長めに設定
+    memory: "1GiB", // 動画処理のためメモリを増加
   },
   async (request) => {
     if (!request.auth) {
