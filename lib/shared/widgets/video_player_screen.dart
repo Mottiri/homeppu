@@ -27,6 +27,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   @override
   void initState() {
     super.initState();
+    // フルスクリーンモード（ナビゲーションバーを非表示）
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     _initializePlayer();
   }
 
@@ -92,6 +94,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   void dispose() {
     _chewieController?.dispose();
     _videoController.dispose();
+    // システムUIを元に戻す
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     // 画面の向きを元に戻す
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
