@@ -58,8 +58,11 @@ service cloud.firestore {
       allow create: if isAuthenticated() && isNotBanned() && 
         request.resource.data.userId == request.auth.uid;
       
-      // 削除: コメント投稿者のみ
-      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+      // 削除: コメント投稿者 または 元投稿の所有者
+      allow delete: if isAuthenticated() && (
+        isOwner(resource.data.userId) ||
+        isOwner(get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.userId)
+      );
     }
     
     // サークルコレクション
