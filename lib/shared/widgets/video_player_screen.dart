@@ -52,6 +52,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         showControls: true,
         showOptions: true, // オプションメニューを表示（再生速度選択）
         playbackSpeeds: _speedOptions,
+        optionsTranslation: OptionsTranslation(
+          playbackSpeedButtonText: '再生速度',
+          cancelButtonText: 'キャンセル',
+        ),
         placeholder: Container(
           color: Colors.black,
           child: const Center(
