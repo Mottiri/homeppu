@@ -1,4 +1,4 @@
-import {onDocumentCreated} from "firebase-functions/v2/firestore";
+﻿import {onDocumentCreated} from "firebase-functions/v2/firestore";
 import {onCall, HttpsError} from "firebase-functions/v2/https";
 import {defineSecret} from "firebase-functions/params";
 import * as admin from "firebase-admin";
@@ -1399,12 +1399,19 @@ export const getTasks = onCall(
 
     const tasksSnapshot = await query.orderBy("createdAt", "asc").get();
 
-    // 今日の日付を取得（日本時間）
-    const now = new Date();
-    const jstOffset = 9 * 60 * 60 * 1000; // JST offset in milliseconds
-    const jstNow = new Date(now.getTime() + jstOffset);
-    const todayStart = new Date(jstNow.getFullYear(), jstNow.getMonth(), jstNow.getDate());
-    todayStart.setTime(todayStart.getTime() - jstOffset); // Convert back to UTC
+    // 今日の日付を取得（日本時間 JST = UTC+9）
+    const now = new Date(); // UTC時間
+    const jstOffsetMs = 9 * 60 * 60 * 1000; // 9時間をミリ秒で
+
+    // 現在時刻をJSTに変換して、年月日を取得（getUTC*を使用して確実にUTC基準で計算）
+    const nowJst = new Date(now.getTime() + jstOffsetMs);
+    const jstYear = nowJst.getUTCFullYear();
+    const jstMonth = nowJst.getUTCMonth();
+    const jstDay = nowJst.getUTCDate();
+
+    // JSTの今日0:00をUTC時間で表現
+    // Date.UTCで確実にUTC時間を作成し、-9時間でJSTの0:00のUTC表現を得る
+    const todayStart = new Date(Date.UTC(jstYear, jstMonth, jstDay) - jstOffsetMs);
 
     return {
       tasks: tasksSnapshot.docs.map((doc) => {
