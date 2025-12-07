@@ -493,7 +493,8 @@ class _MediaGrid extends StatelessWidget {
   }
 
   void _showFullScreenImage(BuildContext context, String url) {
-    Navigator.of(context).push(
+    // rootNavigator: true でShellRouteの外で表示（ボトムナビを非表示）
+    Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute(
         builder: (context) => Scaffold(
           backgroundColor: Colors.black,
@@ -515,7 +516,8 @@ class _MediaGrid extends StatelessWidget {
   }
 
   void _showVideoPlayer(BuildContext context, String url) {
-    Navigator.of(context).push(
+    // rootNavigator: true でShellRouteの外で表示（ボトムナビを非表示）
+    Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute(
         builder: (context) => VideoPlayerScreen(videoUrl: url),
       ),
