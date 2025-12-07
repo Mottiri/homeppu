@@ -364,7 +364,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               const SliverToBoxAdapter(child: SizedBox(height: 12)),
 
               // 投稿一覧
-              _UserPostsList(userId: user.uid),
+              _UserPostsList(userId: user.uid, isMyProfile: _isOwnProfile),
 
               const SliverToBoxAdapter(child: SizedBox(height: 100)),
             ],
@@ -378,8 +378,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 /// ユーザーの投稿一覧
 class _UserPostsList extends StatelessWidget {
   final String userId;
+  final bool isMyProfile;
 
-  const _UserPostsList({required this.userId});
+  const _UserPostsList({required this.userId, this.isMyProfile = false});
 
   @override
   Widget build(BuildContext context) {
@@ -433,7 +434,7 @@ class _UserPostsList extends StatelessWidget {
           delegate: SliverChildBuilderDelegate(
             (context, index) {
               final post = posts[index];
-              return _ProfilePostCard(post: post);
+              return _ProfilePostCard(post: post, isMyProfile: isMyProfile);
             },
             childCount: posts.length,
           ),
@@ -444,26 +445,142 @@ class _UserPostsList extends StatelessWidget {
 }
 
 /// プロフィール画面用の投稿カード
-class _ProfilePostCard extends StatelessWidget {
+class _ProfilePostCard extends StatefulWidget {
   final PostModel post;
+  final bool isMyProfile;
 
-  const _ProfilePostCard({required this.post});
+  const _ProfilePostCard({required this.post, this.isMyProfile = false});
+
+  @override
+  State<_ProfilePostCard> createState() => _ProfilePostCardState();
+}
+
+class _ProfilePostCardState extends State<_ProfilePostCard> {
+  bool _isDeleting = false;
+
+  Future<void> _deletePost() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('投稿を削除'),
+        content: const Text('この投稿を削除しますか？\nこの操作は取り消せません。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('キャンセル'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('削除'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isDeleting = true);
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('posts')
+          .doc(widget.post.id)
+          .delete();
+
+      final comments = await FirebaseFirestore.instance
+          .collection('comments')
+          .where('postId', isEqualTo: widget.post.id)
+          .get();
+      
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in comments.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.post.userId)
+          .update({
+        'totalPosts': FieldValue.increment(-1),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('投稿を削除しました'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('削除に失敗しました: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        setState(() => _isDeleting = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: InkWell(
-        onTap: () => context.push('/post/${post.id}'),
+        onTap: () => context.push('/post/${widget.post.id}'),
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // ヘッダー（自分のプロフィールなら削除ボタン）
+              if (widget.isMyProfile)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    if (_isDeleting)
+                      const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    else
+                      PopupMenuButton<String>(
+                        icon: Icon(
+                          Icons.more_horiz,
+                          color: AppColors.textHint,
+                          size: 20,
+                        ),
+                        onSelected: (value) {
+                          if (value == 'delete') {
+                            _deletePost();
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                                SizedBox(width: 8),
+                                Text('この投稿を削除', style: TextStyle(color: Colors.red)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              
               // 投稿内容
               Text(
-                post.content,
+                widget.post.content,
                 style: Theme.of(context).textTheme.bodyLarge,
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
@@ -475,7 +592,7 @@ class _ProfilePostCard extends StatelessWidget {
                 children: [
                   // 時間
                   Text(
-                    timeago.format(post.createdAt, locale: 'ja'),
+                    timeago.format(widget.post.createdAt, locale: 'ja'),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: AppColors.textHint,
                     ),
@@ -491,7 +608,7 @@ class _ProfilePostCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        '${post.reactions.values.fold(0, (a, b) => a + b)}',
+                        '${widget.post.reactions.values.fold(0, (a, b) => a + b)}',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                       const SizedBox(width: 12),
@@ -502,7 +619,7 @@ class _ProfilePostCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        '${post.commentCount}',
+                        '${widget.post.commentCount}',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],

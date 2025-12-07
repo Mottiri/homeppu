@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
@@ -11,10 +13,101 @@ import '../../../../shared/widgets/report_dialog.dart';
 import 'reaction_button.dart';
 
 /// 投稿カード
-class PostCard extends StatelessWidget {
+class PostCard extends StatefulWidget {
   final PostModel post;
+  final VoidCallback? onDeleted;
 
-  const PostCard({super.key, required this.post});
+  const PostCard({super.key, required this.post, this.onDeleted});
+
+  @override
+  State<PostCard> createState() => _PostCardState();
+}
+
+class _PostCardState extends State<PostCard> {
+  bool _isDeleting = false;
+
+  PostModel get post => widget.post;
+
+  /// 自分の投稿かどうか
+  bool get isMyPost {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    return currentUser != null && currentUser.uid == post.userId;
+  }
+
+  /// 投稿を削除
+  Future<void> _deletePost() async {
+    // 確認ダイアログを表示
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('投稿を削除'),
+        content: const Text('この投稿を削除しますか？\nこの操作は取り消せません。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('キャンセル'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('削除'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isDeleting = true);
+
+    try {
+      // Firestoreから投稿を削除
+      await FirebaseFirestore.instance
+          .collection('posts')
+          .doc(post.id)
+          .delete();
+
+      // 関連するコメントも削除
+      final comments = await FirebaseFirestore.instance
+          .collection('comments')
+          .where('postId', isEqualTo: post.id)
+          .get();
+      
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in comments.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+
+      // ユーザーの投稿数を減少
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(post.userId)
+          .update({
+        'totalPosts': FieldValue.increment(-1),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('投稿を削除しました'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        widget.onDeleted?.call();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('削除に失敗しました: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        setState(() => _isDeleting = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -62,37 +155,59 @@ class PostCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  // オプションメニュー（通報など）
-                  PopupMenuButton<String>(
-                    icon: Icon(
-                      Icons.more_horiz,
-                      color: AppColors.textHint,
-                      size: 20,
-                    ),
-                    onSelected: (value) {
-                      if (value == 'report') {
-                        ReportDialog.show(
-                          context: context,
-                          contentId: post.id,
-                          contentType: 'post',
-                          targetUserId: post.userId,
-                          contentPreview: post.content,
-                        );
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'report',
-                        child: Row(
-                          children: [
-                            Icon(Icons.flag_outlined, size: 18),
-                            SizedBox(width: 8),
-                            Text('この投稿を通報'),
+                  // オプションメニュー（通報・削除など）
+                  _isDeleting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : PopupMenuButton<String>(
+                          icon: Icon(
+                            Icons.more_horiz,
+                            color: AppColors.textHint,
+                            size: 20,
+                          ),
+                          onSelected: (value) {
+                            if (value == 'report') {
+                              ReportDialog.show(
+                                context: context,
+                                contentId: post.id,
+                                contentType: 'post',
+                                targetUserId: post.userId,
+                                contentPreview: post.content,
+                              );
+                            } else if (value == 'delete') {
+                              _deletePost();
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            // 自分の投稿なら削除オプションを表示
+                            if (isMyPost)
+                              const PopupMenuItem(
+                                value: 'delete',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                                    SizedBox(width: 8),
+                                    Text('この投稿を削除', style: TextStyle(color: Colors.red)),
+                                  ],
+                                ),
+                              ),
+                            // 他人の投稿なら通報オプションを表示
+                            if (!isMyPost)
+                              const PopupMenuItem(
+                                value: 'report',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.flag_outlined, size: 18),
+                                    SizedBox(width: 8),
+                                    Text('この投稿を通報'),
+                                  ],
+                                ),
+                              ),
                           ],
                         ),
-                      ),
-                    ],
-                  ),
                 ],
               ),
               
