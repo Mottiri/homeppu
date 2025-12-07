@@ -22,7 +22,7 @@ class TaskCard extends StatefulWidget {
 class _TaskCardState extends State<TaskCard> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
-  bool _isCompleting = false;
+  bool _isProcessing = false;
 
   @override
   void initState() {
@@ -43,14 +43,24 @@ class _TaskCardState extends State<TaskCard> with SingleTickerProviderStateMixin
   }
 
   Future<void> _handleComplete() async {
-    if (_isCompleting) return;
-    setState(() => _isCompleting = true);
+    if (_isProcessing) return;
+    setState(() => _isProcessing = true);
 
     await _controller.forward();
     await _controller.reverse();
 
     widget.onComplete();
-    setState(() => _isCompleting = false);
+    // 注意: 親コンポーネントでタスクリストが更新されるため、
+    // ここでは_isProcessingをリセットしない
+  }
+
+  Future<void> _handleUncomplete() async {
+    if (_isProcessing) return;
+    setState(() => _isProcessing = true);
+
+    widget.onUncomplete();
+    // 注意: 親コンポーネントでタスクリストが更新されるため、
+    // ここでは_isProcessingをリセットしない
   }
 
   @override
@@ -93,23 +103,34 @@ class _TaskCardState extends State<TaskCard> with SingleTickerProviderStateMixin
           child: ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             leading: GestureDetector(
-              onTap: isCompletedToday ? null : _handleComplete,
+              onTap: isCompletedToday || _isProcessing ? null : _handleComplete,
               child: Container(
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: isCompletedToday
-                      ? Colors.green.shade100
-                      : Colors.grey.shade100,
+                  color: _isProcessing
+                      ? Colors.orange.shade50
+                      : isCompletedToday
+                          ? Colors.green.shade100
+                          : Colors.grey.shade100,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Center(
-                  child: isCompletedToday
-                      ? Icon(Icons.check_circle, color: Colors.green.shade600, size: 28)
-                      : Text(
-                          widget.task.emoji,
-                          style: const TextStyle(fontSize: 24),
-                        ),
+                  child: _isProcessing
+                      ? SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: Colors.orange.shade600,
+                          ),
+                        )
+                      : isCompletedToday
+                          ? Icon(Icons.check_circle, color: Colors.green.shade600, size: 28)
+                          : Text(
+                              widget.task.emoji,
+                              style: const TextStyle(fontSize: 24),
+                            ),
                 ),
               ),
             ),
@@ -141,52 +162,82 @@ class _TaskCardState extends State<TaskCard> with SingleTickerProviderStateMixin
                     ),
                   )
                 : null,
-            trailing: isCompletedToday
-                ? GestureDetector(
-                    onTap: widget.onUncomplete,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade100,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.check_circle,
-                            color: Colors.green.shade700,
-                            size: 16,
+            trailing: _isProcessing
+                ? Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.orange.shade600,
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '完了',
-                            style: TextStyle(
-                              color: Colors.green.shade700,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '処理中',
+                          style: TextStyle(
+                            color: Colors.orange.shade700,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   )
-                : IconButton(
-                    icon: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).primaryColor.withAlpha(25),
-                        borderRadius: BorderRadius.circular(8),
+                : isCompletedToday
+                    ? GestureDetector(
+                        onTap: _handleUncomplete,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade100,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.check_circle,
+                                color: Colors.green.shade700,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '完了',
+                                style: TextStyle(
+                                  color: Colors.green.shade700,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : IconButton(
+                        icon: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).primaryColor.withAlpha(25),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            Icons.check,
+                            color: Theme.of(context).primaryColor,
+                            size: 20,
+                          ),
+                        ),
+                        onPressed: _handleComplete,
                       ),
-                      child: Icon(
-                        Icons.check,
-                        color: Theme.of(context).primaryColor,
-                        size: 20,
-                      ),
-                    ),
-                    onPressed: _handleComplete,
-                  ),
           ),
         ),
       ),
