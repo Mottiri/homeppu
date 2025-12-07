@@ -178,7 +178,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                         // 再生速度ボタン（右下、フルスクリーンボタンの左）
                         Positioned(
                           right: 56, // フルスクリーンボタンの左に配置
-                          bottom: 12,
+                          bottom: 52, // シークバーの上に配置
                           child: GestureDetector(
                             onTap: () {
                               setState(() => _showSpeedSelector = !_showSpeedSelector);
@@ -205,7 +205,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                         if (_showSpeedSelector)
                           Positioned(
                             right: 16,
-                            bottom: 56,
+                            bottom: 96, // シークバーの上に配置
                             child: Container(
                               decoration: BoxDecoration(
                                 color: Colors.black87,
