@@ -1399,14 +1399,33 @@ export const getTasks = onCall(
 
     const tasksSnapshot = await query.orderBy("createdAt", "asc").get();
 
+    // 今日の日付を取得（日本時間）
+    const now = new Date();
+    const jstOffset = 9 * 60 * 60 * 1000; // JST offset in milliseconds
+    const jstNow = new Date(now.getTime() + jstOffset);
+    const todayStart = new Date(jstNow.getFullYear(), jstNow.getMonth(), jstNow.getDate());
+    todayStart.setTime(todayStart.getTime() - jstOffset); // Convert back to UTC
+
     return {
-      tasks: tasksSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || null,
-        updatedAt: doc.data().updatedAt?.toDate?.()?.toISOString() || null,
-        lastCompletedAt: doc.data().lastCompletedAt?.toDate?.()?.toISOString() || null,
-      })),
+      tasks: tasksSnapshot.docs.map((doc) => {
+        const data = doc.data();
+        const lastCompletedAt = data.lastCompletedAt?.toDate?.();
+        
+        // デイリータスクの場合、今日完了したかどうかを判定
+        let isCompletedToday = false;
+        if (data.type === "daily" && lastCompletedAt) {
+          isCompletedToday = lastCompletedAt >= todayStart;
+        }
+
+        return {
+          id: doc.id,
+          ...data,
+          isCompletedToday: isCompletedToday,
+          createdAt: data.createdAt?.toDate?.()?.toISOString() || null,
+          updatedAt: data.updatedAt?.toDate?.()?.toISOString() || null,
+          lastCompletedAt: lastCompletedAt?.toISOString() || null,
+        };
+      }),
     };
   }
 );
