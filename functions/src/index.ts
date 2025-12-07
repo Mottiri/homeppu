@@ -560,23 +560,28 @@ export const moderateContent = onCall(
 
     const prompt = `
 あなたはSNS「ほめっぷ」のコンテンツモデレーターです。
-「ほめっぷ」は「世界一優しいSNS」を目指しており、ネガティブな発言を排除しています。
+「ほめっぷ」は「世界一優しいSNS」を目指しています。
 
-以下の投稿内容を分析して、ネガティブかどうか判定してください。
+以下の投稿内容を分析して、「他者への攻撃」があるかどうか判定してください。
 
-【判定基準】
-- harassment: 誹謗中傷、人を傷つける発言
-- hate_speech: 差別、ヘイトスピーチ
-- profanity: 不適切な言葉、暴言、罵倒
-- self_harm: 自傷行為の助長
+【ブロック対象（isNegative: true）】
+- harassment: 他者への誹謗中傷、人格攻撃、悪口
+- hate_speech: 差別、ヘイトスピーチ、特定の属性への攻撃
+- profanity: 他者への暴言、罵倒
+- self_harm: 自傷行為の助長（※これは安全上ブロック）
 - spam: スパム、宣伝
-- none: 問題なし
 
-【重要】
-- 「ほめっぷ」はポジティブなSNSなので、軽い愚痴や不満も「ネガティブ」と判定します
-- ただし、自分の頑張りや努力を共有する投稿は「none」です
-- 他人を批判する内容は「harassment」です
-- 判定は厳しめにお願いします
+【許可する内容（isNegative: false）】
+- 個人の感情表現：「悲しい」「辛い」「落ち込んだ」「疲れた」「しんどい」
+- 自分自身への愚痴：「自分ダメだな」「失敗した」「うまくいかない」
+- 日常の不満：「雨だ〜」「電車遅れた」「眠い」
+- 頑張りや努力の共有
+- 共感を求める投稿
+
+【重要な判定基準】
+⚠️ 「他者を攻撃しているか」が最重要ポイントです
+⚠️ 自分の気持ちを素直に表現することは許可します
+⚠️ 誰かを傷つける意図がない限り「none」と判定してください
 
 【投稿内容】
 ${content}
@@ -698,24 +703,28 @@ export const createPostWithModeration = onCall(
 
       const prompt = `
 あなたはSNS「ほめっぷ」のコンテンツモデレーターです。
-「ほめっぷ」は「世界一優しいSNS」を目指しており、ネガティブな発言を排除しています。
+「ほめっぷ」は「世界一優しいSNS」を目指しています。
 
-以下の投稿内容を分析して、ネガティブかどうか判定してください。
+以下の投稿内容を分析して、「他者への攻撃」があるかどうか判定してください。
 
-【判定基準】
-- harassment: 誹謗中傷、人を傷つける発言
-- hate_speech: 差別、ヘイトスピーチ
-- profanity: 不適切な言葉、暴言、罵倒
-- self_harm: 自傷行為の助長
+【ブロック対象（isNegative: true）】
+- harassment: 他者への誹謗中傷、人格攻撃、悪口
+- hate_speech: 差別、ヘイトスピーチ、特定の属性への攻撃
+- profanity: 他者への暴言、罵倒
+- self_harm: 自傷行為の助長（※これは安全上ブロック）
 - spam: スパム、宣伝
-- none: 問題なし
 
-【重要】
-- 「ほめっぷ」はポジティブなSNSなので、軽い愚痴や不満も「ネガティブ」と判定します
-- ただし、自分の頑張りや努力を共有する投稿は「none」です
-- 他人を批判する内容は「harassment」です
-- 疲れた、辛いなどの軽い愚痴は許容します（共感を求める投稿なので）
-- 判定は厳しすぎず、明らかにネガティブな場合のみ「isNegative: true」にしてください
+【許可する内容（isNegative: false）】
+- 個人の感情表現：「悲しい」「辛い」「落ち込んだ」「疲れた」「しんどい」
+- 自分自身への愚痴：「自分ダメだな」「失敗した」「うまくいかない」
+- 日常の不満：「雨だ〜」「電車遅れた」「眠い」
+- 頑張りや努力の共有
+- 共感を求める投稿
+
+【重要な判定基準】
+⚠️ 「他者を攻撃しているか」が最重要ポイントです
+⚠️ 自分の気持ちを素直に表現することは許可します
+⚠️ 誰かを傷つける意図がない限り「none」と判定してください
 
 【投稿内容】
 ${content}
@@ -847,13 +856,22 @@ export const createCommentWithModeration = onCall(
 
       const prompt = `
 あなたはSNS「ほめっぷ」のコンテンツモデレーターです。
-以下のコメント内容を分析して、ネガティブかどうか判定してください。
+以下のコメント内容を分析して、「他者への攻撃」があるかどうか判定してください。
 
-【判定基準】
-- harassment: 誹謗中傷
-- hate_speech: 差別
-- profanity: 暴言
+【ブロック対象（isNegative: true）】
+- harassment: 他者への誹謗中傷、人格攻撃、悪口
+- hate_speech: 差別、ヘイトスピーチ
+- profanity: 他者への暴言、罵倒
 - none: 問題なし
+
+【許可する内容（isNegative: false）】
+- 共感のコメント：「わかる」「大変だったね」「頑張ったね」
+- 感情の共有：「私も同じ気持ち」「辛いよね」
+- 応援のコメント
+
+【重要】
+⚠️ 「他者を攻撃しているか」が最重要ポイントです
+⚠️ 誰かを傷つける意図がない限り「none」と判定してください
 
 【コメント内容】
 ${content}
@@ -1061,5 +1079,455 @@ export const getVirtueStatus = onCall(
       warningThreshold: VIRTUE_CONFIG.warningThreshold,
       maxVirtue: VIRTUE_CONFIG.initial,
     };
+  }
+);
+
+// ===============================================
+// タスク管理機能
+// ===============================================
+
+// タスク完了時の徳ポイント設定
+const TASK_VIRTUE_CONFIG = {
+  dailyCompletion: 5,    // デイリータスク完了: +5
+  goalCompletion: 20,    // 目標タスク完了: +20
+  streakBonus: 2,        // 連続ボーナス: +2/日
+  maxStreakBonus: 20,    // 連続ボーナス上限: +20
+};
+
+/**
+ * 徳ポイントを増加させる関数
+ */
+async function increaseVirtue(
+  userId: string,
+  reason: string,
+  amount: number
+): Promise<{newVirtue: number}> {
+  const userRef = db.collection("users").doc(userId);
+  const userDoc = await userRef.get();
+  
+  if (!userDoc.exists) {
+    throw new HttpsError("not-found", "ユーザーが見つかりません");
+  }
+  
+  const userData = userDoc.data()!;
+  const currentVirtue = userData.virtue || VIRTUE_CONFIG.initial;
+  const newVirtue = Math.min(currentVirtue + amount, VIRTUE_CONFIG.initial); // 上限を超えない
+  
+  await userRef.update({virtue: newVirtue});
+  
+  // 履歴を記録
+  await db.collection("virtueHistory").add({
+    userId: userId,
+    type: "increase",
+    amount: amount,
+    reason: reason,
+    beforeVirtue: currentVirtue,
+    afterVirtue: newVirtue,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  
+  return {newVirtue};
+}
+
+/**
+ * タスクを作成する
+ */
+export const createTask = onCall(
+  {region: "asia-northeast1"},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    const userId = request.auth.uid;
+    const {content, type} = request.data;
+
+    if (!content || typeof content !== "string") {
+      throw new HttpsError("invalid-argument", "タスク内容が必要です");
+    }
+
+    if (!type || (type !== "daily" && type !== "goal")) {
+      throw new HttpsError("invalid-argument", "タスクタイプは'daily'または'goal'です");
+    }
+
+    const taskRef = db.collection("tasks").doc();
+    await taskRef.set({
+      userId: userId,
+      content: content,
+      type: type,
+      isCompleted: false,
+      streak: 0,
+      lastCompletedAt: null,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return {success: true, taskId: taskRef.id};
+  }
+);
+
+/**
+ * タスクを完了する
+ */
+export const completeTask = onCall(
+  {region: "asia-northeast1"},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    const userId = request.auth.uid;
+    const {taskId} = request.data;
+
+    if (!taskId) {
+      throw new HttpsError("invalid-argument", "タスクIDが必要です");
+    }
+
+    const taskRef = db.collection("tasks").doc(taskId);
+    const taskDoc = await taskRef.get();
+
+    if (!taskDoc.exists) {
+      throw new HttpsError("not-found", "タスクが見つかりません");
+    }
+
+    const taskData = taskDoc.data()!;
+
+    if (taskData.userId !== userId) {
+      throw new HttpsError("permission-denied", "このタスクを完了する権限がありません");
+    }
+
+    // 既に完了している場合
+    if (taskData.type === "goal" && taskData.isCompleted) {
+      throw new HttpsError("failed-precondition", "この目標は既に完了しています");
+    }
+
+    // デイリータスクの場合、今日既に完了しているかチェック
+    if (taskData.type === "daily" && taskData.lastCompletedAt) {
+      const lastCompleted = taskData.lastCompletedAt.toDate();
+      const today = new Date();
+      if (
+        lastCompleted.getFullYear() === today.getFullYear() &&
+        lastCompleted.getMonth() === today.getMonth() &&
+        lastCompleted.getDate() === today.getDate()
+      ) {
+        throw new HttpsError("failed-precondition", "今日は既にこのタスクを完了しています");
+      }
+    }
+
+    // 連続日数を計算
+    let newStreak = 1;
+    if (taskData.type === "daily" && taskData.lastCompletedAt) {
+      const lastCompleted = taskData.lastCompletedAt.toDate();
+      const today = new Date();
+      const diffTime = today.getTime() - lastCompleted.getTime();
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays === 1) {
+        newStreak = (taskData.streak || 0) + 1;
+      } else if (diffDays === 0) {
+        newStreak = taskData.streak || 1;
+      }
+    }
+
+    // 徳ポイント計算
+    let virtueGain = taskData.type === "goal"
+      ? TASK_VIRTUE_CONFIG.goalCompletion
+      : TASK_VIRTUE_CONFIG.dailyCompletion;
+
+    // 連続ボーナス
+    const streakBonus = Math.min(
+      newStreak * TASK_VIRTUE_CONFIG.streakBonus,
+      TASK_VIRTUE_CONFIG.maxStreakBonus
+    );
+    virtueGain += streakBonus;
+
+    // 徳ポイントを増加
+    const virtueResult = await increaseVirtue(
+      userId,
+      `タスク完了: ${taskData.content}`,
+      virtueGain
+    );
+
+    // タスクを更新
+    await taskRef.update({
+      isCompleted: taskData.type === "goal" ? true : taskData.isCompleted,
+      streak: newStreak,
+      lastCompletedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return {
+      success: true,
+      virtueGain: virtueGain,
+      newVirtue: virtueResult.newVirtue,
+      streak: newStreak,
+      streakBonus: streakBonus,
+    };
+  }
+);
+
+/**
+ * タスクの完了を取り消す
+ */
+export const uncompleteTask = onCall(
+  {region: "asia-northeast1"},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    const userId = request.auth.uid;
+    const {taskId} = request.data;
+
+    if (!taskId) {
+      throw new HttpsError("invalid-argument", "タスクIDが必要です");
+    }
+
+    const taskRef = db.collection("tasks").doc(taskId);
+    const taskDoc = await taskRef.get();
+
+    if (!taskDoc.exists) {
+      throw new HttpsError("not-found", "タスクが見つかりません");
+    }
+
+    const taskData = taskDoc.data()!;
+
+    if (taskData.userId !== userId) {
+      throw new HttpsError("permission-denied", "このタスクの完了を取り消す権限がありません");
+    }
+
+    // 既に未完了の場合は何もしない
+    if (taskData.type === "goal" && !taskData.isCompleted) {
+      throw new HttpsError("failed-precondition", "この目標は既に未完了です");
+    }
+    // デイリータスクの場合、lastCompletedAtがnullなら未完了
+    if (taskData.type === "daily" && !taskData.lastCompletedAt) {
+      throw new HttpsError("failed-precondition", "このデイリータスクは既に未完了です");
+    }
+
+    // 徳ポイント減少量を計算 (完了時と同額を減らす)
+    let virtueLoss = taskData.type === "goal"
+      ? TASK_VIRTUE_CONFIG.goalCompletion
+      : TASK_VIRTUE_CONFIG.dailyCompletion;
+
+    // 連続ボーナスも減少
+    const currentStreak = taskData.streak || 0;
+    const streakBonus = Math.min(
+      currentStreak * TASK_VIRTUE_CONFIG.streakBonus,
+      TASK_VIRTUE_CONFIG.maxStreakBonus
+    );
+    virtueLoss += streakBonus;
+
+    // 徳ポイントを減少
+    const virtueResult = await decreaseVirtue(
+      userId,
+      `タスク完了取り消し: ${taskData.content}`,
+      virtueLoss
+    );
+
+    // タスクを更新
+    await taskRef.update({
+      isCompleted: false,
+      streak: taskData.type === "daily" ? Math.max(0, currentStreak - 1) : 0,
+      lastCompletedAt: null,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return {
+      success: true,
+      virtueLoss: virtueLoss,
+      newVirtue: virtueResult.newVirtue,
+      newStreak: taskData.type === "daily" ? Math.max(0, currentStreak - 1) : 0,
+    };
+  }
+);
+
+/**
+ * タスクを削除する
+ */
+export const deleteTask = onCall(
+  {region: "asia-northeast1"},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    const userId = request.auth.uid;
+    const {taskId} = request.data;
+
+    if (!taskId) {
+      throw new HttpsError("invalid-argument", "タスクIDが必要です");
+    }
+
+    const taskRef = db.collection("tasks").doc(taskId);
+    const taskDoc = await taskRef.get();
+
+    if (!taskDoc.exists) {
+      throw new HttpsError("not-found", "タスクが見つかりません");
+    }
+
+    const taskData = taskDoc.data()!;
+
+    if (taskData.userId !== userId) {
+      throw new HttpsError("permission-denied", "このタスクを削除する権限がありません");
+    }
+
+    await taskRef.delete();
+
+    return {success: true};
+  }
+);
+
+/**
+ * タスク一覧を取得する
+ */
+export const getTasks = onCall(
+  {region: "asia-northeast1"},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    const userId = request.auth.uid;
+    const {type} = request.data;
+
+    let query = db.collection("tasks").where("userId", "==", userId);
+
+    if (type && (type === "daily" || type === "goal")) {
+      query = query.where("type", "==", type);
+    }
+
+    const tasksSnapshot = await query.orderBy("createdAt", "asc").get();
+
+    return {
+      tasks: tasksSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || null,
+        updatedAt: doc.data().updatedAt?.toDate?.()?.toISOString() || null,
+        lastCompletedAt: doc.data().lastCompletedAt?.toDate?.()?.toISOString() || null,
+      })),
+    };
+  }
+);
+
+// ===============================================
+// フォロー機能
+// ===============================================
+
+/**
+ * ユーザーをフォローする
+ */
+export const followUser = onCall(
+  {region: "asia-northeast1"},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    const followerId = request.auth.uid;
+    const {targetUserId} = request.data;
+
+    if (!targetUserId) {
+      throw new HttpsError("invalid-argument", "フォロー対象のユーザーIDが必要です");
+    }
+
+    if (followerId === targetUserId) {
+      throw new HttpsError("invalid-argument", "自分自身をフォローすることはできません");
+    }
+
+    // 対象ユーザーの存在確認
+    const targetUserDoc = await db.collection("users").doc(targetUserId).get();
+    if (!targetUserDoc.exists) {
+      throw new HttpsError("not-found", "ユーザーが見つかりません");
+    }
+
+    // 既にフォローしているかチェック
+    const followRef = db.collection("follows").doc(`${followerId}_${targetUserId}`);
+    const followDoc = await followRef.get();
+
+    if (followDoc.exists) {
+      throw new HttpsError("already-exists", "既にフォローしています");
+    }
+
+    // フォローを作成
+    await followRef.set({
+      followerId: followerId,
+      followingId: targetUserId,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // フォロワー数・フォロー数を更新
+    await db.collection("users").doc(followerId).update({
+      followingCount: admin.firestore.FieldValue.increment(1),
+    });
+    await db.collection("users").doc(targetUserId).update({
+      followersCount: admin.firestore.FieldValue.increment(1),
+    });
+
+    return {success: true};
+  }
+);
+
+/**
+ * フォローを解除する
+ */
+export const unfollowUser = onCall(
+  {region: "asia-northeast1"},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    const followerId = request.auth.uid;
+    const {targetUserId} = request.data;
+
+    if (!targetUserId) {
+      throw new HttpsError("invalid-argument", "フォロー解除対象のユーザーIDが必要です");
+    }
+
+    const followRef = db.collection("follows").doc(`${followerId}_${targetUserId}`);
+    const followDoc = await followRef.get();
+
+    if (!followDoc.exists) {
+      throw new HttpsError("not-found", "フォローしていません");
+    }
+
+    // フォローを削除
+    await followRef.delete();
+
+    // フォロワー数・フォロー数を更新
+    await db.collection("users").doc(followerId).update({
+      followingCount: admin.firestore.FieldValue.increment(-1),
+    });
+    await db.collection("users").doc(targetUserId).update({
+      followersCount: admin.firestore.FieldValue.increment(-1),
+    });
+
+    return {success: true};
+  }
+);
+
+/**
+ * フォロー状態を確認する
+ */
+export const getFollowStatus = onCall(
+  {region: "asia-northeast1"},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    const followerId = request.auth.uid;
+    const {targetUserId} = request.data;
+
+    if (!targetUserId) {
+      throw new HttpsError("invalid-argument", "対象ユーザーIDが必要です");
+    }
+
+    const followRef = db.collection("follows").doc(`${followerId}_${targetUserId}`);
+    const followDoc = await followRef.get();
+
+    return {isFollowing: followDoc.exists};
   }
 );
