@@ -14,7 +14,7 @@ class MainShell extends StatelessWidget {
     if (location.startsWith('/home')) return 0;
     if (location.startsWith('/circles')) return 1;
     if (location.startsWith('/tasks')) return 2;
-    if (location.startsWith('/profile')) return 3;
+    if (location.startsWith('/profile') || location.startsWith('/user')) return 3;
     return 0;
   }
 
@@ -88,8 +88,8 @@ class MainShell extends StatelessWidget {
                 
                 // タスク
                 _NavItem(
-                  icon: Icons.checklist_outlined,
-                  activeIcon: Icons.checklist_rounded,
+                  icon: Icons.check_circle_outline,
+                  activeIcon: Icons.check_circle_rounded,
                   label: 'タスク',
                   isActive: currentIndex == 2,
                   onTap: () => context.go('/tasks'),

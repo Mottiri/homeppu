@@ -74,16 +74,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const CirclesScreen(),
           ),
           GoRoute(
-            path: '/profile',
-            name: 'profile',
-            builder: (context, state) => const ProfileScreen(),
-          ),
-          GoRoute(
             path: '/tasks',
             name: 'tasks',
             builder: (context, state) => const TasksScreen(),
           ),
-          // 他ユーザーのプロフィール（ナビゲーションバー付き）
+          GoRoute(
+            path: '/profile',
+            name: 'profile',
+            builder: (context, state) => const ProfileScreen(),
+          ),
+          // ShellRoute内のユーザープロフィール（ナビバー表示）
           GoRoute(
             path: '/user/:userId',
             name: 'userProfile',
@@ -129,10 +129,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const SettingsScreen(),
       ),
       
-      // 他ユーザーのプロフィール（ShellRoute外からのアクセス用）
+      // 投稿詳細画面からの遷移用（ナビバーなし）
       GoRoute(
         path: '/profile/:userId',
-        name: 'otherUserProfile',
+        name: 'profileDetail',
         builder: (context, state) {
           final userId = state.pathParameters['userId']!;
           return ProfileScreen(userId: userId);

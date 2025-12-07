@@ -142,23 +142,23 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                     ),
                                     const SizedBox(width: 12),
                                     Expanded(
-                                      child: GestureDetector(
-                                        onTap: () => context.push('/profile/${post.userId}'),
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          GestureDetector(
+                                            onTap: () => context.push('/profile/${post.userId}'),
+                                            child: Text(
                                               post.userDisplayName,
                                               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                                 color: AppColors.primary,
                                               ),
                                             ),
-                                            Text(
-                                              timeago.format(post.createdAt, locale: 'ja'),
-                                              style: Theme.of(context).textTheme.bodySmall,
-                                            ),
-                                          ],
-                                        ),
+                                          ),
+                                          Text(
+                                            timeago.format(post.createdAt, locale: 'ja'),
+                                            style: Theme.of(context).textTheme.bodySmall,
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ],

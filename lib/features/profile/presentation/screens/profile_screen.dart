@@ -9,9 +9,9 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../shared/models/user_model.dart';
 import '../../../../shared/models/post_model.dart';
 import '../../../../shared/providers/auth_provider.dart';
+import '../../../../shared/services/follow_service.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
 import '../../../../shared/widgets/virtue_indicator.dart';
-import '../../../../shared/services/follow_service.dart';
 
 /// プロフィール画面
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -29,7 +29,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _isOwnProfile = false;
   bool _isFollowing = false;
   bool _isFollowLoading = false;
-  final FollowService _followService = FollowService();
+  final _followService = FollowService();
 
   @override
   void initState() {
@@ -62,7 +62,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         print('ProfileScreen: Document exists: ${doc.exists}');
         
         if (doc.exists) {
-          // フォロー状態を確認
+          // フォロー状態を取得
           final isFollowing = await _followService.getFollowStatus(widget.userId!);
           
           setState(() {
@@ -88,38 +88,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   Future<void> _toggleFollow() async {
     if (_isFollowLoading || _targetUser == null) return;
-    
+
     setState(() => _isFollowLoading = true);
-    
+
     try {
       if (_isFollowing) {
         await _followService.unfollowUser(_targetUser!.uid);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('フォローを解除しました'),
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
       } else {
         await _followService.followUser(_targetUser!.uid);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${_targetUser!.displayName}さんをフォローしました！'),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        }
       }
-      
       setState(() => _isFollowing = !_isFollowing);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('エラーが発生しました: $e')),
+          SnackBar(
+            content: Text(_isFollowing ? 'フォロー解除に失敗しました' : 'フォローに失敗しました'),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     } finally {
@@ -246,6 +231,42 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           style: Theme.of(context).textTheme.headlineSmall,
                         ),
 
+                        // フォローボタン（他ユーザーのみ）
+                        if (!_isOwnProfile) ...[
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            width: 140,
+                            child: ElevatedButton(
+                              onPressed: _isFollowLoading ? null : _toggleFollow,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _isFollowing
+                                    ? AppColors.surfaceVariant
+                                    : AppColors.primary,
+                                foregroundColor: _isFollowing
+                                    ? AppColors.textPrimary
+                                    : Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                  side: _isFollowing
+                                      ? BorderSide(color: AppColors.primary.withOpacity(0.3))
+                                      : BorderSide.none,
+                                ),
+                              ),
+                              child: _isFollowLoading
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: AppColors.primary,
+                                      ),
+                                    )
+                                  : Text(_isFollowing ? 'フォロー中' : 'フォローする'),
+                            ),
+                          ),
+                        ],
+
                         // 自己紹介
                         if (user.bio != null && user.bio!.isNotEmpty) ...[
                           const SizedBox(height: 8),
@@ -270,14 +291,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               icon: Icons.article_outlined,
                             ),
                             _StatItem(
-                              label: 'フォロワー',
-                              value: '${user.followersCount}',
-                              icon: Icons.people_outline,
-                            ),
-                            _StatItem(
-                              label: 'フォロー',
-                              value: '${user.followingCount}',
-                              icon: Icons.person_add_outlined,
+                              label: '称賛',
+                              value: '${user.totalPraises}',
+                              icon: Icons.favorite_outline,
                             ),
                             // 自分のプロフィールの場合は詳細な徳ポイント表示
                             if (_isOwnProfile)
@@ -291,46 +307,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               ),
                           ],
                         ),
-
-                        // フォローボタン（他ユーザーのプロフィールの場合のみ）
-                        if (!_isOwnProfile) ...[
-                          const SizedBox(height: 20),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: _isFollowLoading ? null : _toggleFollow,
-                              icon: _isFollowLoading
-                                  ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : Icon(
-                                      _isFollowing
-                                          ? Icons.person_remove
-                                          : Icons.person_add,
-                                    ),
-                              label: Text(
-                                _isFollowing ? 'フォロー中' : 'フォローする',
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: _isFollowing
-                                    ? Colors.grey.shade300
-                                    : AppColors.primary,
-                                foregroundColor: _isFollowing
-                                    ? Colors.black87
-                                    : Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
 
                         // BAN状態の警告
                         if (user.isBanned) ...[
