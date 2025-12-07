@@ -1,8 +1,13 @@
-﻿import {onDocumentCreated} from "firebase-functions/v2/firestore";
+import {onDocumentCreated} from "firebase-functions/v2/firestore";
 import {onCall, HttpsError} from "firebase-functions/v2/https";
 import {defineSecret} from "firebase-functions/params";
 import * as admin from "firebase-admin";
-import {GoogleGenerativeAI} from "@google/generative-ai";
+import {GoogleGenerativeAI, Part} from "@google/generative-ai";
+import {GoogleAIFileManager} from "@google/generative-ai/server";
+import * as https from "https";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -37,8 +42,250 @@ interface ModerationResult {
   suggestion: string;    // 改善提案
 }
 
+// メディアモデレーション結果
+interface MediaModerationResult {
+  isInappropriate: boolean;
+  category: "adult" | "violence" | "hate" | "dangerous" | "none";
+  confidence: number;
+  reason: string;
+}
+
+// メディアアイテムの型
+interface MediaItem {
+  url: string;
+  type: "image" | "video" | "file";
+  fileName?: string;
+  mimeType?: string;
+  fileSize?: number;
+}
+
 // APIキーをSecretsから取得
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
+
+// ===============================================
+// メディアモデレーション
+// ===============================================
+
+/**
+ * URLからファイルをダウンロード
+ */
+async function downloadFile(url: string): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    https.get(url, (response) => {
+      // リダイレクト対応
+      if (response.statusCode === 301 || response.statusCode === 302) {
+        const redirectUrl = response.headers.location;
+        if (redirectUrl) {
+          downloadFile(redirectUrl).then(resolve).catch(reject);
+          return;
+        }
+      }
+
+      if (response.statusCode !== 200) {
+        reject(new Error(`Failed to download: ${response.statusCode}`));
+        return;
+      }
+
+      const chunks: Buffer[] = [];
+      response.on("data", (chunk) => chunks.push(chunk));
+      response.on("end", () => resolve(Buffer.concat(chunks)));
+      response.on("error", reject);
+    }).on("error", reject);
+  });
+}
+
+/**
+ * 画像をモデレーション
+ */
+async function moderateImage(
+  model: ReturnType<GoogleGenerativeAI["getGenerativeModel"]>,
+  imageUrl: string,
+  mimeType: string = "image/jpeg"
+): Promise<MediaModerationResult> {
+  try {
+    const imageBuffer = await downloadFile(imageUrl);
+    const base64Image = imageBuffer.toString("base64");
+
+    const prompt = `
+この画像がSNSへの投稿として適切かどうか判定してください。
+
+【ブロック対象（isInappropriate: true）】
+- adult: 成人向けコンテンツ、露出の多い画像、性的な内容
+- violence: 暴力的な画像、血液、怪我、残虐な内容
+- hate: ヘイトシンボル、差別的な画像
+- dangerous: 危険な行為、違法行為、武器
+
+【許可する内容（isInappropriate: false）】
+- 通常の人物写真（水着でも一般的なものはOK）
+- 風景、食べ物、ペット
+- 趣味の写真
+- 芸術作品（明らかにアダルトでない限り）
+
+【回答形式】
+必ず以下のJSON形式のみで回答してください：
+{
+  "isInappropriate": true または false,
+  "category": "adult" | "violence" | "hate" | "dangerous" | "none",
+  "confidence": 0から1の数値,
+  "reason": "判定理由"
+}
+`;
+
+    const imagePart: Part = {
+      inlineData: {
+        mimeType: mimeType,
+        data: base64Image,
+      },
+    };
+
+    const result = await model.generateContent([prompt, imagePart]);
+    const responseText = result.response.text().trim();
+
+    let jsonText = responseText;
+    const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (jsonMatch) {
+      jsonText = jsonMatch[1];
+    }
+
+    return JSON.parse(jsonText) as MediaModerationResult;
+  } catch (error) {
+    console.error("Image moderation error:", error);
+    // エラー時は許可
+    return {
+      isInappropriate: false,
+      category: "none",
+      confidence: 0,
+      reason: "モデレーションエラー",
+    };
+  }
+}
+
+/**
+ * 動画をモデレーション
+ */
+async function moderateVideo(
+  apiKey: string,
+  model: ReturnType<GoogleGenerativeAI["getGenerativeModel"]>,
+  videoUrl: string,
+  mimeType: string = "video/mp4"
+): Promise<MediaModerationResult> {
+  const tempFilePath = path.join(os.tmpdir(), `video_${Date.now()}.mp4`);
+
+  try {
+    // 動画をダウンロード
+    const videoBuffer = await downloadFile(videoUrl);
+    fs.writeFileSync(tempFilePath, videoBuffer);
+
+    // Gemini File APIにアップロード
+    const fileManager = new GoogleAIFileManager(apiKey);
+    const uploadResult = await fileManager.uploadFile(tempFilePath, {
+      mimeType: mimeType,
+      displayName: `moderation_video_${Date.now()}`,
+    });
+
+    // アップロード完了を待つ
+    let file = uploadResult.file;
+    while (file.state === "PROCESSING") {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const result = await fileManager.getFile(file.name);
+      file = result;
+    }
+
+    if (file.state === "FAILED") {
+      throw new Error("Video processing failed");
+    }
+
+    const prompt = `
+この動画がSNSへの投稿として適切かどうか判定してください。
+
+【ブロック対象（isInappropriate: true）】
+- adult: 成人向けコンテンツ、露出の多い映像、性的な内容
+- violence: 暴力的な映像、血液、怪我、残虐な内容
+- hate: ヘイトシンボル、差別的な内容
+- dangerous: 危険な行為、違法行為、武器
+
+【許可する内容（isInappropriate: false）】
+- 通常の人物動画
+- 日常の風景、食事、ペット
+- 趣味の動画
+- ダンス、運動（健全なもの）
+
+【回答形式】
+必ず以下のJSON形式のみで回答してください：
+{
+  "isInappropriate": true または false,
+  "category": "adult" | "violence" | "hate" | "dangerous" | "none",
+  "confidence": 0から1の数値,
+  "reason": "判定理由"
+}
+`;
+
+    const videoPart: Part = {
+      fileData: {
+        mimeType: file.mimeType,
+        fileUri: file.uri,
+      },
+    };
+
+    const result = await model.generateContent([prompt, videoPart]);
+    const responseText = result.response.text().trim();
+
+    let jsonText = responseText;
+    const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (jsonMatch) {
+      jsonText = jsonMatch[1];
+    }
+
+    // アップロードしたファイルを削除
+    try {
+      await fileManager.deleteFile(file.name);
+    } catch (e) {
+      console.log("Failed to delete uploaded file:", e);
+    }
+
+    return JSON.parse(jsonText) as MediaModerationResult;
+  } catch (error) {
+    console.error("Video moderation error:", error);
+    // エラー時は許可
+    return {
+      isInappropriate: false,
+      category: "none",
+      confidence: 0,
+      reason: "モデレーションエラー",
+    };
+  } finally {
+    // 一時ファイルを削除
+    if (fs.existsSync(tempFilePath)) {
+      fs.unlinkSync(tempFilePath);
+    }
+  }
+}
+
+/**
+ * メディアアイテムをモデレーション
+ */
+async function moderateMedia(
+  apiKey: string,
+  model: ReturnType<GoogleGenerativeAI["getGenerativeModel"]>,
+  mediaItems: MediaItem[]
+): Promise<{passed: boolean; failedItem?: MediaItem; result?: MediaModerationResult}> {
+  for (const item of mediaItems) {
+    if (item.type === "image") {
+      const result = await moderateImage(model, item.url, item.mimeType || "image/jpeg");
+      if (result.isInappropriate && result.confidence >= 0.7) {
+        return {passed: false, failedItem: item, result};
+      }
+    } else if (item.type === "video") {
+      const result = await moderateVideo(apiKey, model, item.url, item.mimeType || "video/mp4");
+      if (result.isInappropriate && result.confidence >= 0.7) {
+        return {passed: false, failedItem: item, result};
+      }
+    }
+    // fileタイプはスキップ（PDFなどのモデレーションは複雑なため）
+  }
+
+  return {passed: true};
+}
 
 // AIペルソナ定義（より人間らしく）
 const AI_PERSONAS = [
@@ -560,28 +807,23 @@ export const moderateContent = onCall(
 
     const prompt = `
 あなたはSNS「ほめっぷ」のコンテンツモデレーターです。
-「ほめっぷ」は「世界一優しいSNS」を目指しています。
+「ほめっぷ」は「世界一優しいSNS」を目指しており、ネガティブな発言を排除しています。
 
-以下の投稿内容を分析して、「他者への攻撃」があるかどうか判定してください。
+以下の投稿内容を分析して、ネガティブかどうか判定してください。
 
-【ブロック対象（isNegative: true）】
-- harassment: 他者への誹謗中傷、人格攻撃、悪口
-- hate_speech: 差別、ヘイトスピーチ、特定の属性への攻撃
-- profanity: 他者への暴言、罵倒
-- self_harm: 自傷行為の助長（※これは安全上ブロック）
+【判定基準】
+- harassment: 誹謗中傷、人を傷つける発言
+- hate_speech: 差別、ヘイトスピーチ
+- profanity: 不適切な言葉、暴言、罵倒
+- self_harm: 自傷行為の助長
 - spam: スパム、宣伝
+- none: 問題なし
 
-【許可する内容（isNegative: false）】
-- 個人の感情表現：「悲しい」「辛い」「落ち込んだ」「疲れた」「しんどい」
-- 自分自身への愚痴：「自分ダメだな」「失敗した」「うまくいかない」
-- 日常の不満：「雨だ〜」「電車遅れた」「眠い」
-- 頑張りや努力の共有
-- 共感を求める投稿
-
-【重要な判定基準】
-⚠️ 「他者を攻撃しているか」が最重要ポイントです
-⚠️ 自分の気持ちを素直に表現することは許可します
-⚠️ 誰かを傷つける意図がない限り「none」と判定してください
+【重要】
+- 「ほめっぷ」はポジティブなSNSなので、軽い愚痴や不満も「ネガティブ」と判定します
+- ただし、自分の頑張りや努力を共有する投稿は「none」です
+- 他人を批判する内容は「harassment」です
+- 判定は厳しめにお願いします
 
 【投稿内容】
 ${content}
@@ -677,14 +919,18 @@ async function decreaseVirtue(
  * ネガティブな内容は投稿を拒否し、徳を減少
  */
 export const createPostWithModeration = onCall(
-  {region: "asia-northeast1", secrets: [geminiApiKey]},
+  {
+    region: "asia-northeast1",
+    secrets: [geminiApiKey],
+    timeoutSeconds: 120, // メディアモデレーションのため長めに設定
+  },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "ログインが必要です");
     }
 
     const userId = request.auth.uid;
-    const {content, userDisplayName, userAvatarIndex, postMode, circleId} = request.data;
+    const {content, userDisplayName, userAvatarIndex, postMode, circleId, mediaItems} = request.data;
 
     // ユーザーがBANされているかチェック
     const userDoc = await db.collection("users").doc(userId).get();
@@ -695,13 +941,20 @@ export const createPostWithModeration = onCall(
       );
     }
 
-    // コンテンツモデレーション
     const apiKey = geminiApiKey.value();
-    if (apiKey) {
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({model: "gemini-2.0-flash"});
+    if (!apiKey) {
+      console.error("GEMINI_API_KEY is not set");
+      // APIキーがない場合はモデレーションをスキップして投稿を許可
+    }
 
-      const prompt = `
+    const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
+    const model = genAI?.getGenerativeModel({model: "gemini-2.0-flash"});
+
+    // ===============================================
+    // 1. テキストモデレーション
+    // ===============================================
+    if (model && content) {
+      const textPrompt = `
 あなたはSNS「ほめっぷ」のコンテンツモデレーターです。
 「ほめっぷ」は「世界一優しいSNS」を目指しています。
 
@@ -741,7 +994,7 @@ ${content}
 `;
 
       try {
-        const result = await model.generateContent(prompt);
+        const result = await model.generateContent(textPrompt);
         const responseText = result.response.text().trim();
 
         let jsonText = responseText;
@@ -780,12 +1033,68 @@ ${content}
         if (error instanceof HttpsError) {
           throw error;
         }
-        console.error("Moderation error:", error);
+        console.error("Text moderation error:", error);
         // エラー時は投稿を許可
       }
     }
 
-    // レート制限チェック
+    // ===============================================
+    // 2. メディアモデレーション（画像・動画）
+    // ===============================================
+    if (apiKey && model && mediaItems && Array.isArray(mediaItems) && mediaItems.length > 0) {
+      console.log(`Moderating ${mediaItems.length} media items...`);
+
+      try {
+        const mediaResult = await moderateMedia(apiKey, model, mediaItems as MediaItem[]);
+
+        if (!mediaResult.passed && mediaResult.result) {
+          // 徳ポイントを減少
+          const virtueResult = await decreaseVirtue(
+            userId,
+            `不適切なメディア検出: ${mediaResult.result.category}`,
+            VIRTUE_CONFIG.lossPerNegative
+          );
+
+          // 記録
+          await db.collection("moderatedContent").add({
+            userId: userId,
+            content: `[メディア] ${mediaResult.failedItem?.fileName || "media"}`,
+            type: "media",
+            category: mediaResult.result.category,
+            confidence: mediaResult.result.confidence,
+            reason: mediaResult.result.reason,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+
+          // 不適切なメディアの場合はエラーを返す
+          const categoryLabels: Record<string, string> = {
+            adult: "成人向けコンテンツ",
+            violence: "暴力的なコンテンツ",
+            hate: "差別的なコンテンツ",
+            dangerous: "危険なコンテンツ",
+          };
+
+          const categoryLabel = categoryLabels[mediaResult.result.category] || "不適切なコンテンツ";
+
+          throw new HttpsError(
+            "invalid-argument",
+            `添付された${mediaResult.failedItem?.type === "video" ? "動画" : "画像"}に${categoryLabel}が含まれている可能性があります。\n\n別のメディアを選択してください。\n\n(徳ポイント: ${virtueResult.newVirtue})`
+          );
+        }
+
+        console.log("Media moderation passed");
+      } catch (error) {
+        if (error instanceof HttpsError) {
+          throw error;
+        }
+        console.error("Media moderation error:", error);
+        // エラー時は投稿を許可（厳しくしすぎない）
+      }
+    }
+
+    // ===============================================
+    // 3. レート制限チェック
+    // ===============================================
     const oneMinuteAgo = admin.firestore.Timestamp.fromDate(
       new Date(Date.now() - 60000)
     );
@@ -802,13 +1111,16 @@ ${content}
       );
     }
 
-    // 投稿を作成
+    // ===============================================
+    // 4. 投稿を作成
+    // ===============================================
     const postRef = db.collection("posts").doc();
     await postRef.set({
       userId: userId,
       userDisplayName: userDisplayName,
       userAvatarIndex: userAvatarIndex,
       content: content,
+      mediaItems: mediaItems || [],
       postMode: postMode,
       circleId: circleId || null,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -856,22 +1168,13 @@ export const createCommentWithModeration = onCall(
 
       const prompt = `
 あなたはSNS「ほめっぷ」のコンテンツモデレーターです。
-以下のコメント内容を分析して、「他者への攻撃」があるかどうか判定してください。
+以下のコメント内容を分析して、ネガティブかどうか判定してください。
 
-【ブロック対象（isNegative: true）】
-- harassment: 他者への誹謗中傷、人格攻撃、悪口
-- hate_speech: 差別、ヘイトスピーチ
-- profanity: 他者への暴言、罵倒
+【判定基準】
+- harassment: 誹謗中傷
+- hate_speech: 差別
+- profanity: 暴言
 - none: 問題なし
-
-【許可する内容（isNegative: false）】
-- 共感のコメント：「わかる」「大変だったね」「頑張ったね」
-- 感情の共有：「私も同じ気持ち」「辛いよね」
-- 応援のコメント
-
-【重要】
-⚠️ 「他者を攻撃しているか」が最重要ポイントです
-⚠️ 誰かを傷つける意図がない限り「none」と判定してください
 
 【コメント内容】
 ${content}
@@ -1079,481 +1382,5 @@ export const getVirtueStatus = onCall(
       warningThreshold: VIRTUE_CONFIG.warningThreshold,
       maxVirtue: VIRTUE_CONFIG.initial,
     };
-  }
-);
-
-// ===============================================
-// タスク管理機能
-// ===============================================
-
-// タスク完了時の徳ポイント設定
-const TASK_VIRTUE_CONFIG = {
-  dailyCompletion: 5,    // デイリータスク完了: +5
-  goalCompletion: 20,    // 目標タスク完了: +20
-  streakBonus: 2,        // 連続ボーナス: +2/日
-  maxStreakBonus: 20,    // 連続ボーナス上限: +20
-};
-
-/**
- * 徳ポイントを増加させる関数
- */
-async function increaseVirtue(
-  userId: string,
-  reason: string,
-  amount: number
-): Promise<{newVirtue: number}> {
-  const userRef = db.collection("users").doc(userId);
-  const userDoc = await userRef.get();
-  
-  if (!userDoc.exists) {
-    throw new HttpsError("not-found", "ユーザーが見つかりません");
-  }
-  
-  const userData = userDoc.data()!;
-  const currentVirtue = userData.virtue || VIRTUE_CONFIG.initial;
-  const newVirtue = Math.min(currentVirtue + amount, VIRTUE_CONFIG.initial); // 上限を超えない
-  
-  await userRef.update({virtue: newVirtue});
-  
-  // 履歴を記録
-  await db.collection("virtueHistory").add({
-    userId: userId,
-    type: "increase",
-    amount: amount,
-    reason: reason,
-    beforeVirtue: currentVirtue,
-    afterVirtue: newVirtue,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
-  
-  return {newVirtue};
-}
-
-/**
- * タスクを作成する
- */
-export const createTask = onCall(
-  {region: "asia-northeast1"},
-  async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "ログインが必要です");
-    }
-
-    const userId = request.auth.uid;
-    const {content, type} = request.data;
-
-    if (!content || typeof content !== "string") {
-      throw new HttpsError("invalid-argument", "タスク内容が必要です");
-    }
-
-    if (!type || (type !== "daily" && type !== "goal")) {
-      throw new HttpsError("invalid-argument", "タスクタイプは'daily'または'goal'です");
-    }
-
-    const taskRef = db.collection("tasks").doc();
-    await taskRef.set({
-      userId: userId,
-      content: content,
-      type: type,
-      isCompleted: false,
-      streak: 0,
-      lastCompletedAt: null,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    return {success: true, taskId: taskRef.id};
-  }
-);
-
-/**
- * タスクを完了する
- */
-export const completeTask = onCall(
-  {region: "asia-northeast1"},
-  async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "ログインが必要です");
-    }
-
-    const userId = request.auth.uid;
-    const {taskId} = request.data;
-
-    if (!taskId) {
-      throw new HttpsError("invalid-argument", "タスクIDが必要です");
-    }
-
-    const taskRef = db.collection("tasks").doc(taskId);
-    const taskDoc = await taskRef.get();
-
-    if (!taskDoc.exists) {
-      throw new HttpsError("not-found", "タスクが見つかりません");
-    }
-
-    const taskData = taskDoc.data()!;
-
-    if (taskData.userId !== userId) {
-      throw new HttpsError("permission-denied", "このタスクを完了する権限がありません");
-    }
-
-    // 既に完了している場合
-    if (taskData.type === "goal" && taskData.isCompleted) {
-      throw new HttpsError("failed-precondition", "この目標は既に完了しています");
-    }
-
-    // デイリータスクの場合、今日既に完了しているかチェック
-    if (taskData.type === "daily" && taskData.lastCompletedAt) {
-      const lastCompleted = taskData.lastCompletedAt.toDate();
-      const today = new Date();
-      if (
-        lastCompleted.getFullYear() === today.getFullYear() &&
-        lastCompleted.getMonth() === today.getMonth() &&
-        lastCompleted.getDate() === today.getDate()
-      ) {
-        throw new HttpsError("failed-precondition", "今日は既にこのタスクを完了しています");
-      }
-    }
-
-    // 連続日数を計算
-    let newStreak = 1;
-    if (taskData.type === "daily" && taskData.lastCompletedAt) {
-      const lastCompleted = taskData.lastCompletedAt.toDate();
-      const today = new Date();
-      const diffTime = today.getTime() - lastCompleted.getTime();
-      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-      
-      if (diffDays === 1) {
-        newStreak = (taskData.streak || 0) + 1;
-      } else if (diffDays === 0) {
-        newStreak = taskData.streak || 1;
-      }
-    }
-
-    // 徳ポイント計算
-    let virtueGain = taskData.type === "goal"
-      ? TASK_VIRTUE_CONFIG.goalCompletion
-      : TASK_VIRTUE_CONFIG.dailyCompletion;
-
-    // 連続ボーナス
-    const streakBonus = Math.min(
-      newStreak * TASK_VIRTUE_CONFIG.streakBonus,
-      TASK_VIRTUE_CONFIG.maxStreakBonus
-    );
-    virtueGain += streakBonus;
-
-    // 徳ポイントを増加
-    const virtueResult = await increaseVirtue(
-      userId,
-      `タスク完了: ${taskData.content}`,
-      virtueGain
-    );
-
-    // タスクを更新
-    await taskRef.update({
-      isCompleted: taskData.type === "goal" ? true : taskData.isCompleted,
-      streak: newStreak,
-      lastCompletedAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    return {
-      success: true,
-      virtueGain: virtueGain,
-      newVirtue: virtueResult.newVirtue,
-      streak: newStreak,
-      streakBonus: streakBonus,
-    };
-  }
-);
-
-/**
- * タスクの完了を取り消す
- */
-export const uncompleteTask = onCall(
-  {region: "asia-northeast1"},
-  async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "ログインが必要です");
-    }
-
-    const userId = request.auth.uid;
-    const {taskId} = request.data;
-
-    if (!taskId) {
-      throw new HttpsError("invalid-argument", "タスクIDが必要です");
-    }
-
-    const taskRef = db.collection("tasks").doc(taskId);
-    const taskDoc = await taskRef.get();
-
-    if (!taskDoc.exists) {
-      throw new HttpsError("not-found", "タスクが見つかりません");
-    }
-
-    const taskData = taskDoc.data()!;
-
-    if (taskData.userId !== userId) {
-      throw new HttpsError("permission-denied", "このタスクの完了を取り消す権限がありません");
-    }
-
-    // 既に未完了の場合は何もしない
-    if (taskData.type === "goal" && !taskData.isCompleted) {
-      throw new HttpsError("failed-precondition", "この目標は既に未完了です");
-    }
-    // デイリータスクの場合、lastCompletedAtがnullなら未完了
-    if (taskData.type === "daily" && !taskData.lastCompletedAt) {
-      throw new HttpsError("failed-precondition", "このデイリータスクは既に未完了です");
-    }
-
-    // 徳ポイント減少量を計算 (完了時と同額を減らす)
-    let virtueLoss = taskData.type === "goal"
-      ? TASK_VIRTUE_CONFIG.goalCompletion
-      : TASK_VIRTUE_CONFIG.dailyCompletion;
-
-    // 連続ボーナスも減少
-    const currentStreak = taskData.streak || 0;
-    const streakBonus = Math.min(
-      currentStreak * TASK_VIRTUE_CONFIG.streakBonus,
-      TASK_VIRTUE_CONFIG.maxStreakBonus
-    );
-    virtueLoss += streakBonus;
-
-    // 徳ポイントを減少
-    const virtueResult = await decreaseVirtue(
-      userId,
-      `タスク完了取り消し: ${taskData.content}`,
-      virtueLoss
-    );
-
-    // タスクを更新
-    await taskRef.update({
-      isCompleted: false,
-      streak: taskData.type === "daily" ? Math.max(0, currentStreak - 1) : 0,
-      lastCompletedAt: null,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    return {
-      success: true,
-      virtueLoss: virtueLoss,
-      newVirtue: virtueResult.newVirtue,
-      newStreak: taskData.type === "daily" ? Math.max(0, currentStreak - 1) : 0,
-    };
-  }
-);
-
-/**
- * タスクを削除する
- */
-export const deleteTask = onCall(
-  {region: "asia-northeast1"},
-  async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "ログインが必要です");
-    }
-
-    const userId = request.auth.uid;
-    const {taskId} = request.data;
-
-    if (!taskId) {
-      throw new HttpsError("invalid-argument", "タスクIDが必要です");
-    }
-
-    const taskRef = db.collection("tasks").doc(taskId);
-    const taskDoc = await taskRef.get();
-
-    if (!taskDoc.exists) {
-      throw new HttpsError("not-found", "タスクが見つかりません");
-    }
-
-    const taskData = taskDoc.data()!;
-
-    if (taskData.userId !== userId) {
-      throw new HttpsError("permission-denied", "このタスクを削除する権限がありません");
-    }
-
-    await taskRef.delete();
-
-    return {success: true};
-  }
-);
-
-/**
- * タスク一覧を取得する
- */
-export const getTasks = onCall(
-  {region: "asia-northeast1"},
-  async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "ログインが必要です");
-    }
-
-    const userId = request.auth.uid;
-    const {type} = request.data;
-
-    let query = db.collection("tasks").where("userId", "==", userId);
-
-    if (type && (type === "daily" || type === "goal")) {
-      query = query.where("type", "==", type);
-    }
-
-    const tasksSnapshot = await query.orderBy("createdAt", "asc").get();
-
-    // 今日の日付を取得（日本時間 JST = UTC+9）
-    const now = new Date(); // UTC時間
-    const jstOffsetMs = 9 * 60 * 60 * 1000; // 9時間をミリ秒で
-
-    // 現在時刻をJSTに変換して、年月日を取得（getUTC*を使用して確実にUTC基準で計算）
-    const nowJst = new Date(now.getTime() + jstOffsetMs);
-    const jstYear = nowJst.getUTCFullYear();
-    const jstMonth = nowJst.getUTCMonth();
-    const jstDay = nowJst.getUTCDate();
-
-    // JSTの今日0:00をUTC時間で表現
-    // Date.UTCで確実にUTC時間を作成し、-9時間でJSTの0:00のUTC表現を得る
-    const todayStart = new Date(Date.UTC(jstYear, jstMonth, jstDay) - jstOffsetMs);
-
-    return {
-      tasks: tasksSnapshot.docs.map((doc) => {
-        const data = doc.data();
-        const lastCompletedAt = data.lastCompletedAt?.toDate?.();
-        
-        // デイリータスクの場合、今日完了したかどうかを判定
-        let isCompletedToday = false;
-        if (data.type === "daily" && lastCompletedAt) {
-          isCompletedToday = lastCompletedAt >= todayStart;
-        }
-
-        return {
-          id: doc.id,
-          ...data,
-          isCompletedToday: isCompletedToday,
-          createdAt: data.createdAt?.toDate?.()?.toISOString() || null,
-          updatedAt: data.updatedAt?.toDate?.()?.toISOString() || null,
-          lastCompletedAt: lastCompletedAt?.toISOString() || null,
-        };
-      }),
-    };
-  }
-);
-
-// ===============================================
-// フォロー機能
-// ===============================================
-
-/**
- * ユーザーをフォローする
- */
-export const followUser = onCall(
-  {region: "asia-northeast1"},
-  async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "ログインが必要です");
-    }
-
-    const followerId = request.auth.uid;
-    const {targetUserId} = request.data;
-
-    if (!targetUserId) {
-      throw new HttpsError("invalid-argument", "フォロー対象のユーザーIDが必要です");
-    }
-
-    if (followerId === targetUserId) {
-      throw new HttpsError("invalid-argument", "自分自身をフォローすることはできません");
-    }
-
-    // 対象ユーザーの存在確認
-    const targetUserDoc = await db.collection("users").doc(targetUserId).get();
-    if (!targetUserDoc.exists) {
-      throw new HttpsError("not-found", "ユーザーが見つかりません");
-    }
-
-    // 既にフォローしているかチェック
-    const followRef = db.collection("follows").doc(`${followerId}_${targetUserId}`);
-    const followDoc = await followRef.get();
-
-    if (followDoc.exists) {
-      throw new HttpsError("already-exists", "既にフォローしています");
-    }
-
-    // フォローを作成
-    await followRef.set({
-      followerId: followerId,
-      followingId: targetUserId,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    // フォロワー数・フォロー数を更新
-    await db.collection("users").doc(followerId).update({
-      followingCount: admin.firestore.FieldValue.increment(1),
-    });
-    await db.collection("users").doc(targetUserId).update({
-      followersCount: admin.firestore.FieldValue.increment(1),
-    });
-
-    return {success: true};
-  }
-);
-
-/**
- * フォローを解除する
- */
-export const unfollowUser = onCall(
-  {region: "asia-northeast1"},
-  async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "ログインが必要です");
-    }
-
-    const followerId = request.auth.uid;
-    const {targetUserId} = request.data;
-
-    if (!targetUserId) {
-      throw new HttpsError("invalid-argument", "フォロー解除対象のユーザーIDが必要です");
-    }
-
-    const followRef = db.collection("follows").doc(`${followerId}_${targetUserId}`);
-    const followDoc = await followRef.get();
-
-    if (!followDoc.exists) {
-      throw new HttpsError("not-found", "フォローしていません");
-    }
-
-    // フォローを削除
-    await followRef.delete();
-
-    // フォロワー数・フォロー数を更新
-    await db.collection("users").doc(followerId).update({
-      followingCount: admin.firestore.FieldValue.increment(-1),
-    });
-    await db.collection("users").doc(targetUserId).update({
-      followersCount: admin.firestore.FieldValue.increment(-1),
-    });
-
-    return {success: true};
-  }
-);
-
-/**
- * フォロー状態を確認する
- */
-export const getFollowStatus = onCall(
-  {region: "asia-northeast1"},
-  async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "ログインが必要です");
-    }
-
-    const followerId = request.auth.uid;
-    const {targetUserId} = request.data;
-
-    if (!targetUserId) {
-      throw new HttpsError("invalid-argument", "対象ユーザーIDが必要です");
-    }
-
-    const followRef = db.collection("follows").doc(`${followerId}_${targetUserId}`);
-    const followDoc = await followRef.get();
-
-    return {isFollowing: followDoc.exists};
   }
 );

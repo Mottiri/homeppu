@@ -6,8 +6,23 @@ service firebase.storage {
       return request.auth != null;
     }
     
-    // ファイルサイズ制限（5MB）
-    function isValidSize() {
+    // 画像サイズ制限（10MB）
+    function isValidImageSize() {
+      return request.resource.size < 10 * 1024 * 1024;
+    }
+    
+    // 動画サイズ制限（100MB）
+    function isValidVideoSize() {
+      return request.resource.size < 100 * 1024 * 1024;
+    }
+    
+    // ファイルサイズ制限（50MB）
+    function isValidFileSize() {
+      return request.resource.size < 50 * 1024 * 1024;
+    }
+    
+    // プロフィール画像サイズ（5MB）
+    function isValidProfileSize() {
       return request.resource.size < 5 * 1024 * 1024;
     }
     
@@ -16,20 +31,62 @@ service firebase.storage {
       return request.resource.contentType.matches('image/.*');
     }
     
+    // 動画ファイルのみ許可
+    function isVideo() {
+      return request.resource.contentType.matches('video/.*');
+    }
+    
+    // 許可されるファイルタイプ
+    function isAllowedFile() {
+      return request.resource.contentType.matches('application/pdf')
+          || request.resource.contentType.matches('application/msword')
+          || request.resource.contentType.matches('application/vnd.openxmlformats-officedocument.*')
+          || request.resource.contentType.matches('application/vnd.ms-excel')
+          || request.resource.contentType.matches('text/plain')
+          || request.resource.contentType.matches('application/zip');
+    }
+    
     // ユーザープロフィール画像
     match /users/{userId}/profile/{fileName} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() 
                    && request.auth.uid == userId 
-                   && isValidSize() 
+                   && isValidProfileSize() 
                    && isImage();
     }
     
-    // 投稿画像
+    // 投稿メディア - 画像
+    match /posts/{userId}/images/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() 
+                   && request.auth.uid == userId 
+                   && isValidImageSize() 
+                   && isImage();
+    }
+    
+    // 投稿メディア - 動画
+    match /posts/{userId}/videos/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() 
+                   && request.auth.uid == userId 
+                   && isValidVideoSize() 
+                   && isVideo();
+    }
+    
+    // 投稿メディア - ファイル
+    match /posts/{userId}/files/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() 
+                   && request.auth.uid == userId 
+                   && isValidFileSize() 
+                   && isAllowedFile();
+    }
+    
+    // 後方互換性：古い形式の投稿画像
     match /posts/{postId}/{fileName} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() 
-                   && isValidSize() 
+                   && isValidImageSize() 
                    && isImage();
     }
     
@@ -37,7 +94,7 @@ service firebase.storage {
     match /circles/{circleId}/{fileName} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() 
-                   && isValidSize() 
+                   && isValidProfileSize() 
                    && isImage();
     }
   }

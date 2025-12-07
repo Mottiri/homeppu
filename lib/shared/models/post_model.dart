@@ -1,5 +1,48 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// メディアタイプ
+enum MediaType { image, video, file }
+
+/// メディアアイテム
+class MediaItem {
+  final String url;
+  final MediaType type;
+  final String? fileName;
+  final String? mimeType;
+  final int? fileSize; // バイト
+
+  MediaItem({
+    required this.url,
+    required this.type,
+    this.fileName,
+    this.mimeType,
+    this.fileSize,
+  });
+
+  factory MediaItem.fromMap(Map<String, dynamic> data) {
+    return MediaItem(
+      url: data['url'] ?? '',
+      type: MediaType.values.firstWhere(
+        (e) => e.name == data['type'],
+        orElse: () => MediaType.image,
+      ),
+      fileName: data['fileName'],
+      mimeType: data['mimeType'],
+      fileSize: data['fileSize'],
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'url': url,
+      'type': type.name,
+      'fileName': fileName,
+      'mimeType': mimeType,
+      'fileSize': fileSize,
+    };
+  }
+}
+
 /// 投稿モデル
 class PostModel {
   final String id;
@@ -7,9 +50,10 @@ class PostModel {
   final String userDisplayName;
   final int userAvatarIndex;
   final String content;
-  final String? imageUrl;
-  final String postMode;        // 'ai', 'mix', 'human'
-  final String? circleId;       // サークル投稿の場合
+  final String? imageUrl;           // 後方互換性のため残す
+  final List<MediaItem> mediaItems; // 新しいメディアリスト
+  final String postMode;            // 'ai', 'mix', 'human'
+  final String? circleId;           // サークル投稿の場合
   final DateTime createdAt;
   final Map<String, int> reactions;  // {'love': 5, 'praise': 3, ...}
   final int commentCount;
@@ -22,6 +66,7 @@ class PostModel {
     required this.userAvatarIndex,
     required this.content,
     this.imageUrl,
+    this.mediaItems = const [],
     required this.postMode,
     this.circleId,
     required this.createdAt,
@@ -32,6 +77,15 @@ class PostModel {
 
   factory PostModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+    
+    // メディアアイテムのパース
+    List<MediaItem> mediaItems = [];
+    if (data['mediaItems'] != null) {
+      mediaItems = (data['mediaItems'] as List)
+          .map((item) => MediaItem.fromMap(Map<String, dynamic>.from(item)))
+          .toList();
+    }
+    
     return PostModel(
       id: doc.id,
       userId: data['userId'] ?? '',
@@ -39,6 +93,7 @@ class PostModel {
       userAvatarIndex: data['userAvatarIndex'] ?? 0,
       content: data['content'] ?? '',
       imageUrl: data['imageUrl'],
+      mediaItems: mediaItems,
       postMode: data['postMode'] ?? 'mix',
       circleId: data['circleId'],
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
@@ -55,6 +110,7 @@ class PostModel {
       'userAvatarIndex': userAvatarIndex,
       'content': content,
       'imageUrl': imageUrl,
+      'mediaItems': mediaItems.map((item) => item.toMap()).toList(),
       'postMode': postMode,
       'circleId': circleId,
       'createdAt': Timestamp.fromDate(createdAt),
@@ -76,6 +132,7 @@ class PostModel {
     int? userAvatarIndex,
     String? content,
     String? imageUrl,
+    List<MediaItem>? mediaItems,
     String? postMode,
     String? circleId,
     DateTime? createdAt,
@@ -90,6 +147,7 @@ class PostModel {
       userAvatarIndex: userAvatarIndex ?? this.userAvatarIndex,
       content: content ?? this.content,
       imageUrl: imageUrl ?? this.imageUrl,
+      mediaItems: mediaItems ?? this.mediaItems,
       postMode: postMode ?? this.postMode,
       circleId: circleId ?? this.circleId,
       createdAt: createdAt ?? this.createdAt,
@@ -98,6 +156,27 @@ class PostModel {
       isVisible: isVisible ?? this.isVisible,
     );
   }
+
+  /// すべてのメディア（後方互換性も含めて）
+  List<MediaItem> get allMedia {
+    if (mediaItems.isNotEmpty) return mediaItems;
+    if (imageUrl != null && imageUrl!.isNotEmpty) {
+      return [MediaItem(url: imageUrl!, type: MediaType.image)];
+    }
+    return [];
+  }
+
+  /// 画像のみ
+  List<MediaItem> get images =>
+      allMedia.where((m) => m.type == MediaType.image).toList();
+
+  /// 動画のみ
+  List<MediaItem> get videos =>
+      allMedia.where((m) => m.type == MediaType.video).toList();
+
+  /// ファイルのみ
+  List<MediaItem> get files =>
+      allMedia.where((m) => m.type == MediaType.file).toList();
 }
 
 

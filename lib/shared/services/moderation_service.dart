@@ -1,4 +1,5 @@
 import 'package:cloud_functions/cloud_functions.dart';
+import '../models/post_model.dart';
 
 /// モデレーション結果
 class ModerationResult {
@@ -114,11 +115,12 @@ class ModerationService {
     required int userAvatarIndex,
     required String postMode,
     String? circleId,
+    List<MediaItem>? mediaItems,
   }) async {
     try {
       final callable = _functions.httpsCallable(
         'createPostWithModeration',
-        options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 60)),
       );
       
       final result = await callable.call({
@@ -127,6 +129,7 @@ class ModerationService {
         'userAvatarIndex': userAvatarIndex,
         'postMode': postMode,
         'circleId': circleId,
+        'mediaItems': mediaItems?.map((item) => item.toMap()).toList(),
       });
 
       return result.data['postId'] as String;
