@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../shared/models/post_model.dart';
+import '../../../../shared/models/user_model.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../widgets/post_card.dart';
 
@@ -114,12 +115,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 // おすすめタブ（全体のタイムライン）
                 _TimelineTab(
                   isFollowingOnly: false,
-                  currentUserId: currentUser.valueOrNull?.uid,
+                  currentUser: currentUser.valueOrNull,
                 ),
                 // フォロー中タブ
                 _TimelineTab(
                   isFollowingOnly: true,
-                  currentUserId: currentUser.valueOrNull?.uid,
+                  currentUser: currentUser.valueOrNull,
                 ),
               ],
             ),
@@ -163,21 +164,21 @@ class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
 /// タイムラインタブ
 class _TimelineTab extends StatelessWidget {
   final bool isFollowingOnly;
-  final String? currentUserId;
+  final UserModel? currentUser;
 
   const _TimelineTab({
     required this.isFollowingOnly,
-    required this.currentUserId,
+    required this.currentUser,
   });
 
   @override
   Widget build(BuildContext context) {
     // フォロー中タブの場合、フォローしているユーザーのIDを取得する必要がある
-    if (isFollowingOnly && currentUserId != null) {
+    if (isFollowingOnly && currentUser != null) {
       return StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance
             .collection('users')
-            .doc(currentUserId)
+            .doc(currentUser!.uid)
             .snapshots(),
         builder: (context, userSnapshot) {
           if (!userSnapshot.hasData) {
@@ -200,6 +201,7 @@ class _TimelineTab extends StatelessWidget {
                 .where('userId', whereIn: followingIds.take(10).toList())
                 .orderBy('createdAt', descending: true)
                 .limit(AppConstants.postsPerPage),
+            isAIViewer: currentUser!.isAI,
           );
         },
       );
@@ -212,6 +214,7 @@ class _TimelineTab extends StatelessWidget {
           .where('isVisible', isEqualTo: true)
           .orderBy('createdAt', descending: true)
           .limit(AppConstants.postsPerPage),
+      isAIViewer: currentUser?.isAI ?? false,
     );
   }
 }
@@ -219,8 +222,12 @@ class _TimelineTab extends StatelessWidget {
 /// 投稿リスト
 class _PostsList extends StatelessWidget {
   final Query query;
+  final bool isAIViewer;
 
-  const _PostsList({required this.query});
+  const _PostsList({
+    required this.query,
+    this.isAIViewer = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -256,10 +263,18 @@ class _PostsList extends StatelessWidget {
           );
         }
 
-        final posts = snapshot.data?.docs
+        // 投稿をフィルタリング
+        // AIアカウント: 全モードの投稿を見れる
+        // 人間アカウント: 'mix'と'human'の投稿のみ見れる（'ai'モードは見えない）
+        var posts = snapshot.data?.docs
                 .map((doc) => PostModel.fromFirestore(doc))
                 .toList() ??
             [];
+
+        if (!isAIViewer) {
+          // 人間アカウントの場合、'ai'モードの投稿を除外
+          posts = posts.where((post) => post.postMode != 'ai').toList();
+        }
 
         if (posts.isEmpty) {
           return Center(

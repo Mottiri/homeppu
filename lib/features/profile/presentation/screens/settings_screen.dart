@@ -10,15 +10,16 @@ import '../../../../shared/widgets/avatar_selector.dart';
 
 /// 公開範囲モード
 enum PrivacyMode {
-  ai('ai', 'AIモード', 'AIのみに公開するよ'),
-  mix('mix', 'バランス', 'AIと人間の両方に公開するよ'),
-  human('human', '人間モード', '人間のみに公開するよ');
+  ai('ai', 'AIモード', 'AIだけが見れるよ\n人間には見えないから安心して投稿できる！', Icons.auto_awesome),
+  mix('mix', 'ミックス', 'AIも人間も両方見れるよ\n色んな人からリアクションがもらえる！', Icons.groups),
+  human('human', '人間モード', '人間だけが見れるよ\n本物のリアクションだけがほしい人向け', Icons.person);
 
-  const PrivacyMode(this.value, this.label, this.description);
+  const PrivacyMode(this.value, this.label, this.description, this.icon);
   
   final String value;
   final String label;
   final String description;
+  final IconData icon;
 }
 
 /// 設定画面
@@ -226,10 +227,44 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             // 公開範囲設定
             Card(
               child: ExpansionTile(
-                leading: const Icon(Icons.public_outlined),
+                leading: const Icon(Icons.visibility_outlined),
                 title: const Text('公開範囲'),
-                subtitle: const Text('投稿が届く範囲を設定'),
+                subtitle: Consumer(
+                  builder: (context, ref, _) {
+                    final user = ref.watch(currentUserProvider).valueOrNull;
+                    final currentMode = PrivacyMode.values.firstWhere(
+                      (m) => m.value == user?.postMode,
+                      orElse: () => PrivacyMode.ai,
+                    );
+                    return Text('現在: ${currentMode.label}');
+                  },
+                ),
                 children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryLight.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.info_outline, size: 18, color: AppColors.primary),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '次回以降の投稿から適用されます\n過去の投稿は変わりません',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                     child: Consumer(
@@ -246,11 +281,45 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 mode: mode,
                                 isSelected: isSelected,
                                 onTap: () async {
-                                  final authService = ref.read(authServiceProvider);
-                                  await authService.updateUserProfile(
-                                    uid: user.uid,
-                                    postMode: mode.value,
+                                  if (isSelected) return;
+                                  
+                                  // 確認ダイアログ
+                                  final confirmed = await showDialog<bool>(
+                                    context: context,
+                                    builder: (context) => AlertDialog(
+                                      title: Text('${mode.label}に変更'),
+                                      content: Text(
+                                        '公開範囲を「${mode.label}」に変更しますか？\n\n'
+                                        '次回以降の投稿から適用されます。'
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context, false),
+                                          child: const Text('キャンセル'),
+                                        ),
+                                        ElevatedButton(
+                                          onPressed: () => Navigator.pop(context, true),
+                                          child: const Text('変更する'),
+                                        ),
+                                      ],
+                                    ),
                                   );
+                                  
+                                  if (confirmed == true) {
+                                    final authService = ref.read(authServiceProvider);
+                                    await authService.updateUserProfile(
+                                      uid: user.uid,
+                                      postMode: mode.value,
+                                    );
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('公開範囲を「${mode.label}」に変更しました'),
+                                          backgroundColor: AppColors.success,
+                                        ),
+                                      );
+                                    }
+                                  }
                                 },
                               ),
                             );
@@ -475,11 +544,22 @@ class _PrivacyOption extends StatelessWidget {
               : null,
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              _getModeIcon(mode),
-              size: 20,
-              color: isSelected ? AppColors.primary : AppColors.textSecondary,
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: isSelected 
+                    ? AppColors.primary.withOpacity(0.2) 
+                    : Colors.grey.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                mode.icon,
+                size: 22,
+                color: isSelected ? AppColors.primary : AppColors.textSecondary,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -490,11 +570,16 @@ class _PrivacyOption extends StatelessWidget {
                     mode.label,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
+                  const SizedBox(height: 4),
                   Text(
                     mode.description,
-                    style: Theme.of(context).textTheme.bodySmall,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                      height: 1.4,
+                    ),
                   ),
                 ],
               ),
@@ -503,23 +588,12 @@ class _PrivacyOption extends StatelessWidget {
               const Icon(
                 Icons.check_circle,
                 color: AppColors.primary,
-                size: 20,
+                size: 22,
               ),
           ],
         ),
       ),
     );
-  }
-
-  IconData _getModeIcon(PrivacyMode mode) {
-    switch (mode) {
-      case PrivacyMode.ai:
-        return Icons.auto_awesome;
-      case PrivacyMode.mix:
-        return Icons.groups;
-      case PrivacyMode.human:
-        return Icons.person;
-    }
   }
 }
 

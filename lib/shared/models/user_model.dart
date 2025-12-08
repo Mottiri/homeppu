@@ -27,7 +27,7 @@ class UserModel {
     required this.displayName,
     this.bio,
     this.avatarIndex = 0,
-    this.postMode = 'mix',
+    this.postMode = 'ai',  // デフォルトはAIモード（安心スタート）
     this.virtue = 100,
     this.isAI = false,
     required this.createdAt,
@@ -50,7 +50,7 @@ class UserModel {
       displayName: data['displayName'] ?? 'ゲスト',
       bio: data['bio'],
       avatarIndex: data['avatarIndex'] ?? 0,
-      postMode: data['postMode'] ?? 'mix',
+      postMode: data['postMode'] ?? 'ai',  // デフォルトはAIモード
       virtue: data['virtue'] ?? 100,
       isAI: data['isAI'] ?? false,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),

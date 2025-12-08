@@ -364,7 +364,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               const SliverToBoxAdapter(child: SizedBox(height: 12)),
 
               // 投稿一覧
-              _UserPostsList(userId: user.uid, isMyProfile: _isOwnProfile),
+              _UserPostsList(
+                userId: user.uid, 
+                isMyProfile: _isOwnProfile,
+                viewerIsAI: ref.watch(currentUserProvider).valueOrNull?.isAI ?? false,
+              ),
 
               const SliverToBoxAdapter(child: SizedBox(height: 100)),
             ],
@@ -379,8 +383,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 class _UserPostsList extends StatelessWidget {
   final String userId;
   final bool isMyProfile;
+  final bool viewerIsAI;
 
-  const _UserPostsList({required this.userId, this.isMyProfile = false});
+  const _UserPostsList({
+    required this.userId, 
+    this.isMyProfile = false,
+    this.viewerIsAI = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -426,9 +435,40 @@ class _UserPostsList extends StatelessWidget {
           );
         }
 
-        final posts = snapshot.data!.docs
+        // 投稿をフィルタリング
+        // 自分のプロフィール: 全投稿を表示
+        // 他人のプロフィール + AIアカウント: 全投稿を表示
+        // 他人のプロフィール + 人間アカウント: 'ai'モードの投稿を除外
+        var posts = snapshot.data!.docs
             .map((doc) => PostModel.fromFirestore(doc))
             .toList();
+
+        if (!isMyProfile && !viewerIsAI) {
+          posts = posts.where((post) => post.postMode != 'ai').toList();
+        }
+
+        if (posts.isEmpty) {
+          return const SliverToBoxAdapter(
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.all(32),
+                child: Column(
+                  children: [
+                    Text(
+                      '📝',
+                      style: TextStyle(fontSize: 48),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'まだ投稿がないよ',
+                      style: TextStyle(color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
 
         return SliverList(
           delegate: SliverChildBuilderDelegate(
