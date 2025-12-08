@@ -287,6 +287,180 @@ async function moderateMedia(
   return {passed: true};
 }
 
+// ===============================================
+// AIコメント用メディア分析
+// ===============================================
+
+/**
+ * 画像の内容を分析して説明を生成
+ */
+async function analyzeImageForComment(
+  model: ReturnType<GoogleGenerativeAI["getGenerativeModel"]>,
+  imageUrl: string,
+  mimeType: string = "image/jpeg"
+): Promise<string | null> {
+  try {
+    const imageBuffer = await downloadFile(imageUrl);
+    const base64Image = imageBuffer.toString("base64");
+
+    const prompt = `
+この画像の内容を分析して、SNS投稿者を褒めるための情報を提供してください。
+
+【重要なルール】
+1. 専門的な内容（資格試験、プログラミング、専門書、学習アプリ、技術文書、問題集など）の場合：
+   - 画像内のテキストを断片的に解釈しないでください
+   - 「何の勉強・学習をしているか」だけを簡潔に説明してください（例：「資格試験の勉強」「プログラミング学習」）
+   - 詳細な内容には触れず「専門的で難しそう」「すごい挑戦」という観点で説明してください
+   - 例: 「資格試験の学習アプリで勉強している画像です。専門的な内容に取り組んでいて頑張っています。」
+   - 悪い例: 「心理療法士の問題を解いている」← 画像内テキストの断片的解釈はNG
+
+2. 一般的な内容（料理、運動、風景、作品、ペットなど）の場合：
+   - 具体的に何が写っているか説明してください
+   - 褒めポイントを含めてください
+   - 例: 「手作りのケーキの写真です。デコレーションがとても丁寧です。」
+
+3. 画像内にテキストが含まれる場合でも、そのテキストの一部だけを切り取って解釈しないでください。
+   文脈を誤解する原因になります。
+
+【回答形式】
+2〜3文で簡潔に説明してください。
+`;
+
+    const imagePart: Part = {
+      inlineData: {
+        mimeType: mimeType,
+        data: base64Image,
+      },
+    };
+
+    const result = await model.generateContent([prompt, imagePart]);
+    const description = result.response.text()?.trim();
+
+    console.log("Image analysis result:", description);
+    return description || null;
+  } catch (error) {
+    console.error("Image analysis error:", error);
+    return null;
+  }
+}
+
+/**
+ * 動画の内容を分析して説明を生成
+ */
+async function analyzeVideoForComment(
+  apiKey: string,
+  model: ReturnType<GoogleGenerativeAI["getGenerativeModel"]>,
+  videoUrl: string,
+  mimeType: string = "video/mp4"
+): Promise<string | null> {
+  const tempFilePath = path.join(os.tmpdir(), `video_analysis_${Date.now()}.mp4`);
+
+  try {
+    // 動画をダウンロード
+    const videoBuffer = await downloadFile(videoUrl);
+    fs.writeFileSync(tempFilePath, videoBuffer);
+
+    // Gemini File APIにアップロード
+    const fileManager = new GoogleAIFileManager(apiKey);
+    const uploadResult = await fileManager.uploadFile(tempFilePath, {
+      mimeType: mimeType,
+      displayName: `analysis_video_${Date.now()}`,
+    });
+
+    // アップロード完了を待つ
+    let file = uploadResult.file;
+    while (file.state === "PROCESSING") {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const result = await fileManager.getFile(file.name);
+      file = result;
+    }
+
+    if (file.state === "FAILED") {
+      throw new Error("Video processing failed");
+    }
+
+    const prompt = `
+この動画の内容を分析して、SNS投稿者を褒めるための情報を提供してください。
+
+【重要なルール】
+1. 専門的な内容（勉強、プログラミング、技術作業、資格試験など）の場合：
+   - 画面内のテキストを断片的に解釈しないでください
+   - 「何の勉強・作業をしているか」だけを簡潔に説明してください
+   - 詳細な内容には触れず「専門的で難しそう」「すごい挑戦」という観点で説明してください
+   - 例: 「資格試験の勉強をしている動画です。専門的な内容に取り組んでいて頑張っています。」
+
+2. 一般的な内容（運動、料理、ゲーム、趣味など）の場合：
+   - 具体的に何をしている動画か説明してください
+   - 褒めポイントを含めてください
+   - 例: 「ランニングの動画です。良いペースで走っていて、フォームも綺麗です。」
+
+3. 動画内にテキストが含まれる場合でも、そのテキストの一部だけを切り取って解釈しないでください。
+
+【回答形式】
+2〜3文で簡潔に説明してください。
+`;
+
+    const videoPart: Part = {
+      fileData: {
+        mimeType: file.mimeType,
+        fileUri: file.uri,
+      },
+    };
+
+    const result = await model.generateContent([prompt, videoPart]);
+    const description = result.response.text()?.trim();
+
+    // アップロードしたファイルを削除
+    try {
+      await fileManager.deleteFile(file.name);
+    } catch (e) {
+      console.log("Failed to delete uploaded file:", e);
+    }
+
+    console.log("Video analysis result:", description);
+    return description || null;
+  } catch (error) {
+    console.error("Video analysis error:", error);
+    return null;
+  } finally {
+    // 一時ファイルを削除
+    if (fs.existsSync(tempFilePath)) {
+      fs.unlinkSync(tempFilePath);
+    }
+  }
+}
+
+/**
+ * メディアアイテムを分析して説明を生成
+ */
+async function analyzeMediaForComment(
+  apiKey: string,
+  model: ReturnType<GoogleGenerativeAI["getGenerativeModel"]>,
+  mediaItems: MediaItem[]
+): Promise<string[]> {
+  const descriptions: string[] = [];
+
+  for (const item of mediaItems) {
+    try {
+      if (item.type === "image") {
+        const desc = await analyzeImageForComment(model, item.url, item.mimeType || "image/jpeg");
+        if (desc) {
+          descriptions.push(`【画像】${desc}`);
+        }
+      } else if (item.type === "video") {
+        const desc = await analyzeVideoForComment(apiKey, model, item.url, item.mimeType || "video/mp4");
+        if (desc) {
+          descriptions.push(`【動画】${desc}`);
+        }
+      }
+    } catch (error) {
+      console.error(`Failed to analyze media item:`, error);
+    }
+  }
+
+  return descriptions;
+}
+
 // AIペルソナ定義（より人間らしく）
 const AI_PERSONAS = [
   {
@@ -361,25 +535,43 @@ function getSystemPrompt(
 投稿者の名前: ${posterName}
 
 【重要なルール】
-1. 投稿者「${posterName}」さんを褒めてください（あなた自身「${persona.name}」ではありません）
-2. 投稿内容を読んで、${posterName}さんの努力や良いところを具体的に称賛してください
-3. ネガティブなことは一切言わないでください
-4. 短めの返信（50〜100文字程度）にしてください
-5. 自然な日本語で、人間らしく返信してください
-6. 「AI」「ボット」という言葉は使わないでください
-7. 相手の気持ちに寄り添い、共感を示してください
-8. 投稿者の名前を呼ぶ場合は「${posterName}さん」と呼んでください
+1. 投稿者「${posterName}」さんを褒めてください
+2. ネガティブなことは一切言わないでください
+3. 自然な日本語で、人間らしく返信してください
+4. 「AI」「ボット」という言葉は使わないでください
+5. 投稿者の名前は基本呼ばないでください（呼ぶ場合は「${posterName}さん」）
+
+【文字数と構造（最重要）】
+- 20〜80文字で返信してください
+- 構造：「一言褒め」+「詳細な褒め」の2部構成
+- まず短い褒め言葉で始めて、その後に具体的な内容を続ける
+
+- 良い例：「すごい！毎日続けてるの尊敬する✨」（18文字）
+- 良い例：「えらい！こういう積み重ねが大事だよね、応援してる！」（28文字）
+- 良い例：「お疲れ様！難しそうだけど挑戦してるの本当にすごいと思う」（30文字）
+- 良い例：「いいね！私も見習いたいな〜頑張ってる姿見ると元気もらえる✨」（33文字）
+
+- 悪い例：「すごい！」← 短すぎ（20文字未満）
+- 悪い例：「〇〇さんの頑張りが伝わってきます。とても素晴らしい取り組みですね。これからも応援しています！」← 長すぎ・くどい（80文字超え）
+
+【専門的な内容への対応】
+- 勉強、資格試験、専門分野の場合、内容を詳しく知っているふりをしないでください
+- 「難しそう！」「すごい！」くらいの短い反応でOK
+- 画像内のテキストを断片的に引用しないでください
 `;
 }
 
 /**
  * 新規投稿時にAIコメントを生成するトリガー
+ * メディア（画像・動画）がある場合は内容を分析してコメントに反映
  */
 export const onPostCreated = onDocumentCreated(
   {
     document: "posts/{postId}",
     region: "asia-northeast1",
     secrets: [geminiApiKey],
+    timeoutSeconds: 120, // メディア分析のため長めに設定
+    memory: "1GiB", // 動画処理のためメモリを増加
   },
   async (event) => {
     const snap = event.data;
@@ -407,6 +599,21 @@ export const onPostCreated = onDocumentCreated(
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({model: "gemini-2.0-flash"});
 
+    // メディアがある場合は内容を分析
+    let mediaDescriptions: string[] = [];
+    const mediaItems = postData.mediaItems as MediaItem[] | undefined;
+    
+    if (mediaItems && mediaItems.length > 0) {
+      console.log(`Analyzing ${mediaItems.length} media items for AI comment...`);
+      try {
+        mediaDescriptions = await analyzeMediaForComment(apiKey, model, mediaItems);
+        console.log(`Media analysis complete: ${mediaDescriptions.length} descriptions`);
+      } catch (error) {
+        console.error("Media analysis failed:", error);
+        // エラーでもコメント生成は続行
+      }
+    }
+
     // ランダムに1〜3人のAIを選択
     const commentCount = Math.floor(Math.random() * 3) + 1;
     const shuffledPersonas = [...AI_PERSONAS]
@@ -419,13 +626,23 @@ export const onPostCreated = onDocumentCreated(
     // 投稿者の名前を取得
     const posterName = postData.userDisplayName || "投稿者";
 
+    // メディア説明をプロンプトに追加
+    const mediaContext = mediaDescriptions.length > 0
+      ? `\n\n【添付メディアの内容】\n${mediaDescriptions.join("\n")}`
+      : "";
+
     for (const persona of shuffledPersonas) {
       try {
         const prompt = `
 ${getSystemPrompt(persona, posterName)}
 
 【${posterName}さんの投稿】
-${postData.content}
+${postData.content || "(テキストなし)"}${mediaContext}
+
+【重要】
+${mediaDescriptions.length > 0 
+  ? "添付されたメディア（画像・動画）の内容も考慮して、具体的に褒めてください。" 
+  : ""}
 
 【あなた（${persona.name}）の返信】
 `;
@@ -451,7 +668,7 @@ ${postData.content}
         });
 
         totalComments++;
-        console.log(`AI comment created: ${persona.name} (delayed ${delayMinutes}m)`);
+        console.log(`AI comment created: ${persona.name} (delayed ${delayMinutes}m, media: ${mediaDescriptions.length > 0})`);
       } catch (error) {
         console.error(`Error generating comment for ${persona.name}:`, error);
       }
