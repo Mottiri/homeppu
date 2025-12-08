@@ -53,6 +53,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       );
       // 登録成功 → ルーターがリダイレクト
     } catch (e) {
+      print('RegisterScreen: Error during registration: $e');
       setState(() {
         _errorMessage = _getErrorMessage(e.toString());
       });

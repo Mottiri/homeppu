@@ -57,10 +57,14 @@ class AuthService {
     int avatarIndex = 0,
   }) async {
     try {
+      print('AuthService: Starting signUp for email: $email');
+      
       final credential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
+      
+      print('AuthService: Firebase Auth user created: ${credential.user?.uid}');
       
       if (credential.user != null) {
         final user = UserModel(
@@ -73,15 +77,22 @@ class AuthService {
           updatedAt: DateTime.now(),
         );
         
+        print('AuthService: UserModel created, saving to Firestore...');
+        print('AuthService: UserModel data: ${user.toFirestore()}');
+        
         await _firestore
             .collection('users')
             .doc(credential.user!.uid)
             .set(user.toFirestore());
         
+        print('AuthService: User saved to Firestore successfully');
+        
         return user;
       }
       return null;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('AuthService: Error during signUp: $e');
+      print('AuthService: Stack trace: $stackTrace');
       rethrow;
     }
   }

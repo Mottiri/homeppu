@@ -171,6 +171,8 @@ class _TimelineTab extends StatelessWidget {
     required this.currentUser,
   });
 
+  String? get currentUserId => currentUser?.uid;
+
   @override
   Widget build(BuildContext context) {
     // フォロー中タブの場合、フォローしているユーザーのIDを取得する必要がある
@@ -202,6 +204,7 @@ class _TimelineTab extends StatelessWidget {
                 .orderBy('createdAt', descending: true)
                 .limit(AppConstants.postsPerPage),
             isAIViewer: currentUser!.isAI,
+            currentUserId: currentUserId,
           );
         },
       );
@@ -215,6 +218,7 @@ class _TimelineTab extends StatelessWidget {
           .orderBy('createdAt', descending: true)
           .limit(AppConstants.postsPerPage),
       isAIViewer: currentUser?.isAI ?? false,
+      currentUserId: currentUserId,
     );
   }
 }
@@ -223,10 +227,12 @@ class _TimelineTab extends StatelessWidget {
 class _PostsList extends StatelessWidget {
   final Query query;
   final bool isAIViewer;
+  final String? currentUserId;
 
   const _PostsList({
     required this.query,
     this.isAIViewer = false,
+    this.currentUserId,
   });
 
   @override
@@ -266,14 +272,17 @@ class _PostsList extends StatelessWidget {
         // 投稿をフィルタリング
         // AIアカウント: 全モードの投稿を見れる
         // 人間アカウント: 'mix'と'human'の投稿のみ見れる（'ai'モードは見えない）
+        // ただし、自分の投稿は常に見える
         var posts = snapshot.data?.docs
                 .map((doc) => PostModel.fromFirestore(doc))
                 .toList() ??
             [];
 
         if (!isAIViewer) {
-          // 人間アカウントの場合、'ai'モードの投稿を除外
-          posts = posts.where((post) => post.postMode != 'ai').toList();
+          // 人間アカウントの場合、'ai'モードの投稿を除外（自分の投稿は除外しない）
+          posts = posts.where((post) => 
+            post.postMode != 'ai' || post.userId == currentUserId
+          ).toList();
         }
 
         if (posts.isEmpty) {
