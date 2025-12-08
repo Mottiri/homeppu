@@ -348,6 +348,47 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
               const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
+              // フォロー中（自分のプロフィールのみ）
+              // 実際のfollowingリストの長さを使用（followingCountとの不整合を防ぐ）
+              if (_isOwnProfile && user.following.isNotEmpty) ...[
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Row(
+                      children: [
+                        Text(
+                          'フォロー中',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '${user.following.length}',
+                            style: TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 12)),
+                SliverToBoxAdapter(
+                  child: _FollowingList(followingIds: user.following),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 24)),
+              ],
+
               // 過去の投稿
               SliverToBoxAdapter(
                 child: Padding(
@@ -709,6 +750,79 @@ class _StatItem extends StatelessWidget {
           style: Theme.of(context).textTheme.bodySmall,
         ),
       ],
+    );
+  }
+}
+
+/// フォロー中リスト（横スクロール）
+class _FollowingList extends StatelessWidget {
+  final List<String> followingIds;
+
+  const _FollowingList({required this.followingIds});
+
+  @override
+  Widget build(BuildContext context) {
+    if (followingIds.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return SizedBox(
+      height: 100,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: followingIds.length,
+        itemBuilder: (context, index) {
+          final userId = followingIds[index];
+          return _FollowingUserItem(userId: userId);
+        },
+      ),
+    );
+  }
+}
+
+/// フォロー中ユーザーアイテム
+class _FollowingUserItem extends StatelessWidget {
+  final String userId;
+
+  const _FollowingUserItem({required this.userId});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance.collection('users').doc(userId).get(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || !snapshot.data!.exists) {
+          return const SizedBox(width: 80);
+        }
+
+        final user = UserModel.fromFirestore(snapshot.data!);
+
+        return GestureDetector(
+          onTap: () => context.push('/user/${user.uid}'),
+          child: Container(
+            width: 80,
+            margin: const EdgeInsets.only(right: 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AvatarWidget(
+                  avatarIndex: user.avatarIndex,
+                  size: 56,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  user.displayName,
+                  style: Theme.of(context).textTheme.bodySmall,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

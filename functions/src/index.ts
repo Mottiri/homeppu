@@ -1329,6 +1329,132 @@ export const reportContent = onCall(
   }
 );
 
+// ===============================================
+// フォロー機能
+// ===============================================
+
+/**
+ * ユーザーをフォローする
+ */
+export const followUser = onCall(
+  {region: "asia-northeast1"},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    const currentUserId = request.auth.uid;
+    const {targetUserId} = request.data;
+
+    if (!targetUserId) {
+      throw new HttpsError("invalid-argument", "フォロー対象のユーザーIDが必要です");
+    }
+
+    if (currentUserId === targetUserId) {
+      throw new HttpsError("invalid-argument", "自分自身をフォローすることはできません");
+    }
+
+    const batch = db.batch();
+    const currentUserRef = db.collection("users").doc(currentUserId);
+    const targetUserRef = db.collection("users").doc(targetUserId);
+
+    // 対象ユーザーが存在するか確認
+    const targetUser = await targetUserRef.get();
+    if (!targetUser.exists) {
+      throw new HttpsError("not-found", "ユーザーが見つかりません");
+    }
+
+    // 現在のユーザーのfollowing配列に追加
+    batch.update(currentUserRef, {
+      following: admin.firestore.FieldValue.arrayUnion(targetUserId),
+      followingCount: admin.firestore.FieldValue.increment(1),
+    });
+
+    // 対象ユーザーのfollowers配列に追加
+    batch.update(targetUserRef, {
+      followers: admin.firestore.FieldValue.arrayUnion(currentUserId),
+      followersCount: admin.firestore.FieldValue.increment(1),
+    });
+
+    await batch.commit();
+
+    console.log(`User ${currentUserId} followed ${targetUserId}`);
+
+    return {success: true};
+  }
+);
+
+/**
+ * フォローを解除する
+ */
+export const unfollowUser = onCall(
+  {region: "asia-northeast1"},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    const currentUserId = request.auth.uid;
+    const {targetUserId} = request.data;
+
+    if (!targetUserId) {
+      throw new HttpsError("invalid-argument", "フォロー解除対象のユーザーIDが必要です");
+    }
+
+    const batch = db.batch();
+    const currentUserRef = db.collection("users").doc(currentUserId);
+    const targetUserRef = db.collection("users").doc(targetUserId);
+
+    // 現在のユーザーのfollowing配列から削除
+    batch.update(currentUserRef, {
+      following: admin.firestore.FieldValue.arrayRemove(targetUserId),
+      followingCount: admin.firestore.FieldValue.increment(-1),
+    });
+
+    // 対象ユーザーのfollowers配列から削除
+    batch.update(targetUserRef, {
+      followers: admin.firestore.FieldValue.arrayRemove(currentUserId),
+      followersCount: admin.firestore.FieldValue.increment(-1),
+    });
+
+    await batch.commit();
+
+    console.log(`User ${currentUserId} unfollowed ${targetUserId}`);
+
+    return {success: true};
+  }
+);
+
+/**
+ * フォロー状態を取得する
+ */
+export const getFollowStatus = onCall(
+  {region: "asia-northeast1"},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    const currentUserId = request.auth.uid;
+    const {targetUserId} = request.data;
+
+    if (!targetUserId) {
+      throw new HttpsError("invalid-argument", "ユーザーIDが必要です");
+    }
+
+    const currentUser = await db.collection("users").doc(currentUserId).get();
+    
+    if (!currentUser.exists) {
+      return {isFollowing: false};
+    }
+
+    const following = currentUser.data()?.following || [];
+    const isFollowing = following.includes(targetUserId);
+
+    return {isFollowing};
+  }
+);
+
 /**
  * 徳ポイント履歴を取得
  */
