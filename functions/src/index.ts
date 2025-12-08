@@ -1728,3 +1728,272 @@ export const getVirtueStatus = onCall(
     };
   }
 );
+
+// ===============================================
+// タスク機能
+// ===============================================
+
+/**
+ * タスクを作成
+ */
+export const createTask = onCall(
+  {region: "asia-northeast1"},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    const userId = request.auth.uid;
+    const {content, emoji, type} = request.data;
+
+    if (!content || !type) {
+      throw new HttpsError("invalid-argument", "タスク内容とタイプは必須です");
+    }
+
+    const taskRef = db.collection("tasks").doc();
+    await taskRef.set({
+      userId: userId,
+      content: content,
+      emoji: emoji || "📝",
+      type: type, // "daily" | "goal"
+      isCompleted: false,
+      streak: 0,
+      lastCompletedAt: null,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return {success: true, taskId: taskRef.id};
+  }
+);
+
+/**
+ * タスク一覧を取得
+ */
+export const getTasks = onCall(
+  {region: "asia-northeast1"},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    const userId = request.auth.uid;
+    const {type} = request.data;
+
+    let query = db.collection("tasks").where("userId", "==", userId);
+
+    if (type) {
+      query = query.where("type", "==", type);
+    }
+
+    const snapshot = await query.orderBy("createdAt", "desc").get();
+
+    // 今日の開始時刻を計算（日本時間）
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const tasks = snapshot.docs.map((doc) => {
+      const data = doc.data();
+      const lastCompletedAt = data.lastCompletedAt?.toDate?.();
+      
+      // isCompletedTodayを計算（lastCompletedAtが今日かどうか）
+      let isCompletedToday = false;
+      if (lastCompletedAt) {
+        isCompletedToday = lastCompletedAt >= todayStart;
+      }
+
+      return {
+        id: doc.id,
+        ...data,
+        isCompletedToday,
+        createdAt: data.createdAt?.toDate?.()?.toISOString() || null,
+        updatedAt: data.updatedAt?.toDate?.()?.toISOString() || null,
+        lastCompletedAt: lastCompletedAt?.toISOString() || null,
+      };
+    });
+
+    return {tasks};
+  }
+);
+
+/**
+ * タスクを完了
+ */
+export const completeTask = onCall(
+  {region: "asia-northeast1"},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    const userId = request.auth.uid;
+    const {taskId} = request.data;
+
+    if (!taskId) {
+      throw new HttpsError("invalid-argument", "タスクIDが必要です");
+    }
+
+    const taskRef = db.collection("tasks").doc(taskId);
+    const taskDoc = await taskRef.get();
+
+    if (!taskDoc.exists) {
+      throw new HttpsError("not-found", "タスクが見つかりません");
+    }
+
+    const taskData = taskDoc.data()!;
+
+    if (taskData.userId !== userId) {
+      throw new HttpsError("permission-denied", "このタスクを完了する権限がありません");
+    }
+
+    // 連続達成の計算
+    const now = new Date();
+    const lastCompleted = taskData.lastCompletedAt?.toDate();
+    let newStreak = 1;
+
+    if (lastCompleted) {
+      const diffDays = Math.floor((now.getTime() - lastCompleted.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays === 1) {
+        // 昨日完了していたら連続達成
+        newStreak = (taskData.streak || 0) + 1;
+      } else if (diffDays === 0) {
+        // 今日既に完了していた場合
+        newStreak = taskData.streak || 1;
+      }
+    }
+
+    // 徳ポイント計算（連続ボーナス付き）
+    const baseVirtue = 2;
+    const streakBonus = Math.min(newStreak - 1, 5); // 最大5ポイントのボーナス
+    const virtueGain = baseVirtue + streakBonus;
+
+    // タスクを更新
+    await taskRef.update({
+      isCompleted: true,
+      streak: newStreak,
+      lastCompletedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // 徳ポイントを増加
+    const userRef = db.collection("users").doc(userId);
+    await userRef.update({
+      virtue: admin.firestore.FieldValue.increment(virtueGain),
+    });
+
+    // 徳ポイント履歴を記録
+    await db.collection("virtueHistory").add({
+      userId: userId,
+      change: virtueGain,
+      reason: `タスク完了: ${taskData.content}${streakBonus > 0 ? ` (${newStreak}日連続!)` : ""}`,
+      newVirtue: 0, // 後で計算
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    const userDoc = await userRef.get();
+    const newVirtue = userDoc.data()?.virtue || 0;
+
+    return {
+      success: true,
+      virtueGain,
+      newVirtue,
+      streak: newStreak,
+      streakBonus,
+    };
+  }
+);
+
+/**
+ * タスクの完了を取り消し
+ */
+export const uncompleteTask = onCall(
+  {region: "asia-northeast1"},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    const userId = request.auth.uid;
+    const {taskId} = request.data;
+
+    if (!taskId) {
+      throw new HttpsError("invalid-argument", "タスクIDが必要です");
+    }
+
+    const taskRef = db.collection("tasks").doc(taskId);
+    const taskDoc = await taskRef.get();
+
+    if (!taskDoc.exists) {
+      throw new HttpsError("not-found", "タスクが見つかりません");
+    }
+
+    const taskData = taskDoc.data()!;
+
+    if (taskData.userId !== userId) {
+      throw new HttpsError("permission-denied", "このタスクを操作する権限がありません");
+    }
+
+    if (!taskData.isCompleted) {
+      return {success: false, message: "このタスクは完了していません"};
+    }
+
+    // 徳ポイントを減少（基本2ポイント）
+    const virtueLoss = 2;
+
+    await taskRef.update({
+      isCompleted: false,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    const userRef = db.collection("users").doc(userId);
+    await userRef.update({
+      virtue: admin.firestore.FieldValue.increment(-virtueLoss),
+    });
+
+    const userDoc = await userRef.get();
+    const newVirtue = userDoc.data()?.virtue || 0;
+
+    return {
+      success: true,
+      virtueLoss,
+      newVirtue,
+      message: "タスクの完了を取り消しました",
+    };
+  }
+);
+
+/**
+ * タスクを削除
+ */
+export const deleteTask = onCall(
+  {region: "asia-northeast1"},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    const userId = request.auth.uid;
+    const {taskId} = request.data;
+
+    if (!taskId) {
+      throw new HttpsError("invalid-argument", "タスクIDが必要です");
+    }
+
+    const taskRef = db.collection("tasks").doc(taskId);
+    const taskDoc = await taskRef.get();
+
+    if (!taskDoc.exists) {
+      throw new HttpsError("not-found", "タスクが見つかりません");
+    }
+
+    const taskData = taskDoc.data()!;
+
+    if (taskData.userId !== userId) {
+      throw new HttpsError("permission-denied", "このタスクを削除する権限がありません");
+    }
+
+    await taskRef.delete();
+
+    return {success: true};
+  }
+);
