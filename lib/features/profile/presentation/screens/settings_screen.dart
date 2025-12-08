@@ -7,6 +7,8 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/providers/ai_provider.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
+import '../../../../shared/services/name_parts_service.dart';
+import 'name_edit_screen.dart';
 
 /// 公開範囲モード
 enum PrivacyMode {
@@ -31,7 +33,6 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  final _displayNameController = TextEditingController();
   final _bioController = TextEditingController();
   int _selectedAvatarIndex = 0;
   bool _isLoading = false;
@@ -46,7 +47,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void _loadUserData() {
     final user = ref.read(currentUserProvider).valueOrNull;
     if (user != null) {
-      _displayNameController.text = user.displayName;
       _bioController.text = user.bio ?? '';
       _selectedAvatarIndex = user.avatarIndex;
     }
@@ -54,7 +54,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   void dispose() {
-    _displayNameController.dispose();
     _bioController.dispose();
     super.dispose();
   }
@@ -67,9 +66,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     try {
       final authService = ref.read(authServiceProvider);
+      // 名前は名前パーツ方式で変更するので、ここでは更新しない
       await authService.updateUserProfile(
         uid: user.uid,
-        displayName: _displayNameController.text.trim(),
+        displayName: user.displayName, // 現在の名前を維持
         bio: _bioController.text.trim(),
         avatarIndex: _selectedAvatarIndex,
       );
@@ -185,19 +185,71 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
                     const SizedBox(height: 24),
 
-                    // 表示名
+                    // 表示名（名前パーツ方式）
                     Text(
-                      'ニックネーム',
+                      'なまえ',
                       style: Theme.of(context).textTheme.labelLarge,
                     ),
                     const SizedBox(height: 8),
-                    TextField(
-                      controller: _displayNameController,
-                      maxLength: AppConstants.maxDisplayNameLength,
-                      decoration: const InputDecoration(
-                        hintText: 'ニックネームを入力',
-                      ),
-                      onChanged: (_) => setState(() => _hasChanges = true),
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final currentUser = ref.watch(currentUserProvider).valueOrNull;
+                        return InkWell(
+                          onTap: () async {
+                            final result = await Navigator.of(context).push<bool>(
+                              MaterialPageRoute(
+                                builder: (_) => const NameEditScreen(),
+                              ),
+                            );
+                            if (result == true) {
+                              // 名前が変更された場合、ユーザー情報を再取得
+                              ref.invalidate(currentUserProvider);
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.surfaceVariant,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        currentUser?.displayName ?? 'タップして名前を設定',
+                                        style: const TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'タップして名前を変更',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey[600],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Icon(
+                                  Icons.chevron_right,
+                                  color: Colors.grey[600],
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     ),
 
                     const SizedBox(height: 16),
@@ -489,6 +541,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             },
                             icon: const Icon(Icons.auto_awesome),
                             label: const Text('AI過去投稿を生成'),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              final namePartsService = NamePartsService();
+                              try {
+                                await namePartsService.initializeNameParts();
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('名前パーツを初期化しました')),
+                                  );
+                                }
+                              } catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('エラー: $e')),
+                                  );
+                                }
+                              }
+                            },
+                            icon: const Icon(Icons.abc),
+                            label: const Text('名前パーツ初期化'),
                           ),
                         ),
                       ],

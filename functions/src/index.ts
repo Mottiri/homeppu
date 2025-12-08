@@ -603,24 +603,97 @@ const AGE_GROUPS = {
   thirties: {name: "30代", examples: ["32歳", "ベテラン"]},
 };
 
-// 男性の名前候補
-const MALE_NAMES = [
-  "ゆうき", "そうた", "けんた", "りく", "はると", "たくみ", "しょうた", "れん",
-  "こうき", "だいき", "ゆうと", "かいと", "りょう", "しゅん", "けい",
-  "なおき", "まさと", "ひろき", "こうへい", "たいが",
+// 名前パーツの型定義
+interface NamePart {
+  id: string;
+  text: string;
+  category: string;
+  rarity: "normal" | "rare" | "super_rare" | "ultra_rare";
+  order: number;
+}
+
+// 形容詞パーツ（前半）のマスタデータ
+const PREFIX_PARTS: NamePart[] = [
+  // ポジティブ系（ノーマル）
+  {id: "pre_01", text: "がんばる", category: "positive", rarity: "normal", order: 1},
+  {id: "pre_02", text: "キラキラ", category: "positive", rarity: "normal", order: 2},
+  {id: "pre_03", text: "全力", category: "positive", rarity: "normal", order: 3},
+  {id: "pre_04", text: "輝く", category: "positive", rarity: "normal", order: 4},
+  {id: "pre_05", text: "前向き", category: "positive", rarity: "normal", order: 5},
+  // ゆるい系（ノーマル）
+  {id: "pre_06", text: "のんびり", category: "relaxed", rarity: "normal", order: 6},
+  {id: "pre_07", text: "まったり", category: "relaxed", rarity: "normal", order: 7},
+  {id: "pre_08", text: "ゆるふわ", category: "relaxed", rarity: "normal", order: 8},
+  {id: "pre_09", text: "ぼちぼち", category: "relaxed", rarity: "normal", order: 9},
+  {id: "pre_10", text: "ほのぼの", category: "relaxed", rarity: "normal", order: 10},
+  // 努力系（ノーマル）
+  {id: "pre_11", text: "コツコツ", category: "effort", rarity: "normal", order: 11},
+  {id: "pre_12", text: "もくもく", category: "effort", rarity: "normal", order: 12},
+  {id: "pre_13", text: "ひたむき", category: "effort", rarity: "normal", order: 13},
+  {id: "pre_14", text: "地道な", category: "effort", rarity: "normal", order: 14},
+  // 動物っぽい系（レア）
+  {id: "pre_15", text: "もふもふ", category: "animal", rarity: "rare", order: 15},
+  {id: "pre_16", text: "ぴょんぴょん", category: "animal", rarity: "rare", order: 16},
+  {id: "pre_17", text: "わんわん", category: "animal", rarity: "rare", order: 17},
+  {id: "pre_18", text: "にゃんにゃん", category: "animal", rarity: "rare", order: 18},
+  // おもしろ系（スーパーレア）
+  {id: "pre_19", text: "伝説の", category: "funny", rarity: "super_rare", order: 19},
+  {id: "pre_20", text: "覚醒した", category: "funny", rarity: "super_rare", order: 20},
+  {id: "pre_21", text: "無敵の", category: "funny", rarity: "super_rare", order: 21},
+  {id: "pre_22", text: "最強の", category: "funny", rarity: "super_rare", order: 22},
+  // ウルトラレア
+  {id: "pre_23", text: "神に愛された", category: "legendary", rarity: "ultra_rare", order: 23},
+  {id: "pre_24", text: "運命の", category: "legendary", rarity: "ultra_rare", order: 24},
+  {id: "pre_25", text: "永遠の", category: "legendary", rarity: "ultra_rare", order: 25},
 ];
 
-// 女性の名前候補
-const FEMALE_NAMES = [
-  "さくら", "みお", "はな", "ゆい", "あかり", "まな", "りこ", "ひなた",
-  "あやか", "みさき", "かな", "ゆな", "ちひろ", "まい", "えみ",
-  "なつみ", "あいり", "ももか", "ことね", "さき",
+// 名詞パーツ（後半）のマスタデータ
+const SUFFIX_PARTS: NamePart[] = [
+  // 動物（ノーマル）
+  {id: "suf_01", text: "🐰うさぎ", category: "animal", rarity: "normal", order: 1},
+  {id: "suf_02", text: "🐱ねこ", category: "animal", rarity: "normal", order: 2},
+  {id: "suf_03", text: "🐶いぬ", category: "animal", rarity: "normal", order: 3},
+  {id: "suf_04", text: "🐼パンダ", category: "animal", rarity: "normal", order: 4},
+  {id: "suf_05", text: "🐻くま", category: "animal", rarity: "normal", order: 5},
+  {id: "suf_06", text: "🐢かめ", category: "animal", rarity: "normal", order: 6},
+  // 自然（ノーマル）
+  {id: "suf_07", text: "🌸さくら", category: "nature", rarity: "normal", order: 7},
+  {id: "suf_08", text: "🌻ひまわり", category: "nature", rarity: "normal", order: 8},
+  {id: "suf_09", text: "⭐ほし", category: "nature", rarity: "normal", order: 9},
+  {id: "suf_10", text: "🌙つき", category: "nature", rarity: "normal", order: 10},
+  {id: "suf_11", text: "☀️たいよう", category: "nature", rarity: "normal", order: 11},
+  // 食べ物（ノーマル）
+  {id: "suf_12", text: "🍙おにぎり", category: "food", rarity: "normal", order: 12},
+  {id: "suf_13", text: "🍩ドーナツ", category: "food", rarity: "normal", order: 13},
+  {id: "suf_14", text: "🍮プリン", category: "food", rarity: "normal", order: 14},
+  {id: "suf_15", text: "🍰ケーキ", category: "food", rarity: "normal", order: 15},
+  // 職業風（レア）
+  {id: "suf_16", text: "チャレンジャー", category: "occupation", rarity: "rare", order: 16},
+  {id: "suf_17", text: "ファイター", category: "occupation", rarity: "rare", order: 17},
+  {id: "suf_18", text: "ドリーマー", category: "occupation", rarity: "rare", order: 18},
+  {id: "suf_19", text: "見習い", category: "occupation", rarity: "rare", order: 19},
+  // レア動物
+  {id: "suf_20", text: "🦊きつね", category: "animal", rarity: "rare", order: 20},
+  {id: "suf_21", text: "🦁ライオン", category: "animal", rarity: "rare", order: 21},
+  {id: "suf_22", text: "🦄ユニコーン", category: "animal", rarity: "rare", order: 22},
+  // おもしろ系（スーパーレア）
+  {id: "suf_23", text: "勇者", category: "funny", rarity: "super_rare", order: 23},
+  {id: "suf_24", text: "魔王", category: "funny", rarity: "super_rare", order: 24},
+  {id: "suf_25", text: "賢者", category: "funny", rarity: "super_rare", order: 25},
+  {id: "suf_26", text: "修行僧", category: "funny", rarity: "super_rare", order: 26},
+  {id: "suf_27", text: "冒険者", category: "funny", rarity: "super_rare", order: 27},
+  // ウルトラレア
+  {id: "suf_28", text: "🐉ドラゴン", category: "legendary", rarity: "ultra_rare", order: 28},
+  {id: "suf_29", text: "🔥不死鳥", category: "legendary", rarity: "ultra_rare", order: 29},
+  {id: "suf_30", text: "覇王", category: "legendary", rarity: "ultra_rare", order: 30},
 ];
 
 // AIペルソナの型定義
 interface AIPersona {
   id: string;
   name: string;
+  namePrefixId: string;  // 名前パーツ（前半）のID
+  nameSuffixId: string;  // 名前パーツ（後半）のID
   gender: Gender;
   ageGroup: AgeGroup;
   occupation: typeof OCCUPATIONS.male[0];
@@ -744,6 +817,10 @@ const BIO_TEMPLATES: Record<string, Record<string, string[]>> = {
   },
 };
 
+// AIが使用可能な名前パーツ（ノーマルとレアのみ、スーパーレア以上は使用不可）
+const AI_USABLE_PREFIXES = PREFIX_PARTS.filter((p) => p.rarity === "normal" || p.rarity === "rare");
+const AI_USABLE_SUFFIXES = SUFFIX_PARTS.filter((p) => p.rarity === "normal" || p.rarity === "rare");
+
 // AIペルソナを生成する関数
 function generateAIPersona(index: number): AIPersona {
   // 性別を決定（偶数=女性、奇数=男性で半々にする）
@@ -752,7 +829,6 @@ function generateAIPersona(index: number): AIPersona {
   // 各カテゴリをインデックスベースで分散
   const occupations = OCCUPATIONS[gender];
   const personalities = PERSONALITIES[gender];
-  const names = gender === "male" ? MALE_NAMES : FEMALE_NAMES;
 
   const occupation = occupations[index % occupations.length];
   const personality = personalities[Math.floor(index / 2) % personalities.length];
@@ -761,8 +837,12 @@ function generateAIPersona(index: number): AIPersona {
     Math.floor(index / 6) % 3
   ];
 
-  // 名前を決定（インデックスから選択）
-  const name = names[index % names.length];
+  // 名前パーツから選択（インデックスを使って分散）
+  const prefixIndex = index % AI_USABLE_PREFIXES.length;
+  const suffixIndex = Math.floor(index * 1.618) % AI_USABLE_SUFFIXES.length; // 黄金比で分散
+  const namePrefix = AI_USABLE_PREFIXES[prefixIndex];
+  const nameSuffix = AI_USABLE_SUFFIXES[suffixIndex];
+  const name = `${namePrefix.text}${nameSuffix.text}`;
 
   // アバターインデックス（0-9の範囲）
   const avatarIndex = index % 10;
@@ -788,6 +868,8 @@ function generateAIPersona(index: number): AIPersona {
   return {
     id: `ai_${index.toString().padStart(2, "0")}`,
     name,
+    namePrefixId: `prefix_${namePrefix.id}`,
+    nameSuffixId: `suffix_${nameSuffix.id}`,
     gender,
     ageGroup,
     occupation,
@@ -1149,6 +1231,8 @@ export const initializeAIAccounts = onCall(
       const userData = {
         email: `${persona.id}@ai.homeppu.local`,
         displayName: persona.name,
+        namePrefix: persona.namePrefixId,
+        nameSuffix: persona.nameSuffixId,
         bio: generatedBio,
         avatarIndex: persona.avatarIndex,
         postMode: "ai",
@@ -1176,6 +1260,8 @@ export const initializeAIAccounts = onCall(
         // 既存アカウントのキャラ設定とbioを更新
         await docRef.update({
           displayName: persona.name,
+          namePrefix: persona.namePrefixId,
+          nameSuffix: persona.nameSuffixId,
           bio: generatedBio,
           avatarIndex: persona.avatarIndex,
           aiCharacterSettings: aiCharacterSettings,
@@ -2417,5 +2503,204 @@ export const deleteTask = onCall(
     await taskRef.delete();
 
     return {success: true};
+  }
+);
+
+// ===============================================
+// 名前パーツ方式
+// ===============================================
+
+/**
+ * 名前パーツマスタを初期化する関数（管理者用）
+ */
+export const initializeNameParts = onCall(
+  {region: "asia-northeast1"},
+  async () => {
+    const batch = db.batch();
+    let prefixCount = 0;
+    let suffixCount = 0;
+
+    // 形容詞パーツを追加
+    for (const part of PREFIX_PARTS) {
+      const docRef = db.collection("nameParts").doc(`prefix_${part.id}`);
+      batch.set(docRef, {
+        ...part,
+        type: "prefix",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      prefixCount++;
+    }
+
+    // 名詞パーツを追加
+    for (const part of SUFFIX_PARTS) {
+      const docRef = db.collection("nameParts").doc(`suffix_${part.id}`);
+      batch.set(docRef, {
+        ...part,
+        type: "suffix",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      suffixCount++;
+    }
+
+    await batch.commit();
+
+    console.log(`Initialized ${prefixCount} prefix parts and ${suffixCount} suffix parts`);
+
+    return {
+      success: true,
+      message: `名前パーツを初期化しました`,
+      prefixCount,
+      suffixCount,
+    };
+  }
+);
+
+/**
+ * 名前パーツ一覧を取得する関数
+ */
+export const getNameParts = onCall(
+  {region: "asia-northeast1"},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    const userId = request.auth.uid;
+
+    // ユーザーのアンロック済みパーツを取得
+    const userDoc = await db.collection("users").doc(userId).get();
+    const userData = userDoc.data();
+    const unlockedParts: string[] = userData?.unlockedNameParts || [];
+    const isAI = userData?.isAI || false;
+
+    // 全パーツを取得
+    const partsSnapshot = await db.collection("nameParts").orderBy("order").get();
+
+    const prefixes: (NamePart & {unlocked: boolean})[] = [];
+    const suffixes: (NamePart & {unlocked: boolean})[] = [];
+
+    partsSnapshot.docs.forEach((doc) => {
+      const data = doc.data() as NamePart & {type: string};
+      const partId = doc.id;
+
+      // ノーマルは最初からアンロック、それ以外はアンロック済みリストに含まれているか確認
+      const isUnlocked = data.rarity === "normal" || unlockedParts.includes(partId);
+
+      // AIはスーパーレア以上を持てない
+      if (isAI && (data.rarity === "super_rare" || data.rarity === "ultra_rare")) {
+        return;
+      }
+
+      const partWithUnlock = {
+        ...data,
+        id: partId,
+        unlocked: isUnlocked,
+      };
+
+      if (data.type === "prefix") {
+        prefixes.push(partWithUnlock);
+      } else {
+        suffixes.push(partWithUnlock);
+      }
+    });
+
+    return {
+      prefixes,
+      suffixes,
+      currentPrefix: userData?.namePrefix || null,
+      currentSuffix: userData?.nameSuffix || null,
+    };
+  }
+);
+
+/**
+ * ユーザー名を更新する関数
+ */
+export const updateUserName = onCall(
+  {region: "asia-northeast1"},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    const userId = request.auth.uid;
+    const {prefixId, suffixId} = request.data;
+
+    if (!prefixId || !suffixId) {
+      throw new HttpsError("invalid-argument", "パーツIDが必要です");
+    }
+
+    // ユーザー情報を取得
+    const userRef = db.collection("users").doc(userId);
+    const userDoc = await userRef.get();
+
+    if (!userDoc.exists) {
+      throw new HttpsError("not-found", "ユーザーが見つかりません");
+    }
+
+    const userData = userDoc.data()!;
+    const unlockedParts: string[] = userData.unlockedNameParts || [];
+
+    // パーツを取得
+    const prefixDoc = await db.collection("nameParts").doc(prefixId).get();
+    const suffixDoc = await db.collection("nameParts").doc(suffixId).get();
+
+    if (!prefixDoc.exists || !suffixDoc.exists) {
+      throw new HttpsError("not-found", "パーツが見つかりません");
+    }
+
+    const prefixData = prefixDoc.data() as NamePart;
+    const suffixData = suffixDoc.data() as NamePart;
+
+    // アンロック済みか確認（ノーマルは最初からOK）
+    const prefixUnlocked = prefixData.rarity === "normal" || unlockedParts.includes(prefixId);
+    const suffixUnlocked = suffixData.rarity === "normal" || unlockedParts.includes(suffixId);
+
+    if (!prefixUnlocked || !suffixUnlocked) {
+      throw new HttpsError("permission-denied", "アンロックしていないパーツは使用できません");
+    }
+
+    // 名前変更回数チェック（月1回まで）
+    const lastNameChange = userData.lastNameChangeAt?.toDate();
+    const now = new Date();
+
+    if (lastNameChange) {
+      const lastChangeMonth = lastNameChange.getMonth();
+      const lastChangeYear = lastNameChange.getFullYear();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+
+      // 同じ月に既に変更している場合（初回設定は除く）
+      if (
+        userData.namePrefix && // 既に名前が設定されている場合のみチェック
+        lastChangeYear === currentYear &&
+        lastChangeMonth === currentMonth
+      ) {
+        throw new HttpsError(
+          "resource-exhausted",
+          "名前の変更は月1回までです。来月まで待ってね！"
+        );
+      }
+    }
+
+    // 新しい表示名を生成
+    const newDisplayName = `${prefixData.text}${suffixData.text}`;
+
+    // 更新
+    await userRef.update({
+      namePrefix: prefixId,
+      nameSuffix: suffixId,
+      displayName: newDisplayName,
+      lastNameChangeAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    console.log(`User ${userId} changed name to: ${newDisplayName}`);
+
+    return {
+      success: true,
+      displayName: newDisplayName,
+      message: `名前を「${newDisplayName}」に変更しました！`,
+    };
   }
 );

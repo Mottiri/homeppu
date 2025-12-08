@@ -55,6 +55,8 @@ class AuthService {
     required String password,
     required String displayName,
     int avatarIndex = 0,
+    String? namePrefix,
+    String? nameSuffix,
   }) async {
     try {
       print('AuthService: Starting signUp for email: $email');
@@ -73,6 +75,8 @@ class AuthService {
           displayName: displayName,
           avatarIndex: avatarIndex,
           virtue: AppConstants.virtueInitial,
+          namePrefix: namePrefix,
+          nameSuffix: nameSuffix,
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );

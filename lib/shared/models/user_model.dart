@@ -20,6 +20,11 @@ class UserModel {
   final int followingCount;
   final int followersCount;
   final int reportCount;          // 通報された回数
+  // 名前パーツ方式
+  final String? namePrefix;       // 形容詞パーツのID
+  final String? nameSuffix;       // 名詞パーツのID
+  final List<String> unlockedNameParts;  // アンロック済みパーツID
+  final DateTime? lastNameChangeAt;  // 最後に名前を変更した日時
 
   UserModel({
     required this.uid,
@@ -40,6 +45,10 @@ class UserModel {
     this.followingCount = 0,
     this.followersCount = 0,
     this.reportCount = 0,
+    this.namePrefix,
+    this.nameSuffix,
+    this.unlockedNameParts = const [],
+    this.lastNameChangeAt,
   });
 
   factory UserModel.fromFirestore(DocumentSnapshot doc) {
@@ -63,6 +72,10 @@ class UserModel {
       followingCount: data['followingCount'] ?? 0,
       followersCount: data['followersCount'] ?? 0,
       reportCount: data['reportCount'] ?? 0,
+      namePrefix: data['namePrefix'],
+      nameSuffix: data['nameSuffix'],
+      unlockedNameParts: List<String>.from(data['unlockedNameParts'] ?? []),
+      lastNameChangeAt: (data['lastNameChangeAt'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -85,6 +98,10 @@ class UserModel {
       'followingCount': followingCount,
       'followersCount': followersCount,
       'reportCount': reportCount,
+      'namePrefix': namePrefix,
+      'nameSuffix': nameSuffix,
+      'unlockedNameParts': unlockedNameParts,
+      if (lastNameChangeAt != null) 'lastNameChangeAt': Timestamp.fromDate(lastNameChangeAt!),
     };
   }
 
@@ -107,6 +124,10 @@ class UserModel {
     int? followingCount,
     int? followersCount,
     int? reportCount,
+    String? namePrefix,
+    String? nameSuffix,
+    List<String>? unlockedNameParts,
+    DateTime? lastNameChangeAt,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -127,6 +148,10 @@ class UserModel {
       followingCount: followingCount ?? this.followingCount,
       followersCount: followersCount ?? this.followersCount,
       reportCount: reportCount ?? this.reportCount,
+      namePrefix: namePrefix ?? this.namePrefix,
+      nameSuffix: nameSuffix ?? this.nameSuffix,
+      unlockedNameParts: unlockedNameParts ?? this.unlockedNameParts,
+      lastNameChangeAt: lastNameChangeAt ?? this.lastNameChangeAt,
     );
   }
 }
