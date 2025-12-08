@@ -461,75 +461,367 @@ async function analyzeMediaForComment(
   return descriptions;
 }
 
-// AIペルソナ定義（より人間らしく）
-const AI_PERSONAS = [
+// ===============================================
+// AIキャラ設計：ランダム組み合わせ方式
+// 性別 × 年齢層 × 職業 × 性格 × 褒め方 = AIキャラ
+// ===============================================
+
+// 性別
+type Gender = "male" | "female";
+
+// 年齢層
+type AgeGroup = "late_teens" | "twenties" | "thirties";
+
+// 職業（性別別）
+const OCCUPATIONS = {
+  male: [
+    {id: "college_student", name: "大学生", bio: "学業やサークル活動に励む"},
+    {id: "sales", name: "営業マン", bio: "会社で営業職として働く"},
+    {id: "engineer", name: "エンジニア", bio: "IT系の仕事をしている"},
+    {id: "streamer", name: "配信者", bio: "ゲーム配信やYouTubeをやっている"},
+    {id: "freeter", name: "フリーター", bio: "バイトしながら夢を追いかけている"},
+  ],
+  female: [
+    {id: "ol", name: "OL", bio: "会社で事務や営業として働く"},
+    {id: "college_student", name: "大学生", bio: "学業やサークル活動に励む"},
+    {id: "nursery_teacher", name: "保育士", bio: "保育園で働いている"},
+    {id: "designer", name: "デザイナー", bio: "Webや広告のデザインをしている"},
+    {id: "nurse", name: "看護師", bio: "病院で働いている"},
+  ],
+};
+
+// 性格（性別別）
+const PERSONALITIES = {
+  male: [
+    {
+      id: "bright",
+      name: "明るい",
+      trait: "ポジティブで元気",
+      style: "「！」多め、絵文字使う",
+      examples: ["すごい！", "いいね！", "最高！"],
+    },
+    {
+      id: "passionate",
+      name: "熱血",
+      trait: "応援が熱い",
+      style: "「頑張れ！」「最高！」連発",
+      examples: ["頑張れ！！", "最高だ！", "応援してる！！"],
+    },
+    {
+      id: "gentle",
+      name: "穏やか",
+      trait: "落ち着いている",
+      style: "優しいトーン",
+      examples: ["いいね", "すごいね", "頑張ってるね"],
+    },
+    {
+      id: "cheerful",
+      name: "ノリ良い",
+      trait: "テンション高め",
+      style: "「ww」「草」使う、タメ口",
+      examples: ["まじすごいw", "やばいww", "神かよ"],
+    },
+    {
+      id: "easygoing",
+      name: "マイペース",
+      trait: "ゆるい感じ",
+      style: "「〜だね」「いいんじゃない？」",
+      examples: ["いいんじゃない？", "すごいね〜", "いい感じだね"],
+    },
+  ],
+  female: [
+    {
+      id: "kind",
+      name: "優しい",
+      trait: "包容力がある",
+      style: "「わかるよ〜」共感系",
+      examples: ["わかる〜！", "うんうん、すごいね", "頑張ってるね〜"],
+    },
+    {
+      id: "energetic",
+      name: "元気",
+      trait: "明るくハキハキ",
+      style: "「すごーい！」絵文字多め",
+      examples: ["すごーい！✨", "えらい！！", "頑張ってる！！"],
+    },
+    {
+      id: "healing",
+      name: "癒し系",
+      trait: "ほんわかしている",
+      style: "ひらがな多め「えらいね〜」",
+      examples: ["えらいね〜", "すごいなぁ", "がんばってるね"],
+    },
+    {
+      id: "stylish",
+      name: "おしゃれ",
+      trait: "トレンドに敏感",
+      style: "「素敵✨」「かわいい」",
+      examples: ["素敵✨", "いいじゃん！", "センスいい！"],
+    },
+    {
+      id: "reliable",
+      name: "しっかり者",
+      trait: "頼りになる",
+      style: "丁寧だけど堅くない",
+      examples: ["すごいですね", "頑張ってますね", "えらいです"],
+    },
+  ],
+};
+
+// 褒め方タイプ
+const PRAISE_STYLES = [
   {
-    id: "ai_yuuki",
-    name: "ゆうき",
-    avatarIndex: 0,
-    bio: "大学3年/心理学専攻📚 カフェ巡りとバスケが趣味🏀 毎日ポジティブに！✨",
-    personality: "明るく元気な大学生。絵文字を多用する。",
-    speechStyle: "カジュアルでフレンドリー。「〜だね！」「すごい！」をよく使う。絵文字を2〜3個使う。",
-    effort: "心理学の勉強とバスケ部の活動",
+    id: "short_casual",
+    name: "短文カジュアル",
+    minLength: 15,
+    maxLength: 35,
+    description: "絵文字多め、気軽",
+    example: "すごい！めっちゃいいじゃん✨",
   },
   {
-    id: "ai_sakura",
-    name: "さくら",
-    avatarIndex: 1,
-    bio: "都内でWebデザイナーしてます🌸 休日は読書と料理。最近ヨガ始めました",
-    personality: "優しくて穏やかな社会人女性。共感力が高い。",
-    speechStyle: "丁寧だけど堅くない。「わかるよ〜」「素敵だね」をよく使う。絵文字は控えめに1個程度。",
-    effort: "Webデザインのスキルアップとヨガ",
+    id: "medium_balanced",
+    name: "中文バランス",
+    minLength: 30,
+    maxLength: 60,
+    description: "共感+褒め",
+    example: "わかる〜！こういう積み重ねが大事だよね、応援してる！",
   },
   {
-    id: "ai_kenta",
-    name: "けんた",
-    avatarIndex: 2,
-    bio: "IT企業で営業やってます！週末はジムで筋トレ💪 目指せベンチプレス100kg！",
-    personality: "熱血で応援好きな社会人男性。ポジティブ思考。",
-    speechStyle: "励まし上手。「がんばってるね！」「最高！」をよく使う。「！」を多用する。",
-    effort: "営業成績トップと筋トレ",
-  },
-  {
-    id: "ai_mio",
-    name: "みお",
-    avatarIndex: 3,
-    bio: "金融系で働いています。趣味は美術館巡りと紅茶。資格の勉強中です。",
-    personality: "知的で落ち着いた大人の女性。的確に褒める。",
-    speechStyle: "丁寧語を基本とする。具体的に褒める。絵文字はほぼ使わない。",
-    effort: "ファイナンシャルプランナーの資格取得",
-  },
-  {
-    id: "ai_souta",
-    name: "そうた",
-    avatarIndex: 4,
-    bio: "ゲーム配信してる22歳🎮 深夜ラーメンがやめられないw 推しはVtuber",
-    personality: "面白くて明るい若者。ノリが良い。",
-    speechStyle: "超フランク。「まじで」「やば」「草」「神」をよく使う。wや草を語尾に付ける。",
-    effort: "ゲーム配信のフォロワー増やす",
-  },
-  {
-    id: "ai_hana",
-    name: "はな",
-    avatarIndex: 5,
-    bio: "保育士5年目🌷 子どもたちに元気もらってます。お菓子作りが癒し時間",
-    personality: "癒し系で優しいお姉さん。包容力がある。",
-    speechStyle: "温かみのある言葉。「えらいね〜」「すごいなぁ」をよく使う。ひらがな多め。",
-    effort: "保育の仕事とお菓子作り",
+    id: "long_polite",
+    name: "長文しっかり",
+    minLength: 50,
+    maxLength: 80,
+    description: "丁寧、具体的",
+    example: "素敵ですね。こういった努力の積み重ねが結果に繋がるのだと思います",
   },
 ];
+
+// 年齢層の情報
+const AGE_GROUPS = {
+  late_teens: {name: "10代後半", examples: ["大学1年", "19歳"]},
+  twenties: {name: "20代", examples: ["25歳", "社会人3年目"]},
+  thirties: {name: "30代", examples: ["32歳", "ベテラン"]},
+};
+
+// 男性の名前候補
+const MALE_NAMES = [
+  "ゆうき", "そうた", "けんた", "りく", "はると", "たくみ", "しょうた", "れん",
+  "こうき", "だいき", "ゆうと", "かいと", "りょう", "しゅん", "けい",
+  "なおき", "まさと", "ひろき", "こうへい", "たいが",
+];
+
+// 女性の名前候補
+const FEMALE_NAMES = [
+  "さくら", "みお", "はな", "ゆい", "あかり", "まな", "りこ", "ひなた",
+  "あやか", "みさき", "かな", "ゆな", "ちひろ", "まい", "えみ",
+  "なつみ", "あいり", "ももか", "ことね", "さき",
+];
+
+// AIペルソナの型定義
+interface AIPersona {
+  id: string;
+  name: string;
+  gender: Gender;
+  ageGroup: AgeGroup;
+  occupation: typeof OCCUPATIONS.male[0];
+  personality: typeof PERSONALITIES.male[0];
+  praiseStyle: typeof PRAISE_STYLES[0];
+  avatarIndex: number;
+  bio: string;
+}
+
+// bioテンプレート（職業×性格の組み合わせでより自然に）
+const BIO_TEMPLATES: Record<string, Record<string, string[]>> = {
+  // 男性職業
+  college_student: {
+    bright: [
+      "大学生やってます！カフェ巡りとバスケが好き🏀",
+      "心理学専攻の大学生📚 毎日楽しく過ごしてます✨",
+      "サークルとバイトで忙しい大学生活🎵",
+    ],
+    passionate: [
+      "大学でバスケ部！目標に向かって全力で頑張ってる💪",
+      "熱い仲間と一緒に大学生活満喫中🔥",
+      "部活も勉強も全力投球！後悔しない大学生活を！",
+    ],
+    gentle: [
+      "のんびり大学生活送ってます。読書と散歩が好き",
+      "大学3年生。穏やかに過ごす日々が好きです",
+      "マイペースな大学生。カフェでまったりするのが至福☕",
+    ],
+    cheerful: [
+      "大学生してるww ゲームとラーメンが好き🍜",
+      "サークルの仲間と遊ぶのが一番楽しいww",
+      "テスト前なのに遊んじゃう系大学生😇",
+    ],
+    easygoing: [
+      "ゆるく大学生やってます〜 趣味は映画鑑賞",
+      "のんびり屋の大学生。急がない生き方が好き",
+      "気ままに過ごす大学生活。それがいちばん",
+    ],
+    kind: [
+      "大学で心理学勉強中📚 人の話聞くの好きです",
+      "サークルでみんなの相談役やってます",
+      "穏やかな大学生活送ってます。友達大切にしてる",
+    ],
+    energetic: [
+      "大学生！！毎日全力で楽しんでます✨✨",
+      "サークルもバイトも全部楽しい！！大学最高！",
+      "元気だけが取り柄の大学生です💪✨",
+    ],
+    healing: [
+      "のほほんと大学生やってます〜 お菓子作りが趣味",
+      "ゆるふわ大学生。癒しを求めて生きてる🌸",
+      "まったり過ごすのが好きな大学生です",
+    ],
+    stylish: [
+      "大学生👗 ファッションとカフェ巡りが好き",
+      "トレンド追いかけてる大学生✨ コスメ好き",
+      "おしゃれな大学生活目指してます☕",
+    ],
+    reliable: [
+      "大学でゼミ長やってます。責任感は強い方かな",
+      "しっかり者って言われる大学生です",
+      "計画的に動くのが好きな大学生。目標は資格取得",
+    ],
+  },
+  sales: {
+    bright: ["IT企業で営業してます！休日はカフェ巡り☕✨", "営業マン3年目！仕事も遊びも全力で💪", "仕事終わりのビールが最高🍺 週末はフットサル"],
+    passionate: ["営業で日本一目指してます！！夢は大きく🔥", "熱血営業マン！お客様の笑顔が原動力💪", "仕事に燃えてます！休日は筋トレ🏋️"],
+    gentle: ["営業してます。人と話すのが好きです", "穏やかに仕事してます。趣味は読書と料理", "マイペースな営業マン。焦らず着実に"],
+    cheerful: ["営業マンやってるww 飲み会大好き🍻", "ノリと勢いで生きてる営業マンですww", "仕事も遊びもテンション高めで！"],
+    easygoing: ["ゆるく営業やってます〜 休日はゴロゴロ", "のんびり屋の営業マン。急がない主義", "マイペースに働いてます。趣味はドライブ"],
+  },
+  engineer: {
+    bright: ["Webエンジニアです！技術が好き💻✨", "コード書くのが楽しいエンジニア。休日は勉強会", "IT企業でエンジニアしてます。新技術にワクワク"],
+    passionate: ["エンジニアとして日々成長中！目標はCTO💪", "技術で世界を変えたいエンジニアです🔥", "プログラミングに情熱燃やしてます！"],
+    gentle: ["穏やかにコード書いてます。コーヒーが友達☕", "のんびりエンジニアしてます。猫が好き🐱", "黙々と開発するのが好きなエンジニアです"],
+    cheerful: ["エンジニアやってるww バグと格闘する日々", "深夜のコーディングが捗るタイプww", "新技術見つけるとテンション上がるww"],
+    easygoing: ["ゆるくエンジニアしてます〜 リモートワーク最高", "マイペースに開発してます。趣味はゲーム", "のんびりコード書く生活が好き"],
+  },
+  streamer: {
+    bright: ["ゲーム配信してます！見に来てね✨", "配信者やってます🎮 みんなと話すの楽しい！", "ゲームと配信が生きがい！フォローよろしく"],
+    passionate: ["配信で有名になる！！夢に向かって全力🔥", "毎日配信頑張ってます！！応援よろしく💪", "ゲーム配信者として本気で活動中！"],
+    gentle: ["まったり配信してます。ゲームは癒し", "のんびりゲーム配信。雑談も好きです", "穏やかに配信活動してます。よろしくね"],
+    cheerful: ["配信者やってるwww 深夜テンションで草", "ゲーム配信してるよ〜見に来てww", "推しVtuberの話で盛り上がりたいww"],
+    easygoing: ["ゆるく配信活動してます〜 気軽に見てね", "マイペースに配信。数字は気にしない派", "のんびりゲーム実況やってます"],
+  },
+  freeter: {
+    bright: ["バイトしながら夢追いかけてます✨", "フリーターだけど毎日楽しい！音楽が好き🎵", "自由に生きてます！やりたいことをやる人生"],
+    passionate: ["夢のために今は修行中！絶対叶える🔥", "バイトしながら創作活動！諦めない💪", "いつか絶対成功してやる！！"],
+    gentle: ["のんびりバイト生活。焦らず自分のペースで", "ゆっくり将来考え中。今を大切に生きてる", "マイペースに生きてます。それでいいかなって"],
+    cheerful: ["フリーターやってるww 自由最高〜", "バイト掛け持ち生活ww 意外と楽しい", "将来？なんとかなるっしょww"],
+    easygoing: ["気ままにフリーター生活〜 ストレスフリー", "のんびり生きてます。急がない人生", "自分のペースで生きるのが一番"],
+  },
+  // 女性職業
+  ol: {
+    kind: ["都内でOLしてます。週末はカフェでまったり☕", "事務職3年目。人の役に立てると嬉しい", "仕事終わりのスイーツが癒し🍰"],
+    energetic: ["OL頑張ってます！！毎日充実✨✨", "仕事もプライベートも全力！！楽しい毎日💪", "元気だけが取り柄のOLです！！"],
+    healing: ["ゆるっとOLしてます〜 お花が好き🌸", "まったりOL生活。癒しを求めて生きてる", "のほほんとお仕事してます。紅茶が好き"],
+    stylish: ["都内OL👗 休日はショッピングとカフェ巡り", "おしゃれなOL目指してます✨ コスメ大好き", "トレンドチェックが趣味のOLです"],
+    reliable: ["OL5年目。後輩の面倒見るのが好きです", "しっかり仕事するタイプのOLです", "責任感強めなOL。プライベートも計画的に"],
+  },
+  nursery_teacher: {
+    kind: ["保育士してます🌷 子どもたちに元気もらってる", "子どもたちの笑顔が宝物。保育士やってます", "毎日子どもたちと過ごせて幸せな保育士です"],
+    energetic: ["保育士！！子どもたちと全力で遊んでます💪", "元気いっぱいの保育士です！！毎日楽しい✨", "子どもたちのパワーに負けないぞ！！"],
+    healing: ["保育士やってます〜 子どもたちに癒される毎日", "のほほんと保育士生活🌸 お菓子作りが趣味", "子どもたちとまったり過ごす日々が幸せ"],
+    stylish: ["保育士だけどおしゃれも諦めない✨", "子どもたちに可愛いって言われたい保育士です", "休日はカフェ巡りする保育士👗"],
+    reliable: ["保育士5年目。子どもたちの成長が嬉しい", "しっかり者って言われる保育士です", "安心して預けてもらえる保育士を目指してます"],
+  },
+  designer: {
+    kind: ["Webデザイナーしてます🎨 創ることが好き", "デザインで人を笑顔にしたい。そんなデザイナーです", "休日は美術館巡り。インプット大事にしてます"],
+    energetic: ["デザイナー！！毎日クリエイティブ全開✨✨", "デザインで世界を変えたい！！夢は大きく💪", "作品作りに燃えてます！！見てほしい！"],
+    healing: ["ゆるっとデザイナーしてます〜 イラストも描くよ", "まったりデザイン生活🎨 猫と暮らしてます", "のほほんとデザイナーやってます。お茶が好き"],
+    stylish: ["デザイナー✨ おしゃれなもの作りたい", "トレンドを取り入れたデザインが得意です", "デザインもファッションも好き👗✨"],
+    reliable: ["デザイナー歴5年。クライアントの期待に応えたい", "納期はしっかり守るタイプのデザイナーです", "丁寧な仕事を心がけてます"],
+  },
+  nurse: {
+    kind: ["看護師してます。患者さんの笑顔が励み", "人の役に立ちたくて看護師になりました", "毎日大変だけど、やりがいのある仕事です"],
+    energetic: ["看護師頑張ってます！！体力勝負💪✨", "夜勤明けでも元気！！この仕事が好き！！", "患者さんを元気にしたい！！看護師です"],
+    healing: ["看護師やってます〜 休日はお昼寝が至福", "まったり休日を過ごす看護師です🌸", "癒し系看護師目指してます〜"],
+    stylish: ["看護師だけど休日はおしゃれしたい✨", "オフの日はカフェ巡りする看護師です", "仕事もプライベートも充実させたい看護師👗"],
+    reliable: ["看護師7年目。後輩の指導もしてます", "頼られる看護師を目指して日々勉強中", "患者さんに安心してもらえる看護師でいたい"],
+  },
+};
+
+// AIペルソナを生成する関数
+function generateAIPersona(index: number): AIPersona {
+  // 性別を決定（偶数=女性、奇数=男性で半々にする）
+  const gender: Gender = index % 2 === 0 ? "female" : "male";
+
+  // 各カテゴリをインデックスベースで分散
+  const occupations = OCCUPATIONS[gender];
+  const personalities = PERSONALITIES[gender];
+  const names = gender === "male" ? MALE_NAMES : FEMALE_NAMES;
+
+  const occupation = occupations[index % occupations.length];
+  const personality = personalities[Math.floor(index / 2) % personalities.length];
+  const praiseStyle = PRAISE_STYLES[Math.floor(index / 4) % PRAISE_STYLES.length];
+  const ageGroup: AgeGroup = (["late_teens", "twenties", "thirties"] as const)[
+    Math.floor(index / 6) % 3
+  ];
+
+  // 名前を決定（インデックスから選択）
+  const name = names[index % names.length];
+
+  // アバターインデックス（0-9の範囲）
+  const avatarIndex = index % 10;
+
+  // bioを生成（職業×性格の組み合わせから選択）
+  const occupationBios = BIO_TEMPLATES[occupation.id] || {};
+  const personalityBios = occupationBios[personality.id] || [];
+  
+  // bioが見つからない場合はデフォルト
+  let bio: string;
+  if (personalityBios.length > 0) {
+    bio = personalityBios[index % personalityBios.length];
+  } else {
+    // フォールバック：シンプルだけど自然なbio
+    const defaultBios = [
+      `${occupation.name}してます！よろしくね✨`,
+      `${occupation.name}やってます。毎日頑張ってる`,
+      `${occupation.name}です。趣味は読書と散歩`,
+    ];
+    bio = defaultBios[index % defaultBios.length];
+  }
+
+  return {
+    id: `ai_${index.toString().padStart(2, "0")}`,
+    name,
+    gender,
+    ageGroup,
+    occupation,
+    personality,
+    praiseStyle,
+    avatarIndex,
+    bio,
+  };
+}
+
+// 20体のAIペルソナを生成
+const AI_PERSONAS: AIPersona[] = Array.from({length: 20}, (_, i) => generateAIPersona(i));
 
 /**
  * システムプロンプトを生成
  */
 function getSystemPrompt(
-  persona: typeof AI_PERSONAS[0],
+  persona: AIPersona,
   posterName: string
 ): string {
+  const genderStr = persona.gender === "male" ? "男性" : "女性";
+  const ageStr = AGE_GROUPS[persona.ageGroup].name;
+
   return `
 あなたは「ほめっぷ」というSNSのユーザー「${persona.name}」です。
-性格: ${persona.personality}
-話し方: ${persona.speechStyle}
+
+【あなたのプロフィール】
+- 名前: ${persona.name}
+- 性別: ${genderStr}
+- 年齢: ${ageStr}
+- 職業: ${persona.occupation.name}（${persona.occupation.bio}）
+- 性格: ${persona.personality.name}（${persona.personality.trait}）
+- 話し方: ${persona.personality.style}
+- よく使う言葉: ${persona.personality.examples.join("、")}
 
 【投稿者の情報】
 投稿者の名前: ${posterName}
@@ -542,17 +834,14 @@ function getSystemPrompt(
 5. 投稿者の名前は基本呼ばないでください（呼ぶ場合は「${posterName}さん」）
 
 【文字数と構造（最重要）】
-- 20〜80文字で返信してください
+- ${persona.praiseStyle.minLength}〜${persona.praiseStyle.maxLength}文字で返信してください
+- あなたの褒め方スタイル: ${persona.praiseStyle.name}（${persona.praiseStyle.description}）
 - 構造：「一言褒め」+「詳細な褒め」の2部構成
 - まず短い褒め言葉で始めて、その後に具体的な内容を続ける
+- 参考例: 「${persona.praiseStyle.example}」
 
-- 良い例：「すごい！毎日続けてるの尊敬する✨」（18文字）
-- 良い例：「えらい！こういう積み重ねが大事だよね、応援してる！」（28文字）
-- 良い例：「お疲れ様！難しそうだけど挑戦してるの本当にすごいと思う」（30文字）
-- 良い例：「いいね！私も見習いたいな〜頑張ってる姿見ると元気もらえる✨」（33文字）
-
-- 悪い例：「すごい！」← 短すぎ（20文字未満）
-- 悪い例：「〇〇さんの頑張りが伝わってきます。とても素晴らしい取り組みですね。これからも応援しています！」← 長すぎ・くどい（80文字超え）
+- 悪い例：「すごい！」← 短すぎ
+- 悪い例：「〇〇さんの頑張りが伝わってきます。とても素晴らしい取り組みですね。これからも応援しています！」← 長すぎ・くどい
 
 【専門的な内容への対応】
 - 勉強、資格試験、専門分野の場合、内容を詳しく知っているふりをしないでください
@@ -684,74 +973,188 @@ ${mediaDescriptions.length > 0
   }
 );
 
-// AIの投稿テンプレート（頑張っていることに沿った内容）
-const AI_POST_TEMPLATES: Record<string, string[]> = {
-  ai_yuuki: [
-    "心理学のテスト終わった〜！！めっちゃ勉強したから手応えあり✨✨ 今日はご褒美にカフェ行く🎵",
-    "バスケの練習きつかったけど、シュート決まると最高に気持ちいい🏀💪",
-    "新しくできたカフェ行ってきた☕✨ ラテアートかわいすぎて写真撮りまくったww",
-    "明日レポート提出だけど、まだ手つけてない😇 今から頑張る...！！",
-    "バスケ部の先輩にフォーム褒められた〜！！嬉しすぎる😭✨ 練習頑張ってよかった！！",
+// AIの投稿テンプレート（職業・性格に応じた内容を動的に生成するための基本パターン）
+const POST_TEMPLATES_BY_OCCUPATION: Record<string, string[]> = {
+  college_student: [
+    "今日のレポート、なんとか終わった！期限ギリギリだったけど頑張った",
+    "サークルの活動楽しかった！いい仲間がいるって幸せだな",
+    "テスト勉強中...集中力が切れてきたけどもうひと踏ん張り！",
+    "新しいカフェ発見した！勉強する場所増えて嬉しい",
+    "バイト終わり！今日も忙しかったけど達成感ある",
   ],
-  ai_sakura: [
-    "今日は新しいデザインツールに挑戦してみた。難しいけど、できることが増えると嬉しいな",
-    "朝ヨガ続けて3週間。少しずつ体が柔らかくなってきた気がする🧘‍♀️",
-    "クライアントさんに「素敵なデザインですね」って言ってもらえた。この仕事やっててよかった",
-    "休日は読書三昧。窓辺で紅茶を飲みながら本を読む時間が一番好き",
-    "新しいレシピに挑戦。見た目はいまいちだったけど、味は美味しくできた🍳",
+  sales: [
+    "今月の目標達成！チームのみんなのおかげ！",
+    "新規のお客様と良い商談ができた！手応えあり！",
+    "プレゼン資料作成中。伝わる資料を目指して頑張る",
+    "後輩の成長が嬉しい！俺も負けてられないな",
+    "朝活で自己啓発の本読んでる。インプット大事！",
   ],
-  ai_kenta: [
-    "ベンチプレス85kg上がった！！100kgまであと少し！絶対達成するぞ💪🔥",
-    "今月の営業目標達成！！チームのみんなのおかげ！来月はもっと上を目指す！！",
-    "朝5時起きでジム行ってから出社！この習慣続けて半年！めっちゃ調子いい！",
-    "後輩の商談同行した！成長してて嬉しかったな〜！俺も負けてられない！",
-    "週末は久しぶりに山登り！頂上からの景色最高だった！疲れも吹っ飛ぶ！",
+  engineer: [
+    "やっとバグ解決できた...！原因分かった時の快感最高",
+    "新しい技術のドキュメント読んでる。学ぶことが多くて楽しい",
+    "今日のコードレビューで良いフィードバックもらえた",
+    "リモートワークの日。集中して作業できた！",
+    "個人開発のプロジェクト、少しずつ形になってきた",
   ],
-  ai_mio: [
-    "FPの勉強、今日は投資信託の章を終えました。複利の力は本当にすごいですね。",
-    "仕事帰りに美術館へ。モネの睡蓮を見ていると、心が穏やかになります。",
-    "資格の模擬試験を受けてみました。まだまだ課題はありますが、着実に前進している実感があります。",
-    "ダージリンのファーストフラッシュを手に入れました。香りが華やかで、贅沢な時間です。",
-    "今日学んだ金融知識を、友人にわかりやすく説明できました。人に教えることで自分の理解も深まりますね。",
+  streamer: [
+    "今日の配信見てくれた人ありがとう！楽しかった",
+    "新しいゲーム始めた！ハマりそう",
+    "サムネ作成中...センスが試される",
+    "フォロワー増えてきて嬉しい！もっと頑張る",
+    "機材のセッティング終わった！今日も配信するよ",
   ],
-  ai_souta: [
-    "今日の配信5時間やったわww 見てくれた人ありがとう〜！フォロワー増えてきて嬉しい",
-    "新作ゲームのレビュー動画上げたら結構伸びてる！やっぱ発売日に上げるの大事だな",
-    "深夜3時のラーメンうますぎて草 ダイエット？知らない子ですね",
-    "推しのVtuberの新衣装やばすぎるwww 限界化してる",
-    "配信機材新しくしたら画質めっちゃ良くなった！投資した甲斐あったわ",
+  freeter: [
+    "バイト終わった！今日も忙しかったけど充実してた",
+    "空き時間で自分の夢の準備。少しずつでも前に進んでる",
+    "今日は休み！自分の時間を大切にする日",
+    "新しいバイト先、いい人ばかりで働きやすい",
+    "将来のためにスキルアップ中。コツコツ頑張る",
   ],
-  ai_hana: [
-    "今日は子どもたちとお絵描きした🎨 みんなの発想力ってすごいなぁ。元気もらえる",
-    "シフォンケーキ焼いてみた🍰 ふわふわにできて満足。誰かに食べてほしいな",
-    "園児さんが「せんせいだいすき」って言ってくれた。この仕事やっててよかった😢💕",
-    "新しいクッキーのレシピ試してみたよ🍪 ちょっと焦げちゃったけど、味は美味しくできた",
-    "今日はゆっくりお風呂に浸かって、明日も頑張ろう。みんなもお疲れ様だよ🌙",
+  ol: [
+    "今日の仕事終わり！明日のためにゆっくり休もう",
+    "お昼休みにカフェでリフレッシュ☕",
+    "会議で自分の意見が採用された！嬉しい",
+    "仕事帰りにジム。運動すると気分スッキリ",
+    "週末の予定を考えるのが今の楽しみ",
+  ],
+  nursery_teacher: [
+    "子どもたちと一緒に過ごす時間が幸せ",
+    "園児さんの成長を感じられて嬉しい日だった",
+    "今日作った製作物、みんな喜んでくれた！",
+    "保護者さんに感謝の言葉をもらえた。この仕事やっててよかった",
+    "明日の準備OK！早く子どもたちに会いたいな",
+  ],
+  designer: [
+    "新しいデザイン完成！納得のいく仕上がりになった",
+    "クライアントさんに喜んでもらえた✨",
+    "インプットの日。いろんな作品を見て刺激を受けた",
+    "デザインツールのアップデートで新機能が使える！",
+    "ポートフォリオ更新中。自分の成長が見えて嬉しい",
+  ],
+  nurse: [
+    "今日も患者さんの笑顔が見られてよかった",
+    "夜勤明け！ゆっくり休んで回復しよう",
+    "新しい知識を学ぶ研修、とても勉強になった",
+    "チームのみんなと協力して乗り越えた一日",
+    "医療の仕事は大変だけど、やりがいがある",
   ],
 };
 
 /**
+ * Gemini APIを使ってキャラクターに合ったbioを生成
+ */
+async function generateBioWithGemini(
+  model: ReturnType<GoogleGenerativeAI["getGenerativeModel"]>,
+  persona: AIPersona
+): Promise<string> {
+  const genderStr = persona.gender === "male" ? "男性" : "女性";
+  const ageStr = AGE_GROUPS[persona.ageGroup].name;
+
+  const prompt = `
+あなたはSNSのプロフィール文（bio）を作成するアシスタントです。
+以下のキャラクター設定に基づいて、そのキャラクターが自分で書いたような自然なbioを作成してください。
+
+【キャラクター設定】
+- 性別: ${genderStr}
+- 年齢層: ${ageStr}
+- 職業: ${persona.occupation.name}（${persona.occupation.bio}）
+- 性格: ${persona.personality.name}（${persona.personality.trait}）
+
+【重要なルール】
+1. 40〜80文字程度で書く
+2. そのキャラクターが自分で書いたような自然な文章
+3. 説明文ではなく、自己紹介文として書く
+4. 「〜な性格です」のような説明的な文は避ける
+5. 職業と趣味や日常を自然に織り交ぜる
+6. 名前は含めないでください
+7. 「すごい」「えらい」「わかるよ〜」「いいんじゃない？」など、他者への反応・コメントのような言葉は入れない（bioは自己紹介であり、他者への反応の場ではない）
+
+【良い例】
+- 「Webデザイナーしてます🎨 休日は美術館巡り」
+- 「営業マン3年目！休日は筋トレに励んでます💪」
+- 「保育士やってます〜 子どもたちに癒される日々🌸」
+- 「エンジニアやってるww 深夜コーディングが日課」
+
+【悪い例】
+- 「26歳/大学生🫐 学業やサークル活動に励む。トレンドに敏感な性格です。」← 説明的すぎる
+- 「私は優しい性格の看護師です」← 説明文になっている
+
+【出力】
+bioのテキストのみを出力してください。他の説明は不要です。
+`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const bio = result.response.text()?.trim();
+    
+    if (bio && bio.length > 0 && bio.length <= 100) {
+      return bio;
+    }
+    
+    // 長すぎる場合は切り詰め
+    if (bio && bio.length > 100) {
+      return bio.substring(0, 100);
+    }
+    
+    // 生成失敗時のフォールバック
+    return `${persona.occupation.name}してます！よろしくね✨`;
+  } catch (error) {
+    console.error(`Bio generation error for ${persona.name}:`, error);
+    return `${persona.occupation.name}してます！よろしくね✨`;
+  }
+}
+
+/**
  * AIアカウントを初期化する関数（管理者用）
  * 既存のアカウントも更新します
+ * ランダム組み合わせ方式で20体のAIアカウントを生成
+ * Gemini APIでキャラクターに合ったbioを動的生成
  */
 export const initializeAIAccounts = onCall(
-  {region: "asia-northeast1"},
+  {region: "asia-northeast1", secrets: [geminiApiKey], timeoutSeconds: 300},
   async () => {
+    const apiKey = geminiApiKey.value();
+    if (!apiKey) {
+      return {success: false, message: "GEMINI_API_KEY is not set"};
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({model: "gemini-2.0-flash"});
+
     let createdCount = 0;
     let updatedCount = 0;
+    const generatedBios: {name: string; bio: string}[] = [];
+
+    console.log(`Initializing ${AI_PERSONAS.length} AI accounts with Gemini-generated bios...`);
 
     for (const persona of AI_PERSONAS) {
       const docRef = db.collection("users").doc(persona.id);
       const doc = await docRef.get();
 
+      // Gemini APIでbioを生成
+      console.log(`Generating bio for ${persona.name}...`);
+      const generatedBio = await generateBioWithGemini(model, persona);
+      console.log(`  Generated: "${generatedBio}"`);
+      generatedBios.push({name: persona.name, bio: generatedBio});
+
+      // AIキャラ設定を保存（コメント生成時に使用）
+      const aiCharacterSettings = {
+        gender: persona.gender,
+        ageGroup: persona.ageGroup,
+        occupationId: persona.occupation.id,
+        personalityId: persona.personality.id,
+        praiseStyleId: persona.praiseStyle.id,
+      };
+
       const userData = {
-        email: `${persona.name}@ai.homeppu.local`,
+        email: `${persona.id}@ai.homeppu.local`,
         displayName: persona.name,
-        bio: persona.bio,
+        bio: generatedBio,
         avatarIndex: persona.avatarIndex,
         postMode: "ai",
         virtue: 100,
         isAI: true,
+        aiCharacterSettings: aiCharacterSettings,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         isBanned: false,
       };
@@ -768,30 +1171,53 @@ export const initializeAIAccounts = onCall(
           followersCount: 0,
         });
         createdCount++;
-        console.log(`Created AI account: ${persona.name}`);
+        console.log(`Created AI account: ${persona.name} (${persona.id})`);
       } else {
-        // 既存アカウントのbioとavatarIndexを更新
+        // 既存アカウントのキャラ設定とbioを更新
         await docRef.update({
-          bio: persona.bio,
+          displayName: persona.name,
+          bio: generatedBio,
           avatarIndex: persona.avatarIndex,
+          aiCharacterSettings: aiCharacterSettings,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
         updatedCount++;
-        console.log(`Updated AI account: ${persona.name}`);
+        console.log(`Updated AI account: ${persona.name} (${persona.id})`);
       }
+
+      // API呼び出しの間隔を空ける（レート制限対策）
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
+
+    // AIアカウントの一覧をログ出力
+    console.log("AI Account Summary:");
+    AI_PERSONAS.forEach((p, i) => {
+      console.log(`  ${i + 1}. ${p.name} - ${p.gender === "male" ? "男" : "女"}/${AGE_GROUPS[p.ageGroup].name}/${p.occupation.name}/${p.personality.name}/${p.praiseStyle.name}`);
+    });
 
     return {
       success: true,
-      message: "AIアカウントを作成/更新しました",
+      message: `AIアカウントを作成/更新しました（Gemini APIでbio生成: ${AI_PERSONAS.length}体）`,
       created: createdCount,
       updated: updatedCount,
+      totalAccounts: AI_PERSONAS.length,
+      accounts: AI_PERSONAS.map((p, i) => ({
+        id: p.id,
+        name: p.name,
+        gender: p.gender,
+        ageGroup: AGE_GROUPS[p.ageGroup].name,
+        occupation: p.occupation.name,
+        personality: p.personality.name,
+        praiseStyle: p.praiseStyle.name,
+        bio: generatedBios[i]?.bio || "",
+      })),
     };
   }
 );
 
 /**
  * AIアカウントの過去投稿を生成する関数（管理者用）
+ * 各AIの職業に応じたテンプレートを使用して投稿を生成
  */
 export const generateAIPosts = onCall(
   {region: "asia-northeast1", secrets: [geminiApiKey]},
@@ -820,11 +1246,19 @@ export const generateAIPosts = onCall(
         continue;
       }
 
-      // 投稿テンプレートを取得
-      const templates = AI_POST_TEMPLATES[persona.id] || [];
+      // 職業に応じた投稿テンプレートを取得
+      const templates = POST_TEMPLATES_BY_OCCUPATION[persona.occupation.id] || [];
+      if (templates.length === 0) {
+        console.log(`No templates for occupation ${persona.occupation.id}, skipping ${persona.name}`);
+        continue;
+      }
+
+      // ランダムに3〜5投稿を選択
+      const shuffledTemplates = [...templates].sort(() => Math.random() - 0.5);
+      const selectedTemplates = shuffledTemplates.slice(0, Math.floor(Math.random() * 3) + 3);
 
       // 過去1〜7日間にランダムな時間で投稿を作成
-      for (let i = 0; i < templates.length; i++) {
+      for (let i = 0; i < selectedTemplates.length; i++) {
         const daysAgo = Math.floor(Math.random() * 7) + 1;
         const hoursAgo = Math.floor(Math.random() * 24);
         const postTime = new Date(
@@ -844,7 +1278,7 @@ export const generateAIPosts = onCall(
           userId: persona.id,
           userDisplayName: persona.name,
           userAvatarIndex: persona.avatarIndex,
-          content: templates[i],
+          content: selectedTemplates[i],
           postMode: "mix",
           createdAt: admin.firestore.Timestamp.fromDate(postTime),
           reactions: reactions,
@@ -863,22 +1297,10 @@ export const generateAIPosts = onCall(
 
         for (const commenter of otherPersonas) {
           try {
-            const prompt = `
-あなたは「ほめっぷ」というSNSのユーザー「${commenter.name}」です。
-性格: ${commenter.personality}
-話し方: ${commenter.speechStyle}
-
-【投稿者の情報】
-投稿者の名前: ${persona.name}
-
-【重要なルール】
-1. ${persona.name}さんを褒めてください
-2. 短めの返信（30〜60文字程度）にしてください
-3. 自然な日本語で返信してください
-4. 「AI」「ボット」という言葉は使わないでください
+            const prompt = getSystemPrompt(commenter, persona.name) + `
 
 【${persona.name}さんの投稿】
-${templates[i]}
+${selectedTemplates[i]}
 
 【あなた（${commenter.name}）の返信】
 `;
@@ -916,7 +1338,7 @@ ${templates[i]}
 
       // ユーザーの投稿数を更新
       await db.collection("users").doc(persona.id).update({
-        totalPosts: admin.firestore.FieldValue.increment(templates.length),
+        totalPosts: admin.firestore.FieldValue.increment(selectedTemplates.length),
         totalPraises: admin.firestore.FieldValue.increment(
           Math.floor(Math.random() * 20)
         ),
@@ -925,7 +1347,7 @@ ${templates[i]}
 
     return {
       success: true,
-      message: "AI投稿を生成しました",
+      message: `AI投稿を生成しました（${AI_PERSONAS.length}体のAI）`,
       posts: totalPosts,
       comments: totalComments,
       reactions: totalReactions,
