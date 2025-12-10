@@ -2744,9 +2744,33 @@ async function sendPushNotification(
   userId: string,
   title: string,
   body: string,
-  data?: Record<string, string>
-): Promise<void> {
+  data: { [key: string]: string } = {},
+  options?: {
+    type: "comment" | "reaction" | "system";
+    senderId: string;
+    senderName: string;
+    senderAvatarUrl?: string; // アイコンURLまたはインデックス
+  }
+) {
   try {
+    // 1. Firestoreに通知ドキュメントを保存 (オプション指定時)
+    if (options) {
+      await db.collection("users").doc(userId).collection("notifications").add({
+        userId: userId,
+        senderId: options.senderId,
+        senderName: options.senderName,
+        senderAvatarUrl: options.senderAvatarUrl || "",
+        type: options.type,
+        title: title,
+        body: body,
+        postId: data.postId || null,
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      console.log(`Notification saved to Firestore for user: ${userId}`);
+    }
+
+    // 2. FCMトークン取得
     const userDoc = await db.collection("users").doc(userId).get();
     if (!userDoc.exists) {
       console.log(`User not found: ${userId} `);
@@ -2761,6 +2785,7 @@ async function sendPushNotification(
       return;
     }
 
+    // 3. FCM送信
     const message = {
       token: fcmToken,
       notification: {
@@ -2842,7 +2867,13 @@ export const onCommentCreatedNotify = onDocumentCreated(
       postOwnerId,
       "コメントが来たよ！",
       `${commenterName} さんからコメントが来たよ！`,
-      { postId }
+      { postId },
+      {
+        type: "comment",
+        senderId: commenterId,
+        senderName: commenterName,
+        senderAvatarUrl: String(commentData.userAvatarIndex ?? ""), // アバターインデックスを文字列として保存
+      }
     );
   }
 );
@@ -2882,7 +2913,13 @@ export const onReactionAddedNotify = onDocumentCreated(
       postOwnerId,
       "いいね！されたよ！",
       `${reactorName} さんからいいね！されたよ！`,
-      { postId }
+      { postId },
+      {
+        type: "reaction",
+        senderId: reactorId,
+        senderName: reactorName,
+        senderAvatarUrl: "", // リアクションはアバターURLを持たないので空（クライアント側で適宜処理）
+      }
     );
   }
 );

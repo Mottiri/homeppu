@@ -28,6 +28,14 @@ service cloud.firestore {
       // 更新: 本人のみ（特定フィールドは変更不可）
       allow update: if isAuthenticated() && isOwner(userId) && 
         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['virtue', 'isBanned', 'isAI', 'createdAt']);
+
+      // 通知サブコレクション
+      match /notifications/{notificationId} {
+         allow read: if isAuthenticated() && isOwner(userId);
+         allow update: if isAuthenticated() && isOwner(userId); // 既読更新用
+         allow delete: if isAuthenticated() && isOwner(userId); // 削除用
+         allow create: if false; // サーバー側でのみ作成
+      }
     }
     
     // 投稿コレクション

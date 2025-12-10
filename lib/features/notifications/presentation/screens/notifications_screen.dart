@@ -7,6 +7,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../shared/models/notification_model.dart';
 import '../../../../shared/repositories/notification_repository.dart';
 import '../../../../shared/providers/auth_provider.dart';
+import '../../../../shared/widgets/avatar_selector.dart';
 
 class NotificationsScreen extends ConsumerWidget {
   const NotificationsScreen({super.key});
@@ -96,22 +97,33 @@ class _NotificationTile extends ConsumerWidget {
     final user = ref.watch(currentUserProvider).valueOrNull;
 
     return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: AppColors.primary.withOpacity(0.1),
-        // TODO: アバター画像表示 (notification.senderAvatarUrl)
-        child: Icon(
-          _getIcon(notification.type),
-          color: _getIconColor(notification.type),
-          size: 20,
+      leading: GestureDetector(
+        onTap: () {
+          if (notification.senderId.isNotEmpty) {
+            context.push('/profile/${notification.senderId}');
+          }
+        },
+        child: AvatarWidget(
+          avatarIndex: int.tryParse(notification.senderAvatarUrl) ?? 0,
+          size: 40,
         ),
       ),
       title: RichText(
         text: TextSpan(
           style: DefaultTextStyle.of(context).style,
           children: [
-            TextSpan(
-              text: notification.senderName,
-              style: const TextStyle(fontWeight: FontWeight.bold),
+            WidgetSpan(
+              child: GestureDetector(
+                onTap: () {
+                  if (notification.senderId.isNotEmpty) {
+                    context.push('/profile/${notification.senderId}');
+                  }
+                },
+                child: Text(
+                  notification.senderName,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
             ),
             TextSpan(text: 'さんが${notification.title}'),
           ],
@@ -160,28 +172,6 @@ class _NotificationTile extends ConsumerWidget {
           ? AppColors.primary.withOpacity(0.05)
           : null,
     );
-  }
-
-  IconData _getIcon(NotificationType type) {
-    switch (type) {
-      case NotificationType.comment:
-        return Icons.chat_bubble_outline;
-      case NotificationType.reaction:
-        return Icons.favorite_border;
-      case NotificationType.system:
-        return Icons.info_outline;
-    }
-  }
-
-  Color _getIconColor(NotificationType type) {
-    switch (type) {
-      case NotificationType.comment:
-        return AppColors.comment;
-      case NotificationType.reaction:
-        return AppColors.praise; // 称賛色
-      case NotificationType.system:
-        return AppColors.primary;
-    }
   }
 
   String _formatDate(DateTime date) {

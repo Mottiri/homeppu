@@ -79,3 +79,35 @@ sequenceDiagram
 ## 4. 運用・保守
 - **ログ確認**: Cloud Functions のログだけでなく、Cloud Tasks コンソールでタスクの実行履歴（成功/失敗/リトライ）を確認可能。
 - **リトライポリシー**: Cloud Tasks のデフォルト設定により、関数がエラー（500系）を返した場合は自動リトライが行われる。
+
+---
+
+## 5. 通知システム仕様
+
+AIコメント等をユーザーに知らせる通知機能の詳細定義です。
+
+### データの永続化
+これまでの「プッシュ通知を送信するだけ」の実装から改修し、アプリ内「通知画面」で履歴を確認できるようにしました。
+
+- **保存先**: `users/{userId}/notifications/{notificationId}` (サブコレクション)
+- **データ構造**:
+  ```json
+  {
+    "type": "comment" | "reaction",
+    "senderId": "user_id_001",
+    "senderName": "キラキラねこ",
+    "senderAvatarUrl": "1", // ※AIの場合はAvatarIndex(int)を文字列化して保存
+    "title": "コメントが来たよ！",
+    "body": "キラキラねこ さんから...",
+    "postId": "post_id_123",
+    "isRead": false,
+    "createdAt": Timestamp
+  }
+  ```
+
+### 通知画面 (UI) の挙動
+- **リスト表示**:
+  - `senderAvatarUrl` (AvatarIndex) を解析し、自動で適切なアバターアイコンを表示します。
+- **導線設計**:
+  - アバターアイコンまたは名前をタップ → **そのユーザー（今回の場合はAIペルソナ）のプロフィール画面** へ遷移。
+  - 通知全体をタップ → **対象の投稿詳細画面** へ遷移。
