@@ -1080,6 +1080,62 @@ export const onPostCreated = onDocumentCreated(
       });
       await batch.commit();
     }
+
+    // ===========================================
+    // 2. AIリアクションの大量投下 (15〜30件)
+    // ===========================================
+    const reactionCount = Math.floor(Math.random() * 16) + 15; // 15〜30
+    console.log(`Scheduling ${reactionCount} reactions (burst)...`);
+
+    const POSITIVE_REACTIONS = ["love", "praise", "cheer", "sparkles", "clap", "thumbsup", "smile", "flower", "fire", "nice"];
+
+    // コメントするAIも含めて、全AIからランダムに選ぶ
+    for (let i = 0; i < reactionCount; i++) {
+      const persona = AI_PERSONAS[Math.floor(Math.random() * AI_PERSONAS.length)];
+
+      const reactionType = POSITIVE_REACTIONS[Math.floor(Math.random() * POSITIVE_REACTIONS.length)];
+
+      // 10秒〜60分後のランダムな時間
+      const delaySeconds = Math.floor(Math.random() * 3600) + 10;
+      const scheduleTime = new Date(Date.now() + delaySeconds * 1000);
+
+      const payload = {
+        postId,
+        personaId: persona.id,
+        personaName: persona.name,
+        reactionType,
+      };
+
+      const project = process.env.GCLOUD_PROJECT || PROJECT_ID;
+      const url = `https://${LOCATION}-${project}.cloudfunctions.net/generateAIReactionV1`;
+      const serviceAccountEmail = `cloud-tasks-sa@${project}.iam.gserviceaccount.com`;
+
+      const task = {
+        httpRequest: {
+          httpMethod: "POST" as const,
+          url,
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer secret-token",
+          },
+          body: Buffer.from(JSON.stringify(payload)).toString("base64"),
+          oidcToken: {
+            serviceAccountEmail: serviceAccountEmail,
+          },
+        },
+        scheduleTime: {
+          seconds: Math.floor(scheduleTime.getTime() / 1000),
+        },
+      };
+
+      try {
+        await tasksClient.createTask({ parent: queuePath, task });
+      } catch (error) {
+        console.error(`Error enqueuing reaction for ${persona.name}:`, error);
+      }
+    }
+
+    console.log(`Scheduled ${reactionCount} reaction tasks`);
   }
 );
 
@@ -3103,3 +3159,55 @@ export const createCommentWithModeration = onCall(
     return { commentId: commentRef.id };
   }
 );
+
+/**
+ * Cloud Tasks から呼び出される AI リアクション生成関数 (v1)
+ * 単体リアクション用
+ */
+export const generateAIReactionV1 = functionsV1.region("asia-northeast1").https.onRequest(async (request, response) => {
+  // 簡易セキュリティチェック
+  const authHeader = request.headers["authorization"];
+  if (!authHeader) {
+    response.status(403).send("Unauthorized");
+    return;
+  }
+
+  try {
+    const { postId, personaId, personaName, reactionType } = request.body;
+
+    console.log(`Processing AI reaction task for ${personaName} on post ${postId} (Type: ${reactionType})`);
+
+    const persona = AI_PERSONAS.find(p => p.id === personaId);
+    if (!persona) {
+      response.status(400).send("Persona not found");
+      return;
+    }
+
+    const batch = db.batch();
+
+    // 1. リアクション保存
+    const reactionRef = db.collection("reactions").doc();
+    batch.set(reactionRef, {
+      postId: postId,
+      userId: persona.id,
+      userDisplayName: persona.name,
+      reactionType: reactionType,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // 2. 投稿のリアクションカウント更新
+    const postRef = db.collection("posts").doc(postId);
+    batch.update(postRef, {
+      [`reactions.${reactionType}`]: admin.firestore.FieldValue.increment(1),
+    });
+
+    await batch.commit();
+
+    console.log(`AI reaction posted: ${persona.name} -> ${reactionType}`);
+    response.status(200).send("Reaction posted successfully");
+
+  } catch (error) {
+    console.error("Error in generateAIReaction:", error);
+    response.status(500).send("Internal Server Error");
+  }
+});
