@@ -73,7 +73,7 @@ class _PostCardState extends State<PostCard> {
           .collection('comments')
           .where('postId', isEqualTo: post.id)
           .get();
-      
+
       final batch = FirebaseFirestore.instance.batch();
       for (final doc in comments.docs) {
         batch.delete(doc.reference);
@@ -84,9 +84,7 @@ class _PostCardState extends State<PostCard> {
       await FirebaseFirestore.instance
           .collection('users')
           .doc(post.userId)
-          .update({
-        'totalPosts': FieldValue.increment(-1),
-      });
+          .update({'totalPosts': FieldValue.increment(-1)});
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -114,7 +112,7 @@ class _PostCardState extends State<PostCard> {
   Widget build(BuildContext context) {
     // timeagoの日本語設定
     timeago.setLocaleMessages('ja', timeago.JaMessages());
-    
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: InkWell(
@@ -144,9 +142,8 @@ class _PostCardState extends State<PostCard> {
                           onTap: () => context.push('/user/${post.userId}'),
                           child: Text(
                             post.userDisplayName,
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: AppColors.primary,
-                            ),
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(color: AppColors.primary),
                           ),
                         ),
                         Text(
@@ -189,9 +186,16 @@ class _PostCardState extends State<PostCard> {
                                 value: 'delete',
                                 child: Row(
                                   children: [
-                                    Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                                    Icon(
+                                      Icons.delete_outline,
+                                      size: 18,
+                                      color: Colors.red,
+                                    ),
                                     SizedBox(width: 8),
-                                    Text('この投稿を削除', style: TextStyle(color: Colors.red)),
+                                    Text(
+                                      'この投稿を削除',
+                                      style: TextStyle(color: Colors.red),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -211,51 +215,71 @@ class _PostCardState extends State<PostCard> {
                         ),
                 ],
               ),
-              
+
               const SizedBox(height: 12),
-              
+
               // 投稿内容
               Text(
                 post.content,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  height: 1.6,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyLarge?.copyWith(height: 1.6),
               ),
-              
+
               // メディア表示
               if (post.allMedia.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 _MediaGrid(mediaItems: post.allMedia),
               ],
-              
+
               const SizedBox(height: 16),
-              
+
               // リアクションエリア
               Row(
                 children: [
-                  ...ReactionType.values.map((type) => Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ReactionButton(
-                      type: type,
-                      count: post.reactions[type.value] ?? 0,
-                      postId: post.id,
+                  ...ReactionType.values.map(
+                    (type) => Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ReactionButton(
+                        type: type,
+                        count: post.reactions[type.value] ?? 0,
+                        postId: post.id,
+                      ),
                     ),
-                  )),
+                  ),
                   const Spacer(),
-                  // コメント数
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.chat_bubble_outline,
-                        size: 18,
-                        color: AppColors.textHint,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${post.commentCount}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
+                  // コメント数（表示可能なもののみカウント）
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('comments')
+                        .where('postId', isEqualTo: post.id)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      int visibleCount = 0;
+                      if (snapshot.hasData) {
+                        final now = DateTime.now();
+                        visibleCount = snapshot.data!.docs.where((doc) {
+                          final data = doc.data() as Map<String, dynamic>;
+                          final scheduledAt = data['scheduledAt'] as Timestamp?;
+                          if (scheduledAt == null) return true;
+                          return now.isAfter(scheduledAt.toDate());
+                        }).length;
+                      }
+                      return Row(
+                        children: [
+                          const Icon(
+                            Icons.chat_bubble_outline,
+                            size: 18,
+                            color: AppColors.textHint,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '$visibleCount',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),
@@ -301,14 +325,18 @@ class _MediaGrid extends StatelessWidget {
       children: [
         Expanded(
           child: ClipRRect(
-            borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
+            borderRadius: const BorderRadius.horizontal(
+              left: Radius.circular(16),
+            ),
             child: _buildMediaItem(context, mediaItems[0], height: 150),
           ),
         ),
         const SizedBox(width: 4),
         Expanded(
           child: ClipRRect(
-            borderRadius: const BorderRadius.horizontal(right: Radius.circular(16)),
+            borderRadius: const BorderRadius.horizontal(
+              right: Radius.circular(16),
+            ),
             child: _buildMediaItem(context, mediaItems[1], height: 150),
           ),
         ),
@@ -322,7 +350,9 @@ class _MediaGrid extends StatelessWidget {
         Expanded(
           flex: 2,
           child: ClipRRect(
-            borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
+            borderRadius: const BorderRadius.horizontal(
+              left: Radius.circular(16),
+            ),
             child: _buildMediaItem(context, mediaItems[0], height: 200),
           ),
         ),
@@ -331,12 +361,16 @@ class _MediaGrid extends StatelessWidget {
           child: Column(
             children: [
               ClipRRect(
-                borderRadius: const BorderRadius.only(topRight: Radius.circular(16)),
+                borderRadius: const BorderRadius.only(
+                  topRight: Radius.circular(16),
+                ),
                 child: _buildMediaItem(context, mediaItems[1], height: 98),
               ),
               const SizedBox(height: 4),
               ClipRRect(
-                borderRadius: const BorderRadius.only(bottomRight: Radius.circular(16)),
+                borderRadius: const BorderRadius.only(
+                  bottomRight: Radius.circular(16),
+                ),
                 child: _buildMediaItem(context, mediaItems[2], height: 98),
               ),
             ],
@@ -353,14 +387,18 @@ class _MediaGrid extends StatelessWidget {
           children: [
             Expanded(
               child: ClipRRect(
-                borderRadius: const BorderRadius.only(topLeft: Radius.circular(16)),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                ),
                 child: _buildMediaItem(context, mediaItems[0], height: 100),
               ),
             ),
             const SizedBox(width: 4),
             Expanded(
               child: ClipRRect(
-                borderRadius: const BorderRadius.only(topRight: Radius.circular(16)),
+                borderRadius: const BorderRadius.only(
+                  topRight: Radius.circular(16),
+                ),
                 child: _buildMediaItem(context, mediaItems[1], height: 100),
               ),
             ),
@@ -371,15 +409,23 @@ class _MediaGrid extends StatelessWidget {
           children: [
             Expanded(
               child: ClipRRect(
-                borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(16)),
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(16),
+                ),
                 child: _buildMediaItem(context, mediaItems[2], height: 100),
               ),
             ),
             const SizedBox(width: 4),
             Expanded(
               child: ClipRRect(
-                borderRadius: const BorderRadius.only(bottomRight: Radius.circular(16)),
-                child: _buildMediaItem(context, mediaItems.length > 3 ? mediaItems[3] : mediaItems[2], height: 100),
+                borderRadius: const BorderRadius.only(
+                  bottomRight: Radius.circular(16),
+                ),
+                child: _buildMediaItem(
+                  context,
+                  mediaItems.length > 3 ? mediaItems[3] : mediaItems[2],
+                  height: 100,
+                ),
               ),
             ),
           ],
@@ -388,7 +434,11 @@ class _MediaGrid extends StatelessWidget {
     );
   }
 
-  Widget _buildMediaItem(BuildContext context, MediaItem item, {required double height}) {
+  Widget _buildMediaItem(
+    BuildContext context,
+    MediaItem item, {
+    required double height,
+  }) {
     switch (item.type) {
       case MediaType.image:
         return GestureDetector(
@@ -429,9 +479,8 @@ class _MediaGrid extends StatelessWidget {
                     height: height,
                     width: double.infinity,
                     fit: BoxFit.cover,
-                    errorWidget: (context, url, error) => Container(
-                      color: Colors.black54,
-                    ),
+                    errorWidget: (context, url, error) =>
+                        Container(color: Colors.black54),
                   ),
                 // 再生アイコン
                 Container(
@@ -480,10 +529,7 @@ class _MediaGrid extends StatelessWidget {
                 if (item.fileSize != null)
                   Text(
                     _formatFileSize(item.fileSize!),
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Colors.grey.shade600,
-                    ),
+                    style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
                   ),
               ],
             ),
@@ -504,10 +550,7 @@ class _MediaGrid extends StatelessWidget {
           ),
           body: Center(
             child: InteractiveViewer(
-              child: CachedNetworkImage(
-                imageUrl: url,
-                fit: BoxFit.contain,
-              ),
+              child: CachedNetworkImage(imageUrl: url, fit: BoxFit.contain),
             ),
           ),
         ),
@@ -518,17 +561,15 @@ class _MediaGrid extends StatelessWidget {
   void _showVideoPlayer(BuildContext context, String url) {
     // rootNavigator: true でShellRouteの外で表示（ボトムナビを非表示）
     Navigator.of(context, rootNavigator: true).push(
-      MaterialPageRoute(
-        builder: (context) => VideoPlayerScreen(videoUrl: url),
-      ),
+      MaterialPageRoute(builder: (context) => VideoPlayerScreen(videoUrl: url)),
     );
   }
 
   void _openFile(BuildContext context, MediaItem item) {
     // TODO: ファイルダウンロード・表示を実装
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${item.fileName}を開きます')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('${item.fileName}を開きます')));
   }
 
   IconData _getFileIcon(String fileName) {

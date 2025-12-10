@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 import 'package:timeago/timeago.dart' as timeago;
+import 'dart:async';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
@@ -28,9 +29,35 @@ class PostDetailScreen extends ConsumerStatefulWidget {
 class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
   final _commentController = TextEditingController();
   bool _isSending = false;
+  Timer? _refreshTimer;
+  late final Stream<DocumentSnapshot> _postStream;
+  late final Stream<QuerySnapshot> _commentsStream;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // ストリームを初期化（ビルドごとの再接続を防ぐ）
+    _postStream = FirebaseFirestore.instance
+        .collection('posts')
+        .doc(widget.postId)
+        .snapshots();
+
+    _commentsStream = FirebaseFirestore.instance
+        .collection('comments')
+        .where('postId', isEqualTo: widget.postId)
+        .orderBy('createdAt', descending: false)
+        .snapshots();
+
+    // 30秒ごとに画面を更新して、時間経過で表示されるべきコメントを表示する
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
+  }
 
   @override
   void dispose() {
+    _refreshTimer?.cancel();
     _commentController.dispose();
     super.dispose();
   }
@@ -61,10 +88,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     } on ModerationException catch (e) {
       if (mounted) {
         // ネガティブコンテンツが検出された場合
-        await NegativeContentDialog.show(
-          context: context,
-          message: e.message,
-        );
+        await NegativeContentDialog.show(context: context, message: e.message);
         // 徳ポイント状態を更新
         ref.invalidate(virtueStatusProvider);
       }
@@ -97,17 +121,12 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         title: const Text('投稿'),
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.warmGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.warmGradient),
         child: Column(
           children: [
             Expanded(
               child: StreamBuilder<DocumentSnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('posts')
-                    .doc(widget.postId)
-                    .snapshots(),
+                stream: _postStream,
                 builder: (context, postSnapshot) {
                   if (!postSnapshot.hasData || !postSnapshot.data!.exists) {
                     return const Center(
@@ -134,7 +153,9 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                 Row(
                                   children: [
                                     GestureDetector(
-                                      onTap: () => context.push('/profile/${post.userId}'),
+                                      onTap: () => context.push(
+                                        '/profile/${post.userId}',
+                                      ),
                                       child: AvatarWidget(
                                         avatarIndex: post.userAvatarIndex,
                                         size: 48,
@@ -143,40 +164,49 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           GestureDetector(
-                                            onTap: () => context.push('/profile/${post.userId}'),
+                                            onTap: () => context.push(
+                                              '/profile/${post.userId}',
+                                            ),
                                             child: Text(
                                               post.userDisplayName,
-                                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                                color: AppColors.primary,
-                                              ),
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .titleMedium
+                                                  ?.copyWith(
+                                                    color: AppColors.primary,
+                                                  ),
                                             ),
                                           ),
                                           Text(
-                                            timeago.format(post.createdAt, locale: 'ja'),
-                                            style: Theme.of(context).textTheme.bodySmall,
+                                            timeago.format(
+                                              post.createdAt,
+                                              locale: 'ja',
+                                            ),
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.bodySmall,
                                           ),
                                         ],
                                       ),
                                     ),
                                   ],
                                 ),
-                                
+
                                 const SizedBox(height: 16),
-                                
+
                                 // 投稿内容
                                 Text(
                                   post.content,
-                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                    height: 1.8,
-                                    fontSize: 16,
-                                  ),
+                                  style: Theme.of(context).textTheme.bodyLarge
+                                      ?.copyWith(height: 1.8, fontSize: 16),
                                 ),
-                                
+
                                 const SizedBox(height: 20),
-                                
+
                                 // リアクション
                                 Wrap(
                                   spacing: 8,
@@ -194,25 +224,24 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                           ),
                         ),
                       ),
-                      
+
                       // コメントヘッダー
                       SliverToBoxAdapter(
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 8,
+                          ),
                           child: Text(
                             'コメント',
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                         ),
                       ),
-                      
+
                       // コメントリスト
                       StreamBuilder<QuerySnapshot>(
-                        stream: FirebaseFirestore.instance
-                            .collection('comments')
-                            .where('postId', isEqualTo: widget.postId)
-                            .orderBy('createdAt', descending: false)
-                            .snapshots(),
+                        stream: _commentsStream,
                         builder: (context, commentSnapshot) {
                           if (!commentSnapshot.hasData) {
                             return const SliverToBoxAdapter(
@@ -246,14 +275,19 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                       const SizedBox(height: 12),
                                       Text(
                                         'まだコメントがないよ',
-                                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                          color: AppColors.textSecondary,
-                                        ),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.copyWith(
+                                              color: AppColors.textSecondary,
+                                            ),
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
                                         '最初のコメントを送ってみよう！',
-                                        style: Theme.of(context).textTheme.bodySmall,
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.bodySmall,
                                       ),
                                     ],
                                   ),
@@ -263,27 +297,25 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                           }
 
                           return SliverList(
-                            delegate: SliverChildBuilderDelegate(
-                              (context, index) {
-                                final comment = comments[index];
-                                return _CommentTile(comment: comment);
-                              },
-                              childCount: comments.length,
-                            ),
+                            delegate: SliverChildBuilderDelegate((
+                              context,
+                              index,
+                            ) {
+                              final comment = comments[index];
+                              return _CommentTile(comment: comment);
+                            }, childCount: comments.length),
                           );
                         },
                       ),
-                      
+
                       // スペーサー
-                      const SliverToBoxAdapter(
-                        child: SizedBox(height: 100),
-                      ),
+                      const SliverToBoxAdapter(child: SizedBox(height: 100)),
                     ],
                   );
                 },
               ),
             ),
-            
+
             // コメント入力エリア
             Container(
               padding: const EdgeInsets.all(12),
@@ -318,7 +350,8 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                     ),
                     const SizedBox(width: 8),
                     IconButton(
-                      onPressed: _commentController.text.trim().isEmpty || _isSending
+                      onPressed:
+                          _commentController.text.trim().isEmpty || _isSending
                           ? null
                           : _sendComment,
                       icon: _isSending
@@ -368,10 +401,7 @@ class _CommentTile extends StatelessWidget {
           // アバター（タップでプロフィールへ）
           GestureDetector(
             onTap: () => _navigateToProfile(context),
-            child: AvatarWidget(
-              avatarIndex: comment.userAvatarIndex,
-              size: 36,
-            ),
+            child: AvatarWidget(avatarIndex: comment.userAvatarIndex, size: 36),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -391,9 +421,8 @@ class _CommentTile extends StatelessWidget {
                         onTap: () => _navigateToProfile(context),
                         child: Text(
                           comment.userDisplayName,
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            color: AppColors.primary,
-                          ),
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(color: AppColors.primary),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -406,9 +435,9 @@ class _CommentTile extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     comment.content,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      height: 1.5,
-                    ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(height: 1.5),
                   ),
                 ],
               ),
@@ -419,4 +448,3 @@ class _CommentTile extends StatelessWidget {
     );
   }
 }
-

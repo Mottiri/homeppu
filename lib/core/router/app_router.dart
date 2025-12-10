@@ -13,32 +13,35 @@ import '../../features/profile/presentation/screens/profile_screen.dart';
 import '../../features/profile/presentation/screens/settings_screen.dart';
 import '../../features/circle/presentation/screens/circles_screen.dart';
 import '../../features/circle/presentation/screens/circle_detail_screen.dart';
+import '../../features/circle/presentation/screens/create_circle_screen.dart';
 import '../../features/tasks/presentation/screens/tasks_screen.dart';
+import '../../features/notifications/presentation/screens/notifications_screen.dart';
 import '../../shared/providers/auth_provider.dart';
 
 /// アプリのルーター設定
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateProvider);
-  
+
   return GoRouter(
     initialLocation: '/home',
     debugLogDiagnostics: true,
     redirect: (context, state) {
       final isLoggedIn = authState.valueOrNull != null;
-      final isAuthRoute = state.matchedLocation == '/login' || 
-                          state.matchedLocation == '/register' ||
-                          state.matchedLocation == '/onboarding';
-      
+      final isAuthRoute =
+          state.matchedLocation == '/login' ||
+          state.matchedLocation == '/register' ||
+          state.matchedLocation == '/onboarding';
+
       // 未ログインでauth以外にアクセス → ログイン画面へ
       if (!isLoggedIn && !isAuthRoute) {
         return '/onboarding';
       }
-      
+
       // ログイン済みでauth画面にアクセス → ホームへ
       if (isLoggedIn && isAuthRoute) {
         return '/home';
       }
-      
+
       return null;
     },
     routes: [
@@ -58,7 +61,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'register',
         builder: (context, state) => const RegisterScreen(),
       ),
-      
+
       // メイン画面（シェルルート）
       ShellRoute(
         builder: (context, state, child) => MainShell(child: child),
@@ -94,14 +97,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
         ],
       ),
-      
+
       // 投稿作成
       GoRoute(
         path: '/create-post',
         name: 'createPost',
-        builder: (context, state) => const CreatePostScreen(),
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          final circleId = extra?['circleId'] as String?;
+          return CreatePostScreen(circleId: circleId);
+        },
       ),
-      
+
       // 投稿詳細
       GoRoute(
         path: '/post/:postId',
@@ -111,7 +118,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return PostDetailScreen(postId: postId);
         },
       ),
-      
+
       // サークル詳細
       GoRoute(
         path: '/circle/:circleId',
@@ -121,14 +128,28 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return CircleDetailScreen(circleId: circleId);
         },
       ),
-      
+
+      // サークル作成
+      GoRoute(
+        path: '/create-circle',
+        name: 'createCircle',
+        builder: (context, state) => const CreateCircleScreen(),
+      ),
+
       // 設定
       GoRoute(
         path: '/settings',
         name: 'settings',
         builder: (context, state) => const SettingsScreen(),
       ),
-      
+
+      // 通知
+      GoRoute(
+        path: '/notifications',
+        name: 'notifications',
+        builder: (context, state) => const NotificationsScreen(),
+      ),
+
       // 投稿詳細画面からの遷移用（ナビバーなし）
       GoRoute(
         path: '/profile/:userId',
@@ -144,20 +165,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text(
-              '🔍',
-              style: TextStyle(fontSize: 64),
-            ),
+            const Text('🔍', style: TextStyle(fontSize: 64)),
             const SizedBox(height: 16),
             Text(
               'あれ？ページが見つからないよ',
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 8),
-            Text(
-              '大丈夫、ホームに戻ろう！',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
+            Text('大丈夫、ホームに戻ろう！', style: Theme.of(context).textTheme.bodyMedium),
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: () => context.go('/home'),
@@ -169,4 +184,3 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ),
   );
 });
-

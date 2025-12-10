@@ -29,15 +29,17 @@ class AppColors {
   // テキストカラー
   static const Color textPrimary = Color(0xFF4A4A4A);
   static const Color textSecondary = Color(0xFF7A7A7A);
+  static const Color textTertiary = Color(0xFFCCCCCC); // より薄いグレー
   static const Color textHint = Color(0xFFAAAAAA);
   static const Color textOnPrimary = Color(0xFFFFFFFF);
 
   // 特別なカラー
-  static const Color love = Color(0xFFFF6B6B);       // いいね・愛情表現
-  static const Color praise = Color(0xFFFFD93D);    // 称賛・すごい
-  static const Color cheer = Color(0xFF6BCB77);     // 応援・がんばれ
-  static const Color empathy = Color(0xFF4D96FF);   // 共感
-  static const Color virtue = Color(0xFFB794F4);    // 徳ポイント
+  static const Color love = Color(0xFFFF6B6B); // いいね・愛情表現
+  static const Color praise = Color(0xFFFFD93D); // 称賛・すごい
+  static const Color cheer = Color(0xFF6BCB77); // 応援・がんばれ
+  static const Color empathy = Color(0xFF4D96FF); // 共感
+  static const Color virtue = Color(0xFFB794F4); // 徳ポイント
+  static const Color comment = Color(0xFF4DB6AC); // コメント（ティール）
 
   // システムカラー
   static const Color success = Color(0xFF81C784);
@@ -64,5 +66,3 @@ class AppColors {
     colors: [Color(0xFFFFFFFF), Color(0xFFFFF8F2)],
   );
 }
-
-

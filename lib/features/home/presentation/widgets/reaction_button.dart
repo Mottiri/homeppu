@@ -36,9 +36,10 @@ class _ReactionButtonState extends ConsumerState<ReactionButton>
       duration: const Duration(milliseconds: 200),
       vsync: this,
     );
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.3).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
-    );
+    _scaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: 1.3,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.elasticOut));
   }
 
   @override
@@ -53,7 +54,7 @@ class _ReactionButtonState extends ConsumerState<ReactionButton>
 
     // アニメーション
     _controller.forward().then((_) => _controller.reverse());
-    
+
     setState(() => _isReacted = !_isReacted);
 
     // Firestoreに反映
@@ -61,12 +62,23 @@ class _ReactionButtonState extends ConsumerState<ReactionButton>
       final postRef = FirebaseFirestore.instance
           .collection('posts')
           .doc(widget.postId);
-      
+
       await postRef.update({
         'reactions.${widget.type.value}': FieldValue.increment(
           _isReacted ? 1 : -1,
         ),
       });
+
+      // リアクション追加時のみ、通知トリガー用にサブコレクションに書き込む
+      if (_isReacted) {
+        await FirebaseFirestore.instance.collection('reactions').add({
+          'postId': widget.postId,
+          'userId': user.uid,
+          'userDisplayName': user.displayName,
+          'reactionType': widget.type.value,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
     } catch (e) {
       // エラー時は状態を戻す
       setState(() => _isReacted = !_isReacted);
@@ -76,7 +88,7 @@ class _ReactionButtonState extends ConsumerState<ReactionButton>
   @override
   Widget build(BuildContext context) {
     final color = Color(widget.type.colorValue);
-    
+
     return GestureDetector(
       onTap: _onTap,
       child: AnimatedBuilder(
@@ -98,10 +110,7 @@ class _ReactionButtonState extends ConsumerState<ReactionButton>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    widget.type.emoji,
-                    style: const TextStyle(fontSize: 14),
-                  ),
+                  Text(widget.type.emoji, style: const TextStyle(fontSize: 14)),
                   if (widget.count > 0 || _isReacted) ...[
                     const SizedBox(width: 4),
                     Text(
@@ -122,5 +131,3 @@ class _ReactionButtonState extends ConsumerState<ReactionButton>
     );
   }
 }
-
-

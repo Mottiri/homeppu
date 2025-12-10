@@ -16,7 +16,9 @@ import '../../../../shared/widgets/virtue_indicator.dart';
 
 /// 投稿作成画面
 class CreatePostScreen extends ConsumerStatefulWidget {
-  const CreatePostScreen({super.key});
+  final String? circleId; // サークルへの投稿の場合はcircleIdを受け取る
+
+  const CreatePostScreen({super.key, this.circleId});
 
   @override
   ConsumerState<CreatePostScreen> createState() => _CreatePostScreenState();
@@ -28,7 +30,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   bool _isLoading = false;
   bool _isUploading = false;
   double _uploadProgress = 0;
-  
+
   // 選択されたメディア
   final List<_SelectedMedia> _selectedMedia = [];
 
@@ -74,10 +76,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
               const SizedBox(height: 20),
               const Text(
                 'メディアを追加',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 20),
               _MediaPickerOption(
@@ -128,7 +127,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     try {
       final remaining = MediaService.maxMediaCount - _selectedMedia.length;
       final images = await _mediaService.pickImages(maxCount: remaining);
-      
+
       for (final image in images) {
         _addMedia(image.path, MediaType.image);
       }
@@ -166,7 +165,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     try {
       final remaining = MediaService.maxMediaCount - _selectedMedia.length;
       final files = await _mediaService.pickFiles(maxCount: remaining);
-      
+
       for (final file in files) {
         if (file.path != null) {
           _addMedia(file.path!, MediaType.file, fileName: file.name);
@@ -180,13 +179,11 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   /// メディアを追加
   void _addMedia(String path, MediaType type, {String? fileName}) {
     if (_selectedMedia.length >= MediaService.maxMediaCount) return;
-    
+
     setState(() {
-      _selectedMedia.add(_SelectedMedia(
-        path: path,
-        type: type,
-        fileName: fileName,
-      ));
+      _selectedMedia.add(
+        _SelectedMedia(path: path, type: type, fileName: fileName),
+      );
     });
   }
 
@@ -201,10 +198,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   void _showError(String message) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: AppColors.error,
-        ),
+        SnackBar(content: Text(message), backgroundColor: AppColors.error),
       );
     }
   }
@@ -254,6 +248,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         userAvatarIndex: user.avatarIndex,
         postMode: user.postMode,
         mediaItems: uploadedMedia,
+        circleId: widget.circleId, // サークルIDを渡す
       );
 
       // 徳ポイント状態を更新
@@ -304,11 +299,12 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider).valueOrNull;
-    final remainingChars = AppConstants.maxPostLength - _contentController.text.length;
+    final remainingChars =
+        AppConstants.maxPostLength - _contentController.text.length;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('新しい投稿'),
+        title: Text(widget.circleId != null ? 'サークルに投稿' : '新しい投稿'),
         leading: IconButton(
           onPressed: () => context.pop(),
           icon: const Icon(Icons.close_rounded),
@@ -322,7 +318,10 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: ElevatedButton(
-              onPressed: (_contentController.text.trim().isEmpty && _selectedMedia.isEmpty) || _isLoading
+              onPressed:
+                  (_contentController.text.trim().isEmpty &&
+                          _selectedMedia.isEmpty) ||
+                      _isLoading
                   ? null
                   : _createPost,
               style: ElevatedButton.styleFrom(
@@ -343,9 +342,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         ],
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.warmGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.warmGradient),
         child: Column(
           children: [
             Expanded(
@@ -358,20 +355,31 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                     if (user != null)
                       Row(
                         children: [
-                          AvatarWidget(
-                            avatarIndex: user.avatarIndex,
-                            size: 48,
-                          ),
+                          AvatarWidget(avatarIndex: user.avatarIndex, size: 48),
                           const SizedBox(width: 12),
-                          Text(
-                            user.displayName,
-                            style: Theme.of(context).textTheme.titleMedium,
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                user.displayName,
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              if (widget.circleId != null)
+                                Text(
+                                  'サークルへの投稿',
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                ),
+                            ],
                           ),
                         ],
                       ),
-                    
+
                     const SizedBox(height: 20),
-                    
+
                     // 投稿入力
                     TextField(
                       controller: _contentController,
@@ -384,9 +392,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                         fillColor: Colors.transparent,
                         counterText: '',
                       ),
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        height: 1.6,
-                      ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyLarge?.copyWith(height: 1.6),
                       onChanged: (value) => setState(() {}),
                     ),
 
@@ -456,7 +464,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                 ),
               ),
             ),
-            
+
             // ボトムバー
             Container(
               padding: const EdgeInsets.all(16),
@@ -481,8 +489,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                         label: Text('${_selectedMedia.length}'),
                         child: const Icon(Icons.attach_file),
                       ),
-                      color: _selectedMedia.isNotEmpty 
-                          ? AppColors.primary 
+                      color: _selectedMedia.isNotEmpty
+                          ? AppColors.primary
                           : AppColors.textSecondary,
                     ),
                     const Spacer(),
@@ -515,11 +523,7 @@ class _SelectedMedia {
   final MediaType type;
   final String? fileName;
 
-  _SelectedMedia({
-    required this.path,
-    required this.type,
-    this.fileName,
-  });
+  _SelectedMedia({required this.path, required this.type, this.fileName});
 }
 
 /// メディア選択オプション
@@ -559,10 +563,7 @@ class _MediaPreview extends StatelessWidget {
   final _SelectedMedia media;
   final VoidCallback onRemove;
 
-  const _MediaPreview({
-    required this.media,
-    required this.onRemove,
-  });
+  const _MediaPreview({required this.media, required this.onRemove});
 
   @override
   Widget build(BuildContext context) {
@@ -593,11 +594,7 @@ class _MediaPreview extends StatelessWidget {
                   color: Colors.black.withOpacity(0.6),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
-                  Icons.close,
-                  size: 16,
-                  color: Colors.white,
-                ),
+                child: const Icon(Icons.close, size: 16, color: Colors.white),
               ),
             ),
           ),
@@ -617,10 +614,7 @@ class _MediaPreview extends StatelessWidget {
                 ),
                 child: Text(
                   media.fileName ?? 'ファイル',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                  ),
+                  style: const TextStyle(color: Colors.white, fontSize: 10),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
@@ -656,11 +650,7 @@ class _MediaPreview extends StatelessWidget {
           height: 120,
           color: Colors.black87,
           child: const Center(
-            child: Icon(
-              Icons.videocam,
-              size: 40,
-              color: Colors.white54,
-            ),
+            child: Icon(Icons.videocam, size: 40, color: Colors.white54),
           ),
         );
       case MediaType.file:
@@ -668,11 +658,7 @@ class _MediaPreview extends StatelessWidget {
           width: 120,
           height: 120,
           color: Colors.grey.shade100,
-          child: Icon(
-            _getFileIcon(),
-            size: 40,
-            color: Colors.grey.shade600,
-          ),
+          child: Icon(_getFileIcon(), size: 40, color: Colors.grey.shade600),
         );
     }
   }

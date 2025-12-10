@@ -39,10 +39,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   Future<void> _loadUser() async {
     final currentUser = ref.read(currentUserProvider).valueOrNull;
-    
+
     print('ProfileScreen: Loading user with userId: ${widget.userId}');
     print('ProfileScreen: Current user uid: ${currentUser?.uid}');
-    
+
     if (widget.userId == null || widget.userId == currentUser?.uid) {
       // 自分のプロフィール
       setState(() {
@@ -58,13 +58,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             .collection('users')
             .doc(widget.userId)
             .get();
-        
+
         print('ProfileScreen: Document exists: ${doc.exists}');
-        
+
         if (doc.exists) {
           // フォロー状態を取得
-          final isFollowing = await _followService.getFollowStatus(widget.userId!);
-          
+          final isFollowing = await _followService.getFollowStatus(
+            widget.userId!,
+          );
+
           setState(() {
             _targetUser = UserModel.fromFirestore(doc);
             _isOwnProfile = false;
@@ -136,9 +138,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget _buildLoading() {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.warmGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.warmGradient),
         child: const Center(
           child: CircularProgressIndicator(color: AppColors.primary),
         ),
@@ -149,9 +149,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget _buildError() {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.warmGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.warmGradient),
         child: Center(
           child: Text(AppConstants.friendlyMessages['error_general']!),
         ),
@@ -162,25 +160,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget _buildProfile(UserModel? user) {
     if (user == null) {
       return Scaffold(
-        appBar: _isOwnProfile ? null : AppBar(
-          title: const Text('プロフィール'),
-        ),
+        appBar: _isOwnProfile ? null : AppBar(title: const Text('プロフィール')),
         body: Container(
-          decoration: const BoxDecoration(
-            gradient: AppColors.warmGradient,
-          ),
-          child: const Center(
-            child: Text('ユーザーが見つからないよ 😢'),
-          ),
+          decoration: const BoxDecoration(gradient: AppColors.warmGradient),
+          child: const Center(child: Text('ユーザーが見つからないよ 😢')),
         ),
       );
     }
 
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.warmGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.warmGradient),
         child: SafeArea(
           child: CustomScrollView(
             slivers: [
@@ -219,10 +209,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     child: Column(
                       children: [
                         // アバター
-                        AvatarWidget(
-                          avatarIndex: user.avatarIndex,
-                          size: 80,
-                        ),
+                        AvatarWidget(avatarIndex: user.avatarIndex, size: 80),
                         const SizedBox(height: 16),
 
                         // 名前
@@ -237,7 +224,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           SizedBox(
                             width: 140,
                             child: ElevatedButton(
-                              onPressed: _isFollowLoading ? null : _toggleFollow,
+                              onPressed: _isFollowLoading
+                                  ? null
+                                  : _toggleFollow,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: _isFollowing
                                     ? AppColors.surfaceVariant
@@ -245,11 +234,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                 foregroundColor: _isFollowing
                                     ? AppColors.textPrimary
                                     : Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(24),
                                   side: _isFollowing
-                                      ? BorderSide(color: AppColors.primary.withOpacity(0.3))
+                                      ? BorderSide(
+                                          color: AppColors.primary.withOpacity(
+                                            0.3,
+                                          ),
+                                        )
                                       : BorderSide.none,
                                 ),
                               ),
@@ -272,9 +267,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           const SizedBox(height: 8),
                           Text(
                             user.bio!,
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: AppColors.textSecondary,
-                            ),
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: AppColors.textSecondary),
                             textAlign: TextAlign.center,
                           ),
                         ],
@@ -358,13 +352,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       children: [
                         Text(
                           'フォロー中',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: AppColors.primary.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(12),
@@ -406,9 +402,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
               // 投稿一覧
               _UserPostsList(
-                userId: user.uid, 
+                userId: user.uid,
                 isMyProfile: _isOwnProfile,
-                viewerIsAI: ref.watch(currentUserProvider).valueOrNull?.isAI ?? false,
+                viewerIsAI:
+                    ref.watch(currentUserProvider).valueOrNull?.isAI ?? false,
               ),
 
               const SliverToBoxAdapter(child: SizedBox(height: 100)),
@@ -427,7 +424,7 @@ class _UserPostsList extends StatelessWidget {
   final bool viewerIsAI;
 
   const _UserPostsList({
-    required this.userId, 
+    required this.userId,
     this.isMyProfile = false,
     this.viewerIsAI = false,
   });
@@ -460,10 +457,7 @@ class _UserPostsList extends StatelessWidget {
                 padding: EdgeInsets.all(32),
                 child: Column(
                   children: [
-                    Text(
-                      '📝',
-                      style: TextStyle(fontSize: 48),
-                    ),
+                    Text('📝', style: TextStyle(fontSize: 48)),
                     SizedBox(height: 8),
                     Text(
                       'まだ投稿がないよ',
@@ -495,10 +489,7 @@ class _UserPostsList extends StatelessWidget {
                 padding: EdgeInsets.all(32),
                 child: Column(
                   children: [
-                    Text(
-                      '📝',
-                      style: TextStyle(fontSize: 48),
-                    ),
+                    Text('📝', style: TextStyle(fontSize: 48)),
                     SizedBox(height: 8),
                     Text(
                       'まだ投稿がないよ',
@@ -512,13 +503,10 @@ class _UserPostsList extends StatelessWidget {
         }
 
         return SliverList(
-          delegate: SliverChildBuilderDelegate(
-            (context, index) {
-              final post = posts[index];
-              return _ProfilePostCard(post: post, isMyProfile: isMyProfile);
-            },
-            childCount: posts.length,
-          ),
+          delegate: SliverChildBuilderDelegate((context, index) {
+            final post = posts[index];
+            return _ProfilePostCard(post: post, isMyProfile: isMyProfile);
+          }, childCount: posts.length),
         );
       },
     );
@@ -573,7 +561,7 @@ class _ProfilePostCardState extends State<_ProfilePostCard> {
           .collection('comments')
           .where('postId', isEqualTo: widget.post.id)
           .get();
-      
+
       final batch = FirebaseFirestore.instance.batch();
       for (final doc in comments.docs) {
         batch.delete(doc.reference);
@@ -583,9 +571,7 @@ class _ProfilePostCardState extends State<_ProfilePostCard> {
       await FirebaseFirestore.instance
           .collection('users')
           .doc(widget.post.userId)
-          .update({
-        'totalPosts': FieldValue.increment(-1),
-      });
+          .update({'totalPosts': FieldValue.increment(-1)});
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -648,9 +634,16 @@ class _ProfilePostCardState extends State<_ProfilePostCard> {
                             value: 'delete',
                             child: Row(
                               children: [
-                                Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                                Icon(
+                                  Icons.delete_outline,
+                                  size: 18,
+                                  color: Colors.red,
+                                ),
                                 SizedBox(width: 8),
-                                Text('この投稿を削除', style: TextStyle(color: Colors.red)),
+                                Text(
+                                  'この投稿を削除',
+                                  style: TextStyle(color: Colors.red),
+                                ),
                               ],
                             ),
                           ),
@@ -658,7 +651,7 @@ class _ProfilePostCardState extends State<_ProfilePostCard> {
                       ),
                   ],
                 ),
-              
+
               // 投稿内容
               Text(
                 widget.post.content,
@@ -667,41 +660,62 @@ class _ProfilePostCardState extends State<_ProfilePostCard> {
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 12),
-              
+
               // フッター
               Row(
                 children: [
                   // 時間
                   Text(
                     timeago.format(widget.post.createdAt, locale: 'ja'),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.textHint,
-                    ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: AppColors.textHint),
                   ),
                   const Spacer(),
                   // リアクション数
                   Row(
                     children: [
-                      Icon(
-                        Icons.favorite,
-                        size: 16,
-                        color: AppColors.love,
-                      ),
+                      Icon(Icons.favorite, size: 16, color: AppColors.love),
                       const SizedBox(width: 4),
                       Text(
                         '${widget.post.reactions.values.fold(0, (a, b) => a + b)}',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                       const SizedBox(width: 12),
-                      const Icon(
-                        Icons.chat_bubble_outline,
-                        size: 16,
-                        color: AppColors.textHint,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${widget.post.commentCount}',
-                        style: Theme.of(context).textTheme.bodySmall,
+                      // コメント数（表示可能なもののみカウント）
+                      StreamBuilder<QuerySnapshot>(
+                        stream: FirebaseFirestore.instance
+                            .collection('comments')
+                            .where('postId', isEqualTo: widget.post.id)
+                            .snapshots(),
+                        builder: (context, snapshot) {
+                          int visibleCount = 0;
+                          if (snapshot.hasData) {
+                            final now = DateTime.now();
+                            visibleCount = snapshot.data!.docs.where((doc) {
+                              final data = doc.data() as Map<String, dynamic>;
+                              final scheduledAt =
+                                  data['scheduledAt'] as Timestamp?;
+                              if (scheduledAt == null) return true;
+                              return now.isAfter(scheduledAt.toDate());
+                            }).length;
+                          }
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.chat_bubble_outline,
+                                size: 16,
+                                color: AppColors.textHint,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '$visibleCount',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -732,11 +746,7 @@ class _StatItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Icon(
-          icon,
-          color: color ?? AppColors.primary,
-          size: 24,
-        ),
+        Icon(icon, color: color ?? AppColors.primary, size: 24),
         const SizedBox(height: 4),
         Text(
           value,
@@ -745,10 +755,7 @@ class _StatItem extends StatelessWidget {
             color: color ?? AppColors.textPrimary,
           ),
         ),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
       ],
     );
   }
@@ -806,10 +813,7 @@ class _FollowingUserItem extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                AvatarWidget(
-                  avatarIndex: user.avatarIndex,
-                  size: 56,
-                ),
+                AvatarWidget(avatarIndex: user.avatarIndex, size: 56),
                 const SizedBox(height: 8),
                 Text(
                   user.displayName,

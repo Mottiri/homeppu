@@ -6,25 +6,26 @@ class UserModel {
   final String email;
   final String displayName;
   final String? bio;
-  final int avatarIndex;        // プリセットアバターのインデックス
-  final String postMode;        // 'ai', 'mix', 'human'
-  final int virtue;             // 徳ポイント
-  final bool isAI;              // AIアカウントかどうか
+  final int avatarIndex; // プリセットアバターのインデックス
+  final String postMode; // 'ai', 'mix', 'human'
+  final int virtue; // 徳ポイント
+  final bool isAI; // AIアカウントかどうか
   final DateTime createdAt;
   final DateTime updatedAt;
   final bool isBanned;
   final int totalPosts;
-  final int totalPraises;       // 受け取った称賛の数
+  final int totalPraises; // 受け取った称賛の数
   final List<String> following; // フォロー中のユーザーID
   final List<String> followers; // フォロワーのユーザーID
   final int followingCount;
   final int followersCount;
-  final int reportCount;          // 通報された回数
+  final int reportCount; // 通報された回数
   // 名前パーツ方式
-  final String? namePrefix;       // 形容詞パーツのID
-  final String? nameSuffix;       // 名詞パーツのID
-  final List<String> unlockedNameParts;  // アンロック済みパーツID
-  final DateTime? lastNameChangeAt;  // 最後に名前を変更した日時
+  final String? namePrefix; // 形容詞パーツのID
+  final String? nameSuffix; // 名詞パーツのID
+  final List<String> unlockedNameParts; // アンロック済みパーツID
+  final DateTime? lastNameChangeAt; // 最後に名前を変更した日時
+  final String? fcmToken; // プッシュ通知用トークン
 
   UserModel({
     required this.uid,
@@ -32,7 +33,7 @@ class UserModel {
     required this.displayName,
     this.bio,
     this.avatarIndex = 0,
-    this.postMode = 'ai',  // デフォルトはAIモード（安心スタート）
+    this.postMode = 'ai', // デフォルトはAIモード（安心スタート）
     this.virtue = 100,
     this.isAI = false,
     required this.createdAt,
@@ -49,6 +50,7 @@ class UserModel {
     this.nameSuffix,
     this.unlockedNameParts = const [],
     this.lastNameChangeAt,
+    this.fcmToken,
   });
 
   factory UserModel.fromFirestore(DocumentSnapshot doc) {
@@ -59,7 +61,7 @@ class UserModel {
       displayName: data['displayName'] ?? 'ゲスト',
       bio: data['bio'],
       avatarIndex: data['avatarIndex'] ?? 0,
-      postMode: data['postMode'] ?? 'ai',  // デフォルトはAIモード
+      postMode: data['postMode'] ?? 'ai', // デフォルトはAIモード
       virtue: data['virtue'] ?? 100,
       isAI: data['isAI'] ?? false,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
@@ -76,6 +78,7 @@ class UserModel {
       nameSuffix: data['nameSuffix'],
       unlockedNameParts: List<String>.from(data['unlockedNameParts'] ?? []),
       lastNameChangeAt: (data['lastNameChangeAt'] as Timestamp?)?.toDate(),
+      fcmToken: data['fcmToken'],
     );
   }
 
@@ -101,7 +104,8 @@ class UserModel {
       'namePrefix': namePrefix,
       'nameSuffix': nameSuffix,
       'unlockedNameParts': unlockedNameParts,
-      if (lastNameChangeAt != null) 'lastNameChangeAt': Timestamp.fromDate(lastNameChangeAt!),
+      if (lastNameChangeAt != null)
+        'lastNameChangeAt': Timestamp.fromDate(lastNameChangeAt!),
     };
   }
 
@@ -128,6 +132,7 @@ class UserModel {
     String? nameSuffix,
     List<String>? unlockedNameParts,
     DateTime? lastNameChangeAt,
+    String? fcmToken,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -152,6 +157,7 @@ class UserModel {
       nameSuffix: nameSuffix ?? this.nameSuffix,
       unlockedNameParts: unlockedNameParts ?? this.unlockedNameParts,
       lastNameChangeAt: lastNameChangeAt ?? this.lastNameChangeAt,
+      fcmToken: fcmToken ?? this.fcmToken,
     );
   }
 }

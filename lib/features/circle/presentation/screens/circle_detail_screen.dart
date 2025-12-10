@@ -17,8 +17,22 @@ class CircleDetailScreen extends ConsumerWidget {
   const CircleDetailScreen({super.key, required this.circleId});
 
   static const List<String> circleIcons = [
-    '📚', '💪', '🎨', '🎵', '🌱', '💼', '🏃', '🧘',
-    '📷', '✍️', '🎮', '🍳', '🌍', '💡', '🎯', '⭐',
+    '📚',
+    '💪',
+    '🎨',
+    '🎵',
+    '🌱',
+    '💼',
+    '🏃',
+    '🧘',
+    '📷',
+    '✍️',
+    '🎮',
+    '🍳',
+    '🌍',
+    '💡',
+    '🎯',
+    '⭐',
   ];
 
   @override
@@ -39,14 +53,13 @@ class CircleDetailScreen extends ConsumerWidget {
           }
 
           final circle = CircleModel.fromFirestore(snapshot.data!);
-          final iconIndex = circle.iconIndex.clamp(0, circleIcons.length - 1);
-          final isMember = currentUser != null &&
-              circle.memberIds.contains(currentUser.uid);
+          // iconIndex廃止のため、IDのハッシュ値からアイコンを決定
+          final iconIndex = circle.id.hashCode.abs() % circleIcons.length;
+          final isMember =
+              currentUser != null && circle.memberIds.contains(currentUser.uid);
 
           return Container(
-            decoration: const BoxDecoration(
-              gradient: AppColors.warmGradient,
-            ),
+            decoration: const BoxDecoration(gradient: AppColors.warmGradient),
             child: CustomScrollView(
               slivers: [
                 // ヘッダー
@@ -105,10 +118,11 @@ class CircleDetailScreen extends ConsumerWidget {
                             const SizedBox(height: 12),
                             Text(
                               circle.name,
-                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                color: AppColors.textPrimary,
-                                fontWeight: FontWeight.bold,
-                              ),
+                              style: Theme.of(context).textTheme.headlineSmall
+                                  ?.copyWith(
+                                    color: AppColors.textPrimary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                             ),
                           ],
                         ),
@@ -129,9 +143,9 @@ class CircleDetailScreen extends ConsumerWidget {
                           children: [
                             Text(
                               circle.description,
-                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                height: 1.6,
-                              ),
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodyLarge?.copyWith(height: 1.6),
                             ),
                             const SizedBox(height: 16),
                             Row(
@@ -143,7 +157,7 @@ class CircleDetailScreen extends ConsumerWidget {
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
-                                  '${circle.memberCount}人のメンバー',
+                                  '${circle.memberIds.length}人のメンバー',
                                   style: Theme.of(context).textTheme.bodyMedium,
                                 ),
                               ],
@@ -175,7 +189,10 @@ class CircleDetailScreen extends ConsumerWidget {
                 // 投稿ヘッダー
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 8,
+                    ),
                     child: Text(
                       'みんなの投稿',
                       style: Theme.of(context).textTheme.titleMedium,
@@ -217,14 +234,13 @@ class CircleDetailScreen extends ConsumerWidget {
                           child: Center(
                             child: Column(
                               children: [
-                                const Text(
-                                  '✨',
-                                  style: TextStyle(fontSize: 48),
-                                ),
+                                const Text('✨', style: TextStyle(fontSize: 48)),
                                 const SizedBox(height: 16),
                                 Text(
                                   'まだ投稿がないよ',
-                                  style: Theme.of(context).textTheme.titleMedium,
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium,
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
@@ -239,25 +255,25 @@ class CircleDetailScreen extends ConsumerWidget {
                     }
 
                     return SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          return PostCard(post: posts[index]);
-                        },
-                        childCount: posts.length,
-                      ),
+                      delegate: SliverChildBuilderDelegate((context, index) {
+                        return PostCard(post: posts[index]);
+                      }, childCount: posts.length),
                     );
                   },
                 ),
 
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: 100),
-                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 100)),
               ],
             ),
           );
         },
       ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () =>
+            context.push('/create-post', extra: {'circleId': circleId}),
+        backgroundColor: AppColors.primary,
+        child: const Icon(Icons.edit, color: Colors.white),
+      ),
     );
   }
 }
-

@@ -15,9 +15,7 @@ class CirclesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.warmGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.warmGradient),
         child: SafeArea(
           child: CustomScrollView(
             slivers: [
@@ -68,7 +66,7 @@ class CirclesScreen extends ConsumerWidget {
                 stream: FirebaseFirestore.instance
                     .collection('circles')
                     .where('isPublic', isEqualTo: true)
-                    .orderBy('memberCount', descending: true)
+                    .orderBy('createdAt', descending: true)
                     .limit(20)
                     .snapshots(),
                 builder: (context, snapshot) {
@@ -85,14 +83,18 @@ class CirclesScreen extends ConsumerWidget {
                   if (snapshot.hasError) {
                     return SliverFillRemaining(
                       child: Center(
-                        child: Text(AppConstants.friendlyMessages['error_general']!),
+                        child: Text(
+                          AppConstants.friendlyMessages['error_general']!,
+                        ),
                       ),
                     );
                   }
 
-                  final circles = snapshot.data?.docs
-                      .map((doc) => CircleModel.fromFirestore(doc))
-                      .toList() ?? [];
+                  final circles =
+                      snapshot.data?.docs
+                          .map((doc) => CircleModel.fromFirestore(doc))
+                          .toList() ??
+                      [];
 
                   if (circles.isEmpty) {
                     return SliverFillRemaining(
@@ -100,10 +102,7 @@ class CirclesScreen extends ConsumerWidget {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Text(
-                              '👥',
-                              style: TextStyle(fontSize: 64),
-                            ),
+                            const Text('👥', style: TextStyle(fontSize: 64)),
                             const SizedBox(height: 16),
                             Text(
                               'まだサークルがないよ',
@@ -112,14 +111,13 @@ class CirclesScreen extends ConsumerWidget {
                             const SizedBox(height: 8),
                             Text(
                               '最初のサークルを作ってみよう！',
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(color: AppColors.textSecondary),
                             ),
                             const SizedBox(height: 24),
                             ElevatedButton.icon(
                               onPressed: () {
-                                // TODO: サークル作成画面
+                                context.push('/create-circle');
                               },
                               icon: const Icon(Icons.add),
                               label: const Text('サークルを作る'),
@@ -133,12 +131,9 @@ class CirclesScreen extends ConsumerWidget {
                   return SliverPadding(
                     padding: const EdgeInsets.only(bottom: 100),
                     sliver: SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          return _CircleCard(circle: circles[index]);
-                        },
-                        childCount: circles.length,
-                      ),
+                      delegate: SliverChildBuilderDelegate((context, index) {
+                        return _CircleCard(circle: circles[index]);
+                      }, childCount: circles.length),
                     ),
                   );
                 },
@@ -146,6 +141,11 @@ class CirclesScreen extends ConsumerWidget {
             ],
           ),
         ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => context.push('/create-circle'),
+        backgroundColor: AppColors.primary,
+        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
@@ -158,13 +158,27 @@ class _CircleCard extends StatelessWidget {
   const _CircleCard({required this.circle});
 
   static const List<String> circleIcons = [
-    '📚', '💪', '🎨', '🎵', '🌱', '💼', '🏃', '🧘',
-    '📷', '✍️', '🎮', '🍳', '🌍', '💡', '🎯', '⭐',
+    '📚',
+    '💪',
+    '🎨',
+    '🎵',
+    '🌱',
+    '💼',
+    '🏃',
+    '🧘',
+    '📷',
+    '✍️',
+    '🎮',
+    '🍳',
+    '🌍',
+    '💡',
+    '🎯',
+    '⭐',
   ];
 
   @override
   Widget build(BuildContext context) {
-    final iconIndex = circle.iconIndex.clamp(0, circleIcons.length - 1);
+    final iconIndex = circle.id.hashCode.abs() % circleIcons.length;
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -218,7 +232,7 @@ class _CircleCard extends StatelessWidget {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          '${circle.memberCount}人',
+                          '${circle.memberIds.length}人',
                           style: Theme.of(context).textTheme.labelSmall,
                         ),
                       ],
@@ -227,10 +241,7 @@ class _CircleCard extends StatelessWidget {
                 ),
               ),
 
-              const Icon(
-                Icons.chevron_right,
-                color: AppColors.textHint,
-              ),
+              const Icon(Icons.chevron_right, color: AppColors.textHint),
             ],
           ),
         ),
@@ -238,4 +249,3 @@ class _CircleCard extends StatelessWidget {
     );
   }
 }
-

@@ -1,10 +1,21 @@
-import {onDocumentCreated} from "firebase-functions/v2/firestore";
-import {onCall, HttpsError} from "firebase-functions/v2/https";
-import {defineSecret} from "firebase-functions/params";
+import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import * as functionsV1 from "firebase-functions/v1";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { defineSecret } from "firebase-functions/params";
+
 import * as admin from "firebase-admin";
-import {GoogleGenerativeAI, Part} from "@google/generative-ai";
-import {GoogleAIFileManager} from "@google/generative-ai/server";
+import { GoogleGenerativeAI, Part } from "@google/generative-ai";
+import { GoogleAIFileManager } from "@google/generative-ai/server";
 import * as https from "https";
+import { CloudTasksClient } from "@google-cloud/tasks";
+
+// プロジェクトIDとロケーション（Cloud Tasks用）
+const PROJECT_ID = "positive-sns"; // ※デプロイ環境に合わせて変更される前提、またはprocess.env.GCLOUD_PROJECT
+const LOCATION = "asia-northeast1";
+const QUEUE_NAME = "generateAIComment";
+
+// Gemini API Key
+const geminiApiKey = defineSecret("GEMINI_API_KEY");
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -59,8 +70,7 @@ interface MediaItem {
   fileSize?: number;
 }
 
-// APIキーをSecretsから取得
-const geminiApiKey = defineSecret("GEMINI_API_KEY");
+
 
 // ===============================================
 // メディアモデレーション
@@ -82,7 +92,7 @@ async function downloadFile(url: string): Promise<Buffer> {
       }
 
       if (response.statusCode !== 200) {
-        reject(new Error(`Failed to download: ${response.statusCode}`));
+        reject(new Error(`Failed to download: ${response.statusCode} `));
         return;
       }
 
@@ -111,23 +121,23 @@ async function moderateImage(
 
 【ブロック対象（isInappropriate: true）】
 - adult: 成人向けコンテンツ、露出の多い画像、性的な内容
-- violence: 暴力的な画像、血液、怪我、残虐な内容
-- hate: ヘイトシンボル、差別的な画像
-- dangerous: 危険な行為、違法行為、武器
+  - violence: 暴力的な画像、血液、怪我、残虐な内容
+    - hate: ヘイトシンボル、差別的な画像
+      - dangerous: 危険な行為、違法行為、武器
 
 【許可する内容（isInappropriate: false）】
 - 通常の人物写真（水着でも一般的なものはOK）
 - 風景、食べ物、ペット
-- 趣味の写真
-- 芸術作品（明らかにアダルトでない限り）
+  - 趣味の写真
+  - 芸術作品（明らかにアダルトでない限り）
 
 【回答形式】
 必ず以下のJSON形式のみで回答してください：
 {
   "isInappropriate": true または false,
-  "category": "adult" | "violence" | "hate" | "dangerous" | "none",
-  "confidence": 0から1の数値,
-  "reason": "判定理由"
+    "category": "adult" | "violence" | "hate" | "dangerous" | "none",
+      "confidence": 0から1の数値,
+        "reason": "判定理由"
 }
 `;
 
@@ -142,7 +152,7 @@ async function moderateImage(
     const responseText = result.response.text().trim();
 
     let jsonText = responseText;
-    const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    const jsonMatch = responseText.match(/```(?: json) ?\s * ([\s\S] *?) \s * ```/);
     if (jsonMatch) {
       jsonText = jsonMatch[1];
     }
@@ -180,7 +190,7 @@ async function moderateVideo(
     const fileManager = new GoogleAIFileManager(apiKey);
     const uploadResult = await fileManager.uploadFile(tempFilePath, {
       mimeType: mimeType,
-      displayName: `moderation_video_${Date.now()}`,
+      displayName: `moderation_video_${Date.now()} `,
     });
 
     // アップロード完了を待つ
@@ -200,23 +210,23 @@ async function moderateVideo(
 
 【ブロック対象（isInappropriate: true）】
 - adult: 成人向けコンテンツ、露出の多い映像、性的な内容
-- violence: 暴力的な映像、血液、怪我、残虐な内容
-- hate: ヘイトシンボル、差別的な内容
-- dangerous: 危険な行為、違法行為、武器
+  - violence: 暴力的な映像、血液、怪我、残虐な内容
+    - hate: ヘイトシンボル、差別的な内容
+      - dangerous: 危険な行為、違法行為、武器
 
 【許可する内容（isInappropriate: false）】
 - 通常の人物動画
-- 日常の風景、食事、ペット
-- 趣味の動画
-- ダンス、運動（健全なもの）
+  - 日常の風景、食事、ペット
+    - 趣味の動画
+    - ダンス、運動（健全なもの）
 
 【回答形式】
 必ず以下のJSON形式のみで回答してください：
 {
   "isInappropriate": true または false,
-  "category": "adult" | "violence" | "hate" | "dangerous" | "none",
-  "confidence": 0から1の数値,
-  "reason": "判定理由"
+    "category": "adult" | "violence" | "hate" | "dangerous" | "none",
+      "confidence": 0から1の数値,
+        "reason": "判定理由"
 }
 `;
 
@@ -231,7 +241,7 @@ async function moderateVideo(
     const responseText = result.response.text().trim();
 
     let jsonText = responseText;
-    const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    const jsonMatch = responseText.match(/```(?: json) ?\s * ([\s\S] *?) \s * ```/);
     if (jsonMatch) {
       jsonText = jsonMatch[1];
     }
@@ -268,23 +278,23 @@ async function moderateMedia(
   apiKey: string,
   model: ReturnType<GoogleGenerativeAI["getGenerativeModel"]>,
   mediaItems: MediaItem[]
-): Promise<{passed: boolean; failedItem?: MediaItem; result?: MediaModerationResult}> {
+): Promise<{ passed: boolean; failedItem?: MediaItem; result?: MediaModerationResult }> {
   for (const item of mediaItems) {
     if (item.type === "image") {
       const result = await moderateImage(model, item.url, item.mimeType || "image/jpeg");
       if (result.isInappropriate && result.confidence >= 0.7) {
-        return {passed: false, failedItem: item, result};
+        return { passed: false, failedItem: item, result };
       }
     } else if (item.type === "video") {
       const result = await moderateVideo(apiKey, model, item.url, item.mimeType || "video/mp4");
       if (result.isInappropriate && result.confidence >= 0.7) {
-        return {passed: false, failedItem: item, result};
+        return { passed: false, failedItem: item, result };
       }
     }
     // fileタイプはスキップ（PDFなどのモデレーションは複雑なため）
   }
 
-  return {passed: true};
+  return { passed: true };
 }
 
 // ===============================================
@@ -308,19 +318,19 @@ async function analyzeImageForComment(
 
 【重要なルール】
 1. 専門的な内容（資格試験、プログラミング、専門書、学習アプリ、技術文書、問題集など）の場合：
-   - 画像内のテキストを断片的に解釈しないでください
-   - 「何の勉強・学習をしているか」だけを簡潔に説明してください（例：「資格試験の勉強」「プログラミング学習」）
-   - 詳細な内容には触れず「専門的で難しそう」「すごい挑戦」という観点で説明してください
-   - 例: 「資格試験の学習アプリで勉強している画像です。専門的な内容に取り組んでいて頑張っています。」
-   - 悪い例: 「心理療法士の問題を解いている」← 画像内テキストの断片的解釈はNG
+- 画像内のテキストを断片的に解釈しないでください
+  - 「何の勉強・学習をしているか」だけを簡潔に説明してください（例：「資格試験の勉強」「プログラミング学習」）
+- 詳細な内容には触れず「専門的で難しそう」「すごい挑戦」という観点で説明してください
+  - 例: 「資格試験の学習アプリで勉強している画像です。専門的な内容に取り組んでいて頑張っています。」
+- 悪い例: 「心理療法士の問題を解いている」← 画像内テキストの断片的解釈はNG
 
 2. 一般的な内容（料理、運動、風景、作品、ペットなど）の場合：
-   - 具体的に何が写っているか説明してください
-   - 褒めポイントを含めてください
-   - 例: 「手作りのケーキの写真です。デコレーションがとても丁寧です。」
+- 具体的に何が写っているか説明してください
+  - 褒めポイントを含めてください
+  - 例: 「手作りのケーキの写真です。デコレーションがとても丁寧です。」
 
 3. 画像内にテキストが含まれる場合でも、そのテキストの一部だけを切り取って解釈しないでください。
-   文脈を誤解する原因になります。
+文脈を誤解する原因になります。
 
 【回答形式】
 2〜3文で簡潔に説明してください。
@@ -364,7 +374,7 @@ async function analyzeVideoForComment(
     const fileManager = new GoogleAIFileManager(apiKey);
     const uploadResult = await fileManager.uploadFile(tempFilePath, {
       mimeType: mimeType,
-      displayName: `analysis_video_${Date.now()}`,
+      displayName: `analysis_video_${Date.now()} `,
     });
 
     // アップロード完了を待つ
@@ -384,15 +394,15 @@ async function analyzeVideoForComment(
 
 【重要なルール】
 1. 専門的な内容（勉強、プログラミング、技術作業、資格試験など）の場合：
-   - 画面内のテキストを断片的に解釈しないでください
-   - 「何の勉強・作業をしているか」だけを簡潔に説明してください
-   - 詳細な内容には触れず「専門的で難しそう」「すごい挑戦」という観点で説明してください
-   - 例: 「資格試験の勉強をしている動画です。専門的な内容に取り組んでいて頑張っています。」
+- 画面内のテキストを断片的に解釈しないでください
+  - 「何の勉強・作業をしているか」だけを簡潔に説明してください
+    - 詳細な内容には触れず「専門的で難しそう」「すごい挑戦」という観点で説明してください
+      - 例: 「資格試験の勉強をしている動画です。専門的な内容に取り組んでいて頑張っています。」
 
 2. 一般的な内容（運動、料理、ゲーム、趣味など）の場合：
-   - 具体的に何をしている動画か説明してください
-   - 褒めポイントを含めてください
-   - 例: 「ランニングの動画です。良いペースで走っていて、フォームも綺麗です。」
+- 具体的に何をしている動画か説明してください
+  - 褒めポイントを含めてください
+  - 例: 「ランニングの動画です。良いペースで走っていて、フォームも綺麗です。」
 
 3. 動画内にテキストが含まれる場合でも、そのテキストの一部だけを切り取って解釈しないでください。
 
@@ -445,16 +455,16 @@ async function analyzeMediaForComment(
       if (item.type === "image") {
         const desc = await analyzeImageForComment(model, item.url, item.mimeType || "image/jpeg");
         if (desc) {
-          descriptions.push(`【画像】${desc}`);
+          descriptions.push(`【画像】${desc} `);
         }
       } else if (item.type === "video") {
         const desc = await analyzeVideoForComment(apiKey, model, item.url, item.mimeType || "video/mp4");
         if (desc) {
-          descriptions.push(`【動画】${desc}`);
+          descriptions.push(`【動画】${desc} `);
         }
       }
     } catch (error) {
-      console.error(`Failed to analyze media item:`, error);
+      console.error(`Failed to analyze media item: `, error);
     }
   }
 
@@ -475,18 +485,18 @@ type AgeGroup = "late_teens" | "twenties" | "thirties";
 // 職業（性別別）
 const OCCUPATIONS = {
   male: [
-    {id: "college_student", name: "大学生", bio: "学業やサークル活動に励む"},
-    {id: "sales", name: "営業マン", bio: "会社で営業職として働く"},
-    {id: "engineer", name: "エンジニア", bio: "IT系の仕事をしている"},
-    {id: "streamer", name: "配信者", bio: "ゲーム配信やYouTubeをやっている"},
-    {id: "freeter", name: "フリーター", bio: "バイトしながら夢を追いかけている"},
+    { id: "college_student", name: "大学生", bio: "学業やサークル活動に励む" },
+    { id: "sales", name: "営業マン", bio: "会社で営業職として働く" },
+    { id: "engineer", name: "エンジニア", bio: "IT系の仕事をしている" },
+    { id: "streamer", name: "配信者", bio: "ゲーム配信やYouTubeをやっている" },
+    { id: "freeter", name: "フリーター", bio: "バイトしながら夢を追いかけている" },
   ],
   female: [
-    {id: "ol", name: "OL", bio: "会社で事務や営業として働く"},
-    {id: "college_student", name: "大学生", bio: "学業やサークル活動に励む"},
-    {id: "nursery_teacher", name: "保育士", bio: "保育園で働いている"},
-    {id: "designer", name: "デザイナー", bio: "Webや広告のデザインをしている"},
-    {id: "nurse", name: "看護師", bio: "病院で働いている"},
+    { id: "ol", name: "OL", bio: "会社で事務や営業として働く" },
+    { id: "college_student", name: "大学生", bio: "学業やサークル活動に励む" },
+    { id: "nursery_teacher", name: "保育士", bio: "保育園で働いている" },
+    { id: "designer", name: "デザイナー", bio: "Webや広告のデザインをしている" },
+    { id: "nurse", name: "看護師", bio: "病院で働いている" },
   ],
 };
 
@@ -598,9 +608,9 @@ const PRAISE_STYLES = [
 
 // 年齢層の情報
 const AGE_GROUPS = {
-  late_teens: {name: "10代後半", examples: ["大学1年", "19歳"]},
-  twenties: {name: "20代", examples: ["25歳", "社会人3年目"]},
-  thirties: {name: "30代", examples: ["32歳", "ベテラン"]},
+  late_teens: { name: "10代後半", examples: ["大学1年", "19歳"] },
+  twenties: { name: "20代", examples: ["25歳", "社会人3年目"] },
+  thirties: { name: "30代", examples: ["32歳", "ベテラン"] },
 };
 
 // 名前パーツの型定義
@@ -615,77 +625,77 @@ interface NamePart {
 // 形容詞パーツ（前半）のマスタデータ
 const PREFIX_PARTS: NamePart[] = [
   // ポジティブ系（ノーマル）
-  {id: "pre_01", text: "がんばる", category: "positive", rarity: "normal", order: 1},
-  {id: "pre_02", text: "キラキラ", category: "positive", rarity: "normal", order: 2},
-  {id: "pre_03", text: "全力", category: "positive", rarity: "normal", order: 3},
-  {id: "pre_04", text: "輝く", category: "positive", rarity: "normal", order: 4},
-  {id: "pre_05", text: "前向き", category: "positive", rarity: "normal", order: 5},
+  { id: "pre_01", text: "がんばる", category: "positive", rarity: "normal", order: 1 },
+  { id: "pre_02", text: "キラキラ", category: "positive", rarity: "normal", order: 2 },
+  { id: "pre_03", text: "全力", category: "positive", rarity: "normal", order: 3 },
+  { id: "pre_04", text: "輝く", category: "positive", rarity: "normal", order: 4 },
+  { id: "pre_05", text: "前向き", category: "positive", rarity: "normal", order: 5 },
   // ゆるい系（ノーマル）
-  {id: "pre_06", text: "のんびり", category: "relaxed", rarity: "normal", order: 6},
-  {id: "pre_07", text: "まったり", category: "relaxed", rarity: "normal", order: 7},
-  {id: "pre_08", text: "ゆるふわ", category: "relaxed", rarity: "normal", order: 8},
-  {id: "pre_09", text: "ぼちぼち", category: "relaxed", rarity: "normal", order: 9},
-  {id: "pre_10", text: "ほのぼの", category: "relaxed", rarity: "normal", order: 10},
+  { id: "pre_06", text: "のんびり", category: "relaxed", rarity: "normal", order: 6 },
+  { id: "pre_07", text: "まったり", category: "relaxed", rarity: "normal", order: 7 },
+  { id: "pre_08", text: "ゆるふわ", category: "relaxed", rarity: "normal", order: 8 },
+  { id: "pre_09", text: "ぼちぼち", category: "relaxed", rarity: "normal", order: 9 },
+  { id: "pre_10", text: "ほのぼの", category: "relaxed", rarity: "normal", order: 10 },
   // 努力系（ノーマル）
-  {id: "pre_11", text: "コツコツ", category: "effort", rarity: "normal", order: 11},
-  {id: "pre_12", text: "もくもく", category: "effort", rarity: "normal", order: 12},
-  {id: "pre_13", text: "ひたむき", category: "effort", rarity: "normal", order: 13},
-  {id: "pre_14", text: "地道な", category: "effort", rarity: "normal", order: 14},
+  { id: "pre_11", text: "コツコツ", category: "effort", rarity: "normal", order: 11 },
+  { id: "pre_12", text: "もくもく", category: "effort", rarity: "normal", order: 12 },
+  { id: "pre_13", text: "ひたむき", category: "effort", rarity: "normal", order: 13 },
+  { id: "pre_14", text: "地道な", category: "effort", rarity: "normal", order: 14 },
   // 動物っぽい系（レア）
-  {id: "pre_15", text: "もふもふ", category: "animal", rarity: "rare", order: 15},
-  {id: "pre_16", text: "ぴょんぴょん", category: "animal", rarity: "rare", order: 16},
-  {id: "pre_17", text: "わんわん", category: "animal", rarity: "rare", order: 17},
-  {id: "pre_18", text: "にゃんにゃん", category: "animal", rarity: "rare", order: 18},
+  { id: "pre_15", text: "もふもふ", category: "animal", rarity: "rare", order: 15 },
+  { id: "pre_16", text: "ぴょんぴょん", category: "animal", rarity: "rare", order: 16 },
+  { id: "pre_17", text: "わんわん", category: "animal", rarity: "rare", order: 17 },
+  { id: "pre_18", text: "にゃんにゃん", category: "animal", rarity: "rare", order: 18 },
   // おもしろ系（スーパーレア）
-  {id: "pre_19", text: "伝説の", category: "funny", rarity: "super_rare", order: 19},
-  {id: "pre_20", text: "覚醒した", category: "funny", rarity: "super_rare", order: 20},
-  {id: "pre_21", text: "無敵の", category: "funny", rarity: "super_rare", order: 21},
-  {id: "pre_22", text: "最強の", category: "funny", rarity: "super_rare", order: 22},
+  { id: "pre_19", text: "伝説の", category: "funny", rarity: "super_rare", order: 19 },
+  { id: "pre_20", text: "覚醒した", category: "funny", rarity: "super_rare", order: 20 },
+  { id: "pre_21", text: "無敵の", category: "funny", rarity: "super_rare", order: 21 },
+  { id: "pre_22", text: "最強の", category: "funny", rarity: "super_rare", order: 22 },
   // ウルトラレア
-  {id: "pre_23", text: "神に愛された", category: "legendary", rarity: "ultra_rare", order: 23},
-  {id: "pre_24", text: "運命の", category: "legendary", rarity: "ultra_rare", order: 24},
-  {id: "pre_25", text: "永遠の", category: "legendary", rarity: "ultra_rare", order: 25},
+  { id: "pre_23", text: "神に愛された", category: "legendary", rarity: "ultra_rare", order: 23 },
+  { id: "pre_24", text: "運命の", category: "legendary", rarity: "ultra_rare", order: 24 },
+  { id: "pre_25", text: "永遠の", category: "legendary", rarity: "ultra_rare", order: 25 },
 ];
 
 // 名詞パーツ（後半）のマスタデータ
 const SUFFIX_PARTS: NamePart[] = [
   // 動物（ノーマル）
-  {id: "suf_01", text: "🐰うさぎ", category: "animal", rarity: "normal", order: 1},
-  {id: "suf_02", text: "🐱ねこ", category: "animal", rarity: "normal", order: 2},
-  {id: "suf_03", text: "🐶いぬ", category: "animal", rarity: "normal", order: 3},
-  {id: "suf_04", text: "🐼パンダ", category: "animal", rarity: "normal", order: 4},
-  {id: "suf_05", text: "🐻くま", category: "animal", rarity: "normal", order: 5},
-  {id: "suf_06", text: "🐢かめ", category: "animal", rarity: "normal", order: 6},
+  { id: "suf_01", text: "🐰うさぎ", category: "animal", rarity: "normal", order: 1 },
+  { id: "suf_02", text: "🐱ねこ", category: "animal", rarity: "normal", order: 2 },
+  { id: "suf_03", text: "🐶いぬ", category: "animal", rarity: "normal", order: 3 },
+  { id: "suf_04", text: "🐼パンダ", category: "animal", rarity: "normal", order: 4 },
+  { id: "suf_05", text: "🐻くま", category: "animal", rarity: "normal", order: 5 },
+  { id: "suf_06", text: "🐢かめ", category: "animal", rarity: "normal", order: 6 },
   // 自然（ノーマル）
-  {id: "suf_07", text: "🌸さくら", category: "nature", rarity: "normal", order: 7},
-  {id: "suf_08", text: "🌻ひまわり", category: "nature", rarity: "normal", order: 8},
-  {id: "suf_09", text: "⭐ほし", category: "nature", rarity: "normal", order: 9},
-  {id: "suf_10", text: "🌙つき", category: "nature", rarity: "normal", order: 10},
-  {id: "suf_11", text: "☀️たいよう", category: "nature", rarity: "normal", order: 11},
+  { id: "suf_07", text: "🌸さくら", category: "nature", rarity: "normal", order: 7 },
+  { id: "suf_08", text: "🌻ひまわり", category: "nature", rarity: "normal", order: 8 },
+  { id: "suf_09", text: "⭐ほし", category: "nature", rarity: "normal", order: 9 },
+  { id: "suf_10", text: "🌙つき", category: "nature", rarity: "normal", order: 10 },
+  { id: "suf_11", text: "☀️たいよう", category: "nature", rarity: "normal", order: 11 },
   // 食べ物（ノーマル）
-  {id: "suf_12", text: "🍙おにぎり", category: "food", rarity: "normal", order: 12},
-  {id: "suf_13", text: "🍩ドーナツ", category: "food", rarity: "normal", order: 13},
-  {id: "suf_14", text: "🍮プリン", category: "food", rarity: "normal", order: 14},
-  {id: "suf_15", text: "🍰ケーキ", category: "food", rarity: "normal", order: 15},
+  { id: "suf_12", text: "🍙おにぎり", category: "food", rarity: "normal", order: 12 },
+  { id: "suf_13", text: "🍩ドーナツ", category: "food", rarity: "normal", order: 13 },
+  { id: "suf_14", text: "🍮プリン", category: "food", rarity: "normal", order: 14 },
+  { id: "suf_15", text: "🍰ケーキ", category: "food", rarity: "normal", order: 15 },
   // 職業風（レア）
-  {id: "suf_16", text: "チャレンジャー", category: "occupation", rarity: "rare", order: 16},
-  {id: "suf_17", text: "ファイター", category: "occupation", rarity: "rare", order: 17},
-  {id: "suf_18", text: "ドリーマー", category: "occupation", rarity: "rare", order: 18},
-  {id: "suf_19", text: "見習い", category: "occupation", rarity: "rare", order: 19},
+  { id: "suf_16", text: "チャレンジャー", category: "occupation", rarity: "rare", order: 16 },
+  { id: "suf_17", text: "ファイター", category: "occupation", rarity: "rare", order: 17 },
+  { id: "suf_18", text: "ドリーマー", category: "occupation", rarity: "rare", order: 18 },
+  { id: "suf_19", text: "見習い", category: "occupation", rarity: "rare", order: 19 },
   // レア動物
-  {id: "suf_20", text: "🦊きつね", category: "animal", rarity: "rare", order: 20},
-  {id: "suf_21", text: "🦁ライオン", category: "animal", rarity: "rare", order: 21},
-  {id: "suf_22", text: "🦄ユニコーン", category: "animal", rarity: "rare", order: 22},
+  { id: "suf_20", text: "🦊きつね", category: "animal", rarity: "rare", order: 20 },
+  { id: "suf_21", text: "🦁ライオン", category: "animal", rarity: "rare", order: 21 },
+  { id: "suf_22", text: "🦄ユニコーン", category: "animal", rarity: "rare", order: 22 },
   // おもしろ系（スーパーレア）
-  {id: "suf_23", text: "勇者", category: "funny", rarity: "super_rare", order: 23},
-  {id: "suf_24", text: "魔王", category: "funny", rarity: "super_rare", order: 24},
-  {id: "suf_25", text: "賢者", category: "funny", rarity: "super_rare", order: 25},
-  {id: "suf_26", text: "修行僧", category: "funny", rarity: "super_rare", order: 26},
-  {id: "suf_27", text: "冒険者", category: "funny", rarity: "super_rare", order: 27},
+  { id: "suf_23", text: "勇者", category: "funny", rarity: "super_rare", order: 23 },
+  { id: "suf_24", text: "魔王", category: "funny", rarity: "super_rare", order: 24 },
+  { id: "suf_25", text: "賢者", category: "funny", rarity: "super_rare", order: 25 },
+  { id: "suf_26", text: "修行僧", category: "funny", rarity: "super_rare", order: 26 },
+  { id: "suf_27", text: "冒険者", category: "funny", rarity: "super_rare", order: 27 },
   // ウルトラレア
-  {id: "suf_28", text: "🐉ドラゴン", category: "legendary", rarity: "ultra_rare", order: 28},
-  {id: "suf_29", text: "🔥不死鳥", category: "legendary", rarity: "ultra_rare", order: 29},
-  {id: "suf_30", text: "覇王", category: "legendary", rarity: "ultra_rare", order: 30},
+  { id: "suf_28", text: "🐉ドラゴン", category: "legendary", rarity: "ultra_rare", order: 28 },
+  { id: "suf_29", text: "🔥不死鳥", category: "legendary", rarity: "ultra_rare", order: 29 },
+  { id: "suf_30", text: "覇王", category: "legendary", rarity: "ultra_rare", order: 30 },
 ];
 
 // AIペルソナの型定義
@@ -842,7 +852,7 @@ function generateAIPersona(index: number): AIPersona {
   const suffixIndex = Math.floor(index * 1.618) % AI_USABLE_SUFFIXES.length; // 黄金比で分散
   const namePrefix = AI_USABLE_PREFIXES[prefixIndex];
   const nameSuffix = AI_USABLE_SUFFIXES[suffixIndex];
-  const name = `${namePrefix.text}${nameSuffix.text}`;
+  const name = `${namePrefix.text}${nameSuffix.text} `;
 
   // アバターインデックス（0-9の範囲）
   const avatarIndex = index % 10;
@@ -850,7 +860,7 @@ function generateAIPersona(index: number): AIPersona {
   // bioを生成（職業×性格の組み合わせから選択）
   const occupationBios = BIO_TEMPLATES[occupation.id] || {};
   const personalityBios = occupationBios[personality.id] || [];
-  
+
   // bioが見つからない場合はデフォルト
   let bio: string;
   if (personalityBios.length > 0) {
@@ -858,18 +868,18 @@ function generateAIPersona(index: number): AIPersona {
   } else {
     // フォールバック：シンプルだけど自然なbio
     const defaultBios = [
-      `${occupation.name}してます！よろしくね✨`,
-      `${occupation.name}やってます。毎日頑張ってる`,
-      `${occupation.name}です。趣味は読書と散歩`,
+      `${occupation.name} してます！よろしくね✨`,
+      `${occupation.name} やってます。毎日頑張ってる`,
+      `${occupation.name} です。趣味は読書と散歩`,
     ];
     bio = defaultBios[index % defaultBios.length];
   }
 
   return {
-    id: `ai_${index.toString().padStart(2, "0")}`,
+    id: `ai_${index.toString().padStart(2, "0")} `,
     name,
-    namePrefixId: `prefix_${namePrefix.id}`,
-    nameSuffixId: `suffix_${nameSuffix.id}`,
+    namePrefixId: `prefix_${namePrefix.id} `,
+    nameSuffixId: `suffix_${nameSuffix.id} `,
     gender,
     ageGroup,
     occupation,
@@ -881,7 +891,7 @@ function generateAIPersona(index: number): AIPersona {
 }
 
 // 20体のAIペルソナを生成
-const AI_PERSONAS: AIPersona[] = Array.from({length: 20}, (_, i) => generateAIPersona(i));
+const AI_PERSONAS: AIPersona[] = Array.from({ length: 20 }, (_, i) => generateAIPersona(i));
 
 /**
  * システムプロンプトを生成
@@ -913,23 +923,23 @@ function getSystemPrompt(
 2. ネガティブなことは一切言わないでください
 3. 自然な日本語で、人間らしく返信してください
 4. 「AI」「ボット」という言葉は使わないでください
-5. 投稿者の名前は基本呼ばないでください（呼ぶ場合は「${posterName}さん」）
+5. 投稿者の名前は基本呼ばないでください（呼ぶ場合は「${posterName} さん」）
 
 【文字数と構造（最重要）】
-- ${persona.praiseStyle.minLength}〜${persona.praiseStyle.maxLength}文字で返信してください
-- あなたの褒め方スタイル: ${persona.praiseStyle.name}（${persona.praiseStyle.description}）
+- ${persona.praiseStyle.minLength}〜${persona.praiseStyle.maxLength} 文字で返信してください
+  - あなたの褒め方スタイル: ${persona.praiseStyle.name}（${persona.praiseStyle.description}）
 - 構造：「一言褒め」+「詳細な褒め」の2部構成
-- まず短い褒め言葉で始めて、その後に具体的な内容を続ける
-- 参考例: 「${persona.praiseStyle.example}」
+  - まず短い褒め言葉で始めて、その後に具体的な内容を続ける
+    - 参考例: 「${persona.praiseStyle.example}」
 
 - 悪い例：「すごい！」← 短すぎ
-- 悪い例：「〇〇さんの頑張りが伝わってきます。とても素晴らしい取り組みですね。これからも応援しています！」← 長すぎ・くどい
+  - 悪い例：「〇〇さんの頑張りが伝わってきます。とても素晴らしい取り組みですね。これからも応援しています！」← 長すぎ・くどい
 
 【専門的な内容への対応】
 - 勉強、資格試験、専門分野の場合、内容を詳しく知っているふりをしないでください
-- 「難しそう！」「すごい！」くらいの短い反応でOK
-- 画像内のテキストを断片的に引用しないでください
-`;
+  - 「難しそう！」「すごい！」くらいの短い反応でOK
+    - 画像内のテキストを断片的に引用しないでください
+      `;
 }
 
 /**
@@ -943,6 +953,7 @@ export const onPostCreated = onDocumentCreated(
     secrets: [geminiApiKey],
     timeoutSeconds: 120, // メディア分析のため長めに設定
     memory: "1GiB", // 動画処理のためメモリを増加
+    serviceAccount: "cloud-tasks-sa@positive-sns.iam.gserviceaccount.com", // Cloud Tasks作成権限を持つSAを指定
   },
   async (event) => {
     const snap = event.data;
@@ -968,12 +979,12 @@ export const onPostCreated = onDocumentCreated(
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({model: "gemini-2.0-flash"});
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     // メディアがある場合は内容を分析
     let mediaDescriptions: string[] = [];
     const mediaItems = postData.mediaItems as MediaItem[] | undefined;
-    
+
     if (mediaItems && mediaItems.length > 0) {
       console.log(`Analyzing ${mediaItems.length} media items for AI comment...`);
       try {
@@ -985,8 +996,8 @@ export const onPostCreated = onDocumentCreated(
       }
     }
 
-    // ランダムに1〜3人のAIを選択
-    const commentCount = Math.floor(Math.random() * 3) + 1;
+    // ランダムに3〜10人のAIを選択
+    const commentCount = Math.floor(Math.random() * 8) + 3;
     const shuffledPersonas = [...AI_PERSONAS]
       .sort(() => Math.random() - 0.5)
       .slice(0, commentCount);
@@ -997,55 +1008,72 @@ export const onPostCreated = onDocumentCreated(
     // 投稿者の名前を取得
     const posterName = postData.userDisplayName || "投稿者";
 
-    // メディア説明をプロンプトに追加
-    const mediaContext = mediaDescriptions.length > 0
-      ? `\n\n【添付メディアの内容】\n${mediaDescriptions.join("\n")}`
-      : "";
 
-    for (const persona of shuffledPersonas) {
+
+    // ランダムな遅延時間を生成し、昇順にソート（順番にコメントが来るようにする）
+    // 1〜10分の間で分散（テスト用）
+    const delays = Array.from({ length: commentCount }, () => Math.floor(Math.random() * 9) + 1)
+      .sort((a, b) => a - b);
+
+    // Cloud Tasks クライアント
+    const tasksClient = new CloudTasksClient();
+    const queuePath = tasksClient.queuePath(process.env.GCLOUD_PROJECT || PROJECT_ID, LOCATION, QUEUE_NAME);
+
+    for (let i = 0; i < shuffledPersonas.length; i++) {
+      const persona = shuffledPersonas[i];
+      const delayMinutes = delays[i];
+
+      // タスクの実行時間を計算
+      const scheduleTime = new Date(Date.now() + delayMinutes * 60 * 1000);
+
       try {
-        const prompt = `
-${getSystemPrompt(persona, posterName)}
-
-【${posterName}さんの投稿】
-${postData.content || "(テキストなし)"}${mediaContext}
-
-【重要】
-${mediaDescriptions.length > 0 
-  ? "添付されたメディア（画像・動画）の内容も考慮して、具体的に褒めてください。" 
-  : ""}
-
-【あなた（${persona.name}）の返信】
-`;
-
-        const result = await model.generateContent(prompt);
-        const commentText = result.response.text()?.trim();
-
-        if (!commentText) continue;
-
-        // ランダムな遅延時間（1〜30分後）をシミュレート
-        const delayMinutes = Math.floor(Math.random() * 29) + 1;
-        const commentTime = new Date(Date.now() + delayMinutes * 60 * 1000);
-
-        const commentRef = db.collection("comments").doc();
-        batch.set(commentRef, {
+        // ペイロード作成（画像分析結果も含めることで、個別の再分析を回避）
+        const payload = {
           postId: postId,
-          userId: persona.id,
-          userDisplayName: persona.name,
-          userAvatarIndex: persona.avatarIndex,
-          isAI: true,
-          content: commentText,
-          createdAt: admin.firestore.Timestamp.fromDate(commentTime),
-        });
+          postContent: postData.content || "",
+          userDisplayName: posterName,
+          personaId: persona.id,
+          personaName: persona.name,
+          mediaDescriptions: mediaDescriptions, // 分析済みデータを渡す
+        };
 
-        totalComments++;
-        console.log(`AI comment created: ${persona.name} (delayed ${delayMinutes}m, media: ${mediaDescriptions.length > 0})`);
+        // v1関数のURL形式 (asia-northeast1-PROJECT_ID.cloudfunctions.net/FUNCTION_NAME)
+        const targetUrl = `https://${LOCATION}-${process.env.GCLOUD_PROJECT}.cloudfunctions.net/generateAICommentV1`;
+
+        // ユーザーに作成してもらうサービスアカウント
+        const serviceAccountEmail = `cloud-tasks-sa@${process.env.GCLOUD_PROJECT}.iam.gserviceaccount.com`;
+
+        console.log(`Enqueuing task for ${persona.name} to ${targetUrl} with SA ${serviceAccountEmail}`);
+
+        const task = {
+          httpRequest: {
+            httpMethod: "POST" as const,
+            url: targetUrl,
+            body: Buffer.from(JSON.stringify(payload)).toString("base64"),
+            headers: {
+              "Content-Type": "application/json",
+            },
+            oidcToken: {
+              serviceAccountEmail: serviceAccountEmail,
+            },
+          },
+          scheduleTime: {
+            seconds: Math.floor(scheduleTime.getTime() / 1000),
+          },
+        };
+
+        await tasksClient.createTask({ parent: queuePath, task });
+
+        console.log(`Task enqueued for ${persona.name}: delay=${delayMinutes}m, time=${scheduleTime.toISOString()}`);
+        totalComments++; // 見込み数としてカウント
       } catch (error) {
-        console.error(`Error generating comment for ${persona.name}:`, error);
+        console.error(`Error enqueuing task for ${persona.name}:`, error);
       }
     }
 
-    // コメント数を更新
+    // コメント数（予定）を更新
+    // ※実際にコメントされる前にカウントを増やすかどうかは議論の余地ありだが、
+    // 「賑わってる感」を出すために先行して増やしておく（失敗したらズレるが許容）
     if (totalComments > 0) {
       batch.update(snap.ref, {
         commentCount: admin.firestore.FieldValue.increment(totalComments),
@@ -1158,8 +1186,8 @@ async function generateBioWithGemini(
 - 「エンジニアやってるww 深夜コーディングが日課」
 
 【悪い例】
-- 「26歳/大学生🫐 学業やサークル活動に励む。トレンドに敏感な性格です。」← 説明的すぎる
-- 「私は優しい性格の看護師です」← 説明文になっている
+- 「26歳 / 大学生🫐 学業やサークル活動に励む。トレンドに敏感な性格です。」← 説明的すぎる
+  - 「私は優しい性格の看護師です」← 説明文になっている
 
 【出力】
 bioのテキストのみを出力してください。他の説明は不要です。
@@ -1168,21 +1196,21 @@ bioのテキストのみを出力してください。他の説明は不要で�
   try {
     const result = await model.generateContent(prompt);
     const bio = result.response.text()?.trim();
-    
+
     if (bio && bio.length > 0 && bio.length <= 100) {
       return bio;
     }
-    
+
     // 長すぎる場合は切り詰め
     if (bio && bio.length > 100) {
       return bio.substring(0, 100);
     }
-    
+
     // 生成失敗時のフォールバック
-    return `${persona.occupation.name}してます！よろしくね✨`;
+    return `${persona.occupation.name} してます！よろしくね✨`;
   } catch (error) {
-    console.error(`Bio generation error for ${persona.name}:`, error);
-    return `${persona.occupation.name}してます！よろしくね✨`;
+    console.error(`Bio generation error for ${persona.name}: `, error);
+    return `${persona.occupation.name} してます！よろしくね✨`;
   }
 }
 
@@ -1193,21 +1221,21 @@ bioのテキストのみを出力してください。他の説明は不要で�
  * Gemini APIでキャラクターに合ったbioを動的生成
  */
 export const initializeAIAccounts = onCall(
-  {region: "asia-northeast1", secrets: [geminiApiKey], timeoutSeconds: 300},
+  { region: "asia-northeast1", secrets: [geminiApiKey], timeoutSeconds: 300 },
   async () => {
     const apiKey = geminiApiKey.value();
     if (!apiKey) {
-      return {success: false, message: "GEMINI_API_KEY is not set"};
+      return { success: false, message: "GEMINI_API_KEY is not set" };
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({model: "gemini-2.0-flash"});
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     let createdCount = 0;
     let updatedCount = 0;
-    const generatedBios: {name: string; bio: string}[] = [];
+    const generatedBios: { name: string; bio: string }[] = [];
 
-    console.log(`Initializing ${AI_PERSONAS.length} AI accounts with Gemini-generated bios...`);
+    console.log(`Initializing ${AI_PERSONAS.length} AI accounts with Gemini - generated bios...`);
 
     for (const persona of AI_PERSONAS) {
       const docRef = db.collection("users").doc(persona.id);
@@ -1217,7 +1245,7 @@ export const initializeAIAccounts = onCall(
       console.log(`Generating bio for ${persona.name}...`);
       const generatedBio = await generateBioWithGemini(model, persona);
       console.log(`  Generated: "${generatedBio}"`);
-      generatedBios.push({name: persona.name, bio: generatedBio});
+      generatedBios.push({ name: persona.name, bio: generatedBio });
 
       // AIキャラ設定を保存（コメント生成時に使用）
       const aiCharacterSettings = {
@@ -1229,7 +1257,7 @@ export const initializeAIAccounts = onCall(
       };
 
       const userData = {
-        email: `${persona.id}@ai.homeppu.local`,
+        email: `${persona.id} @ai.homeppu.local`,
         displayName: persona.name,
         namePrefix: persona.namePrefixId,
         nameSuffix: persona.nameSuffixId,
@@ -1278,12 +1306,12 @@ export const initializeAIAccounts = onCall(
     // AIアカウントの一覧をログ出力
     console.log("AI Account Summary:");
     AI_PERSONAS.forEach((p, i) => {
-      console.log(`  ${i + 1}. ${p.name} - ${p.gender === "male" ? "男" : "女"}/${AGE_GROUPS[p.ageGroup].name}/${p.occupation.name}/${p.personality.name}/${p.praiseStyle.name}`);
+      console.log(`  ${i + 1}. ${p.name} - ${p.gender === "male" ? "男" : "女"} /${AGE_GROUPS[p.ageGroup].name}/${p.occupation.name} /${p.personality.name}/${p.praiseStyle.name} `);
     });
 
     return {
       success: true,
-      message: `AIアカウントを作成/更新しました（Gemini APIでbio生成: ${AI_PERSONAS.length}体）`,
+      message: `AIアカウントを作成 / 更新しました（Gemini APIでbio生成: ${AI_PERSONAS.length} 体）`,
       created: createdCount,
       updated: updatedCount,
       totalAccounts: AI_PERSONAS.length,
@@ -1306,15 +1334,15 @@ export const initializeAIAccounts = onCall(
  * 各AIの職業に応じたテンプレートを使用して投稿を生成
  */
 export const generateAIPosts = onCall(
-  {region: "asia-northeast1", secrets: [geminiApiKey]},
+  { region: "asia-northeast1", secrets: [geminiApiKey] },
   async () => {
     const apiKey = geminiApiKey.value();
     if (!apiKey) {
-      return {success: false, message: "GEMINI_API_KEY is not set"};
+      return { success: false, message: "GEMINI_API_KEY is not set" };
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({model: "gemini-2.0-flash"});
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     let totalPosts = 0;
     let totalComments = 0;
@@ -1335,7 +1363,7 @@ export const generateAIPosts = onCall(
       // 職業に応じた投稿テンプレートを取得
       const templates = POST_TEMPLATES_BY_OCCUPATION[persona.occupation.id] || [];
       if (templates.length === 0) {
-        console.log(`No templates for occupation ${persona.occupation.id}, skipping ${persona.name}`);
+        console.log(`No templates for occupation ${persona.occupation.id}, skipping ${persona.name} `);
         continue;
       }
 
@@ -1385,7 +1413,7 @@ export const generateAIPosts = onCall(
           try {
             const prompt = getSystemPrompt(commenter, persona.name) + `
 
-【${persona.name}さんの投稿】
+【${persona.name} さんの投稿】
 ${selectedTemplates[i]}
 
 【あなた（${commenter.name}）の返信】
@@ -1417,7 +1445,7 @@ ${selectedTemplates[i]}
               });
             }
           } catch (error) {
-            console.error(`Error generating comment:`, error);
+            console.error(`Error generating comment: `, error);
           }
         }
       }
@@ -1433,7 +1461,7 @@ ${selectedTemplates[i]}
 
     return {
       success: true,
-      message: `AI投稿を生成しました（${AI_PERSONAS.length}体のAI）`,
+      message: `AI投稿を生成しました（${AI_PERSONAS.length} 体のAI）`,
       posts: totalPosts,
       comments: totalComments,
       reactions: totalReactions,
@@ -1445,7 +1473,7 @@ ${selectedTemplates[i]}
  * レート制限付きの投稿作成（スパム対策）
  */
 export const createPostWithRateLimit = onCall(
-  {region: "asia-northeast1"},
+  { region: "asia-northeast1" },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError(
@@ -1480,7 +1508,7 @@ export const createPostWithRateLimit = onCall(
       ...data,
       userId: userId,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      reactions: {love: 0, praise: 0, cheer: 0, empathy: 0},
+      reactions: { love: 0, praise: 0, cheer: 0, empathy: 0 },
       commentCount: 0,
       isVisible: true,
     });
@@ -1490,7 +1518,7 @@ export const createPostWithRateLimit = onCall(
       totalPosts: admin.firestore.FieldValue.increment(1),
     });
 
-    return {success: true, postId: postRef.id};
+    return { success: true, postId: postRef.id };
   }
 );
 
@@ -1503,13 +1531,13 @@ export const createPostWithRateLimit = onCall(
  * Gemini AIでネガティブ発言を検出
  */
 export const moderateContent = onCall(
-  {region: "asia-northeast1", secrets: [geminiApiKey]},
+  { region: "asia-northeast1", secrets: [geminiApiKey] },
   async (request): Promise<ModerationResult> => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "ログインが必要です");
     }
 
-    const {content} = request.data;
+    const { content } = request.data;
     if (!content || typeof content !== "string") {
       throw new HttpsError("invalid-argument", "コンテンツが必要です");
     }
@@ -1528,7 +1556,7 @@ export const moderateContent = onCall(
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({model: "gemini-2.0-flash"});
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     const prompt = `
 あなたはSNS「ほめっぷ」のコンテンツモデレーターです。
@@ -1538,17 +1566,17 @@ export const moderateContent = onCall(
 
 【判定基準】
 - harassment: 誹謗中傷、人を傷つける発言
-- hate_speech: 差別、ヘイトスピーチ
-- profanity: 不適切な言葉、暴言、罵倒
-- self_harm: 自傷行為の助長
-- spam: スパム、宣伝
-- none: 問題なし
+  - hate_speech: 差別、ヘイトスピーチ
+    - profanity: 不適切な言葉、暴言、罵倒
+      - self_harm: 自傷行為の助長
+        - spam: スパム、宣伝
+          - none: 問題なし
 
 【重要】
 - 「ほめっぷ」はポジティブなSNSなので、軽い愚痴や不満も「ネガティブ」と判定します
-- ただし、自分の頑張りや努力を共有する投稿は「none」です
-- 他人を批判する内容は「harassment」です
-- 判定は厳しめにお願いします
+  - ただし、自分の頑張りや努力を共有する投稿は「none」です
+    - 他人を批判する内容は「harassment」です
+      - 判定は厳しめにお願いします
 
 【投稿内容】
 ${content}
@@ -1557,10 +1585,10 @@ ${content}
 必ず以下のJSON形式で回答してください。他の文字は含めないでください。
 {
   "isNegative": true または false,
-  "category": "harassment" | "hate_speech" | "profanity" | "self_harm" | "spam" | "none",
-  "confidence": 0から1の数値,
-  "reason": "判定理由（ユーザーに見せる優しい説明）",
-  "suggestion": "より良い表現の提案"
+    "category": "harassment" | "hate_speech" | "profanity" | "self_harm" | "spam" | "none",
+      "confidence": 0から1の数値,
+        "reason": "判定理由（ユーザーに見せる優しい説明）",
+          "suggestion": "より良い表現の提案"
 }
 `;
 
@@ -1570,7 +1598,7 @@ ${content}
 
       // JSONを抽出（マークダウンコードブロックを考慮）
       let jsonText = responseText;
-      const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      const jsonMatch = responseText.match(/```(?: json) ?\s * ([\s\S] *?) \s * ```/);
       if (jsonMatch) {
         jsonText = jsonMatch[1];
       }
@@ -1605,7 +1633,7 @@ async function decreaseVirtue(
   userId: string,
   reason: string,
   amount: number = VIRTUE_CONFIG.lossPerNegative
-): Promise<{newVirtue: number; isBanned: boolean}> {
+): Promise<{ newVirtue: number; isBanned: boolean }> {
   const userRef = db.collection("users").doc(userId);
   const userDoc = await userRef.get();
 
@@ -1634,9 +1662,9 @@ async function decreaseVirtue(
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
-  console.log(`Virtue decreased for ${userId}: ${currentVirtue} -> ${newVirtue}, banned: ${isBanned}`);
+  console.log(`Virtue decreased for ${userId}: ${currentVirtue} -> ${newVirtue}, banned: ${isBanned} `);
 
-  return {newVirtue, isBanned};
+  return { newVirtue, isBanned };
 }
 
 /**
@@ -1656,7 +1684,7 @@ export const createPostWithModeration = onCall(
     }
 
     const userId = request.auth.uid;
-    const {content, userDisplayName, userAvatarIndex, postMode, circleId, mediaItems} = request.data;
+    const { content, userDisplayName, userAvatarIndex, postMode, circleId, mediaItems } = request.data;
 
     // ユーザーがBANされているかチェック
     const userDoc = await db.collection("users").doc(userId).get();
@@ -1674,7 +1702,7 @@ export const createPostWithModeration = onCall(
     }
 
     const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
-    const model = genAI?.getGenerativeModel({model: "gemini-2.0-flash"});
+    const model = genAI?.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     // ===============================================
     // 1. テキストモデレーション
@@ -1688,9 +1716,9 @@ export const createPostWithModeration = onCall(
 
 【ブロック対象（isNegative: true）】
 - harassment: 他者への誹謗中傷、人格攻撃、悪口
-- hate_speech: 差別、ヘイトスピーチ、特定の属性への攻撃
-- profanity: 他者への暴言、罵倒
-- self_harm: 自傷行為の助長（※これは安全上ブロック）
+  - hate_speech: 差別、ヘイトスピーチ、特定の属性への攻撃
+    - profanity: 他者への暴言、罵倒
+      - self_harm: 自傷行為の助長（※これは安全上ブロック）
 - spam: スパム、宣伝
 
 【許可する内容（isNegative: false）】
@@ -1698,7 +1726,7 @@ export const createPostWithModeration = onCall(
 - 自分自身への愚痴：「自分ダメだな」「失敗した」「うまくいかない」
 - 日常の不満：「雨だ〜」「電車遅れた」「眠い」
 - 頑張りや努力の共有
-- 共感を求める投稿
+  - 共感を求める投稿
 
 【重要な判定基準】
 ⚠️ 「他者を攻撃しているか」が最重要ポイントです
@@ -1712,10 +1740,10 @@ ${content}
 必ず以下のJSON形式で回答してください。他の文字は含めないでください。
 {
   "isNegative": true または false,
-  "category": "harassment" | "hate_speech" | "profanity" | "self_harm" | "spam" | "none",
-  "confidence": 0から1の数値,
-  "reason": "判定理由（ユーザーに見せる優しい説明）",
-  "suggestion": "より良い表現の提案"
+    "category": "harassment" | "hate_speech" | "profanity" | "self_harm" | "spam" | "none",
+      "confidence": 0から1の数値,
+        "reason": "判定理由（ユーザーに見せる優しい説明）",
+          "suggestion": "より良い表現の提案"
 }
 `;
 
@@ -1724,7 +1752,7 @@ ${content}
         const responseText = result.response.text().trim();
 
         let jsonText = responseText;
-        const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+        const jsonMatch = responseText.match(/```(?: json) ?\s * ([\s\S] *?) \s * ```/);
         if (jsonMatch) {
           jsonText = jsonMatch[1];
         }
@@ -1735,7 +1763,7 @@ ${content}
           // 徳ポイントを減少
           const virtueResult = await decreaseVirtue(
             userId,
-            `ネガティブ投稿検出: ${modResult.category}`,
+            `ネガティブ投稿検出: ${modResult.category} `,
             VIRTUE_CONFIG.lossPerNegative
           );
 
@@ -1752,7 +1780,7 @@ ${content}
 
           throw new HttpsError(
             "invalid-argument",
-            `${modResult.reason}\n\n💡 提案: ${modResult.suggestion}\n\n(徳ポイント: ${virtueResult.newVirtue})`
+            `${modResult.reason} \n\n💡 提案: ${modResult.suggestion} \n\n(徳ポイント: ${virtueResult.newVirtue})`
           );
         }
       } catch (error) {
@@ -1777,14 +1805,14 @@ ${content}
           // 徳ポイントを減少
           const virtueResult = await decreaseVirtue(
             userId,
-            `不適切なメディア検出: ${mediaResult.result.category}`,
+            `不適切なメディア検出: ${mediaResult.result.category} `,
             VIRTUE_CONFIG.lossPerNegative
           );
 
           // 記録
           await db.collection("moderatedContent").add({
             userId: userId,
-            content: `[メディア] ${mediaResult.failedItem?.fileName || "media"}`,
+            content: `[メディア] ${mediaResult.failedItem?.fileName || "media"} `,
             type: "media",
             category: mediaResult.result.category,
             confidence: mediaResult.result.confidence,
@@ -1804,7 +1832,7 @@ ${content}
 
           throw new HttpsError(
             "invalid-argument",
-            `添付された${mediaResult.failedItem?.type === "video" ? "動画" : "画像"}に${categoryLabel}が含まれている可能性があります。\n\n別のメディアを選択してください。\n\n(徳ポイント: ${virtueResult.newVirtue})`
+            `添付された${mediaResult.failedItem?.type === "video" ? "動画" : "画像"}に${categoryLabel} が含まれている可能性があります。\n\n別のメディアを選択してください。\n\n(徳ポイント: ${virtueResult.newVirtue})`
           );
         }
 
@@ -1850,7 +1878,7 @@ ${content}
       postMode: postMode,
       circleId: circleId || null,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      reactions: {love: 0, praise: 0, cheer: 0, empathy: 0},
+      reactions: { love: 0, praise: 0, cheer: 0, empathy: 0 },
       commentCount: 0,
       isVisible: true,
     });
@@ -1860,7 +1888,7 @@ ${content}
       totalPosts: admin.firestore.FieldValue.increment(1),
     });
 
-    return {success: true, postId: postRef.id};
+    return { success: true, postId: postRef.id };
   }
 );
 
@@ -1868,14 +1896,14 @@ ${content}
  * モデレーション付きコメント作成
  */
 export const createCommentWithModeration = onCall(
-  {region: "asia-northeast1", secrets: [geminiApiKey]},
+  { region: "asia-northeast1", secrets: [geminiApiKey] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "ログインが必要です");
     }
 
     const userId = request.auth.uid;
-    const {postId, content, userDisplayName, userAvatarIndex} = request.data;
+    const { postId, content, userDisplayName, userAvatarIndex } = request.data;
 
     // ユーザーがBANされているかチェック
     const userDoc = await db.collection("users").doc(userId).get();
@@ -1890,7 +1918,7 @@ export const createCommentWithModeration = onCall(
     const apiKey = geminiApiKey.value();
     if (apiKey) {
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({model: "gemini-2.0-flash"});
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
       const prompt = `
 あなたはSNS「ほめっぷ」のコンテンツモデレーターです。
@@ -1898,9 +1926,9 @@ export const createCommentWithModeration = onCall(
 
 【判定基準】
 - harassment: 誹謗中傷
-- hate_speech: 差別
-- profanity: 暴言
-- none: 問題なし
+  - hate_speech: 差別
+    - profanity: 暴言
+      - none: 問題なし
 
 【コメント内容】
 ${content}
@@ -1908,10 +1936,10 @@ ${content}
 【回答形式】
 {
   "isNegative": boolean,
-  "category": string,
-  "confidence": number,
-  "reason": "理由",
-  "suggestion": "提案"
+    "category": string,
+      "confidence": number,
+        "reason": "理由",
+          "suggestion": "提案"
 }
 `;
 
@@ -1920,7 +1948,7 @@ ${content}
         const responseText = result.response.text().trim();
 
         let jsonText = responseText;
-        const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+        const jsonMatch = responseText.match(/```(?: json) ?\s * ([\s\S] *?) \s * ```/);
         if (jsonMatch) {
           jsonText = jsonMatch[1];
         }
@@ -1930,13 +1958,13 @@ ${content}
         if (modResult.isNegative && modResult.confidence >= 0.7) {
           await decreaseVirtue(
             userId,
-            `ネガティブコメント検出: ${modResult.category}`,
+            `ネガティブコメント検出: ${modResult.category} `,
             VIRTUE_CONFIG.lossPerNegative
           );
 
           throw new HttpsError(
             "invalid-argument",
-            `${modResult.reason}\n\n💡 ${modResult.suggestion}`
+            `${modResult.reason} \n\n💡 ${modResult.suggestion} `
           );
         }
       } catch (error) {
@@ -1964,7 +1992,7 @@ ${content}
       commentCount: admin.firestore.FieldValue.increment(1),
     });
 
-    return {success: true, commentId: commentRef.id};
+    return { success: true, commentId: commentRef.id };
   }
 );
 
@@ -1976,14 +2004,14 @@ ${content}
  * コンテンツを通報する
  */
 export const reportContent = onCall(
-  {region: "asia-northeast1"},
+  { region: "asia-northeast1" },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "ログインが必要です");
     }
 
     const reporterId = request.auth.uid;
-    const {contentId, contentType, reason, targetUserId} = request.data;
+    const { contentId, contentType, reason, targetUserId } = request.data;
 
     if (!contentId || !contentType || !reason || !targetUserId) {
       throw new HttpsError("invalid-argument", "必要な情報が不足しています");
@@ -2039,11 +2067,11 @@ export const reportContent = onCall(
       // 通報をreviewedに更新
       const batch = db.batch();
       reportsCount.docs.forEach((doc) => {
-        batch.update(doc.ref, {status: "reviewed"});
+        batch.update(doc.ref, { status: "reviewed" });
       });
       await batch.commit();
 
-      console.log(`Auto virtue decrease for ${targetUserId}: ${virtueResult.newVirtue}`);
+      console.log(`Auto virtue decrease for ${targetUserId}: ${virtueResult.newVirtue} `);
     }
 
     return {
@@ -2062,14 +2090,14 @@ export const reportContent = onCall(
  * ユーザーをフォローする
  */
 export const followUser = onCall(
-  {region: "asia-northeast1"},
+  { region: "asia-northeast1" },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "ログインが必要です");
     }
 
     const currentUserId = request.auth.uid;
-    const {targetUserId} = request.data;
+    const { targetUserId } = request.data;
 
     if (!targetUserId) {
       throw new HttpsError("invalid-argument", "フォロー対象のユーザーIDが必要です");
@@ -2103,9 +2131,9 @@ export const followUser = onCall(
 
     await batch.commit();
 
-    console.log(`User ${currentUserId} followed ${targetUserId}`);
+    console.log(`User ${currentUserId} followed ${targetUserId} `);
 
-    return {success: true};
+    return { success: true };
   }
 );
 
@@ -2113,14 +2141,14 @@ export const followUser = onCall(
  * フォローを解除する
  */
 export const unfollowUser = onCall(
-  {region: "asia-northeast1"},
+  { region: "asia-northeast1" },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "ログインが必要です");
     }
 
     const currentUserId = request.auth.uid;
-    const {targetUserId} = request.data;
+    const { targetUserId } = request.data;
 
     if (!targetUserId) {
       throw new HttpsError("invalid-argument", "フォロー解除対象のユーザーIDが必要です");
@@ -2144,9 +2172,9 @@ export const unfollowUser = onCall(
 
     await batch.commit();
 
-    console.log(`User ${currentUserId} unfollowed ${targetUserId}`);
+    console.log(`User ${currentUserId} unfollowed ${targetUserId} `);
 
-    return {success: true};
+    return { success: true };
   }
 );
 
@@ -2154,29 +2182,29 @@ export const unfollowUser = onCall(
  * フォロー状態を取得する
  */
 export const getFollowStatus = onCall(
-  {region: "asia-northeast1"},
+  { region: "asia-northeast1" },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "ログインが必要です");
     }
 
     const currentUserId = request.auth.uid;
-    const {targetUserId} = request.data;
+    const { targetUserId } = request.data;
 
     if (!targetUserId) {
       throw new HttpsError("invalid-argument", "ユーザーIDが必要です");
     }
 
     const currentUser = await db.collection("users").doc(currentUserId).get();
-    
+
     if (!currentUser.exists) {
-      return {isFollowing: false};
+      return { isFollowing: false };
     }
 
     const following = currentUser.data()?.following || [];
     const isFollowing = following.includes(targetUserId);
 
-    return {isFollowing};
+    return { isFollowing };
   }
 );
 
@@ -2184,7 +2212,7 @@ export const getFollowStatus = onCall(
  * 徳ポイント履歴を取得
  */
 export const getVirtueHistory = onCall(
-  {region: "asia-northeast1"},
+  { region: "asia-northeast1" },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "ログインが必要です");
@@ -2213,7 +2241,7 @@ export const getVirtueHistory = onCall(
  * 徳ポイントの現在値と設定を取得
  */
 export const getVirtueStatus = onCall(
-  {region: "asia-northeast1"},
+  { region: "asia-northeast1" },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "ログインが必要です");
@@ -2245,14 +2273,14 @@ export const getVirtueStatus = onCall(
  * タスクを作成
  */
 export const createTask = onCall(
-  {region: "asia-northeast1"},
+  { region: "asia-northeast1" },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "ログインが必要です");
     }
 
     const userId = request.auth.uid;
-    const {content, emoji, type} = request.data;
+    const { content, emoji, type } = request.data;
 
     if (!content || !type) {
       throw new HttpsError("invalid-argument", "タスク内容とタイプは必須です");
@@ -2271,7 +2299,7 @@ export const createTask = onCall(
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    return {success: true, taskId: taskRef.id};
+    return { success: true, taskId: taskRef.id };
   }
 );
 
@@ -2279,14 +2307,14 @@ export const createTask = onCall(
  * タスク一覧を取得
  */
 export const getTasks = onCall(
-  {region: "asia-northeast1"},
+  { region: "asia-northeast1" },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "ログインが必要です");
     }
 
     const userId = request.auth.uid;
-    const {type} = request.data;
+    const { type } = request.data;
 
     let query = db.collection("tasks").where("userId", "==", userId);
 
@@ -2303,7 +2331,7 @@ export const getTasks = onCall(
     const tasks = snapshot.docs.map((doc) => {
       const data = doc.data();
       const lastCompletedAt = data.lastCompletedAt?.toDate?.();
-      
+
       // isCompletedTodayを計算（lastCompletedAtが今日かどうか）
       let isCompletedToday = false;
       if (lastCompletedAt) {
@@ -2320,7 +2348,7 @@ export const getTasks = onCall(
       };
     });
 
-    return {tasks};
+    return { tasks };
   }
 );
 
@@ -2328,14 +2356,14 @@ export const getTasks = onCall(
  * タスクを完了
  */
 export const completeTask = onCall(
-  {region: "asia-northeast1"},
+  { region: "asia-northeast1" },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "ログインが必要です");
     }
 
     const userId = request.auth.uid;
-    const {taskId} = request.data;
+    const { taskId } = request.data;
 
     if (!taskId) {
       throw new HttpsError("invalid-argument", "タスクIDが必要です");
@@ -2393,7 +2421,7 @@ export const completeTask = onCall(
     await db.collection("virtueHistory").add({
       userId: userId,
       change: virtueGain,
-      reason: `タスク完了: ${taskData.content}${streakBonus > 0 ? ` (${newStreak}日連続!)` : ""}`,
+      reason: `タスク完了: ${taskData.content}${streakBonus > 0 ? ` (${newStreak}日連続!)` : ""} `,
       newVirtue: 0, // 後で計算
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
@@ -2415,14 +2443,14 @@ export const completeTask = onCall(
  * タスクの完了を取り消し
  */
 export const uncompleteTask = onCall(
-  {region: "asia-northeast1"},
+  { region: "asia-northeast1" },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "ログインが必要です");
     }
 
     const userId = request.auth.uid;
-    const {taskId} = request.data;
+    const { taskId } = request.data;
 
     if (!taskId) {
       throw new HttpsError("invalid-argument", "タスクIDが必要です");
@@ -2442,7 +2470,7 @@ export const uncompleteTask = onCall(
     }
 
     if (!taskData.isCompleted) {
-      return {success: false, message: "このタスクは完了していません"};
+      return { success: false, message: "このタスクは完了していません" };
     }
 
     // 徳ポイントを減少（基本2ポイント）
@@ -2474,14 +2502,14 @@ export const uncompleteTask = onCall(
  * タスクを削除
  */
 export const deleteTask = onCall(
-  {region: "asia-northeast1"},
+  { region: "asia-northeast1" },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "ログインが必要です");
     }
 
     const userId = request.auth.uid;
-    const {taskId} = request.data;
+    const { taskId } = request.data;
 
     if (!taskId) {
       throw new HttpsError("invalid-argument", "タスクIDが必要です");
@@ -2502,7 +2530,7 @@ export const deleteTask = onCall(
 
     await taskRef.delete();
 
-    return {success: true};
+    return { success: true };
   }
 );
 
@@ -2514,7 +2542,7 @@ export const deleteTask = onCall(
  * 名前パーツマスタを初期化する関数（管理者用）
  */
 export const initializeNameParts = onCall(
-  {region: "asia-northeast1"},
+  { region: "asia-northeast1" },
   async () => {
     const batch = db.batch();
     let prefixCount = 0;
@@ -2522,7 +2550,7 @@ export const initializeNameParts = onCall(
 
     // 形容詞パーツを追加
     for (const part of PREFIX_PARTS) {
-      const docRef = db.collection("nameParts").doc(`prefix_${part.id}`);
+      const docRef = db.collection("nameParts").doc(`prefix_${part.id} `);
       batch.set(docRef, {
         ...part,
         type: "prefix",
@@ -2533,7 +2561,7 @@ export const initializeNameParts = onCall(
 
     // 名詞パーツを追加
     for (const part of SUFFIX_PARTS) {
-      const docRef = db.collection("nameParts").doc(`suffix_${part.id}`);
+      const docRef = db.collection("nameParts").doc(`suffix_${part.id} `);
       batch.set(docRef, {
         ...part,
         type: "suffix",
@@ -2559,7 +2587,7 @@ export const initializeNameParts = onCall(
  * 名前パーツ一覧を取得する関数
  */
 export const getNameParts = onCall(
-  {region: "asia-northeast1"},
+  { region: "asia-northeast1" },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "ログインが必要です");
@@ -2576,11 +2604,11 @@ export const getNameParts = onCall(
     // 全パーツを取得
     const partsSnapshot = await db.collection("nameParts").orderBy("order").get();
 
-    const prefixes: (NamePart & {unlocked: boolean})[] = [];
-    const suffixes: (NamePart & {unlocked: boolean})[] = [];
+    const prefixes: (NamePart & { unlocked: boolean })[] = [];
+    const suffixes: (NamePart & { unlocked: boolean })[] = [];
 
     partsSnapshot.docs.forEach((doc) => {
-      const data = doc.data() as NamePart & {type: string};
+      const data = doc.data() as NamePart & { type: string };
       const partId = doc.id;
 
       // ノーマルは最初からアンロック、それ以外はアンロック済みリストに含まれているか確認
@@ -2617,14 +2645,14 @@ export const getNameParts = onCall(
  * ユーザー名を更新する関数
  */
 export const updateUserName = onCall(
-  {region: "asia-northeast1"},
+  { region: "asia-northeast1" },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "ログインが必要です");
     }
 
     const userId = request.auth.uid;
-    const {prefixId, suffixId} = request.data;
+    const { prefixId, suffixId } = request.data;
 
     if (!prefixId || !suffixId) {
       throw new HttpsError("invalid-argument", "パーツIDが必要です");
@@ -2684,7 +2712,7 @@ export const updateUserName = onCall(
     }
 
     // 新しい表示名を生成
-    const newDisplayName = `${prefixData.text}${suffixData.text}`;
+    const newDisplayName = `${prefixData.text}${suffixData.text} `;
 
     // 更新
     await userRef.update({
@@ -2695,7 +2723,7 @@ export const updateUserName = onCall(
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    console.log(`User ${userId} changed name to: ${newDisplayName}`);
+    console.log(`User ${userId} changed name to: ${newDisplayName} `);
 
     return {
       success: true,
@@ -2703,4 +2731,254 @@ export const updateUserName = onCall(
       message: `名前を「${newDisplayName}」に変更しました！`,
     };
   }
+);
+
+// ===============================================
+// プッシュ通知
+// ===============================================
+
+/**
+ * プッシュ通知を送信
+ */
+async function sendPushNotification(
+  userId: string,
+  title: string,
+  body: string,
+  data?: Record<string, string>
+): Promise<void> {
+  try {
+    const userDoc = await db.collection("users").doc(userId).get();
+    if (!userDoc.exists) {
+      console.log(`User not found: ${userId} `);
+      return;
+    }
+
+    const userData = userDoc.data();
+    const fcmToken = userData?.fcmToken;
+
+    if (!fcmToken) {
+      console.log(`No FCM token for user: ${userId} `);
+      return;
+    }
+
+    const message = {
+      token: fcmToken,
+      notification: {
+        title,
+        body,
+      },
+      data: data || {},
+      android: {
+        priority: "high" as const,
+        notification: {
+          sound: "default",
+          channelId: "default_channel",
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: "default",
+            badge: 1,
+          },
+        },
+      },
+    };
+
+    await admin.messaging().send(message);
+    console.log(`Push notification sent to ${userId}: ${title} `);
+  } catch (error) {
+    console.error(`Failed to send push notification to ${userId}: `, error);
+  }
+}
+
+/**
+ * コメント作成時に投稿者へ通知
+ */
+export const onCommentCreatedNotify = onDocumentCreated(
+  {
+    document: "comments/{commentId}",
+    region: "asia-northeast1",
+  },
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+
+    const commentData = snap.data();
+    const postId = commentData.postId;
+    const commenterName = commentData.userDisplayName;
+    const commenterId = commentData.userId;
+    // AIかどうかに関わらず通知（コンセプト: AIと人間の区別をつけない）
+
+    // 投稿を取得
+    const postDoc = await db.collection("posts").doc(postId).get();
+    if (!postDoc.exists) return;
+
+    const postData = postDoc.data();
+    const postOwnerId = postData?.userId;
+
+    // 自分へのコメントは通知しない
+    console.log(`Comment Notification Check: postOwner = ${postOwnerId}, commenter = ${commenterId} `);
+
+    // 文字列として確実に比較（空白除去なども念のため）
+    if (String(postOwnerId).trim() === String(commenterId).trim()) {
+      console.log("Skipping self-comment notification");
+      return;
+    }
+
+    // 未来の投稿（AIの予約投稿）の場合は通知しない
+    // Note: クライアント側で表示される時間になったら通知を送る仕組みが必要（現在はCronジョブ等がないためスキップのみ）
+    if (commentData.scheduledAt) {
+      const scheduledAt = commentData.scheduledAt.toDate();
+      const now = new Date();
+      if (scheduledAt > now) {
+        console.log(`Skipping notification for scheduled comment(scheduledAt: ${scheduledAt.toISOString()})`);
+        return;
+      }
+    }
+
+    // 通知を送信
+    await sendPushNotification(
+      postOwnerId,
+      "コメントが来たよ！",
+      `${commenterName} さんからコメントが来たよ！`,
+      { postId }
+    );
+  }
+);
+
+/**
+ * リアクション追加時に投稿者へ通知
+ */
+export const onReactionAddedNotify = onDocumentCreated(
+  {
+    document: "reactions/{reactionId}",
+    region: "asia-northeast1",
+  },
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+
+    const reactionData = snap.data();
+    const postId = reactionData.postId;
+    const reactorId = reactionData.userId;
+    const reactorName = reactionData.userDisplayName || "誰か";
+
+    // 投稿を取得
+    const postDoc = await db.collection("posts").doc(postId).get();
+    if (!postDoc.exists) return;
+
+    const postData = postDoc.data();
+    const postOwnerId = postData?.userId;
+
+    // 自分へのリアクションは通知しない
+    if (postOwnerId === reactorId) {
+      console.log("Skipping self-reaction notification");
+      return;
+    }
+
+    // 通知を送信
+    await sendPushNotification(
+      postOwnerId,
+      "いいね！されたよ！",
+      `${reactorName} さんからいいね！されたよ！`,
+      { postId }
+    );
+  }
+);
+
+/**
+ * Cloud Tasks から呼び出される AI コメント生成関数 (v1)
+ * v1を使用することでURLを固定化: https://asia-northeast1-positive-sns.cloudfunctions.net/generateAICommentV1
+ */
+// Imports removed as they are already in scope or invalid
+
+export const generateAICommentV1 = functionsV1.region("asia-northeast1").runWith({
+  secrets: ["GEMINI_API_KEY"],
+  timeoutSeconds: 60,
+}).https.onRequest(async (request, response) => {
+  // Cloud Tasks からのリクエスト以外は拒否（簡易的なセキュリティチェック）
+  const authHeader = request.headers["authorization"];
+  if (!authHeader) {
+    response.status(403).send("Unauthorized");
+    return;
+  }
+
+  try {
+    const {
+      postId,
+      postContent,
+      userDisplayName,
+      personaId,
+      personaName,
+      mediaDescriptions
+    } = request.body;
+
+    console.log(`Processing AI comment task for ${personaName} on post ${postId}`);
+
+    // APIキー取得
+    const apiKey = geminiApiKey.value();
+    if (!apiKey) {
+      throw new Error("GEMINI_API_KEY is not set");
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+    // ペルソナを再構築（IDから検索）
+    // AI_PERSONAS はグローバルスコープにあるので直接参照
+    const persona = AI_PERSONAS.find(p => p.id === personaId);
+    if (!persona) {
+      console.error(`Persona not found: ${personaId}`);
+      response.status(400).send("Persona not found");
+      return;
+    }
+
+    // プロンプト構築
+    const mediaContext = mediaDescriptions && mediaDescriptions.length > 0
+      ? `\n\n【添付メディアの内容】\n${mediaDescriptions.join("\n")}`
+      : "";
+
+    const prompt = `
+${getSystemPrompt(persona, userDisplayName)}
+
+【${userDisplayName}さんの投稿】
+${postContent || "(テキストなし)"}${mediaContext}
+
+【重要】
+${mediaDescriptions && mediaDescriptions.length > 0
+        ? "添付されたメディア（画像・動画）の内容も考慮して、具体的に褒めてください。"
+        : ""}
+
+【あなた（${persona.name}）の返信】
+`;
+
+    const result = await model.generateContent(prompt);
+    const commentText = result.response.text()?.trim();
+
+    if (!commentText) {
+      console.warn("Empty comment generated");
+      response.status(200).send("No comment generated");
+      return;
+    }
+
+    // Firestore に保存
+    await db.collection("comments").add({
+      postId: postId,
+      userId: persona.id,
+      userDisplayName: persona.name,
+      userAvatarIndex: persona.avatarIndex,
+      isAI: true,
+      content: commentText,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    console.log(`AI comment posted: ${persona.name}`);
+    response.status(200).send("Comment posted successfully");
+
+  } catch (error) {
+    console.error("Error in generateAIComment:", error);
+    response.status(500).send("Internal Server Error");
+  }
+}
 );

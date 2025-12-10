@@ -7,7 +7,9 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../shared/models/post_model.dart';
 import '../../../../shared/models/user_model.dart';
 import '../../../../shared/providers/auth_provider.dart';
+import '../../../../shared/repositories/notification_repository.dart';
 import '../widgets/post_card.dart';
+import 'package:go_router/go_router.dart';
 
 /// ホーム画面（タイムライン）
 class HomeScreen extends ConsumerStatefulWidget {
@@ -39,9 +41,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.warmGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.warmGradient),
         child: SafeArea(
           child: NestedScrollView(
             headerSliverBuilder: (context, innerBoxIsScrolled) {
@@ -52,29 +52,83 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
                     child: Row(
                       children: [
-                        const Text(
-                          '🌸',
-                          style: TextStyle(fontSize: 32),
-                        ),
+                        const Text('🌸', style: TextStyle(fontSize: 32)),
                         const SizedBox(width: 12),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              AppConstants.appName,
-                              style: Theme.of(context).textTheme.headlineMedium,
-                            ),
-                            currentUser.when(
-                              data: (user) => Text(
-                                user != null
-                                    ? '${user.displayName}さん、おはよう！'
-                                    : 'ようこそ！',
-                                style: Theme.of(context).textTheme.bodySmall,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                AppConstants.appName,
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.headlineMedium,
                               ),
-                              loading: () => const SizedBox.shrink(),
-                              error: (_, __) => const SizedBox.shrink(),
-                            ),
-                          ],
+                              currentUser.when(
+                                data: (user) => Text(
+                                  user != null
+                                      ? '${user.displayName}さん、おはよう！'
+                                      : 'ようこそ！',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                                loading: () => const SizedBox.shrink(),
+                                error: (_, __) => const SizedBox.shrink(),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // 通知アイコン
+                        currentUser.when(
+                          data: (user) {
+                            if (user == null) return const SizedBox.shrink();
+                            return StreamBuilder<int>(
+                              stream: ref
+                                  .watch(notificationRepositoryProvider)
+                                  .getUnreadCountStream(user.uid),
+                              builder: (context, snapshot) {
+                                final count = snapshot.data ?? 0;
+                                return Stack(
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.notifications_outlined,
+                                        size: 28,
+                                      ),
+                                      onPressed: () =>
+                                          context.push('/notifications'),
+                                    ),
+                                    if (count > 0)
+                                      Positioned(
+                                        right: 8,
+                                        top: 8,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: const BoxDecoration(
+                                            color: AppColors.error,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          constraints: const BoxConstraints(
+                                            minWidth: 16,
+                                            minHeight: 16,
+                                          ),
+                                          child: Text(
+                                            count > 99 ? '99+' : '$count',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                );
+                              },
+                            );
+                          },
+                          loading: () => const SizedBox.shrink(),
+                          error: (_, __) => const SizedBox.shrink(),
                         ),
                       ],
                     ),
@@ -139,7 +193,7 @@ class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   double get minExtent => tabBar.preferredSize.height;
-  
+
   @override
   double get maxExtent => tabBar.preferredSize.height;
 
@@ -149,10 +203,7 @@ class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
     double shrinkOffset,
     bool overlapsContent,
   ) {
-    return Container(
-      color: AppColors.background,
-      child: tabBar,
-    );
+    return Container(color: AppColors.background, child: tabBar);
   }
 
   @override
@@ -273,16 +324,19 @@ class _PostsList extends StatelessWidget {
         // AIアカウント: 全モードの投稿を見れる
         // 人間アカウント: 'mix'と'human'の投稿のみ見れる（'ai'モードは見えない）
         // ただし、自分の投稿は常に見える
-        var posts = snapshot.data?.docs
+        var posts =
+            snapshot.data?.docs
                 .map((doc) => PostModel.fromFirestore(doc))
                 .toList() ??
             [];
 
         if (!isAIViewer) {
           // 人間アカウントの場合、'ai'モードの投稿を除外（自分の投稿は除外しない）
-          posts = posts.where((post) => 
-            post.postMode != 'ai' || post.userId == currentUserId
-          ).toList();
+          posts = posts
+              .where(
+                (post) => post.postMode != 'ai' || post.userId == currentUserId,
+              )
+              .toList();
         }
 
         if (posts.isEmpty) {
@@ -292,16 +346,13 @@ class _PostsList extends StatelessWidget {
               children: [
                 const Text('✨', style: TextStyle(fontSize: 64)),
                 const SizedBox(height: 16),
-                Text(
-                  'まだ投稿がないよ',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
+                Text('まだ投稿がないよ', style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 8),
                 Text(
                   '最初の投稿をしてみよう！',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ],
             ),
@@ -340,9 +391,9 @@ class _EmptyFollowingState extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               '「おすすめ」タブで気になる人を\n見つけてフォローしてみよう！',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
               textAlign: TextAlign.center,
             ),
           ],

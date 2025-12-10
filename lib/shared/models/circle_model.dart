@@ -1,29 +1,36 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// サークル（コミュニティ）モデル
+enum CircleAIMode { aiOnly, mix, humanOnly }
+
 class CircleModel {
   final String id;
   final String name;
   final String description;
+  final String category;
   final String ownerId;
-  final int iconIndex;          // プリセットアイコンのインデックス
-  final bool allowAI;           // AIの参加を許可するか
   final List<String> memberIds;
-  final int memberCount;
-  final DateTime createdAt;
+  final CircleAIMode aiMode;
+  final List<Map<String, dynamic>> generatedAIs; // AI persona data
   final bool isPublic;
+  final int maxMembers;
+  final DateTime createdAt;
+  final DateTime? recentActivity;
+  final String goal;
 
   CircleModel({
     required this.id,
     required this.name,
     required this.description,
+    required this.category,
     required this.ownerId,
-    this.iconIndex = 0,
-    this.allowAI = true,
-    this.memberIds = const [],
-    this.memberCount = 0,
-    required this.createdAt,
+    required this.memberIds,
+    required this.aiMode,
+    this.generatedAIs = const [],
     this.isPublic = true,
+    this.maxMembers = 20,
+    required this.createdAt,
+    this.recentActivity,
+    required this.goal,
   });
 
   factory CircleModel.fromFirestore(DocumentSnapshot doc) {
@@ -32,13 +39,19 @@ class CircleModel {
       id: doc.id,
       name: data['name'] ?? '',
       description: data['description'] ?? '',
+      category: data['category'] ?? 'その他',
       ownerId: data['ownerId'] ?? '',
-      iconIndex: data['iconIndex'] ?? 0,
-      allowAI: data['allowAI'] ?? true,
       memberIds: List<String>.from(data['memberIds'] ?? []),
-      memberCount: data['memberCount'] ?? 0,
-      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      aiMode: CircleAIMode.values.firstWhere(
+        (e) => e.name == (data['aiMode'] ?? 'mix'),
+        orElse: () => CircleAIMode.mix,
+      ),
+      generatedAIs: List<Map<String, dynamic>>.from(data['generatedAIs'] ?? []),
       isPublic: data['isPublic'] ?? true,
+      maxMembers: data['maxMembers'] ?? 20,
+      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      recentActivity: (data['recentActivity'] as Timestamp?)?.toDate(),
+      goal: data['goal'] ?? '',
     );
   }
 
@@ -46,13 +59,18 @@ class CircleModel {
     return {
       'name': name,
       'description': description,
+      'category': category,
       'ownerId': ownerId,
-      'iconIndex': iconIndex,
-      'allowAI': allowAI,
       'memberIds': memberIds,
-      'memberCount': memberCount,
-      'createdAt': Timestamp.fromDate(createdAt),
+      'aiMode': aiMode.name,
+      'generatedAIs': generatedAIs,
       'isPublic': isPublic,
+      'maxMembers': maxMembers,
+      'createdAt': Timestamp.fromDate(createdAt),
+      'recentActivity': recentActivity != null
+          ? Timestamp.fromDate(recentActivity!)
+          : null,
+      'goal': goal,
     };
   }
 
@@ -60,27 +78,31 @@ class CircleModel {
     String? id,
     String? name,
     String? description,
+    String? category,
     String? ownerId,
-    int? iconIndex,
-    bool? allowAI,
     List<String>? memberIds,
-    int? memberCount,
-    DateTime? createdAt,
+    CircleAIMode? aiMode,
+    List<Map<String, dynamic>>? generatedAIs,
     bool? isPublic,
+    int? maxMembers,
+    DateTime? createdAt,
+    DateTime? recentActivity,
+    String? goal,
   }) {
     return CircleModel(
       id: id ?? this.id,
       name: name ?? this.name,
       description: description ?? this.description,
+      category: category ?? this.category,
       ownerId: ownerId ?? this.ownerId,
-      iconIndex: iconIndex ?? this.iconIndex,
-      allowAI: allowAI ?? this.allowAI,
       memberIds: memberIds ?? this.memberIds,
-      memberCount: memberCount ?? this.memberCount,
-      createdAt: createdAt ?? this.createdAt,
+      aiMode: aiMode ?? this.aiMode,
+      generatedAIs: generatedAIs ?? this.generatedAIs,
       isPublic: isPublic ?? this.isPublic,
+      maxMembers: maxMembers ?? this.maxMembers,
+      createdAt: createdAt ?? this.createdAt,
+      recentActivity: recentActivity ?? this.recentActivity,
+      goal: goal ?? this.goal,
     );
   }
 }
-
-

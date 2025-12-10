@@ -12,6 +12,8 @@ class TaskModel {
   final DateTime? lastCompletedAt;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final bool isPublic;
+  final List<String> shareToCircleIds;
 
   TaskModel({
     required this.id,
@@ -25,6 +27,8 @@ class TaskModel {
     this.lastCompletedAt,
     required this.createdAt,
     required this.updatedAt,
+    this.isPublic = false,
+    this.shareToCircleIds = const [],
   });
 
   factory TaskModel.fromFirestore(DocumentSnapshot doc) {
@@ -47,6 +51,8 @@ class TaskModel {
       updatedAt: data['updatedAt'] != null
           ? (data['updatedAt'] as Timestamp).toDate()
           : DateTime.now(),
+      isPublic: data['isPublic'] ?? false,
+      shareToCircleIds: List<String>.from(data['shareToCircleIds'] ?? []),
     );
   }
 
@@ -69,6 +75,8 @@ class TaskModel {
       updatedAt: data['updatedAt'] != null
           ? DateTime.parse(data['updatedAt'])
           : DateTime.now(),
+      isPublic: data['isPublic'] ?? false,
+      shareToCircleIds: List<String>.from(data['shareToCircleIds'] ?? []),
     );
   }
 
@@ -83,11 +91,43 @@ class TaskModel {
       'lastCompletedAt': lastCompletedAt,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
+      'isPublic': isPublic,
+      'shareToCircleIds': shareToCircleIds,
     };
+  }
+
+  TaskModel copyWith({
+    String? id,
+    String? userId,
+    String? content,
+    String? emoji,
+    String? type,
+    bool? isCompleted,
+    bool? isCompletedToday,
+    int? streak,
+    DateTime? lastCompletedAt,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    bool? isPublic,
+    List<String>? shareToCircleIds,
+  }) {
+    return TaskModel(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      content: content ?? this.content,
+      emoji: emoji ?? this.emoji,
+      type: type ?? this.type,
+      isCompleted: isCompleted ?? this.isCompleted,
+      isCompletedToday: isCompletedToday ?? this.isCompletedToday,
+      streak: streak ?? this.streak,
+      lastCompletedAt: lastCompletedAt ?? this.lastCompletedAt,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      isPublic: isPublic ?? this.isPublic,
+      shareToCircleIds: shareToCircleIds ?? this.shareToCircleIds,
+    );
   }
 
   bool get isDaily => type == 'daily';
   bool get isGoal => type == 'goal';
 }
-
-
