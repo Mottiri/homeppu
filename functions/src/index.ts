@@ -2897,8 +2897,16 @@ ${mediaDescriptions && mediaDescriptions.length > 0
       return;
     }
 
-    // Firestore に保存
-    await db.collection("comments").add({
+    // リアクションもランダムで送信 (ポジティブなものから選択)
+    const POSITIVE_REACTIONS = ["love", "praise", "cheer", "sparkles", "clap", "thumbsup", "smile"];
+    const reactionType = POSITIVE_REACTIONS[Math.floor(Math.random() * POSITIVE_REACTIONS.length)];
+
+    // バッチ書き込みで一括処理
+    const batch = db.batch();
+
+    // 1. コメント保存
+    const commentRef = db.collection("comments").doc();
+    batch.set(commentRef, {
       postId: postId,
       userId: persona.id,
       userDisplayName: persona.name,
@@ -2908,8 +2916,26 @@ ${mediaDescriptions && mediaDescriptions.length > 0
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    console.log(`AI comment posted: ${persona.name}`);
-    response.status(200).send("Comment posted successfully");
+    // 2. リアクション保存 (通知トリガー用)
+    const reactionRef = db.collection("reactions").doc();
+    batch.set(reactionRef, {
+      postId: postId,
+      userId: persona.id,
+      userDisplayName: persona.name,
+      reactionType: reactionType,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // 3. 投稿のリアクションカウント更新
+    const postRef = db.collection("posts").doc(postId);
+    batch.update(postRef, {
+      [`reactions.${reactionType}`]: admin.firestore.FieldValue.increment(1),
+    });
+
+    await batch.commit();
+
+    console.log(`AI comment and reaction posted: ${persona.name} (Reaction: ${reactionType})`);
+    response.status(200).send("Comment and reaction posted successfully");
 
   } catch (error) {
     console.error("Error in generateAIComment:", error);
