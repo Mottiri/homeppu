@@ -16,6 +16,8 @@ import '../../../../shared/widgets/avatar_selector.dart';
 import '../../../../shared/widgets/report_dialog.dart';
 import '../../../home/presentation/widgets/reaction_button.dart';
 
+import '../../../home/presentation/widgets/reaction_background.dart';
+
 /// 投稿詳細画面
 class PostDetailScreen extends ConsumerStatefulWidget {
   final String postId;
@@ -144,83 +146,187 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                       SliverToBoxAdapter(
                         child: Card(
                           margin: const EdgeInsets.all(16),
-                          child: Padding(
-                            padding: const EdgeInsets.all(20),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // ユーザー情報
-                                Row(
+                          child: Stack(
+                            children: [
+                              Positioned.fill(
+                                child: ReactionBackground(
+                                  reactions: post.reactions,
+                                  postId: post.id,
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    GestureDetector(
-                                      onTap: () => context.push(
-                                        '/profile/${post.userId}',
-                                      ),
-                                      child: AvatarWidget(
-                                        avatarIndex: post.userAvatarIndex,
-                                        size: 48,
-                                      ),
+                                    // ユーザー情報
+                                    Row(
+                                      children: [
+                                        GestureDetector(
+                                          onTap: () => context.push(
+                                            '/profile/${post.userId}',
+                                          ),
+                                          child: AvatarWidget(
+                                            avatarIndex: post.userAvatarIndex,
+                                            size: 48,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              GestureDetector(
+                                                onTap: () => context.push(
+                                                  '/profile/${post.userId}',
+                                                ),
+                                                child: Text(
+                                                  post.userDisplayName,
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .titleMedium
+                                                      ?.copyWith(
+                                                        color:
+                                                            AppColors.primary,
+                                                      ),
+                                                ),
+                                              ),
+                                              Text(
+                                                timeago.format(
+                                                  post.createdAt,
+                                                  locale: 'ja',
+                                                ),
+                                                style: Theme.of(
+                                                  context,
+                                                ).textTheme.bodySmall,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          GestureDetector(
-                                            onTap: () => context.push(
-                                              '/profile/${post.userId}',
-                                            ),
-                                            child: Text(
-                                              post.userDisplayName,
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .titleMedium
-                                                  ?.copyWith(
-                                                    color: AppColors.primary,
+
+                                    const SizedBox(height: 16),
+
+                                    // 投稿内容
+                                    Text(
+                                      post.content,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyLarge
+                                          ?.copyWith(height: 1.8, fontSize: 16),
+                                    ),
+
+                                    const SizedBox(height: 20),
+
+                                    // モバイル投稿詳細用にリアクション追加ボタンのみを表示
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.end,
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(
+                                            Icons.add_reaction_outlined,
+                                            color: AppColors.textSecondary,
+                                          ),
+                                          onPressed: () {
+                                            showModalBottomSheet(
+                                              context: context,
+                                              backgroundColor:
+                                                  Colors.transparent,
+                                              isScrollControlled: true,
+                                              builder: (context) => SafeArea(
+                                                child: Container(
+                                                  padding: const EdgeInsets.all(
+                                                    24,
                                                   ),
-                                            ),
-                                          ),
-                                          Text(
-                                            timeago.format(
-                                              post.createdAt,
-                                              locale: 'ja',
-                                            ),
-                                            style: Theme.of(
-                                              context,
-                                            ).textTheme.bodySmall,
-                                          ),
-                                        ],
-                                      ),
+                                                  decoration: const BoxDecoration(
+                                                    color: Colors.white,
+                                                    borderRadius:
+                                                        BorderRadius.vertical(
+                                                          top: Radius.circular(
+                                                            20,
+                                                          ),
+                                                        ),
+                                                  ),
+                                                  child: SingleChildScrollView(
+                                                    child: Column(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        // ヘッダー（タイトルと閉じるボタン）
+                                                        Row(
+                                                          mainAxisAlignment:
+                                                              MainAxisAlignment
+                                                                  .spaceBetween,
+                                                          children: [
+                                                            const Text(
+                                                              'リアクションを選択',
+                                                              style: TextStyle(
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                                fontSize: 16,
+                                                              ),
+                                                            ),
+                                                            IconButton(
+                                                              icon: const Icon(
+                                                                Icons.close,
+                                                                size: 20,
+                                                              ),
+                                                              onPressed: () =>
+                                                                  Navigator.pop(
+                                                                    context,
+                                                                  ),
+                                                              padding:
+                                                                  EdgeInsets
+                                                                      .zero,
+                                                              constraints:
+                                                                  const BoxConstraints(),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                        const SizedBox(
+                                                          height: 24,
+                                                        ),
+                                                        Wrap(
+                                                          alignment:
+                                                              WrapAlignment
+                                                                  .center,
+                                                          spacing: 24,
+                                                          runSpacing: 24,
+                                                          children: ReactionType
+                                                              .values
+                                                              .map((type) {
+                                                                return ReactionButton(
+                                                                  type: type,
+                                                                  count:
+                                                                      post.reactions[type
+                                                                          .value] ??
+                                                                      0,
+                                                                  postId:
+                                                                      post.id,
+                                                                );
+                                                              })
+                                                              .toList(),
+                                                        ),
+                                                        const SizedBox(
+                                                          height: 12,
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
-
-                                const SizedBox(height: 16),
-
-                                // 投稿内容
-                                Text(
-                                  post.content,
-                                  style: Theme.of(context).textTheme.bodyLarge
-                                      ?.copyWith(height: 1.8, fontSize: 16),
-                                ),
-
-                                const SizedBox(height: 20),
-
-                                // リアクション
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: ReactionType.values.map((type) {
-                                    return ReactionButton(
-                                      type: type,
-                                      count: post.reactions[type.value] ?? 0,
-                                      postId: post.id,
-                                    );
-                                  }).toList(),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ),
                       ),

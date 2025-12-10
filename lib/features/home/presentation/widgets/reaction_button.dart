@@ -110,7 +110,8 @@ class _ReactionButtonState extends ConsumerState<ReactionButton>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(widget.type.emoji, style: const TextStyle(fontSize: 14)),
+                  Text(widget.type.emoji, style: const TextStyle(fontSize: 18)),
+                  /* カウントは表示しない（背景に表示するため）
                   if (widget.count > 0 || _isReacted) ...[
                     const SizedBox(width: 4),
                     Text(
@@ -122,6 +123,7 @@ class _ReactionButtonState extends ConsumerState<ReactionButton>
                       ),
                     ),
                   ],
+                  */
                 ],
               ),
             ),

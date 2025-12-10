@@ -13,10 +13,10 @@ class AppConstants {
   static const String modeHuman = 'human';
 
   // リアクションタイプ
-  static const String reactionLove = 'love';        // いいね
-  static const String reactionPraise = 'praise';    // すごい
-  static const String reactionCheer = 'cheer';      // がんばれ
-  static const String reactionEmpathy = 'empathy';  // わかる
+  static const String reactionLove = 'love'; // いいね
+  static const String reactionPraise = 'praise'; // すごい
+  static const String reactionCheer = 'cheer'; // がんばれ
+  static const String reactionEmpathy = 'empathy'; // わかる
 
   // システムメッセージ（フレンドリーなトーン）
   static const Map<String, String> friendlyMessages = {
@@ -33,8 +33,8 @@ class AppConstants {
   };
 
   // AI応答の遅延設定（ミリ秒）
-  static const int aiMinDelay = 60000;     // 最小1分
-  static const int aiMaxDelay = 10800000;  // 最大3時間
+  static const int aiMinDelay = 60000; // 最小1分
+  static const int aiMaxDelay = 10800000; // 最大3時間
 
   // バリデーション
   static const int maxPostLength = 500;
@@ -61,7 +61,7 @@ enum PostMode {
   human('human', '人間モード', '実際の人間からのみ反応が届くよ');
 
   const PostMode(this.value, this.label, this.description);
-  
+
   final String value;
   final String label;
   final String description;
@@ -72,14 +72,60 @@ enum ReactionType {
   love('love', '❤️', 'いいね', 0xFFFF6B6B),
   praise('praise', '✨', 'すごい', 0xFFFFD93D),
   cheer('cheer', '💪', 'がんばれ', 0xFF6BCB77),
-  empathy('empathy', '🤝', 'わかる', 0xFF4D96FF);
+  empathy('empathy', '🤝', 'わかる', 0xFF4D96FF),
+  balloon('balloon', '🎈', 'おいわい', 0xFFFF9800),
+  warm('warm', '☺️', 'ほっこり', 0xFFFFC1E3),
+  banana('banana', '🍌', 'バナナ', 0xFFFFE135),
+
+  // 追加リアクション (LINE風)
+  star('star', '⭐', 'スター', 0xFFFFD700),
+  heart_red('heart_red', '❤️', '赤ハート', 0xFFFF0000),
+  heart_pink('heart_pink', '🩷', 'ピンクハート', 0xFFFF69B4),
+  heart_blue('heart_blue', '🩵', '水色ハート', 0xFF87CEEB),
+  sparkles('sparkles', '✨', 'キラキラ', 0xFFFFE4B5),
+  fire('fire', '🔥', '情熱', 0xFFFF4500),
+  thumbsup('thumbsup', '👍', 'グッド', 0xFFFFA500),
+  ok('ok', '🙆', 'OK', 0xFF32CD32),
+  clap('clap', '👏', '拍手', 0xFFFFDAB9),
+  flower('flower', '🌸', '花', 0xFFFFB7C5),
+
+  // 表情
+  smile('smile', '😊', 'ニコニコ', 0xFFFFE4B5),
+  laugh('laugh', '😆', '大笑い', 0xFFFFE4B5),
+  cry_happy('cry_happy', '😂', '嬉し泣き', 0xFFFFE4B5),
+  wink('wink', '😉', 'ウィンク', 0xFFFFE4B5),
+  kiss('kiss', '😘', 'キス', 0xFFFFE4B5),
+  love_eyes('love_eyes', '😍', 'メロメロ', 0xFFFFE4B5),
+  relief('relief', '😌', '安心', 0xFFFFE4B5),
+  party('party', '🥳', 'パーティー', 0xFFFFE4B5),
+  sunglasses('sunglasses', '😎', 'クール', 0xFFFFE4B5),
+
+  // 動物・自然
+  cat('cat', '🐱', 'ネコ', 0xFFD3D3D3),
+  dog('dog', '🐶', 'イヌ', 0xFFD2B48C),
+  bear('bear', '🐻', 'クマ', 0xFF8B4513),
+  rabbit('rabbit', '🐰', 'ウサギ', 0xFFFFC0CB),
+  panda('panda', '🐼', 'パンダ', 0xFFFFFFFF),
+  sun('sun', '☀️', '太陽', 0xFFFFA500),
+  moon('moon', '🌙', '月', 0xFFFFFF00),
+  rainbow('rainbow', '🌈', '虹', 0xFF87CEEB),
+
+  // その他
+  gift('gift', '🎁', 'プレゼント', 0xFFFF0000),
+  trophy('trophy', '🏆', 'トロフィー', 0xFFFFD700),
+  medal('medal', '🥇', 'メダル', 0xFFFFD700),
+  music('music', '🎵', '音楽', 0xFF000000),
+  coffee('coffee', '☕', 'コーヒー', 0xFF8B4513),
+  beer('beer', '🍺', 'ビール', 0xFFFFD700),
+  cake('cake', '🍰', 'ケーキ', 0xFFFFC0CB),
+  sushi('sushi', '🍣', '寿司', 0xFFFF4500),
+  rocket('rocket', '🚀', 'ロケット', 0xFF808080),
+  onigiri('onigiri', '🍙', 'おにぎり', 0xFFFFFFFF);
 
   const ReactionType(this.value, this.emoji, this.label, this.colorValue);
-  
+
   final String value;
   final String emoji;
   final String label;
   final int colorValue;
 }
-
-

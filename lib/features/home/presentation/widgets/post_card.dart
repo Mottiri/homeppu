@@ -12,6 +12,7 @@ import '../../../../shared/widgets/avatar_selector.dart';
 import '../../../../shared/widgets/report_dialog.dart';
 import '../../../../shared/widgets/video_player_screen.dart';
 import 'reaction_button.dart';
+import 'reaction_background.dart';
 
 /// 投稿カード
 class PostCard extends StatefulWidget {
@@ -115,177 +116,245 @@ class _PostCardState extends State<PostCard> {
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: InkWell(
-        onTap: () => context.push('/post/${post.id}'),
-        borderRadius: BorderRadius.circular(20),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ユーザー情報
-              Row(
+      child: Stack(
+        children: [
+          // 背景リアクション（落書き風）
+          Positioned.fill(
+            child: ReactionBackground(
+              reactions: post.reactions,
+              postId: post.id,
+            ),
+          ),
+          // カードコンテンツ
+          InkWell(
+            onTap: () => context.push('/post/${post.id}'),
+            borderRadius: BorderRadius.circular(20),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  GestureDetector(
-                    onTap: () => context.push('/user/${post.userId}'),
-                    child: AvatarWidget(
-                      avatarIndex: post.userAvatarIndex,
-                      size: 44,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        GestureDetector(
-                          onTap: () => context.push('/user/${post.userId}'),
-                          child: Text(
-                            post.userDisplayName,
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(color: AppColors.primary),
-                          ),
+                  // ユーザー情報
+                  Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () => context.push('/user/${post.userId}'),
+                        child: AvatarWidget(
+                          avatarIndex: post.userAvatarIndex,
+                          size: 44,
                         ),
-                        Text(
-                          timeago.format(post.createdAt, locale: 'ja'),
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                  ),
-                  // オプションメニュー（通報・削除など）
-                  _isDeleting
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : PopupMenuButton<String>(
-                          icon: Icon(
-                            Icons.more_horiz,
-                            color: AppColors.textHint,
-                            size: 20,
-                          ),
-                          onSelected: (value) {
-                            if (value == 'report') {
-                              ReportDialog.show(
-                                context: context,
-                                contentId: post.id,
-                                contentType: 'post',
-                                targetUserId: post.userId,
-                                contentPreview: post.content,
-                              );
-                            } else if (value == 'delete') {
-                              _deletePost();
-                            }
-                          },
-                          itemBuilder: (context) => [
-                            // 自分の投稿なら削除オプションを表示
-                            if (isMyPost)
-                              const PopupMenuItem(
-                                value: 'delete',
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.delete_outline,
-                                      size: 18,
-                                      color: Colors.red,
-                                    ),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      'この投稿を削除',
-                                      style: TextStyle(color: Colors.red),
-                                    ),
-                                  ],
-                                ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            GestureDetector(
+                              onTap: () => context.push('/user/${post.userId}'),
+                              child: Text(
+                                post.userDisplayName,
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(color: AppColors.primary),
                               ),
-                            // 他人の投稿なら通報オプションを表示
-                            if (!isMyPost)
-                              const PopupMenuItem(
-                                value: 'report',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.flag_outlined, size: 18),
-                                    SizedBox(width: 8),
-                                    Text('この投稿を通報'),
-                                  ],
-                                ),
-                              ),
+                            ),
+                            Text(
+                              timeago.format(post.createdAt, locale: 'ja'),
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
                           ],
                         ),
-                ],
-              ),
-
-              const SizedBox(height: 12),
-
-              // 投稿内容
-              Text(
-                post.content,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyLarge?.copyWith(height: 1.6),
-              ),
-
-              // メディア表示
-              if (post.allMedia.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                _MediaGrid(mediaItems: post.allMedia),
-              ],
-
-              const SizedBox(height: 16),
-
-              // リアクションエリア
-              Row(
-                children: [
-                  ...ReactionType.values.map(
-                    (type) => Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ReactionButton(
-                        type: type,
-                        count: post.reactions[type.value] ?? 0,
-                        postId: post.id,
                       ),
-                    ),
+                      // オプションメニュー（通報・削除など）
+                      _isDeleting
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : PopupMenuButton<String>(
+                              icon: Icon(
+                                Icons.more_horiz,
+                                color: AppColors.textHint,
+                                size: 20,
+                              ),
+                              onSelected: (value) {
+                                if (value == 'report') {
+                                  ReportDialog.show(
+                                    context: context,
+                                    contentId: post.id,
+                                    contentType: 'post',
+                                    targetUserId: post.userId,
+                                    contentPreview: post.content,
+                                  );
+                                } else if (value == 'delete') {
+                                  _deletePost();
+                                }
+                              },
+                              itemBuilder: (context) => [
+                                // 自分の投稿なら削除オプションを表示
+                                if (isMyPost)
+                                  const PopupMenuItem(
+                                    value: 'delete',
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.delete_outline,
+                                          size: 18,
+                                          color: Colors.red,
+                                        ),
+                                        SizedBox(width: 8),
+                                        Text(
+                                          'この投稿を削除',
+                                          style: TextStyle(color: Colors.red),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                // 他人の投稿なら通報オプションを表示
+                                if (!isMyPost)
+                                  const PopupMenuItem(
+                                    value: 'report',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.flag_outlined, size: 18),
+                                        SizedBox(width: 8),
+                                        Text('この投稿を通報'),
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            ),
+                    ],
                   ),
-                  const Spacer(),
-                  // コメント数（表示可能なもののみカウント）
-                  StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('comments')
-                        .where('postId', isEqualTo: post.id)
-                        .snapshots(),
-                    builder: (context, snapshot) {
-                      int visibleCount = 0;
-                      if (snapshot.hasData) {
-                        final now = DateTime.now();
-                        visibleCount = snapshot.data!.docs.where((doc) {
-                          final data = doc.data() as Map<String, dynamic>;
-                          final scheduledAt = data['scheduledAt'] as Timestamp?;
-                          if (scheduledAt == null) return true;
-                          return now.isAfter(scheduledAt.toDate());
-                        }).length;
-                      }
-                      return Row(
-                        children: [
-                          const Icon(
-                            Icons.chat_bubble_outline,
-                            size: 18,
-                            color: AppColors.textHint,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '$visibleCount',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                      );
-                    },
+
+                  const SizedBox(height: 12),
+
+                  // 投稿内容
+                  Text(
+                    post.content,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyLarge?.copyWith(height: 1.6),
+                  ),
+
+                  // メディア表示
+                  if (post.allMedia.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _MediaGrid(mediaItems: post.allMedia),
+                  ],
+
+                  const SizedBox(height: 16),
+
+                  // リアクションエリア
+                  Row(
+                    children: [
+                      const Spacer(),
+                      // リアクション追加ボタン
+                      IconButton(
+                        icon: const Icon(
+                          Icons.add_reaction_outlined,
+                          color: AppColors.textSecondary,
+                        ),
+                        onPressed: () {
+                          // 自分の投稿にはリアクションできない
+                          if (isMyPost) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('自分の投稿にはリアクションできません'),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                            return;
+                          }
+
+                          showModalBottomSheet(
+                            context: context,
+                            backgroundColor: Colors.transparent,
+                            isScrollControlled: true, // コンテンツサイズに合わせる
+                            builder: (context) => SafeArea(
+                              child: Container(
+                                padding: const EdgeInsets.all(24),
+                                decoration: const BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.vertical(
+                                    top: Radius.circular(20),
+                                  ),
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Text(
+                                      'リアクションを送る',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 24),
+                                    Wrap(
+                                      alignment: WrapAlignment.center,
+                                      spacing: 24,
+                                      runSpacing: 24,
+                                      children: ReactionType.values.map((type) {
+                                        return ReactionButton(
+                                          type: type,
+                                          count:
+                                              post.reactions[type.value] ?? 0,
+                                          postId: post.id,
+                                        );
+                                      }).toList(),
+                                    ),
+                                    const SizedBox(height: 12),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      // コメント数（表示可能なもののみカウント）
+                      StreamBuilder<QuerySnapshot>(
+                        stream: FirebaseFirestore.instance
+                            .collection('comments')
+                            .where('postId', isEqualTo: post.id)
+                            .snapshots(),
+                        builder: (context, snapshot) {
+                          int visibleCount = 0;
+                          if (snapshot.hasData) {
+                            final now = DateTime.now();
+                            visibleCount = snapshot.data!.docs.where((doc) {
+                              final data = doc.data() as Map<String, dynamic>;
+                              final scheduledAt =
+                                  data['scheduledAt'] as Timestamp?;
+                              if (scheduledAt == null) return true;
+                              return now.isAfter(scheduledAt.toDate());
+                            }).length;
+                          }
+                          return Row(
+                            children: [
+                              const Icon(
+                                Icons.chat_bubble_outline,
+                                size: 18,
+                                color: AppColors.textHint,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '$visibleCount',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                      const SizedBox(width: 4),
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
