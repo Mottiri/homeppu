@@ -1892,109 +1892,7 @@ ${content}
   }
 );
 
-/**
- * モデレーション付きコメント作成
- */
-export const createCommentWithModeration = onCall(
-  { region: "asia-northeast1", secrets: [geminiApiKey] },
-  async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "ログインが必要です");
-    }
 
-    const userId = request.auth.uid;
-    const { postId, content, userDisplayName, userAvatarIndex } = request.data;
-
-    // ユーザーがBANされているかチェック
-    const userDoc = await db.collection("users").doc(userId).get();
-    if (userDoc.exists && userDoc.data()?.isBanned) {
-      throw new HttpsError(
-        "permission-denied",
-        "申し訳ありませんが、現在コメントできません。"
-      );
-    }
-
-    // コンテンツモデレーション
-    const apiKey = geminiApiKey.value();
-    if (apiKey) {
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-
-      const prompt = `
-あなたはSNS「ほめっぷ」のコンテンツモデレーターです。
-以下のコメント内容を分析して、ネガティブかどうか判定してください。
-
-【判定基準】
-- harassment: 誹謗中傷
-  - hate_speech: 差別
-    - profanity: 暴言
-      - none: 問題なし
-
-【コメント内容】
-${content}
-
-【回答形式】
-{
-  "isNegative": boolean,
-    "category": string,
-      "confidence": number,
-        "reason": "理由",
-          "suggestion": "提案"
-}
-`;
-
-      try {
-        const result = await model.generateContent(prompt);
-        const responseText = result.response.text().trim();
-
-        let jsonText = responseText;
-        const jsonMatch = responseText.match(/```(?: json) ?\s * ([\s\S] *?) \s * ```/);
-        if (jsonMatch) {
-          jsonText = jsonMatch[1];
-        }
-
-        const modResult = JSON.parse(jsonText) as ModerationResult;
-
-        if (modResult.isNegative && modResult.confidence >= 0.7) {
-          await decreaseVirtue(
-            userId,
-            `ネガティブコメント検出: ${modResult.category} `,
-            VIRTUE_CONFIG.lossPerNegative
-          );
-
-          throw new HttpsError(
-            "invalid-argument",
-            `${modResult.reason} \n\n💡 ${modResult.suggestion} `
-          );
-        }
-      } catch (error) {
-        if (error instanceof HttpsError) {
-          throw error;
-        }
-        console.error("Moderation error:", error);
-      }
-    }
-
-    // コメントを作成
-    const commentRef = db.collection("comments").doc();
-    await commentRef.set({
-      postId: postId,
-      userId: userId,
-      userDisplayName: userDisplayName,
-      userAvatarIndex: userAvatarIndex,
-      isAI: false,
-      content: content,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    // 投稿のコメント数を更新
-    await db.collection("posts").doc(postId).update({
-      commentCount: admin.firestore.FieldValue.increment(1),
-    });
-
-    return { success: true, commentId: commentRef.id };
-  }
-);
 
 // ===============================================
 // 通報機能
@@ -3018,4 +2916,164 @@ ${mediaDescriptions && mediaDescriptions.length > 0
     response.status(500).send("Internal Server Error");
   }
 }
+);
+
+// ===============================================
+// モデレーション機能 (onCall)
+// ===============================================
+
+/**
+ * テキストのモデレーション判定 (Gemini)
+ */
+async function moderateText(text: string, postContent: string = ""): Promise<ModerationResult> {
+  // 短すぎる場合はスキップ
+  if (!text || text.length < 2) {
+    return { isNegative: false, category: "none", confidence: 0, reason: "", suggestion: "" };
+  }
+
+  const apiKey = geminiApiKey.value();
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+  const prompt = `
+あなたはSNSのコミュニティマネージャーです。以下のテキストが、ポジティブで優しいSNS「ほめっぷ」にふさわしいかどうか（攻撃的、誹謗中傷、不適切でないか）を判定してください。
+文脈として、ユーザーは「投稿内容」に対して「コメント」をしようとしています。
+たとえ一見普通の言葉でも、文脈によって嫌味や攻撃になる場合はネガティブと判定してください。
+特に「死ね」「殺す」「きもい」などの直接的な暴言・攻撃は厳しく判定してください。
+
+【投稿内容】
+"${postContent}"
+
+【コメントしようとしている内容】
+"${text}"
+
+以下のJSON形式のみで回答してください:
+{
+  "isNegative": boolean, // ネガティブ（不適切）ならtrue
+  "category": "harassment" | "hate_speech" | "profanity" | "self_harm" | "spam" | "none",
+  "confidence": number, // 0.0〜1.0 (確信度)
+  "reason": "判定理由（ユーザーに簡潔に伝える用）",
+  "suggestion": "より優しい言い方の提案（もしあれば）"
+}
+`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text();
+    // JSONブロックを取り出す
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.warn("Moderation JSON parse failed", responseText);
+      return { isNegative: false, category: "none", confidence: 0, reason: "", suggestion: "" };
+    }
+    const data = JSON.parse(jsonMatch[0]) as ModerationResult;
+    return data;
+  } catch (e) {
+    console.error("Moderation AI Error:", e);
+    // エラー時は安全側に倒してスルー（または厳しくするか要検討）
+    return { isNegative: false, category: "none", confidence: 0, reason: "", suggestion: "" };
+  }
+}
+
+/**
+ * 徳ポイントの更新（減少処理）
+ */
+async function penalizeUser(userId: string, penalty: number, reason: string) {
+  const userRef = db.collection("users").doc(userId);
+
+  await db.runTransaction(async (t) => {
+    const doc = await t.get(userRef);
+    if (!doc.exists) return;
+
+    const currentVirtue = doc.data()?.virtue || 100;
+    const newVirtue = Math.max(0, currentVirtue - penalty);
+
+    t.update(userRef, { virtue: newVirtue });
+
+    // 履歴追加
+    const historyRef = db.collection("virtueHistory").doc();
+    t.set(historyRef, {
+      userId,
+      change: -penalty,
+      reason,
+      newVirtue,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  });
+}
+
+/**
+ * モデレーション付きコメント作成
+ */
+export const createCommentWithModeration = onCall(
+  {
+    region: "asia-northeast1",
+    secrets: [geminiApiKey],
+  },
+  async (request) => {
+    // 認証チェック
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "User must be logged in");
+    }
+
+    const { postId, content, userDisplayName, userAvatarIndex } = request.data;
+    const userId = request.auth.uid;
+
+    if (!postId || !content) {
+      throw new HttpsError("invalid-argument", "Missing postId or content");
+    }
+
+    // ユーザーがBANされているかチェック
+    const userDoc = await db.collection("users").doc(userId).get();
+    if (userDoc.exists && userDoc.data()?.isBanned) {
+      throw new HttpsError(
+        "permission-denied",
+        "申し訳ありませんが、現在コメントできません。"
+      );
+    }
+
+    // 投稿のコンテキストを取得
+    let postContentText = "";
+    try {
+      const postDoc = await db.collection("posts").doc(postId).get();
+      if (postDoc.exists) {
+        postContentText = postDoc.data()?.content || "";
+      }
+    } catch (e) {
+      console.warn(`Failed to fetch post context for moderation: ${postId}`, e);
+    }
+
+    // 1. モデレーション実行（コンテキスト付き）
+    const moderation = await moderateText(content, postContentText);
+    if (moderation.isNegative && moderation.confidence > 0.7) {
+      // 徳ポイント減少
+      await penalizeUser(userId, VIRTUE_CONFIG.lossPerNegative, `不適切な発言: ${moderation.category}`);
+
+      throw new HttpsError(
+        "invalid-argument",
+        moderation.reason || "不適切な内容が含まれています",
+        { suggestion: moderation.suggestion }
+      );
+    }
+
+    // 2. コメント保存
+    const commentRef = db.collection("comments").doc();
+    await commentRef.set({
+      postId,
+      userId,
+      userDisplayName: userDisplayName || "Unknown",
+      userAvatarIndex: userAvatarIndex || 0,
+      content,
+      isAI: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      isVisibleNow: true, // 即時表示
+    });
+
+    // 3. 投稿のコメント数を更新
+    await db.collection("posts").doc(postId).update({
+      commentCount: admin.firestore.FieldValue.increment(1)
+    });
+
+    return { commentId: commentRef.id };
+  }
 );
