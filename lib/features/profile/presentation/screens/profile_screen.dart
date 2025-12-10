@@ -355,25 +355,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(fontWeight: FontWeight.bold),
                         ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            '${user.following.length}',
-                            style: TextStyle(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -552,26 +533,42 @@ class _ProfilePostCardState extends State<_ProfilePostCard> {
     setState(() => _isDeleting = true);
 
     try {
-      await FirebaseFirestore.instance
-          .collection('posts')
-          .doc(widget.post.id)
-          .delete();
+      // バッチ処理で一括削除（整合性担保とルール回避のため）
+      final batch = FirebaseFirestore.instance.batch();
 
+      // 1. 関連するコメントを削除対象に追加
       final comments = await FirebaseFirestore.instance
           .collection('comments')
           .where('postId', isEqualTo: widget.post.id)
           .get();
 
-      final batch = FirebaseFirestore.instance.batch();
       for (final doc in comments.docs) {
         batch.delete(doc.reference);
       }
-      await batch.commit();
 
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.post.userId)
-          .update({'totalPosts': FieldValue.increment(-1)});
+      // 2. 関連するリアクションも削除対象に追加
+      final reactions = await FirebaseFirestore.instance
+          .collection('reactions')
+          .where('postId', isEqualTo: widget.post.id)
+          .get();
+
+      for (final doc in reactions.docs) {
+        batch.delete(doc.reference);
+      }
+
+      // 3. 投稿自体を削除対象に追加
+      batch.delete(
+        FirebaseFirestore.instance.collection('posts').doc(widget.post.id),
+      );
+
+      // 4. ユーザーの投稿数を減少
+      batch.update(
+        FirebaseFirestore.instance.collection('users').doc(widget.post.userId),
+        {'totalPosts': FieldValue.increment(-1)},
+      );
+
+      // コミット
+      await batch.commit();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -800,7 +797,7 @@ class _FollowingUserItem extends StatelessWidget {
       future: FirebaseFirestore.instance.collection('users').doc(userId).get(),
       builder: (context, snapshot) {
         if (!snapshot.hasData || !snapshot.data!.exists) {
-          return const SizedBox(width: 80);
+          return const SizedBox.shrink();
         }
 
         final user = UserModel.fromFirestore(snapshot.data!);

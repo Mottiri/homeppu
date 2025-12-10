@@ -26,6 +26,7 @@ class UserModel {
   final List<String> unlockedNameParts; // アンロック済みパーツID
   final DateTime? lastNameChangeAt; // 最後に名前を変更した日時
   final String? fcmToken; // プッシュ通知用トークン
+  final Map<String, bool> notificationSettings; // 通知設定
 
   UserModel({
     required this.uid,
@@ -50,7 +51,9 @@ class UserModel {
     this.nameSuffix,
     this.unlockedNameParts = const [],
     this.lastNameChangeAt,
+
     this.fcmToken,
+    this.notificationSettings = const {'comments': true, 'reactions': true},
   });
 
   factory UserModel.fromFirestore(DocumentSnapshot doc) {
@@ -78,7 +81,11 @@ class UserModel {
       nameSuffix: data['nameSuffix'],
       unlockedNameParts: List<String>.from(data['unlockedNameParts'] ?? []),
       lastNameChangeAt: (data['lastNameChangeAt'] as Timestamp?)?.toDate(),
+
       fcmToken: data['fcmToken'],
+      notificationSettings: Map<String, bool>.from(
+        data['notificationSettings'] ?? {'comments': true, 'reactions': true},
+      ),
     );
   }
 
@@ -106,6 +113,7 @@ class UserModel {
       'unlockedNameParts': unlockedNameParts,
       if (lastNameChangeAt != null)
         'lastNameChangeAt': Timestamp.fromDate(lastNameChangeAt!),
+      'notificationSettings': notificationSettings,
     };
   }
 
@@ -133,6 +141,7 @@ class UserModel {
     List<String>? unlockedNameParts,
     DateTime? lastNameChangeAt,
     String? fcmToken,
+    Map<String, bool>? notificationSettings,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -158,6 +167,7 @@ class UserModel {
       unlockedNameParts: unlockedNameParts ?? this.unlockedNameParts,
       lastNameChangeAt: lastNameChangeAt ?? this.lastNameChangeAt,
       fcmToken: fcmToken ?? this.fcmToken,
+      notificationSettings: notificationSettings ?? this.notificationSettings,
     );
   }
 }

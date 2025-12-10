@@ -73,6 +73,22 @@ service cloud.firestore {
       );
     }
     
+    // リアクションコレクション
+    match /reactions/{reactionId} {
+      // 読み取り: 認証済みユーザー
+      allow read: if isAuthenticated();
+      
+      // 作成: 認証済みでBANされていないユーザー
+      allow create: if isAuthenticated() && isNotBanned() && 
+        request.resource.data.userId == request.auth.uid;
+      
+      // 削除: リアクションした本人 または 元投稿の所有者
+      allow delete: if isAuthenticated() && (
+        isOwner(resource.data.userId) ||
+        isOwner(get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.userId)
+      );
+    }
+
     // サークルコレクション
     match /circles/{circleId} {
       // 読み取り: 公開サークルは誰でも、非公開はメンバーのみ

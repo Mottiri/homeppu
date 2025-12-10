@@ -5,7 +5,8 @@ import 'package:cloud_functions/cloud_functions.dart';
 class AIService {
   final FirebaseFunctions _functions;
 
-  AIService() : _functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+  AIService()
+    : _functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
 
   /// AIアカウントを初期化（管理者用）
   Future<void> initializeAIAccounts() async {
@@ -24,7 +25,7 @@ class AIService {
     try {
       final callable = _functions.httpsCallable(
         'generateAIPosts',
-        options: HttpsCallableOptions(timeout: const Duration(minutes: 5)),
+        options: HttpsCallableOptions(timeout: const Duration(minutes: 9)),
       );
       final result = await callable.call();
       print('AI投稿生成: ${result.data}');
@@ -55,6 +56,21 @@ class AIService {
       return result.data['postId'] as String?;
     } catch (e) {
       print('投稿作成エラー: $e');
+      rethrow;
+    }
+  }
+
+  /// AIユーザーを全削除（管理者用）
+  Future<void> deleteAllAIUsers() async {
+    try {
+      final callable = _functions.httpsCallable(
+        'deleteAllAIUsers',
+        options: HttpsCallableOptions(timeout: const Duration(minutes: 9)),
+      );
+      final result = await callable.call();
+      print('AIユーザー全削除: ${result.data}');
+    } catch (e) {
+      print('AIユーザー全削除エラー: $e');
       rethrow;
     }
   }

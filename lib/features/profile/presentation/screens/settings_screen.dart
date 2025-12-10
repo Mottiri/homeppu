@@ -17,7 +17,7 @@ enum PrivacyMode {
   human('human', '人間モード', '人間だけが見れるよ\n本物のリアクションだけがほしい人向け', Icons.person);
 
   const PrivacyMode(this.value, this.label, this.description, this.icon);
-  
+
   final String value;
   final String label;
   final String description;
@@ -150,9 +150,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ],
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.warmGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.warmGradient),
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
@@ -186,21 +184,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     const SizedBox(height: 24),
 
                     // 表示名（名前パーツ方式）
-                    Text(
-                      'なまえ',
-                      style: Theme.of(context).textTheme.labelLarge,
-                    ),
+                    Text('なまえ', style: Theme.of(context).textTheme.labelLarge),
                     const SizedBox(height: 8),
                     Consumer(
                       builder: (context, ref, _) {
-                        final currentUser = ref.watch(currentUserProvider).valueOrNull;
+                        final currentUser = ref
+                            .watch(currentUserProvider)
+                            .valueOrNull;
                         return InkWell(
                           onTap: () async {
-                            final result = await Navigator.of(context).push<bool>(
-                              MaterialPageRoute(
-                                builder: (_) => const NameEditScreen(),
-                              ),
-                            );
+                            final result = await Navigator.of(context)
+                                .push<bool>(
+                                  MaterialPageRoute(
+                                    builder: (_) => const NameEditScreen(),
+                                  ),
+                                );
                             if (result == true) {
                               // 名前が変更された場合、ユーザー情報を再取得
                               ref.invalidate(currentUserProvider);
@@ -211,20 +209,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             width: double.infinity,
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.surfaceVariant,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.surfaceVariant,
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.outline.withOpacity(0.3),
                               ),
                             ),
                             child: Row(
                               children: [
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        currentUser?.displayName ?? 'タップして名前を設定',
+                                        currentUser?.displayName ??
+                                            'タップして名前を設定',
                                         style: const TextStyle(
                                           fontSize: 18,
                                           fontWeight: FontWeight.bold,
@@ -255,10 +259,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     const SizedBox(height: 16),
 
                     // 自己紹介
-                    Text(
-                      '自己紹介',
-                      style: Theme.of(context).textTheme.labelLarge,
-                    ),
+                    Text('自己紹介', style: Theme.of(context).textTheme.labelLarge),
                     const SizedBox(height: 8),
                     TextField(
                       controller: _bioController,
@@ -271,6 +272,80 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   ],
                 ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // 通知設定
+            Card(
+              child: ExpansionTile(
+                leading: const Icon(Icons.notifications_outlined),
+                title: const Text('通知設定'),
+                subtitle: Consumer(
+                  builder: (context, ref, _) {
+                    final user = ref.watch(currentUserProvider).valueOrNull;
+                    final enabledCount =
+                        (user?.notificationSettings.values
+                            .where((e) => e)
+                            .length ??
+                        0);
+                    return Text(enabledCount == 0 ? 'すべてオフ' : 'カスタマイズ中');
+                  },
+                ),
+                children: [
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final user = ref.watch(currentUserProvider).valueOrNull;
+                      if (user == null) return const SizedBox.shrink();
+
+                      return Column(
+                        children: [
+                          SwitchListTile(
+                            title: const Text('コメント通知'),
+                            subtitle: const Text('投稿へのコメントを通知します'),
+                            secondary: const Icon(Icons.chat_bubble_outline),
+                            value:
+                                user.notificationSettings['comments'] ?? true,
+                            onChanged: (value) async {
+                              final authService = ref.read(authServiceProvider);
+                              final newSettings = Map<String, bool>.from(
+                                user.notificationSettings,
+                              );
+                              newSettings['comments'] = value;
+
+                              await authService.updateUserProfile(
+                                uid: user.uid,
+                                notificationSettings: newSettings,
+                              );
+                            },
+                          ),
+                          const Divider(height: 1),
+                          SwitchListTile(
+                            title: const Text('リアクション通知'),
+                            subtitle: const Text('投稿へのリアクションを通知します'),
+                            secondary: const Icon(Icons.favorite_border),
+                            value:
+                                user.notificationSettings['reactions'] ?? true,
+                            onChanged: (value) async {
+                              final authService = ref.read(authServiceProvider);
+                              final newSettings = Map<String, bool>.from(
+                                user.notificationSettings,
+                              );
+                              newSettings['reactions'] = value;
+
+                              await authService.updateUserProfile(
+                                uid: user.uid,
+                                notificationSettings: newSettings,
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                      );
+                    },
+                  ),
+                ],
               ),
             ),
 
@@ -302,7 +377,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                       child: const Row(
                         children: [
-                          Icon(Icons.info_outline, size: 18, color: AppColors.primary),
+                          Icon(
+                            Icons.info_outline,
+                            size: 18,
+                            color: AppColors.primary,
+                          ),
                           SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -323,7 +402,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       builder: (context, ref, _) {
                         final user = ref.watch(currentUserProvider).valueOrNull;
                         if (user == null) return const SizedBox.shrink();
-                        
+
                         return Column(
                           children: PrivacyMode.values.map((mode) {
                             final isSelected = user.postMode == mode.value;
@@ -334,7 +413,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 isSelected: isSelected,
                                 onTap: () async {
                                   if (isSelected) return;
-                                  
+
                                   // 確認ダイアログ
                                   final confirmed = await showDialog<bool>(
                                     context: context,
@@ -342,31 +421,39 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                       title: Text('${mode.label}に変更'),
                                       content: Text(
                                         '公開範囲を「${mode.label}」に変更しますか？\n\n'
-                                        '次回以降の投稿から適用されます。'
+                                        '次回以降の投稿から適用されます。',
                                       ),
                                       actions: [
                                         TextButton(
-                                          onPressed: () => Navigator.pop(context, false),
+                                          onPressed: () =>
+                                              Navigator.pop(context, false),
                                           child: const Text('キャンセル'),
                                         ),
                                         ElevatedButton(
-                                          onPressed: () => Navigator.pop(context, true),
+                                          onPressed: () =>
+                                              Navigator.pop(context, true),
                                           child: const Text('変更する'),
                                         ),
                                       ],
                                     ),
                                   );
-                                  
+
                                   if (confirmed == true) {
-                                    final authService = ref.read(authServiceProvider);
+                                    final authService = ref.read(
+                                      authServiceProvider,
+                                    );
                                     await authService.updateUserProfile(
                                       uid: user.uid,
                                       postMode: mode.value,
                                     );
                                     if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
                                         SnackBar(
-                                          content: Text('公開範囲を「${mode.label}」に変更しました'),
+                                          content: Text(
+                                            '公開範囲を「${mode.label}」に変更しました',
+                                          ),
                                           backgroundColor: AppColors.success,
                                         ),
                                       );
@@ -445,10 +532,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             // ログアウト
             Card(
               child: ListTile(
-                leading: const Icon(
-                  Icons.logout,
-                  color: AppColors.error,
-                ),
+                leading: const Icon(Icons.logout, color: AppColors.error),
                 title: const Text(
                   'ログアウト',
                   style: TextStyle(color: AppColors.error),
@@ -459,121 +543,212 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
             const SizedBox(height: 16),
 
+            const SizedBox(height: 16),
+
             // 管理者設定（開発用）
-            Card(
-              child: ExpansionTile(
-                leading: const Icon(Icons.admin_panel_settings),
-                title: const Text('管理者設定'),
-                subtitle: const Text(
-                  '開発者専用',
-                  style: TextStyle(fontSize: 12, color: AppColors.textHint),
-                ),
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    child: Column(
-                      children: [
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: () async {
-                              try {
-                                final aiService = ref.read(aiServiceProvider);
-                                await aiService.initializeAIAccounts();
-                                if (mounted) {
+            if (ref.watch(currentUserProvider).valueOrNull?.email ==
+                'movielike4@gmail.com')
+              Card(
+                child: ExpansionTile(
+                  leading: const Icon(Icons.admin_panel_settings),
+                  title: const Text('管理者設定'),
+                  subtitle: const Text(
+                    '開発者専用',
+                    style: TextStyle(fontSize: 12, color: AppColors.textHint),
+                  ),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      child: Column(
+                        children: [
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: () async {
+                                try {
+                                  final aiService = ref.read(aiServiceProvider);
+                                  await aiService.initializeAIAccounts();
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('AIアカウントを作成しました！🤖'),
+                                        backgroundColor: AppColors.success,
+                                      ),
+                                    );
+                                  }
+                                } catch (e) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('エラー: $e'),
+                                        backgroundColor: AppColors.error,
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                              icon: const Icon(Icons.group_add),
+                              label: const Text('AIアカウントを初期化'),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: () async {
+                                try {
+                                  final aiService = ref.read(aiServiceProvider);
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
-                                      content: Text('AIアカウントを作成しました！🤖'),
-                                      backgroundColor: AppColors.success,
+                                      content: Text('AI投稿を生成中...（少し時間がかかります）'),
+                                      backgroundColor: AppColors.primary,
+                                      duration: Duration(seconds: 10),
                                     ),
                                   );
+                                  final result = await aiService
+                                      .generateAIPosts();
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(
+                                      context,
+                                    ).hideCurrentSnackBar();
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          'AI投稿を生成しました！📝 ${result['posts']}件の投稿、${result['comments']}件のコメント',
+                                        ),
+                                        backgroundColor: AppColors.success,
+                                      ),
+                                    );
+                                  }
+                                } catch (e) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(
+                                      context,
+                                    ).hideCurrentSnackBar();
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('エラー: $e'),
+                                        backgroundColor: AppColors.error,
+                                      ),
+                                    );
+                                  }
                                 }
-                              } catch (e) {
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('エラー: $e'),
-                                      backgroundColor: AppColors.error,
-                                    ),
-                                  );
-                                }
-                              }
-                            },
-                            icon: const Icon(Icons.group_add),
-                            label: const Text('AIアカウントを初期化'),
+                              },
+                              icon: const Icon(Icons.auto_awesome),
+                              label: const Text('AI過去投稿を生成'),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: () async {
-                              try {
-                                final aiService = ref.read(aiServiceProvider);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('AI投稿を生成中...（少し時間がかかります）'),
-                                    backgroundColor: AppColors.primary,
-                                    duration: Duration(seconds: 10),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: () async {
+                                final namePartsService = NamePartsService();
+                                try {
+                                  await namePartsService.initializeNameParts();
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('名前パーツを初期化しました'),
+                                      ),
+                                    );
+                                  }
+                                } catch (e) {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('エラー: $e')),
+                                    );
+                                  }
+                                }
+                              },
+                              icon: const Icon(Icons.abc),
+                              label: const Text('名前パーツ初期化'),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: () async {
+                                final confirmed = await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text('本当に削除しますか？'),
+                                    content: const Text(
+                                      '全てのAIユーザーと、その投稿・コメント・リアクションが完全に削除されます。\nこの操作は取り消せません。',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(context, false),
+                                        child: const Text('キャンセル'),
+                                      ),
+                                      ElevatedButton(
+                                        onPressed: () =>
+                                            Navigator.pop(context, true),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: AppColors.error,
+                                          foregroundColor: Colors.white,
+                                        ),
+                                        child: const Text('全削除実行'),
+                                      ),
+                                    ],
                                   ),
                                 );
-                                final result = await aiService.generateAIPosts();
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('AI投稿を生成しました！📝 ${result['posts']}件の投稿、${result['comments']}件のコメント'),
-                                      backgroundColor: AppColors.success,
-                                    ),
-                                  );
+
+                                if (confirmed != true) return;
+
+                                try {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'AIユーザーを削除中...（数分かかる場合があります）',
+                                        ),
+                                        duration: Duration(minutes: 5),
+                                      ),
+                                    );
+                                  }
+
+                                  final aiService = ref.read(aiServiceProvider);
+                                  await aiService.deleteAllAIUsers();
+
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(
+                                      context,
+                                    ).hideCurrentSnackBar();
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('AIデータの全削除が完了しました！🧹'),
+                                        backgroundColor: AppColors.success,
+                                      ),
+                                    );
+                                  }
+                                } catch (e) {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(
+                                      context,
+                                    ).hideCurrentSnackBar();
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('エラー: $e')),
+                                    );
+                                  }
                                 }
-                              } catch (e) {
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('エラー: $e'),
-                                      backgroundColor: AppColors.error,
-                                    ),
-                                  );
-                                }
-                              }
-                            },
-                            icon: const Icon(Icons.auto_awesome),
-                            label: const Text('AI過去投稿を生成'),
+                              },
+                              icon: const Icon(Icons.delete_forever),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.error,
+                                foregroundColor: Colors.white,
+                              ),
+                              label: const Text('データ全削除（危険）'),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: () async {
-                              final namePartsService = NamePartsService();
-                              try {
-                                await namePartsService.initializeNameParts();
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('名前パーツを初期化しました')),
-                                  );
-                                }
-                              } catch (e) {
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('エラー: $e')),
-                                  );
-                                }
-                              }
-                            },
-                            icon: const Icon(Icons.abc),
-                            label: const Text('名前パーツ初期化'),
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
 
             const SizedBox(height: 32),
 
@@ -627,8 +802,8 @@ class _PrivacyOption extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: isSelected 
-                    ? AppColors.primary.withOpacity(0.2) 
+                color: isSelected
+                    ? AppColors.primary.withOpacity(0.2)
                     : Colors.grey.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
@@ -646,7 +821,9 @@ class _PrivacyOption extends StatelessWidget {
                   Text(
                     mode.label,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                      color: isSelected
+                          ? AppColors.primary
+                          : AppColors.textPrimary,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -673,4 +850,3 @@ class _PrivacyOption extends StatelessWidget {
     );
   }
 }
-

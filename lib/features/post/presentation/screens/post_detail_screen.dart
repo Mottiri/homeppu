@@ -14,7 +14,6 @@ import '../../../../shared/providers/moderation_provider.dart';
 import '../../../../shared/services/moderation_service.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
 import '../../../../shared/widgets/report_dialog.dart';
-import '../../../home/presentation/widgets/reaction_button.dart';
 
 import '../../../home/presentation/widgets/reaction_background.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -132,10 +131,36 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
               child: StreamBuilder<DocumentSnapshot>(
                 stream: _postStream,
                 builder: (context, postSnapshot) {
-                  if (!postSnapshot.hasData || !postSnapshot.data!.exists) {
+                  if (postSnapshot.connectionState == ConnectionState.waiting) {
                     return const Center(
                       child: CircularProgressIndicator(
                         color: AppColors.primary,
+                      ),
+                    );
+                  }
+
+                  if (!postSnapshot.hasData || !postSnapshot.data!.exists) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.error_outline_rounded,
+                            size: 48,
+                            color: AppColors.textSecondary,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'この投稿は削除されました',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(color: AppColors.textSecondary),
+                          ),
+                          const SizedBox(height: 24),
+                          ElevatedButton(
+                            onPressed: () => context.pop(),
+                            child: const Text('戻る'),
+                          ),
+                        ],
                       ),
                     );
                   }

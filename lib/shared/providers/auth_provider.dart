@@ -24,18 +24,14 @@ final authStateProvider = StreamProvider<User?>((ref) {
 final currentUserProvider = StreamProvider<UserModel?>((ref) {
   final authState = ref.watch(authStateProvider);
   final firestore = ref.watch(firestoreProvider);
-  
+
   return authState.when(
     data: (user) {
       if (user == null) return Stream.value(null);
-      return firestore
-          .collection('users')
-          .doc(user.uid)
-          .snapshots()
-          .map((doc) {
-            if (!doc.exists) return null;
-            return UserModel.fromFirestore(doc);
-          });
+      return firestore.collection('users').doc(user.uid).snapshots().map((doc) {
+        if (!doc.exists) return null;
+        return UserModel.fromFirestore(doc);
+      });
     },
     loading: () => Stream.value(null),
     error: (_, __) => Stream.value(null),
@@ -60,14 +56,14 @@ class AuthService {
   }) async {
     try {
       print('AuthService: Starting signUp for email: $email');
-      
+
       final credential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
-      
+
       print('AuthService: Firebase Auth user created: ${credential.user?.uid}');
-      
+
       if (credential.user != null) {
         final user = UserModel(
           uid: credential.user!.uid,
@@ -80,17 +76,17 @@ class AuthService {
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );
-        
+
         print('AuthService: UserModel created, saving to Firestore...');
         print('AuthService: UserModel data: ${user.toFirestore()}');
-        
+
         await _firestore
             .collection('users')
             .doc(credential.user!.uid)
             .set(user.toFirestore());
-        
+
         print('AuthService: User saved to Firestore successfully');
-        
+
         return user;
       }
       return null;
@@ -134,16 +130,17 @@ class AuthService {
     String? bio,
     int? avatarIndex,
     String? postMode,
+    Map<String, bool>? notificationSettings,
   }) async {
-    final updates = <String, dynamic>{
-      'updatedAt': Timestamp.now(),
-    };
-    
+    final updates = <String, dynamic>{'updatedAt': Timestamp.now()};
+
     if (displayName != null) updates['displayName'] = displayName;
     if (bio != null) updates['bio'] = bio;
     if (avatarIndex != null) updates['avatarIndex'] = avatarIndex;
     if (postMode != null) updates['postMode'] = postMode;
-    
+    if (notificationSettings != null)
+      updates['notificationSettings'] = notificationSettings;
+
     await _firestore.collection('users').doc(uid).update(updates);
   }
 }
@@ -155,5 +152,3 @@ final authServiceProvider = Provider<AuthService>((ref) {
     ref.watch(firestoreProvider),
   );
 });
-
-

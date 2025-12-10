@@ -852,7 +852,7 @@ function generateAIPersona(index: number): AIPersona {
   const suffixIndex = Math.floor(index * 1.618) % AI_USABLE_SUFFIXES.length; // 黄金比で分散
   const namePrefix = AI_USABLE_PREFIXES[prefixIndex];
   const nameSuffix = AI_USABLE_SUFFIXES[suffixIndex];
-  const name = `${namePrefix.text}${nameSuffix.text} `;
+  const name = `${namePrefix.text}${nameSuffix.text}`;
 
   // アバターインデックス（0-9の範囲）
   const avatarIndex = index % 10;
@@ -876,10 +876,10 @@ function generateAIPersona(index: number): AIPersona {
   }
 
   return {
-    id: `ai_${index.toString().padStart(2, "0")} `,
-    name,
-    namePrefixId: `prefix_${namePrefix.id} `,
-    nameSuffixId: `suffix_${nameSuffix.id} `,
+    id: `ai_${index.toString().padStart(2, "0")}`,
+    name: name.trim(),
+    namePrefixId: `prefix_${namePrefix.id}`,
+    nameSuffixId: `suffix_${nameSuffix.id}`,
     gender,
     ageGroup,
     occupation,
@@ -1389,8 +1389,65 @@ export const initializeAIAccounts = onCall(
  * AIアカウントの過去投稿を生成する関数（管理者用）
  * 各AIの職業に応じたテンプレートを使用して投稿を生成
  */
+/**
+ * AI投稿生成のディスパッチャー
+ * ボタンを押すと、20人分の投稿タスクを「1分〜10分後」にバラけてスケジュールします。
+ */
 export const generateAIPosts = onCall(
-  { region: "asia-northeast1", secrets: [geminiApiKey] },
+  { region: "asia-northeast1" },
+  async () => {
+    const tasksClient = new CloudTasksClient();
+    const project = process.env.GCLOUD_PROJECT;
+    const queue = "generate-ai-posts";
+    const location = "asia-northeast1";
+    const parent = tasksClient.queuePath(project!, location, queue);
+
+    // ファンクションのURL
+    const url = `https://${location}-${project}.cloudfunctions.net/executeAIPostGeneration`;
+
+    let taskCount = 0;
+
+    for (const persona of AI_PERSONAS) {
+      // 1分(60秒) 〜 10分(600秒) 後のランダムな時間
+      const delaySeconds = Math.floor(Math.random() * (600 - 60 + 1)) + 60;
+      const scheduleTime = new Date(Date.now() + delaySeconds * 1000);
+
+      const postId = db.collection("posts").doc().id;
+      const payload = {
+        postId,
+        personaId: persona.id,
+        postTimeIso: scheduleTime.toISOString(),
+      };
+
+      const task = {
+        httpRequest: {
+          httpMethod: "POST" as const,
+          url: url,
+          body: Buffer.from(JSON.stringify(payload)).toString("base64"),
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer internal-token",
+          },
+        },
+        scheduleTime: {
+          seconds: Math.floor(scheduleTime.getTime() / 1000),
+        },
+      };
+
+      await tasksClient.createTask({ parent, task });
+      taskCount++;
+    }
+
+    return {
+      success: true,
+      message: `AI投稿タスクを${taskCount}件スケジュールしました。\nすべて完了するまでに1分〜10分ほどかかります。`,
+    };
+  }
+);
+
+/*
+export const generateAIPosts_OLD = onCall(
+  { region: "asia-northeast1", secrets: [geminiApiKey], timeoutSeconds: 540, memory: "1GiB" },
   async () => {
     const apiKey = geminiApiKey.value();
     if (!apiKey) {
@@ -1427,6 +1484,8 @@ export const generateAIPosts = onCall(
       const shuffledTemplates = [...templates].sort(() => Math.random() - 0.5);
       const selectedTemplates = shuffledTemplates.slice(0, Math.floor(Math.random() * 3) + 3);
 
+      let userTotalReactions = 0;
+
       // 過去1〜7日間にランダムな時間で投稿を作成
       for (let i = 0; i < selectedTemplates.length; i++) {
         const daysAgo = Math.floor(Math.random() * 7) + 1;
@@ -1457,7 +1516,9 @@ export const generateAIPosts = onCall(
         });
 
         totalPosts++;
-        totalReactions += Object.values(reactions).reduce((a, b) => a + b, 0);
+        const postReactions = Object.values(reactions).reduce((a, b) => a + b, 0);
+        totalReactions += postReactions;
+        userTotalReactions += postReactions;
 
         // 他のAIからコメントを生成（1〜2件）
         const commentCount = Math.floor(Math.random() * 2) + 1;
@@ -1509,21 +1570,14 @@ ${selectedTemplates[i]}
       // ユーザーの投稿数を更新
       await db.collection("users").doc(persona.id).update({
         totalPosts: admin.firestore.FieldValue.increment(selectedTemplates.length),
-        totalPraises: admin.firestore.FieldValue.increment(
-          Math.floor(Math.random() * 20)
-        ),
+        totalPraises: admin.firestore.FieldValue.increment(userTotalReactions),
       });
     }
 
-    return {
-      success: true,
-      message: `AI投稿を生成しました（${AI_PERSONAS.length} 体のAI）`,
-      posts: totalPosts,
-      comments: totalComments,
-      reactions: totalReactions,
     };
   }
 );
+*/
 
 /**
  * レート制限付きの投稿作成（スパム対策）
@@ -2739,6 +2793,18 @@ async function sendPushNotification(
       return;
     }
 
+    // 2.5 通知設定の確認
+    if (options && userData?.notificationSettings) {
+      const type = options.type;
+      // 設定キーへのマッピング (comment -> comments, reaction -> reactions)
+      const settingKey = type === "comment" ? "comments" : type === "reaction" ? "reactions" : null;
+
+      if (settingKey && userData.notificationSettings[settingKey] === false) {
+        console.log(`Notification skipped due to user setting: ${type} for user ${userId}`);
+        return;
+      }
+    }
+
     // 3. FCM送信
     const message = {
       token: fcmToken,
@@ -3208,6 +3274,341 @@ export const generateAIReactionV1 = functionsV1.region("asia-northeast1").https.
 
   } catch (error) {
     console.error("Error in generateAIReaction:", error);
+    response.status(500).send("Internal Server Error");
+  }
+});
+
+/**
+ * 管理用: AIユーザーデータをFirestoreに流し込む (v1)
+ * このエンドポイントを叩くことで users コレクションにAIの実体を作成します。
+ */
+export const populateAIUsers = functionsV1.region("asia-northeast1").https.onRequest(async (request, response) => {
+  // 簡易セキュリティ: クエリパラメータ ?key=admin_secret がないと実行不可
+  // 本番環境ではより厳密な認証を推奨しますが、初期構築用スクリプトとして簡易実装
+  const key = request.query.key;
+  if (key !== "admin_secret_homeppu_2025") {
+    response.status(403).send("Forbidden");
+    return;
+  }
+
+  try {
+    const batch = db.batch();
+
+    // AI_PERSONAS配列から全員分作成
+    for (const persona of AI_PERSONAS) {
+      const userRef = db.collection("users").doc(persona.id);
+
+      const userData = {
+        uid: persona.id,
+        email: `${persona.id}@homeppu.com`, // ダミーメール
+        displayName: persona.name,
+        bio: persona.bio,
+        avatarIndex: persona.avatarIndex,
+        postMode: "ai",
+        virtue: 100,
+        isAI: true,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        isBanned: false,
+        totalPosts: 0,
+        totalPraises: 0,
+        following: [],
+        followers: [],
+        followingCount: 0,
+        followersCount: 0,
+        reportCount: 0,
+        // 名前パーツIDも保存（将来の拡張用）
+        namePrefix: persona.namePrefixId,
+        nameSuffix: persona.nameSuffixId,
+        notificationSettings: {
+          comments: true,
+          reactions: true
+        }
+      };
+
+      // 上書き保存 (set with merge: true)
+      batch.set(userRef, userData, { merge: true });
+    }
+
+    await batch.commit();
+
+    console.log(`Successfully populated ${AI_PERSONAS.length} AI users.`);
+    response.status(200).send(`Successfully populated ${AI_PERSONAS.length} AI users.`);
+
+  } catch (error) {
+    console.error("Error creating AI users:", error);
+    response.status(500).send("Internal Server Error");
+  }
+});
+
+/**
+ * 管理用: 全ユーザーのフォローリストを掃除する (v1)
+ * 存在しないユーザーIDをフォローリストから削除し、カウントを整合させます。
+ */
+export const cleanUpUserFollows = functionsV1.region("asia-northeast1").https.onRequest(async (request, response) => {
+  const key = request.query.key;
+  if (key !== "admin_secret_homeppu_2025") {
+    response.status(403).send("Forbidden");
+    return;
+  }
+
+  try {
+    const usersSnapshot = await db.collection("users").get();
+    let updatedCount = 0;
+
+    for (const userDoc of usersSnapshot.docs) {
+      const userData = userDoc.data();
+      const following = userData.following || [];
+
+      if (following.length === 0) continue;
+
+      // フォロー中のIDが本当に存在するかチェック
+      const validFollowing: string[] = [];
+      const invalidFollowing: string[] = [];
+
+      for (const followedId of following) {
+        // 簡易チェック: IDにスペースが含まれていたら不正なので削除
+        if (followedId.trim() !== followedId) {
+          invalidFollowing.push(followedId);
+          continue;
+        }
+
+        // Firestore確認 (コストかかるが確実)
+        const followedUserDoc = await db.collection("users").doc(followedId).get();
+        if (followedUserDoc.exists) {
+          validFollowing.push(followedId);
+        } else {
+          invalidFollowing.push(followedId);
+        }
+      }
+
+      // 変更がある場合のみ更新
+      if (invalidFollowing.length > 0) {
+        await userDoc.ref.update({
+          following: validFollowing,
+          followingCount: validFollowing.length
+        });
+        updatedCount++;
+        console.log(`Cleaned up user ${userDoc.id}: Removed ${invalidFollowing.length} invalid follows.`);
+      }
+    }
+
+    response.status(200).send(`Cleanup complete. Updated ${updatedCount} users.`);
+
+  } catch (error) {
+    console.error("Error cleaning up follows:", error);
+    response.status(500).send("Internal Server Error");
+  }
+});
+
+/**
+ * 管理用: 全てのAIユーザーを削除する (v1)
+ * AIユーザーとその投稿、コメント、リアクションを全て削除します。
+ */
+export const deleteAllAIUsers = functionsV1.region("asia-northeast1").runWith({
+  timeoutSeconds: 540, // 処理が重くなる可能性があるので長めに
+  memory: "1GB"
+}).https.onCall(async (data, context) => {
+  // 簡易セキュリティ: ログイン必須
+  if (!context.auth) {
+    throw new functionsV1.https.HttpsError("unauthenticated", "ログインが必要です");
+  }
+
+  try {
+    console.log("Starting deletion of all AI users...");
+    const batchSize = 400;
+    let batch = db.batch();
+    let operationCount = 0;
+
+    // 1. AIユーザーを取得
+    const aiUsersSnapshot = await db.collection("users").where("isAI", "==", true).get();
+    console.log(`Found ${aiUsersSnapshot.size} AI users to delete.`);
+
+    if (aiUsersSnapshot.empty) {
+      return { success: true, message: "AIユーザーはいませんでした" };
+    }
+
+    const aiUserIds = aiUsersSnapshot.docs.map(doc => doc.id);
+
+    // バッチコミット用ヘルパー
+    const commitBatchIfNeeded = async () => {
+      if (operationCount >= batchSize) {
+        await batch.commit();
+        batch = db.batch();
+        operationCount = 0;
+      }
+    };
+
+    // 2. 関連データの削除 (Posts, Comments, Reactions)
+    // Helper to process deletion in chunks
+    const deleteCollectionByUserId = async (collectionName: string) => {
+      // 10人ずつ処理
+      const chunkSize = 10;
+      for (let i = 0; i < aiUserIds.length; i += chunkSize) {
+        const chunk = aiUserIds.slice(i, i + chunkSize);
+        const snapshot = await db.collection(collectionName).where("userId", "in", chunk).get();
+
+        for (const doc of snapshot.docs) {
+          batch.delete(doc.ref);
+          operationCount++;
+          await commitBatchIfNeeded();
+        }
+      }
+    };
+
+    console.log("Deleting AI posts...");
+    await deleteCollectionByUserId("posts");
+
+    console.log("Deleting AI comments...");
+    await deleteCollectionByUserId("comments");
+
+    console.log("Deleting AI reactions...");
+    await deleteCollectionByUserId("reactions");
+
+    // 3. ユーザー自身の削除（サブコレクション 'notifications' も含めて）
+    console.log("Deleting AI user profiles and subcollections...");
+    for (const doc of aiUsersSnapshot.docs) {
+      // notificationsサブコレクションを削除
+      const notificationsSnapshot = await doc.ref.collection("notifications").get();
+      for (const notifDoc of notificationsSnapshot.docs) {
+        batch.delete(notifDoc.ref);
+        operationCount++;
+        await commitBatchIfNeeded();
+      }
+
+      batch.delete(doc.ref);
+      operationCount++;
+      await commitBatchIfNeeded();
+    }
+
+    // 残りのバッチを実行
+    if (operationCount > 0) {
+      await batch.commit();
+    }
+
+    console.log("Successfully deleted all AI data.");
+    return { success: true, message: `AIユーザー${aiUsersSnapshot.size}人とそのデータを削除しました` };
+
+  } catch (error) {
+    console.error("Error deleting AI users:", error);
+    throw new functionsV1.https.HttpsError("internal", "削除処理中にエラーが発生しました");
+  }
+});
+
+/**
+ * Cloud Tasks から呼び出される AI 投稿生成関数 (Worker)
+ */
+export const executeAIPostGeneration = functionsV1.region("asia-northeast1").runWith({
+  secrets: ["GEMINI_API_KEY"],
+  timeoutSeconds: 300,
+  memory: "1GB",
+}).https.onRequest(async (request, response) => {
+  // Cloud Tasks からのリクエスト以外は拒否（簡易的なセキュリティチェック）
+  // 実際にはOIDCトークン検証が推奨されますが、ここでは最低限のヘッダーチェックを行います
+  const authHeader = request.headers["authorization"];
+  if (!authHeader) {
+    response.status(403).send("Unauthorized");
+    return;
+  }
+
+  try {
+    const { postId, personaId, postTimeIso } = request.body;
+    console.log(`Executing AI post generation for ${personaId}`);
+
+    const apiKey = geminiApiKey.value();
+    if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+    // ペルソナ取得
+    const persona = AI_PERSONAS.find((p) => p.id === personaId);
+    if (!persona) {
+      console.error(`Persona not found: ${personaId}`);
+      response.status(400).send("Persona not found");
+      return;
+    }
+
+    // 職業に応じたテンプレートを取得（フォールバック用）
+    const templates = POST_TEMPLATES_BY_OCCUPATION[persona.occupation.id] || [];
+
+    // 現在時刻
+    const now = new Date();
+    const hours = now.getHours();
+
+    // プロンプト生成 (努力・達成・日常の頑張りをテーマに)
+    const prompt = `
+${getSystemPrompt(persona, "みんな")}
+
+【指示】
+あなたは「ホームップ」というSNSのユーザー「${persona.name}」です。
+職業は「${persona.occupation.name}」、性格は「${persona.personality.name}」です。
+
+今の時間帯（${hours}時頃）に合わせた、自然な「つぶやき」を投稿してください。
+テーマは「今日頑張ったこと」「小さな達成」「日常の努力」「ふとした気づき」などです。
+ポジティブで、他のユーザーが見て「頑張ってるな」と思えるような内容にしてください。
+
+【条件】
+- ネガティブな発言禁止
+- 誹謗中傷禁止
+- ハッシュタグ不要
+- 絵文字を適度に使用して人間らしく
+- 文章は短め〜中くらい（30文字〜80文字程度）
+
+【例】
+- 「今日は早起きして朝活できた！気持ちいい✨」
+- 「仕事の資料、期限内に終わった〜！自分へのご褒美にコンビニスイーツ買う🍰」
+- 「今日は疲れたけど、筋トレだけは欠かさずやった💪 えらい！」
+`;
+
+    const result = await model.generateContent(prompt);
+    let content = result.response.text()?.trim();
+
+    // 生成失敗時はテンプレートからランダム選択
+    if (!content && templates.length > 0) {
+      content = templates[Math.floor(Math.random() * templates.length)];
+    }
+
+    if (!content) {
+      throw new Error("Failed to generate content");
+    }
+
+    // 投稿作成
+    const postRef = db.collection("posts").doc(postId);
+    const reactions = {
+      love: Math.floor(Math.random() * 5),
+      praise: Math.floor(Math.random() * 5),
+      cheer: Math.floor(Math.random() * 5),
+      empathy: Math.floor(Math.random() * 5),
+    };
+
+    // postTimeIsoがあればその時間、なければ現在時刻
+    const createdAt = postTimeIso ? admin.firestore.Timestamp.fromDate(new Date(postTimeIso)) : admin.firestore.FieldValue.serverTimestamp();
+
+    await postRef.set({
+      userId: persona.id,
+      userDisplayName: persona.name,
+      userAvatarIndex: persona.avatarIndex,
+      content: content,
+      postMode: "mix", // 公開範囲
+      createdAt: createdAt,
+      reactions: reactions,
+      commentCount: 0,
+      isVisible: true,
+    });
+
+    // ユーザーの統計更新
+    const totalReactions = Object.values(reactions).reduce((a, b) => a + b, 0);
+    await db.collection("users").doc(persona.id).update({
+      totalPosts: admin.firestore.FieldValue.increment(1),
+      totalPraises: admin.firestore.FieldValue.increment(totalReactions),
+    });
+
+    console.log(`Successfully created post for ${persona.name}: ${content}`);
+    response.status(200).json({ success: true, postId: postRef.id });
+
+  } catch (error) {
+    console.error("Error in executeAIPostGeneration:", error);
     response.status(500).send("Internal Server Error");
   }
 });

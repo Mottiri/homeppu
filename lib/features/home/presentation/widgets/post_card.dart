@@ -65,29 +65,42 @@ class _PostCardState extends State<PostCard> {
     setState(() => _isDeleting = true);
 
     try {
-      // Firestoreから投稿を削除
-      await FirebaseFirestore.instance
-          .collection('posts')
-          .doc(post.id)
-          .delete();
+      // バッチ処理で一括削除（整合性担保とルール回避のため）
+      final batch = FirebaseFirestore.instance.batch();
 
-      // 関連するコメントも削除
+      // 1. 関連するコメントを削除対象に追加
+      // Note: 投稿を先に消すと、コメント削除のセキュリティルール(get(post))が失敗するため
+      // バッチにするか、コメント→投稿の順で消す必要がある。バッチが確実。
       final comments = await FirebaseFirestore.instance
           .collection('comments')
           .where('postId', isEqualTo: post.id)
           .get();
 
-      final batch = FirebaseFirestore.instance.batch();
       for (final doc in comments.docs) {
         batch.delete(doc.reference);
       }
-      await batch.commit();
 
-      // ユーザーの投稿数を減少
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(post.userId)
-          .update({'totalPosts': FieldValue.increment(-1)});
+      // 2. 関連するリアクションも削除対象に追加
+      final reactions = await FirebaseFirestore.instance
+          .collection('reactions')
+          .where('postId', isEqualTo: post.id)
+          .get();
+
+      for (final doc in reactions.docs) {
+        batch.delete(doc.reference);
+      }
+
+      // 3. 投稿自体を削除対象に追加
+      batch.delete(FirebaseFirestore.instance.collection('posts').doc(post.id));
+
+      // 4. ユーザーの投稿数を減少
+      batch.update(
+        FirebaseFirestore.instance.collection('users').doc(post.userId),
+        {'totalPosts': FieldValue.increment(-1)},
+      );
+
+      // コミット
+      await batch.commit();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
