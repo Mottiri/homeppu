@@ -35,16 +35,16 @@ class ReactionBackground extends StatelessWidget {
         // Stackで重ねて表示
         return Stack(
           clipBehavior: Clip.hardEdge,
-          children: List.generate(icons.length, (index) {
-            return _buildStableIcon(width, height, icons[index], index);
-          }),
+          children: icons.map((iconData) {
+            return _buildStableIcon(width, height, iconData);
+          }).toList(),
         );
       },
     );
   }
 
-  List<String> _generateIconList() {
-    final List<String> list = [];
+  List<_IconDatum> _generateIconList() {
+    final List<_IconDatum> list = [];
 
     reactions.forEach((key, count) {
       final type = ReactionType.values.firstWhere(
@@ -53,14 +53,16 @@ class ReactionBackground extends StatelessWidget {
       );
 
       for (var i = 0; i < count; i++) {
-        list.add(type.emoji);
+        // PostID, 種類, その種類内のインデックス を組み合わせてシードにする
+        // これにより、他のリアクションが増えても、このアイコン(#i)の配置シードは変わらない
+        final seed = Object.hash(postId, key, i);
+        list.add(_IconDatum(type.emoji, seed));
       }
     });
 
     // パフォーマンス制限
     if (maxIcons != null && list.length > maxIcons!) {
-      // 決定論的にシャッフルしたいが、ここでは単純に先頭から取る
-      // （リアクションが増えた時に既存のが消えないようにするため）
+      // リスト先頭から300個に絞るが、シードは個別に持っているので配置はズレない
       return list.sublist(0, maxIcons!);
     }
 
@@ -70,13 +72,9 @@ class ReactionBackground extends StatelessWidget {
   Widget _buildStableIcon(
     double parentWidth,
     double parentHeight,
-    String emoji,
-    int index,
+    _IconDatum iconData,
   ) {
-    // PostIDとインデックスを組み合わせてシードにする
-    // これにより、同じ投稿のn番目のアイコンは常に同じ場所に描画される
-    final seed = postId.hashCode ^ index;
-    final random = Random(seed);
+    final random = Random(iconData.seed);
 
     // ランダムな位置 (-10% 〜 110%)
     final left = random.nextDouble() * parentWidth * 1.2 - (parentWidth * 0.1);
@@ -85,7 +83,7 @@ class ReactionBackground extends StatelessWidget {
     // ランダムな回転 (-45度 〜 +45度)
     final angle = (random.nextDouble() - 0.5) * 1.5;
 
-    // ランダムなサイズ (24 〜 56: 少し大きめにしてみる)
+    // ランダムなサイズ (24 〜 56:少し大きめにしてみる)
     final size = 24.0 + random.nextDouble() * 32.0;
 
     return Positioned(
@@ -94,7 +92,7 @@ class ReactionBackground extends StatelessWidget {
       child: Transform.rotate(
         angle: angle,
         child: Text(
-          emoji,
+          iconData.emoji,
           style: TextStyle(
             fontSize: size,
             // アルファ値も少しランダムにすると面白いかも
@@ -107,4 +105,11 @@ class ReactionBackground extends StatelessWidget {
       ),
     );
   }
+}
+
+class _IconDatum {
+  final String emoji;
+  final int seed;
+
+  _IconDatum(this.emoji, this.seed);
 }

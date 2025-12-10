@@ -14,6 +14,8 @@ import '../../../../shared/widgets/video_player_screen.dart';
 import 'reaction_button.dart';
 import 'reaction_background.dart';
 
+import 'reaction_selection_sheet.dart';
+
 /// 投稿カード
 class PostCard extends StatefulWidget {
   final PostModel post;
@@ -271,43 +273,9 @@ class _PostCardState extends State<PostCard> {
                             context: context,
                             backgroundColor: Colors.transparent,
                             isScrollControlled: true, // コンテンツサイズに合わせる
-                            builder: (context) => SafeArea(
-                              child: Container(
-                                padding: const EdgeInsets.all(24),
-                                decoration: const BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.vertical(
-                                    top: Radius.circular(20),
-                                  ),
-                                ),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Text(
-                                      'リアクションを送る',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 24),
-                                    Wrap(
-                                      alignment: WrapAlignment.center,
-                                      spacing: 24,
-                                      runSpacing: 24,
-                                      children: ReactionType.values.map((type) {
-                                        return ReactionButton(
-                                          type: type,
-                                          count:
-                                              post.reactions[type.value] ?? 0,
-                                          postId: post.id,
-                                        );
-                                      }).toList(),
-                                    ),
-                                    const SizedBox(height: 12),
-                                  ],
-                                ),
-                              ),
+                            builder: (context) => ReactionSelectionSheet(
+                              postId: post.id,
+                              reactions: post.reactions,
                             ),
                           );
                         },

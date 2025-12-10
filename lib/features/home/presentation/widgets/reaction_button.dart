@@ -103,9 +103,11 @@ class _ReactionButtonState extends ConsumerState<ReactionButton>
                     ? color.withOpacity(0.2)
                     : AppColors.surfaceVariant,
                 borderRadius: BorderRadius.circular(20),
-                border: _isReacted
-                    ? Border.all(color: color.withOpacity(0.5))
-                    : null,
+                border: Border.all(
+                  color: _isReacted
+                      ? color.withOpacity(0.5)
+                      : Colors.transparent,
+                ),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,

@@ -17,6 +17,8 @@ import '../../../../shared/widgets/report_dialog.dart';
 import '../../../home/presentation/widgets/reaction_button.dart';
 
 import '../../../home/presentation/widgets/reaction_background.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../../home/presentation/widgets/reaction_selection_sheet.dart';
 
 /// 投稿詳細画面
 class PostDetailScreen extends ConsumerStatefulWidget {
@@ -230,94 +232,38 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                             color: AppColors.textSecondary,
                                           ),
                                           onPressed: () {
+                                            // 自分の投稿にはリアクションできない
+                                            final currentUser = FirebaseAuth
+                                                .instance
+                                                .currentUser;
+                                            if (currentUser != null &&
+                                                currentUser.uid ==
+                                                    post.userId) {
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                const SnackBar(
+                                                  content: Text(
+                                                    '自分の投稿にはリアクションできません',
+                                                  ),
+                                                  duration: Duration(
+                                                    seconds: 2,
+                                                  ),
+                                                ),
+                                              );
+                                              return;
+                                            }
+
                                             showModalBottomSheet(
                                               context: context,
                                               backgroundColor:
                                                   Colors.transparent,
                                               isScrollControlled: true,
-                                              builder: (context) => SafeArea(
-                                                child: Container(
-                                                  padding: const EdgeInsets.all(
-                                                    24,
+                                              builder: (context) =>
+                                                  ReactionSelectionSheet(
+                                                    postId: post.id,
+                                                    reactions: post.reactions,
                                                   ),
-                                                  decoration: const BoxDecoration(
-                                                    color: Colors.white,
-                                                    borderRadius:
-                                                        BorderRadius.vertical(
-                                                          top: Radius.circular(
-                                                            20,
-                                                          ),
-                                                        ),
-                                                  ),
-                                                  child: SingleChildScrollView(
-                                                    child: Column(
-                                                      mainAxisSize:
-                                                          MainAxisSize.min,
-                                                      children: [
-                                                        // ヘッダー（タイトルと閉じるボタン）
-                                                        Row(
-                                                          mainAxisAlignment:
-                                                              MainAxisAlignment
-                                                                  .spaceBetween,
-                                                          children: [
-                                                            const Text(
-                                                              'リアクションを選択',
-                                                              style: TextStyle(
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .bold,
-                                                                fontSize: 16,
-                                                              ),
-                                                            ),
-                                                            IconButton(
-                                                              icon: const Icon(
-                                                                Icons.close,
-                                                                size: 20,
-                                                              ),
-                                                              onPressed: () =>
-                                                                  Navigator.pop(
-                                                                    context,
-                                                                  ),
-                                                              padding:
-                                                                  EdgeInsets
-                                                                      .zero,
-                                                              constraints:
-                                                                  const BoxConstraints(),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                        const SizedBox(
-                                                          height: 24,
-                                                        ),
-                                                        Wrap(
-                                                          alignment:
-                                                              WrapAlignment
-                                                                  .center,
-                                                          spacing: 24,
-                                                          runSpacing: 24,
-                                                          children: ReactionType
-                                                              .values
-                                                              .map((type) {
-                                                                return ReactionButton(
-                                                                  type: type,
-                                                                  count:
-                                                                      post.reactions[type
-                                                                          .value] ??
-                                                                      0,
-                                                                  postId:
-                                                                      post.id,
-                                                                );
-                                                              })
-                                                              .toList(),
-                                                        ),
-                                                        const SizedBox(
-                                                          height: 12,
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
                                             );
                                           },
                                         ),
