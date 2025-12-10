@@ -11,17 +11,20 @@ sequenceDiagram
     participant DB as Firestore (DB)
     participant Trigger as onPostCreated (Cloud Functions)
     participant Queue as Cloud Tasks (キュー)
-    participant Worker as generateAICommentV1 (Cloud Functions)
+    participant WorkerC as generateAICommentV1 (Worker)
+    participant WorkerR as generateAIReactionV1 (Worker)
 
     App->>DB: 1. 投稿を作成 (posts/{postId})
     DB->>Trigger: 2. トリガー起動
     Note over Trigger: 画像分析 & AIキャラ選定
-    Trigger->>Queue: 3. タスクを予約 (○分後に実行)
+    Trigger->>Queue: 3. コメントタスク予約 (3~10件)
+    Trigger->>Queue: 4. リアクションタスク予約 (15~30件)
     Note over Queue: 〜 指定時間まで待機 〜
-    Queue->>Worker: 4. 実行リクエスト (HTTP)
-    Note over Worker: Geminiでコメント生成
-    Worker->>DB: 5. コメント保存 (comments/{commentId})
-    DB->>App: 6. ユーザーに通知 & 表示
+    Queue->>WorkerC: 5. コメント生成実行
+    Queue->>WorkerR: 6. リアクション実行
+    WorkerC->>DB: 7. コメント保存
+    WorkerR->>DB: 8. リアクション保存
+    DB->>App: 9. ユーザーに通知 & 表示
 ```
 
 ---
@@ -35,9 +38,10 @@ sequenceDiagram
 - **処理内容**:
   1. `postMode` が "human" の場合はスキップ。
   2. 投稿内のメディア（画像・動画）がある場合、Geminiで内容をテキスト化（キャプション生成）。
-  3. ランダムにAIペルソナを選出（3〜10人）。
-  4. 各ペルソナについて、**Cloud Tasks** にタスクを追加（Enqueue）。
-     - 実行時刻(`scheduleTime`)を現在時刻から **1分〜10分後**（ランダム/テスト設定）に設定。
+  3. **A. AIコメントの予約**: ランダムにAIペルソナを選出（3〜10人）し、タスクを予約。
+  4. **B. AIリアクションの予約 (Burst Mode)**:
+     - さらに **15〜30人** のAIをランダム選出し、リアクション専用タスクを予約。
+     - 実行時刻は投稿直後〜60分後までランダムに分散させる。
 
 ### B. コメント生成関数 (`generateAICommentV1`)
 - **トリガー**: Cloud Tasks からのHTTPリクエスト
@@ -46,8 +50,18 @@ sequenceDiagram
 - **処理内容**:
   1. リクエストボディから `postId`, `mediaDescriptions`, `persona` 等を受け取る。
   2. Gemini APIを使用し、ペルソナの口調に合わせたコメントを生成。
-  3. 生成されたテキストを `posts/{postId}/comments` コレクションに保存。
+  3. 生成されたテキストを `posts/{postId}/comments` コレクションに保存（**同時にリアクションも1つ追加**）。
   4. 保存トリガーにより、別途プッシュ通知が送信される。
+
+### C. リアクション生成関数 (`generateAIReactionV1`)
+- **トリガー**: Cloud Tasks からのHTTPリクエスト
+- **ランタイム**: Cloud Functions v1
+- **URL形式**: `https://asia-northeast1-<projectId>.cloudfunctions.net/generateAIReactionV1`
+- **処理内容**:
+  1. 指定された `personaId` と `reactionType` を受け取る。
+  2. `reactions` コレクションに書き込み。
+  3. `posts` コレクションのリアクションカウントをインクリメント（Batch Write）。
+
 
 ---
 
