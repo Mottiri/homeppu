@@ -2,22 +2,44 @@ import 'package:cloud_functions/cloud_functions.dart';
 import '../models/task_model.dart';
 
 class TaskService {
-  final FirebaseFunctions _functions =
-      FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+  final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(
+    region: 'asia-northeast1',
+  );
 
   /// タスクを作成
   Future<String> createTask({
     required String content,
     required String emoji,
     required String type,
+    DateTime? scheduledAt,
+    int priority = 0,
+    String? googleCalendarEventId,
   }) async {
     final callable = _functions.httpsCallable('createTask');
     final result = await callable.call({
       'content': content,
       'emoji': emoji,
       'type': type,
+      'scheduledAt': scheduledAt?.toIso8601String(),
+      'priority': priority,
+      'googleCalendarEventId': googleCalendarEventId,
     });
     return result.data['taskId'];
+  }
+
+  /// タスクを更新
+  Future<void> updateTask(TaskModel task) async {
+    final callable = _functions.httpsCallable('updateTask');
+    await callable.call({
+      'taskId': task.id,
+      'content': task.content,
+      'emoji': task.emoji,
+      'type': task.type,
+      'scheduledAt': task.scheduledAt?.toIso8601String(),
+      'priority': task.priority,
+      'googleCalendarEventId': task.googleCalendarEventId,
+      'subtasks': task.subtasks.map((e) => e.toMap()).toList(),
+    });
   }
 
   /// タスクを完了
@@ -91,5 +113,3 @@ class TaskUncompleteResult {
     this.message,
   });
 }
-
-

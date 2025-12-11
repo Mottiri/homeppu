@@ -2288,7 +2288,7 @@ export const createTask = onCall(
     }
 
     const userId = request.auth.uid;
-    const { content, emoji, type } = request.data;
+    const { content, emoji, type, scheduledAt, priority, googleCalendarEventId, subtasks } = request.data;
 
     if (!content || !type) {
       throw new HttpsError("invalid-argument", "タスク内容とタイプは必須です");
@@ -2299,12 +2299,16 @@ export const createTask = onCall(
       userId: userId,
       content: content,
       emoji: emoji || "📝",
-      type: type, // "daily" | "goal"
+      type: type, // "daily" | "goal" | "todo"
       isCompleted: false,
       streak: 0,
       lastCompletedAt: null,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      scheduledAt: scheduledAt ? admin.firestore.Timestamp.fromDate(new Date(scheduledAt)) : null,
+      priority: priority || 0,
+      googleCalendarEventId: googleCalendarEventId || null,
+      subtasks: subtasks || [],
     });
 
     return { success: true, taskId: taskRef.id };
@@ -2353,10 +2357,65 @@ export const getTasks = onCall(
         createdAt: data.createdAt?.toDate?.()?.toISOString() || null,
         updatedAt: data.updatedAt?.toDate?.()?.toISOString() || null,
         lastCompletedAt: lastCompletedAt?.toISOString() || null,
+        scheduledAt: data.scheduledAt?.toDate?.()?.toISOString() || null,
+        priority: data.priority || 0,
+        googleCalendarEventId: data.googleCalendarEventId || null,
+        subtasks: data.subtasks || [],
       };
     });
 
     return { tasks };
+  }
+);
+
+/**
+ * タスクを更新
+ */
+export const updateTask = onCall(
+  { region: "asia-northeast1" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    const userId = request.auth.uid;
+    const { taskId, content, emoji, type, scheduledAt, priority, googleCalendarEventId, subtasks } = request.data;
+
+    if (!taskId) {
+      throw new HttpsError("invalid-argument", "タスクIDが必要です");
+    }
+
+    const taskRef = db.collection("tasks").doc(taskId);
+    const taskDoc = await taskRef.get();
+
+    if (!taskDoc.exists) {
+      throw new HttpsError("not-found", "タスクが見つかりません");
+    }
+
+    const taskData = taskDoc.data()!;
+
+    if (taskData.userId !== userId) {
+      throw new HttpsError("permission-denied", "このタスクを更新する権限がありません");
+    }
+
+    const updateData: any = {
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    if (content !== undefined) updateData.content = content;
+    if (emoji !== undefined) updateData.emoji = emoji;
+    if (type !== undefined) updateData.type = type;
+    if (priority !== undefined) updateData.priority = priority;
+    if (googleCalendarEventId !== undefined) updateData.googleCalendarEventId = googleCalendarEventId;
+    if (subtasks !== undefined) updateData.subtasks = subtasks;
+
+    if (scheduledAt !== undefined) {
+      updateData.scheduledAt = scheduledAt ? admin.firestore.Timestamp.fromDate(new Date(scheduledAt)) : null;
+    }
+
+    await taskRef.update(updateData);
+
+    return { success: true };
   }
 );
 

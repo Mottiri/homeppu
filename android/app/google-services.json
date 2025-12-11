@@ -12,7 +12,12 @@
           "package_name": "com.hayak.positive_sns"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "632480860678-sjbsa31uv8cj35o4ouha4j3k4bvefsn3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCj1lretYu7WdQ_itHYHWQWwjzsNgJlOa0"
@@ -20,7 +25,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "632480860678-sjbsa31uv8cj35o4ouha4j3k4bvefsn3.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "632480860678-lrjivdi8b48l1qs8v6sgmm276apil1fa.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.hayak.positivesns"
+              }
+            }
+          ]
         }
       }
     },
@@ -31,7 +48,20 @@
           "package_name": "com.homeppu.homeppu"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "632480860678-9tfnf0q6msdka8ah7mumi0t3bijilf4t.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.homeppu.homeppu",
+            "certificate_hash": "8aa08697edcd90425954e23e6935e4ab1a85788c"
+          }
+        },
+        {
+          "client_id": "632480860678-sjbsa31uv8cj35o4ouha4j3k4bvefsn3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCj1lretYu7WdQ_itHYHWQWwjzsNgJlOa0"
@@ -39,7 +69,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "632480860678-sjbsa31uv8cj35o4ouha4j3k4bvefsn3.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "632480860678-lrjivdi8b48l1qs8v6sgmm276apil1fa.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.hayak.positivesns"
+              }
+            }
+          ]
         }
       }
     }
