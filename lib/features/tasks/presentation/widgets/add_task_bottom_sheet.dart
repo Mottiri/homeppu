@@ -1,9 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:homeppu/core/constants/app_colors.dart';
+import 'package:homeppu/shared/models/category_model.dart';
 import 'package:intl/intl.dart';
+import 'package:homeppu/features/tasks/presentation/widgets/recurrence_settings_sheet.dart';
 
 class AddTaskBottomSheet extends StatefulWidget {
-  const AddTaskBottomSheet({super.key});
+  final List<CategoryModel> categories;
+  final String? initialCategoryId;
+  final DateTime? initialScheduledDate;
+
+  const AddTaskBottomSheet({
+    super.key,
+    this.categories = const [],
+    this.initialCategoryId,
+    this.initialScheduledDate,
+  });
 
   @override
   State<AddTaskBottomSheet> createState() => _AddTaskBottomSheetState();
@@ -13,26 +24,24 @@ class _AddTaskBottomSheetState extends State<AddTaskBottomSheet> {
   final _titleController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
 
-  String _selectedType = 'daily'; // daily, todo, goal
+  // Selection State
+  String? _selectedCategoryId; // null = 'Task' (Default)
+
   int _priority = 0; // 0, 1, 2
   DateTime? _scheduledDate;
-  bool _syncGoogleCalendar = false;
 
-  final List<String> _types = ['daily', 'todo', 'goal'];
-  final Map<String, String> _typeLabels = {
-    'daily': '毎日',
-    'todo': 'やること',
-    'goal': '目標',
-  };
-  final Map<String, IconData> _typeIcons = {
-    'daily': Icons.loop,
-    'todo': Icons.check_circle_outline,
-    'goal': Icons.flag_outlined,
-  };
+  // Recurrence State
+  int? _recurrenceInterval;
+  String? _recurrenceUnit; // null means no recurrence
+  List<int>? _recurrenceDaysOfWeek;
+  DateTime? _recurrenceEndDate;
 
   @override
   void initState() {
     super.initState();
+    _selectedCategoryId = widget.initialCategoryId;
+    _scheduledDate = widget.initialScheduledDate;
+
     // ボトムシートが開いたら自動でフォーカス
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
@@ -50,27 +59,20 @@ class _AddTaskBottomSheetState extends State<AddTaskBottomSheet> {
     final title = _titleController.text.trim();
     if (title.isEmpty) return;
 
+    final type = 'todo';
+
     Navigator.pop(context, {
       'content': title,
-      'type': _selectedType,
+      'type': type,
+      'categoryId': _selectedCategoryId,
       'priority': _priority,
       'scheduledAt': _scheduledDate,
-      'syncGoogleCalendar': _syncGoogleCalendar,
-      'emoji': _getEmojiForType(_selectedType), // 簡易的にタイプから決定（後で編集可能）
+      'emoji': '📝',
+      'recurrenceInterval': _recurrenceInterval,
+      'recurrenceUnit': _recurrenceUnit,
+      'recurrenceDaysOfWeek': _recurrenceDaysOfWeek,
+      'recurrenceEndDate': _recurrenceEndDate,
     });
-  }
-
-  String _getEmojiForType(String type) {
-    switch (type) {
-      case 'daily':
-        return '✨';
-      case 'todo':
-        return '📝';
-      case 'goal':
-        return '🎯';
-      default:
-        return '✨';
-    }
   }
 
   Future<void> _pickDate() async {
@@ -80,6 +82,7 @@ class _AddTaskBottomSheetState extends State<AddTaskBottomSheet> {
       initialDate: _scheduledDate ?? now,
       firstDate: now,
       lastDate: now.add(const Duration(days: 365)),
+      locale: const Locale('ja'),
     );
 
     if (pickedDate != null) {
@@ -98,18 +101,71 @@ class _AddTaskBottomSheetState extends State<AddTaskBottomSheet> {
             pickedTime.hour,
             pickedTime.minute,
           );
-          // 日時指定したらタイプを自動でtodoに切り替え（便利機能）
-          if (_selectedType == 'daily') {
-            _selectedType = 'todo';
-          }
         });
       }
     }
   }
 
+  Future<void> _openRecurrenceSettings() async {
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => RecurrenceSettingsSheet(
+        initialInterval: _recurrenceInterval ?? 1,
+        initialUnit: _recurrenceUnit ?? 'weekly',
+        initialDaysOfWeek: _recurrenceDaysOfWeek,
+        initialEndDate: _recurrenceEndDate,
+        startDate: _scheduledDate ?? DateTime.now(),
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        if (result['unit'] == 'none') {
+          _recurrenceInterval = null;
+          _recurrenceUnit = null;
+          _recurrenceDaysOfWeek = null;
+          _recurrenceEndDate = null;
+        } else {
+          _recurrenceInterval = result['interval'];
+          _recurrenceUnit = result['unit'];
+          _recurrenceDaysOfWeek = result['daysOfWeek'];
+          _recurrenceEndDate = result['endDate'];
+        }
+      });
+    }
+  }
+
+  String _getRecurrenceLabel() {
+    if (_recurrenceUnit == null) return '繰り返し';
+
+    final unitLabel = switch (_recurrenceUnit!) {
+      'daily' => '日',
+      'weekly' => '週',
+      'monthly' => 'ヶ月',
+      'yearly' => '年',
+      _ => '',
+    };
+
+    if (_recurrenceInterval != null && _recurrenceInterval! > 1) {
+      if (_recurrenceUnit == 'weekly' &&
+          (_recurrenceDaysOfWeek?.isNotEmpty ?? false)) {
+        return '${_recurrenceInterval}$unitLabelごと (曜日指定)';
+      }
+      return '${_recurrenceInterval}$unitLabelごと';
+    }
+
+    if (_recurrenceUnit == 'weekly' &&
+        (_recurrenceDaysOfWeek?.isNotEmpty ?? false)) {
+      return '毎週 (曜日指定)';
+    }
+
+    return '毎${unitLabel}';
+  }
+
   @override
   Widget build(BuildContext context) {
-    // キーボードの上のパディング
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Padding(
@@ -124,53 +180,47 @@ class _AddTaskBottomSheetState extends State<AddTaskBottomSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // ヘッダー: タイプ選択
+            // カテゴリ・タイプ選択 (横スクロール)
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
-                children: _types.map((type) {
-                  final isSelected = _selectedType == type;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Row(
-                        children: [
-                          Icon(
-                            _typeIcons[type],
-                            size: 16,
-                            color: isSelected ? Colors.white : Colors.grey,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(_typeLabels[type]!),
-                        ],
+                children: [
+                  // 1. Task (Default)
+                  _buildOptionChip(
+                    label: 'タスク',
+                    icon: Icons.check_circle_outline,
+                    isSelected: _selectedCategoryId == null,
+                    onSelected: (val) {
+                      if (val)
+                        setState(() {
+                          _selectedCategoryId = null;
+                        });
+                    },
+                    color: Colors.blue,
+                  ),
+                  const SizedBox(width: 8),
+
+                  // 2. Custom Categories
+                  ...widget.categories.map((cat) {
+                    final isSelected = _selectedCategoryId == cat.id;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: _buildOptionChip(
+                        label: cat.name,
+                        icon: Icons.label_outline,
+                        isSelected: isSelected,
+                        onSelected: (val) {
+                          if (val)
+                            setState(() {
+                              _selectedCategoryId = cat.id;
+                            });
+                        },
+                        color: Colors
+                            .orange, // Fixed color for now, or use cat specific
                       ),
-                      selected: isSelected,
-                      onSelected: (bool selected) {
-                        if (selected) {
-                          setState(() {
-                            _selectedType = type;
-                            // タイプ変更時のリセットロジック
-                            if (type == 'daily') {
-                              _scheduledDate = null;
-                            }
-                          });
-                        }
-                      },
-                      selectedColor: AppColors.primary,
-                      labelStyle: TextStyle(
-                        color: isSelected ? Colors.white : Colors.grey[700],
-                        fontWeight: isSelected
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                      ),
-                      backgroundColor: Colors.grey[100],
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                        side: BorderSide.none,
-                      ),
-                    ),
-                  );
-                }).toList(),
+                    );
+                  }),
+                ],
               ),
             ),
             const SizedBox(height: 12),
@@ -194,7 +244,6 @@ class _AddTaskBottomSheetState extends State<AddTaskBottomSheet> {
                     onSubmitted: (_) => _submit(),
                   ),
                 ),
-                // 送信ボタン
                 IconButton(
                   onPressed: _submit,
                   icon: const Icon(Icons.arrow_upward_rounded),
@@ -245,6 +294,35 @@ class _AddTaskBottomSheetState extends State<AddTaskBottomSheet> {
                   ),
                   const SizedBox(width: 8),
 
+                  // 繰り返し設定
+                  ActionChip(
+                    avatar: Icon(
+                      Icons.repeat,
+                      size: 16,
+                      color: _recurrenceUnit != null
+                          ? AppColors.primary
+                          : Colors.grey,
+                    ),
+                    label: Text(
+                      _recurrenceUnit != null ? _getRecurrenceLabel() : '繰り返し',
+                      style: TextStyle(
+                        color: _recurrenceUnit != null
+                            ? AppColors.primary
+                            : Colors.grey[700],
+                      ),
+                    ),
+                    onPressed: _openRecurrenceSettings,
+                    backgroundColor: _recurrenceUnit != null
+                        ? AppColors.primary.withOpacity(0.1)
+                        : Colors.white,
+                    side: BorderSide(
+                      color: _recurrenceUnit != null
+                          ? AppColors.primary
+                          : Colors.grey[300]!,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+
                   // 優先度
                   PopupMenuButton<int>(
                     initialValue: _priority,
@@ -283,43 +361,49 @@ class _AddTaskBottomSheetState extends State<AddTaskBottomSheet> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-
-                  // カレンダー同期スイッチ
-                  FilterChip(
-                    label: const Text('Google連携'),
-                    avatar: const Icon(Icons.sync, size: 16),
-                    selected: _syncGoogleCalendar,
-                    onSelected: (bool value) async {
-                      if (value && _scheduledDate == null) {
-                        // 同期ONにするなら日時必須 -> 日時ピッカーを開く
-                        await _pickDate();
-                        // キャンセルされたらONにしない
-                        if (_scheduledDate == null) return;
-                      }
-                      setState(() {
-                        _syncGoogleCalendar = value;
-                      });
-                    },
-                    selectedColor: Colors.blue.withOpacity(0.2),
-                    labelStyle: TextStyle(
-                      color: _syncGoogleCalendar
-                          ? Colors.blue[800]
-                          : Colors.grey[700],
-                    ),
-                    checkmarkColor: Colors.blue[800],
-                    side: BorderSide(
-                      color: _syncGoogleCalendar
-                          ? Colors.blue
-                          : Colors.grey[300]!,
-                    ),
-                  ),
                 ],
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildOptionChip({
+    required String label,
+    required IconData icon,
+    required bool isSelected,
+    required Function(bool) onSelected,
+    required Color color,
+  }) {
+    return ChoiceChip(
+      label: Row(
+        children: [
+          Icon(
+            icon,
+            size: 16,
+            color: isSelected
+                ? Colors.white
+                : color, // Selected: White, Unselected: Color
+          ),
+          const SizedBox(width: 4),
+          Text(label),
+        ],
+      ),
+      selected: isSelected,
+      onSelected: onSelected,
+      selectedColor: color,
+      labelStyle: TextStyle(
+        color: isSelected ? Colors.white : Colors.black87,
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+      ),
+      backgroundColor: Colors.grey[100],
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide.none,
+      ),
+      showCheckmark: false, // シンプルにするためチェックマーク非表示
     );
   }
 }

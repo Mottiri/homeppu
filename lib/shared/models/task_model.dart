@@ -49,6 +49,14 @@ class TaskModel {
   final String? googleCalendarEventId; // Googleカレンダー連携ID
   final int priority; // 0:低, 1:中, 2:高
   final List<TaskItem> subtasks; // サブタスク
+  final String? categoryId; // カスタムカテゴリID
+
+  // Recurrence Fields
+  final String? recurrenceGroupId; // 繰り返しグループID
+  final int? recurrenceInterval; // 繰り返しの間隔
+  final String? recurrenceUnit; // 'daily', 'weekly', 'monthly', 'yearly'
+  final List<int>? recurrenceDaysOfWeek; // 週次の場合の曜日 (1=Mon ... 7=Sun)
+  final DateTime? recurrenceEndDate; // 繰り返しの終了日
 
   TaskModel({
     required this.id,
@@ -68,6 +76,12 @@ class TaskModel {
     this.googleCalendarEventId,
     this.priority = 0,
     this.subtasks = const [],
+    this.categoryId,
+    this.recurrenceGroupId,
+    this.recurrenceInterval,
+    this.recurrenceUnit,
+    this.recurrenceDaysOfWeek,
+    this.recurrenceEndDate,
   });
 
   factory TaskModel.fromFirestore(DocumentSnapshot doc) {
@@ -110,10 +124,28 @@ class TaskModel {
       googleCalendarEventId: data['googleCalendarEventId'],
       priority: data['priority'] ?? 0,
       subtasks:
-          (data['subtasks'] as List<dynamic>?)
-              ?.map((item) => TaskItem.fromMap(item))
-              .toList() ??
+          (data['subtasks'] as List<dynamic>?)?.map((item) {
+            if (item is Map) {
+              return TaskItem.fromMap(Map<String, dynamic>.from(item));
+            }
+            return TaskItem(
+              id: DateTime.now().millisecondsSinceEpoch.toString(),
+              title: '',
+            );
+          }).toList() ??
           [],
+      categoryId: data['categoryId'],
+      recurrenceGroupId: data['recurrenceGroupId'],
+      recurrenceInterval: data['recurrenceInterval'],
+      recurrenceUnit: data['recurrenceUnit'],
+      recurrenceDaysOfWeek: data['recurrenceDaysOfWeek'] != null
+          ? List<int>.from(data['recurrenceDaysOfWeek'])
+          : null,
+      recurrenceEndDate: data['recurrenceEndDate'] != null
+          ? (data['recurrenceEndDate'] is Timestamp
+                ? (data['recurrenceEndDate'] as Timestamp).toDate()
+                : DateTime.parse(data['recurrenceEndDate'].toString()))
+          : null,
     );
   }
 
@@ -134,6 +166,12 @@ class TaskModel {
       'googleCalendarEventId': googleCalendarEventId,
       'priority': priority,
       'subtasks': subtasks.map((e) => e.toMap()).toList(),
+      'categoryId': categoryId,
+      'recurrenceGroupId': recurrenceGroupId,
+      'recurrenceInterval': recurrenceInterval,
+      'recurrenceUnit': recurrenceUnit,
+      'recurrenceDaysOfWeek': recurrenceDaysOfWeek,
+      'recurrenceEndDate': recurrenceEndDate,
     };
   }
 
@@ -155,6 +193,12 @@ class TaskModel {
     String? googleCalendarEventId,
     int? priority,
     List<TaskItem>? subtasks,
+    String? categoryId,
+    String? recurrenceGroupId,
+    int? recurrenceInterval,
+    String? recurrenceUnit,
+    List<int>? recurrenceDaysOfWeek,
+    DateTime? recurrenceEndDate,
   }) {
     return TaskModel(
       id: id ?? this.id,
@@ -175,6 +219,12 @@ class TaskModel {
           googleCalendarEventId ?? this.googleCalendarEventId,
       priority: priority ?? this.priority,
       subtasks: subtasks ?? this.subtasks,
+      categoryId: categoryId ?? this.categoryId,
+      recurrenceGroupId: recurrenceGroupId ?? this.recurrenceGroupId,
+      recurrenceInterval: recurrenceInterval ?? this.recurrenceInterval,
+      recurrenceUnit: recurrenceUnit ?? this.recurrenceUnit,
+      recurrenceDaysOfWeek: recurrenceDaysOfWeek ?? this.recurrenceDaysOfWeek,
+      recurrenceEndDate: recurrenceEndDate ?? this.recurrenceEndDate,
     );
   }
 

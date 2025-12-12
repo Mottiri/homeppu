@@ -36,6 +36,26 @@ service cloud.firestore {
          allow delete: if isAuthenticated() && isOwner(userId); // 削除用
          allow create: if false; // サーバー側でのみ作成
       }
+
+      // カテゴリサブコレクション
+      match /categories/{categoryId} {
+         allow read, write: if isAuthenticated() && isOwner(userId);
+      }
+    }
+
+    // タスクコレクション
+    match /tasks/{taskId} {
+      // 読み取り: 本人のみ
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      
+      // 作成: 本人のみ
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      
+      // 更新: 本人のみ
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      
+      // 削除: 本人のみ
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
     
     // 投稿コレクション

@@ -14,7 +14,8 @@ class MainShell extends StatelessWidget {
     if (location.startsWith('/home')) return 0;
     if (location.startsWith('/circles')) return 1;
     if (location.startsWith('/tasks')) return 2;
-    if (location.startsWith('/profile') || location.startsWith('/user')) return 3;
+    if (location.startsWith('/profile') || location.startsWith('/user'))
+      return 3;
     return 0;
   }
 
@@ -23,6 +24,7 @@ class MainShell extends StatelessWidget {
     final currentIndex = _getCurrentIndex(context);
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       body: child,
       extendBody: true,
       bottomNavigationBar: Container(
@@ -51,7 +53,7 @@ class MainShell extends StatelessWidget {
                   isActive: currentIndex == 0,
                   onTap: () => context.go('/home'),
                 ),
-                
+
                 // サークル
                 _NavItem(
                   icon: Icons.groups_outlined,
@@ -60,7 +62,7 @@ class MainShell extends StatelessWidget {
                   isActive: currentIndex == 1,
                   onTap: () => context.go('/circles'),
                 ),
-                
+
                 // 投稿ボタン（中央・大きめ）
                 GestureDetector(
                   onTap: () => context.push('/create-post'),
@@ -85,7 +87,7 @@ class MainShell extends StatelessWidget {
                     ),
                   ),
                 ),
-                
+
                 // タスク
                 _NavItem(
                   icon: Icons.check_circle_outline,
@@ -94,7 +96,7 @@ class MainShell extends StatelessWidget {
                   isActive: currentIndex == 2,
                   onTap: () => context.go('/tasks'),
                 ),
-                
+
                 // マイページ
                 _NavItem(
                   icon: Icons.person_outline,
