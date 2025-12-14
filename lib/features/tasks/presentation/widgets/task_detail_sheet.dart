@@ -599,15 +599,12 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         _recurrenceEndDate != widget.task.recurrenceEndDate;
   }
 
-  // listEquals helper since standard equals checks reference
+  // listEquals helper
   bool listEquals<T>(List<T>? a, List<T>? b) {
     if (a == null) return b == null;
     if (b == null || a.length != b.length) return false;
-    // TaskItem equality check is needed if T is TaskItem, but simplistic string check or deep check logic:
-    // Here we might need a better check. For now assume reference or simplistic checks.
-    // For List<int> (recurrenceDaysOfWeek) it works if we loop.
     for (int i = 0; i < a.length; i++) {
-      if (a[i].toString() != b[i].toString()) return false;
+      if (a[i] != b[i]) return false;
     }
     return true;
   }

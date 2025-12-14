@@ -27,6 +27,18 @@ class TaskItem {
       isCompleted: isCompleted ?? this.isCompleted,
     );
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is TaskItem &&
+        other.id == id &&
+        other.title == title &&
+        other.isCompleted == isCompleted;
+  }
+
+  @override
+  int get hashCode => id.hashCode ^ title.hashCode ^ isCompleted.hashCode;
 }
 
 class TaskModel {

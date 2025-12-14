@@ -164,7 +164,6 @@ class _TasksScreenState extends State<TasksScreen>
         // ソート
         for (final key in _taskData.keys) {
           _taskData[key]!.sort((a, b) {
-            if (a.isCompleted != b.isCompleted) return a.isCompleted ? 1 : -1;
             if (a.priority != b.priority) return b.priority - a.priority;
             return 0;
           });
@@ -277,6 +276,7 @@ class _TasksScreenState extends State<TasksScreen>
           userId: user.uid,
           recurrenceGroupId: task.recurrenceGroupId,
           deleteAll: deleteAll,
+          startDate: task.scheduledAt,
         );
       }
 
@@ -917,16 +917,6 @@ class _TasksScreenState extends State<TasksScreen>
     }).toList();
 
     filteredTasks.sort((a, b) {
-      // 完了済みは下 (ただし、直近で完了したものは元の位置を維持するために未完了扱いとする)
-      final aIsRecentlyCompleted = _recentlyCompletedTaskIds.contains(a.id);
-      final bIsRecentlyCompleted = _recentlyCompletedTaskIds.contains(b.id);
-
-      final aCompleted =
-          !aIsRecentlyCompleted && (a.isCompletedToday || a.isCompleted);
-      final bCompleted =
-          !bIsRecentlyCompleted && (b.isCompletedToday || b.isCompleted);
-
-      if (aCompleted != bCompleted) return aCompleted ? 1 : -1;
       // 優先度
       if (a.priority != b.priority) return b.priority - a.priority;
       // 日付

@@ -312,28 +312,39 @@ class TaskService {
     String? recurrenceGroupId,
     bool deleteAll = false,
     required String userId,
+    DateTime? startDate,
   }) async {
     if (deleteAll && recurrenceGroupId != null) {
       // 未来のタスクをまとめて削除
       // ※過去のタスク（完了済みなど）は残すべきか？ -> 「以降すべて削除」が一般的
       // ここでは「現在時刻以降」を削除対象とする
+      // startDateが指定されていればそれを使う。なければ現在日時（今日）
       final now = DateTime.now();
-      // 今日の0時0分
-      // 今日の0時0分
-      final today = DateTime(now.year, now.month, now.day);
+      // 時間情報は切り捨てて日付のみにする (00:00:00)
+      final baseDate = startDate ?? now;
+      final cutoffDate = DateTime(baseDate.year, baseDate.month, baseDate.day);
 
       final query = await _firestore
           .collection('tasks')
           .where('userId', isEqualTo: userId) // Security Rule requirement
           .where('recurrenceGroupId', isEqualTo: recurrenceGroupId)
-          .where(
-            'scheduledAt',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(today),
-          )
           .get();
 
+      // Client-side filtering to ensure robustness
+      final docsToDelete = query.docs.where((doc) {
+        final data = doc.data();
+        if (data['scheduledAt'] == null) return false;
+        final scheduledAt = (data['scheduledAt'] as Timestamp).toDate();
+        // Compare dates
+        // docのscheduledAtがcutoffDate以降なら削除対象
+        // isAtSameMomentAs: 同日
+        // isAfter: 未来
+        return scheduledAt.isAtSameMomentAs(cutoffDate) ||
+            scheduledAt.isAfter(cutoffDate);
+      }).toList();
+
       final batch = _firestore.batch();
-      for (var doc in query.docs) {
+      for (var doc in docsToDelete) {
         batch.delete(doc.reference);
       }
       await batch.commit();
