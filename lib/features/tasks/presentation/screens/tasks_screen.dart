@@ -45,6 +45,9 @@ class _TasksScreenState extends State<TasksScreen>
   DateTime _selectedDate = DateTime.now();
   Map<DateTime, List<TaskModel>> _taskData = {};
 
+  // 直近で完了したタスクのID (即時ソートによるジャンプを防ぐため)
+  final Set<String> _recentlyCompletedTaskIds = {};
+
   @override
   void initState() {
     super.initState();
@@ -221,14 +224,15 @@ class _TasksScreenState extends State<TasksScreen>
         lastCompletedAt: DateTime.now(), // Approximate
       );
       setState(() {
+        _recentlyCompletedTaskIds.add(task.id);
         _updateTaskLocally(updatedTask);
       });
 
       // API Call
       await _taskService.completeTask(task.id);
 
-      // Async Sync (Silent)
-      await _loadData(showLoading: false);
+      // Async Sync (Silent) - Removed to prevent race condition/stomp of optimistic UI
+      // await _loadData(showLoading: false);
 
       if (mounted) {
         // 簡易メッセージ
@@ -251,15 +255,31 @@ class _TasksScreenState extends State<TasksScreen>
     }
   }
 
-  Future<void> _deleteTask(TaskModel task) async {
+  Future<void> _deleteTask(TaskModel task, {bool deleteAll = false}) async {
     // Optimistic Update
     setState(() {
-      _removeTaskLocally(task.id);
+      if (deleteAll && task.recurrenceGroupId != null) {
+        _removeTaskSeriesLocally(
+          task.recurrenceGroupId!,
+          task.scheduledAt ?? DateTime.now(),
+        );
+      } else {
+        _removeTaskLocally(task.id);
+      }
     });
 
     try {
       // カレンダー連携削除済み
-      await _taskService.deleteTask(task.id, userId: task.userId);
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await _taskService.deleteTask(
+          task.id,
+          userId: user.uid,
+          recurrenceGroupId: task.recurrenceGroupId,
+          deleteAll: deleteAll,
+        );
+      }
+
       // await _loadData(); // Removed to avoid flicker
       if (mounted) {
         ScaffoldMessenger.of(
@@ -285,6 +305,7 @@ class _TasksScreenState extends State<TasksScreen>
         lastCompletedAt: null,
       );
       setState(() {
+        _recentlyCompletedTaskIds.remove(task.id);
         _updateTaskLocally(updatedTask);
       });
 
@@ -319,7 +340,8 @@ class _TasksScreenState extends State<TasksScreen>
       builder: (context) => TaskDetailSheet(
         task: task,
         onUpdate: _handleUpdateTask,
-        onDelete: () => _deleteTask(task),
+        onDelete: ({bool deleteAll = false}) =>
+            _deleteTask(task, deleteAll: deleteAll),
       ),
     );
   }
@@ -336,6 +358,34 @@ class _TasksScreenState extends State<TasksScreen>
     // 3. Remove from _taskData (Calendar data)
     for (var key in _taskData.keys) {
       _taskData[key]?.removeWhere((t) => t.id == taskId);
+    }
+  }
+
+  void _removeTaskSeriesLocally(String groupId, DateTime startDate) {
+    bool shouldRemove(TaskModel t) {
+      if (t.recurrenceGroupId != groupId) return false;
+      if (t.scheduledAt == null) return false;
+      // scheduledAt >= startDate
+      return t.scheduledAt!.isAtSameMomentAs(startDate) ||
+          t.scheduledAt!.isAfter(startDate);
+    }
+
+    // 1. Remove from _defaultTasks
+    _defaultTasks.removeWhere(shouldRemove);
+
+    // 2. Remove from _categoryTasks
+    for (var key in _categoryTasks.keys) {
+      _categoryTasks[key]?.removeWhere(shouldRemove);
+    }
+
+    // 3. Remove from _taskData
+    for (var key in _taskData.keys) {
+      // 日付がstartDateより前の場合はチェック不要だが、
+      // 念のため全チェックするか、日付比較でskipする。
+      // _taskData key is DateTime (00:00:00).
+      // If key < startDate (ignoring time?), wait.
+      // startDate includes time probably. comparison should be safe.
+      _taskData[key]?.removeWhere(shouldRemove);
     }
   }
 
@@ -867,9 +917,14 @@ class _TasksScreenState extends State<TasksScreen>
     }).toList();
 
     filteredTasks.sort((a, b) {
-      // 完了済みは下
-      final aCompleted = a.isCompletedToday || a.isCompleted;
-      final bCompleted = b.isCompletedToday || b.isCompleted;
+      // 完了済みは下 (ただし、直近で完了したものは元の位置を維持するために未完了扱いとする)
+      final aIsRecentlyCompleted = _recentlyCompletedTaskIds.contains(a.id);
+      final bIsRecentlyCompleted = _recentlyCompletedTaskIds.contains(b.id);
+
+      final aCompleted =
+          !aIsRecentlyCompleted && (a.isCompletedToday || a.isCompleted);
+      final bCompleted =
+          !bIsRecentlyCompleted && (b.isCompletedToday || b.isCompleted);
 
       if (aCompleted != bCompleted) return aCompleted ? 1 : -1;
       // 優先度

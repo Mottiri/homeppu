@@ -319,6 +319,7 @@ class TaskService {
       // ここでは「現在時刻以降」を削除対象とする
       final now = DateTime.now();
       // 今日の0時0分
+      // 今日の0時0分
       final today = DateTime(now.year, now.month, now.day);
 
       final query = await _firestore

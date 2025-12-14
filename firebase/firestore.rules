@@ -64,8 +64,8 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       
       // 作成: 認証済みでBANされていないユーザー
-      allow create: if isAuthenticated() && isNotBanned() && 
-        request.resource.data.userId == request.auth.uid;
+      // 作成: クライアントからの直接作成を禁止（Cloud Functions経由のみ）
+      allow create: if false;
       
       // 更新: 投稿者のみ（リアクションは誰でも更新可能）
       allow update: if isAuthenticated() && (

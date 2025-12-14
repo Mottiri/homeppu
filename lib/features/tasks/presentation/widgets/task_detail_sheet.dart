@@ -7,7 +7,7 @@ import 'package:intl/intl.dart';
 class TaskDetailSheet extends StatefulWidget {
   final TaskModel task;
   final Function(TaskModel, String) onUpdate;
-  final VoidCallback onDelete;
+  final Function({bool deleteAll}) onDelete;
 
   const TaskDetailSheet({
     super.key,
@@ -74,28 +74,70 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
   }
 
   Future<void> _deleteTask() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('タスクの削除'),
-        content: const Text('このタスクを削除してもよろしいですか？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('キャンセル'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('削除'),
-          ),
-        ],
-      ),
-    );
+    if (widget.task.recurrenceGroupId == null) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('タスクの削除'),
+          content: const Text('このタスクを削除してもよろしいですか？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('キャンセル'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('削除'),
+            ),
+          ],
+        ),
+      );
 
-    if (confirm == true) {
-      widget.onDelete();
-      if (mounted) Navigator.pop(context);
+      if (confirm == true) {
+        widget.onDelete(deleteAll: false);
+        if (mounted) Navigator.pop(context);
+      }
+    } else {
+      // 繰り返しタスクの場合
+      final deleteMode = await showDialog<String>(
+        context: context,
+        builder: (context) => SimpleDialog(
+          title: const Text('繰り返しタスクの削除'),
+          children: [
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, 'single'),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text('このタスクのみ削除'),
+              ),
+            ),
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, 'future'),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text('これ以降のタスクも削除', style: TextStyle(color: Colors.red)),
+              ),
+            ),
+            const Divider(),
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, 'cancel'),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text('キャンセル', style: TextStyle(color: Colors.grey)),
+              ),
+            ),
+          ],
+        ),
+      );
+
+      if (deleteMode == 'single') {
+        widget.onDelete(deleteAll: false);
+        if (mounted) Navigator.pop(context);
+      } else if (deleteMode == 'future') {
+        widget.onDelete(deleteAll: true);
+        if (mounted) Navigator.pop(context);
+      }
     }
   }
 
@@ -250,285 +292,293 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
             // メインコンテンツ (スクロール可能)
             Padding(
               padding: EdgeInsets.only(bottom: bottomPadding),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // ヘッダー: タイトル編集とアクション
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // 優先度
-                        Padding(
-                          padding: const EdgeInsets.only(top: 12),
-                          child: GestureDetector(
-                            onTap: () {
-                              setState(() => _priority = (_priority + 1) % 3);
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: _priority == 2
-                                    ? Colors.red[50]
-                                    : (_priority == 1
-                                          ? Colors.orange[50]
-                                          : Colors.green[50]),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Text(
-                                _priority == 2
-                                    ? '🔴'
-                                    : (_priority == 1 ? '🟡' : '🟢'),
-                                style: const TextStyle(fontSize: 16),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        // タイトル
-                        Expanded(
-                          child: TextField(
-                            controller: _titleController,
-                            maxLines: null,
-                            decoration: const InputDecoration(
-                              border: InputBorder.none,
-                              hintText: 'タイトルを入力',
-                            ),
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        // 削除ボタン
-                        IconButton(
-                          onPressed: _deleteTask,
-                          icon: const Icon(
-                            Icons.delete_outline,
-                            color: Colors.grey,
-                          ),
-                        ),
-                        // 完了ボタン (明示的に閉じるとき用)
-                        IconButton(
-                          onPressed: () => Navigator.maybePop(context),
-                          icon: const Icon(
-                            Icons.check,
-                            color: AppColors.primary,
-                            size: 28,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-
-                    // 日付設定 (リストアイテム風)
-                    InkWell(
-                      onTap: () async {
-                        final date = await showDatePicker(
-                          context: context,
-                          initialDate: _scheduledAt ?? DateTime.now(),
-                          firstDate: DateTime.now(),
-                          lastDate: DateTime.now().add(
-                            const Duration(days: 365),
-                          ),
-                          locale: const Locale('ja'), // 日本語化
-                        );
-                        if (date != null && mounted) {
-                          final time = await showTimePicker(
-                            context: context,
-                            initialTime: TimeOfDay.fromDateTime(
-                              _scheduledAt ?? DateTime.now(),
-                            ),
-                          );
-                          if (time != null) {
-                            setState(() {
-                              _scheduledAt = DateTime(
-                                date.year,
-                                date.month,
-                                date.day,
-                                time.hour,
-                                time.minute,
-                              );
-                            });
-                          }
-                        }
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.access_time,
-                              color: _scheduledAt != null
-                                  ? AppColors.primary
-                                  : Colors.grey,
-                            ),
-                            const SizedBox(width: 16),
-                            Text(
-                              _scheduledAt == null
-                                  ? '日時を追加'
-                                  : DateFormat(
-                                      'yyyy/MM/dd HH:mm',
-                                    ).format(_scheduledAt!),
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: _scheduledAt != null
-                                    ? Colors.black
-                                    : Colors.grey[600],
+              child: SafeArea(
+                bottom: false, // viewInsets handles bottom
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(
+                    24,
+                    24,
+                    24,
+                    80,
+                  ), // Extra bottom padding
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // ヘッダー: タイトル編集とアクション
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // 優先度
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: GestureDetector(
+                              onTap: () {
+                                setState(() => _priority = (_priority + 1) % 3);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: _priority == 2
+                                      ? Colors.red[50]
+                                      : (_priority == 1
+                                            ? Colors.orange[50]
+                                            : Colors.green[50]),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Text(
+                                  _priority == 2
+                                      ? '🔴'
+                                      : (_priority == 1 ? '🟡' : '🟢'),
+                                  style: const TextStyle(fontSize: 16),
+                                ),
                               ),
                             ),
-                            if (_scheduledAt != null) ...[
-                              const Spacer(),
-                              IconButton(
-                                icon: const Icon(Icons.close, size: 20),
-                                onPressed: () =>
-                                    setState(() => _scheduledAt = null),
+                          ),
+                          const SizedBox(width: 12),
+                          // タイトル
+                          Expanded(
+                            child: TextField(
+                              controller: _titleController,
+                              maxLines: null,
+                              decoration: const InputDecoration(
+                                border: InputBorder.none,
+                                hintText: 'タイトルを入力',
                               ),
-                            ],
-                          ],
-                        ),
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          // 削除ボタン
+                          IconButton(
+                            onPressed: _deleteTask,
+                            icon: const Icon(
+                              Icons.delete_outline,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          // 完了ボタン (明示的に閉じるとき用)
+                          IconButton(
+                            onPressed: () => Navigator.maybePop(context),
+                            icon: const Icon(
+                              Icons.check,
+                              color: AppColors.primary,
+                              size: 28,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
+                      const SizedBox(height: 16),
 
-                    // 繰り返し設定
-                    InkWell(
-                      onTap: _showRecurrenceSettings,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.repeat,
-                              color: _recurrenceUnit != null
-                                  ? AppColors.primary
-                                  : Colors.grey,
+                      // 日付設定 (リストアイテム風)
+                      InkWell(
+                        onTap: () async {
+                          final date = await showDatePicker(
+                            context: context,
+                            initialDate: _scheduledAt ?? DateTime.now(),
+                            firstDate: DateTime.now(),
+                            lastDate: DateTime.now().add(
+                              const Duration(days: 365),
                             ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Text(
-                                _getRecurrenceText(),
+                            locale: const Locale('ja'), // 日本語化
+                          );
+                          if (date != null && mounted) {
+                            final time = await showTimePicker(
+                              context: context,
+                              initialTime: TimeOfDay.fromDateTime(
+                                _scheduledAt ?? DateTime.now(),
+                              ),
+                            );
+                            if (time != null) {
+                              setState(() {
+                                _scheduledAt = DateTime(
+                                  date.year,
+                                  date.month,
+                                  date.day,
+                                  time.hour,
+                                  time.minute,
+                                );
+                              });
+                            }
+                          }
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.access_time,
+                                color: _scheduledAt != null
+                                    ? AppColors.primary
+                                    : Colors.grey,
+                              ),
+                              const SizedBox(width: 16),
+                              Text(
+                                _scheduledAt == null
+                                    ? '日時を追加'
+                                    : DateFormat(
+                                        'yyyy/MM/dd HH:mm',
+                                      ).format(_scheduledAt!),
                                 style: TextStyle(
                                   fontSize: 16,
-                                  color: _recurrenceUnit != null
+                                  color: _scheduledAt != null
                                       ? Colors.black
                                       : Colors.grey[600],
                                 ),
                               ),
-                            ),
-                          ],
+                              if (_scheduledAt != null) ...[
+                                const Spacer(),
+                                IconButton(
+                                  icon: const Icon(Icons.close, size: 20),
+                                  onPressed: () =>
+                                      setState(() => _scheduledAt = null),
+                                ),
+                              ],
+                            ],
+                          ),
                         ),
                       ),
-                    ),
 
-                    // サブタスクリスト
-                    if (_subtasks.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      ..._subtasks.asMap().entries.map((entry) {
-                        final index = entry.key;
-                        final item = entry.value;
-                        return Row(
-                          children: [
-                            Checkbox(
-                              value: item.isCompleted,
-                              onChanged: (val) {
-                                setState(() {
-                                  _subtasks[index] = item.copyWith(
-                                    isCompleted: val,
-                                  );
-                                });
-                              },
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            ),
-                            Expanded(
-                              child: Text(
-                                item.title,
-                                style: TextStyle(
-                                  decoration: item.isCompleted
-                                      ? TextDecoration.lineThrough
-                                      : null,
-                                  color: item.isCompleted
-                                      ? Colors.grey
-                                      : Colors.black87,
-                                ),
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(
-                                Icons.close,
-                                size: 18,
-                                color: Colors.grey,
-                              ),
-                              onPressed: () {
-                                setState(() {
-                                  _subtasks.removeAt(index);
-                                });
-                              },
-                            ),
-                          ],
-                        );
-                      }),
-                    ],
-
-                    // サブタスク追加
-                    if (_isAddingSubtask)
-                      Padding(
-                        padding: const EdgeInsets.only(left: 12, top: 4),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.subdirectory_arrow_right,
-                              color: Colors.grey,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: TextField(
-                                controller: _subtaskController,
-                                autofocus: true,
-                                decoration: const InputDecoration(
-                                  hintText: 'サブタスクを入力',
-                                  border: InputBorder.none,
-                                ),
-                                onSubmitted: (_) => _addSubtask(),
-                              ),
-                            ),
-                            IconButton(
-                              onPressed: _addSubtask,
-                              icon: const Icon(
-                                Icons.check,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    else
+                      // 繰り返し設定
                       InkWell(
-                        onTap: () => setState(() => _isAddingSubtask = true),
+                        onTap: _showRecurrenceSettings,
                         child: Padding(
                           padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.repeat,
+                                color: _recurrenceUnit != null
+                                    ? AppColors.primary
+                                    : Colors.grey,
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Text(
+                                  _getRecurrenceText(),
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: _recurrenceUnit != null
+                                        ? Colors.black
+                                        : Colors.grey[600],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      // サブタスクリスト
+                      if (_subtasks.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        ..._subtasks.asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final item = entry.value;
+                          return Row(
+                            children: [
+                              Checkbox(
+                                value: item.isCompleted,
+                                onChanged: (val) {
+                                  setState(() {
+                                    _subtasks[index] = item.copyWith(
+                                      isCompleted: val,
+                                    );
+                                  });
+                                },
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  item.title,
+                                  style: TextStyle(
+                                    decoration: item.isCompleted
+                                        ? TextDecoration.lineThrough
+                                        : null,
+                                    color: item.isCompleted
+                                        ? Colors.grey
+                                        : Colors.black87,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.close,
+                                  size: 18,
+                                  color: Colors.grey,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _subtasks.removeAt(index);
+                                  });
+                                },
+                              ),
+                            ],
+                          );
+                        }),
+                      ],
+
+                      // サブタスク追加
+                      if (_isAddingSubtask)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 12, top: 4),
                           child: Row(
                             children: [
                               const Icon(
                                 Icons.subdirectory_arrow_right,
                                 color: Colors.grey,
                               ),
-                              const SizedBox(width: 16),
-                              Text(
-                                'サブタスクを追加',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: Colors.grey[600],
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: TextField(
+                                  controller: _subtaskController,
+                                  autofocus: true,
+                                  decoration: const InputDecoration(
+                                    hintText: 'サブタスクを入力',
+                                    border: InputBorder.none,
+                                  ),
+                                  onSubmitted: (_) => _addSubtask(),
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: _addSubtask,
+                                icon: const Icon(
+                                  Icons.check,
+                                  color: AppColors.primary,
                                 ),
                               ),
                             ],
                           ),
+                        )
+                      else
+                        InkWell(
+                          onTap: () => setState(() => _isAddingSubtask = true),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.subdirectory_arrow_right,
+                                  color: Colors.grey,
+                                ),
+                                const SizedBox(width: 16),
+                                Text(
+                                  'サブタスクを追加',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

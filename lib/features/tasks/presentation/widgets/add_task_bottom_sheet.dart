@@ -171,200 +171,209 @@ class _AddTaskBottomSheetState extends State<AddTaskBottomSheet> {
     return Padding(
       padding: EdgeInsets.only(bottom: bottomInset),
       child: Container(
-        padding: const EdgeInsets.all(16),
         decoration: const BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // カテゴリ・タイプ選択 (横スクロール)
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  // 1. Task (Default)
-                  _buildOptionChip(
-                    label: 'タスク',
-                    icon: Icons.check_circle_outline,
-                    isSelected: _selectedCategoryId == null,
-                    onSelected: (val) {
-                      if (val)
-                        setState(() {
-                          _selectedCategoryId = null;
-                        });
-                    },
-                    color: Colors.blue,
-                  ),
-                  const SizedBox(width: 8),
-
-                  // 2. Custom Categories
-                  ...widget.categories.map((cat) {
-                    final isSelected = _selectedCategoryId == cat.id;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8.0),
-                      child: _buildOptionChip(
-                        label: cat.name,
-                        icon: Icons.label_outline,
-                        isSelected: isSelected,
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // カテゴリ・タイプ選択 (横スクロール)
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      // 1. Task (Default)
+                      _buildOptionChip(
+                        label: 'タスク',
+                        icon: Icons.check_circle_outline,
+                        isSelected: _selectedCategoryId == null,
                         onSelected: (val) {
                           if (val)
                             setState(() {
-                              _selectedCategoryId = cat.id;
+                              _selectedCategoryId = null;
                             });
                         },
-                        color: Colors
-                            .orange, // Fixed color for now, or use cat specific
+                        color: Colors.blue,
                       ),
-                    );
-                  }),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
+                      const SizedBox(width: 8),
 
-            // 入力エリア
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _titleController,
-                    focusNode: _focusNode,
-                    decoration: const InputDecoration(
-                      hintText: '新しいタスクを入力...',
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                    style: const TextStyle(fontSize: 18),
-                    maxLines: 1,
-                    textInputAction: TextInputAction.done,
-                    onSubmitted: (_) => _submit(),
+                      // 2. Custom Categories
+                      ...widget.categories.map((cat) {
+                        final isSelected = _selectedCategoryId == cat.id;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: _buildOptionChip(
+                            label: cat.name,
+                            icon: Icons.label_outline,
+                            isSelected: isSelected,
+                            onSelected: (val) {
+                              if (val)
+                                setState(() {
+                                  _selectedCategoryId = cat.id;
+                                });
+                            },
+                            color: Colors
+                                .orange, // Fixed color for now, or use cat specific
+                          ),
+                        );
+                      }),
+                    ],
                   ),
                 ),
-                IconButton(
-                  onPressed: _submit,
-                  icon: const Icon(Icons.arrow_upward_rounded),
-                  style: IconButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
+                const SizedBox(height: 12),
+
+                // 入力エリア
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _titleController,
+                        focusNode: _focusNode,
+                        decoration: const InputDecoration(
+                          hintText: '新しいタスクを入力...',
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                        style: const TextStyle(fontSize: 18),
+                        maxLines: 1,
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => _submit(),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _submit,
+                      icon: const Icon(Icons.arrow_upward_rounded),
+                      style: IconButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // オプションエリア (日付・優先度・同期)
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      // 日付選択
+                      ActionChip(
+                        avatar: Icon(
+                          Icons.calendar_today_outlined,
+                          size: 16,
+                          color: _scheduledDate != null
+                              ? AppColors.primary
+                              : Colors.grey,
+                        ),
+                        label: Text(
+                          _scheduledDate != null
+                              ? DateFormat('M/d H:mm').format(_scheduledDate!)
+                              : '日時',
+                          style: TextStyle(
+                            color: _scheduledDate != null
+                                ? AppColors.primary
+                                : Colors.grey[700],
+                          ),
+                        ),
+                        onPressed: _pickDate,
+                        backgroundColor: _scheduledDate != null
+                            ? AppColors.primary.withOpacity(0.1)
+                            : Colors.white,
+                        shape: StadiumBorder(
+                          side: BorderSide(
+                            color: _scheduledDate != null
+                                ? AppColors.primary
+                                : Colors.grey[300]!,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+
+                      // 繰り返し設定
+                      ActionChip(
+                        avatar: Icon(
+                          Icons.repeat,
+                          size: 16,
+                          color: _recurrenceUnit != null
+                              ? AppColors.primary
+                              : Colors.grey,
+                        ),
+                        label: Text(
+                          _recurrenceUnit != null
+                              ? _getRecurrenceLabel()
+                              : '繰り返し',
+                          style: TextStyle(
+                            color: _recurrenceUnit != null
+                                ? AppColors.primary
+                                : Colors.grey[700],
+                          ),
+                        ),
+                        onPressed: _openRecurrenceSettings,
+                        backgroundColor: _recurrenceUnit != null
+                            ? AppColors.primary.withOpacity(0.1)
+                            : Colors.white,
+                        side: BorderSide(
+                          color: _recurrenceUnit != null
+                              ? AppColors.primary
+                              : Colors.grey[300]!,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+
+                      // 優先度
+                      PopupMenuButton<int>(
+                        initialValue: _priority,
+                        onSelected: (int item) {
+                          setState(() {
+                            _priority = item;
+                          });
+                        },
+                        itemBuilder: (BuildContext context) =>
+                            <PopupMenuEntry<int>>[
+                              const PopupMenuItem<int>(
+                                value: 0,
+                                child: Text('優先度: 低 🟢'),
+                              ),
+                              const PopupMenuItem<int>(
+                                value: 1,
+                                child: Text('優先度: 中 🟡'),
+                              ),
+                              const PopupMenuItem<int>(
+                                value: 2,
+                                child: Text('優先度: 高 🔴'),
+                              ),
+                            ],
+                        child: Chip(
+                          avatar: Text(
+                            _priority == 0
+                                ? '🟢'
+                                : (_priority == 1 ? '🟡' : '🔴'),
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          label: Text(
+                            _priority == 0 ? '低' : (_priority == 1 ? '中' : '高'),
+                            style: TextStyle(color: Colors.grey[700]),
+                          ),
+                          backgroundColor: Colors.white,
+                          shape: StadiumBorder(
+                            side: BorderSide(color: Colors.grey[300]!),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-
-            // オプションエリア (日付・優先度・同期)
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  // 日付選択
-                  ActionChip(
-                    avatar: Icon(
-                      Icons.calendar_today_outlined,
-                      size: 16,
-                      color: _scheduledDate != null
-                          ? AppColors.primary
-                          : Colors.grey,
-                    ),
-                    label: Text(
-                      _scheduledDate != null
-                          ? DateFormat('M/d H:mm').format(_scheduledDate!)
-                          : '日時',
-                      style: TextStyle(
-                        color: _scheduledDate != null
-                            ? AppColors.primary
-                            : Colors.grey[700],
-                      ),
-                    ),
-                    onPressed: _pickDate,
-                    backgroundColor: _scheduledDate != null
-                        ? AppColors.primary.withOpacity(0.1)
-                        : Colors.white,
-                    shape: StadiumBorder(
-                      side: BorderSide(
-                        color: _scheduledDate != null
-                            ? AppColors.primary
-                            : Colors.grey[300]!,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-
-                  // 繰り返し設定
-                  ActionChip(
-                    avatar: Icon(
-                      Icons.repeat,
-                      size: 16,
-                      color: _recurrenceUnit != null
-                          ? AppColors.primary
-                          : Colors.grey,
-                    ),
-                    label: Text(
-                      _recurrenceUnit != null ? _getRecurrenceLabel() : '繰り返し',
-                      style: TextStyle(
-                        color: _recurrenceUnit != null
-                            ? AppColors.primary
-                            : Colors.grey[700],
-                      ),
-                    ),
-                    onPressed: _openRecurrenceSettings,
-                    backgroundColor: _recurrenceUnit != null
-                        ? AppColors.primary.withOpacity(0.1)
-                        : Colors.white,
-                    side: BorderSide(
-                      color: _recurrenceUnit != null
-                          ? AppColors.primary
-                          : Colors.grey[300]!,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-
-                  // 優先度
-                  PopupMenuButton<int>(
-                    initialValue: _priority,
-                    onSelected: (int item) {
-                      setState(() {
-                        _priority = item;
-                      });
-                    },
-                    itemBuilder: (BuildContext context) =>
-                        <PopupMenuEntry<int>>[
-                          const PopupMenuItem<int>(
-                            value: 0,
-                            child: Text('優先度: 低 🟢'),
-                          ),
-                          const PopupMenuItem<int>(
-                            value: 1,
-                            child: Text('優先度: 中 🟡'),
-                          ),
-                          const PopupMenuItem<int>(
-                            value: 2,
-                            child: Text('優先度: 高 🔴'),
-                          ),
-                        ],
-                    child: Chip(
-                      avatar: Text(
-                        _priority == 0 ? '🟢' : (_priority == 1 ? '🟡' : '🔴'),
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      label: Text(
-                        _priority == 0 ? '低' : (_priority == 1 ? '中' : '高'),
-                        style: TextStyle(color: Colors.grey[700]),
-                      ),
-                      backgroundColor: Colors.white,
-                      shape: StadiumBorder(
-                        side: BorderSide(color: Colors.grey[300]!),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

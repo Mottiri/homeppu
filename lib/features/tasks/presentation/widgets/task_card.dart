@@ -62,6 +62,8 @@ class _TaskCardState extends State<TaskCard>
     // Randomize shake
     final random = Random();
     _randomDirection = random.nextBool() ? 1 : -1;
+    // 0.5 ~ 1.5倍の振れ幅
+    _randomAmplitude = 0.5 + random.nextDouble();
   }
 
   @override

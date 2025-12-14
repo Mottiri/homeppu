@@ -1655,13 +1655,23 @@ export const moderateContent = onCall(
     const apiKey = geminiApiKey.value();
     if (!apiKey) {
       console.error("GEMINI_API_KEY is not set");
-      // APIキーがない場合はモデレーションをスキップ
+      // Fail Closed
+      throw new HttpsError("internal", "システムエラーが発生しました。");
+    }
+
+    // ===============================================
+    // 0. 静的NGワードチェック
+    // ===============================================
+    const hasNgWord = NG_WORDS.some(word => content.includes(word));
+    if (hasNgWord) {
+      // 記録だけして返す（moderateContentは判定結果を返す関数のため、エラーではなくisNegative=trueを返す）
+      console.log("NG word detected:", content);
       return {
-        isNegative: false,
-        category: "none",
-        confidence: 0,
-        reason: "",
-        suggestion: "",
+        isNegative: true,
+        category: "profanity",
+        confidence: 1.0,
+        reason: "不適切な表現が含まれています（NGワード）",
+        suggestion: "別の表現を使用してください",
       };
     }
 
@@ -1670,23 +1680,27 @@ export const moderateContent = onCall(
 
     const prompt = `
 あなたはSNS「ほめっぷ」のコンテンツモデレーターです。
-「ほめっぷ」は「世界一優しいSNS」を目指しており、ネガティブな発言を排除しています。
+「ほめっぷ」は「世界一優しいSNS」を目指しています。
 
-以下の投稿内容を分析して、ネガティブかどうか判定してください。
+以下の投稿内容を分析して、「他者への攻撃」や「暴力的な表現」があるかどうか厳格に判定してください。
 
-【判定基準】
-- harassment: 誹謗中傷、人を傷つける発言
-  - hate_speech: 差別、ヘイトスピーチ
-    - profanity: 不適切な言葉、暴言、罵倒
-      - self_harm: 自傷行為の助長
-        - spam: スパム、宣伝
-          - none: 問題なし
+【ブロック対象（isNegative: true）】
+- harassment: 他者への誹謗中傷、人格攻撃、悪口
+- hate_speech: 差別、ヘイトスピーチ
+- profanity: 暴言、罵倒、汚い言葉（「死ね」「殺す」などは対象なしでもNG）
+- violence: 暴力的な表現、脅迫
+- self_harm: 自傷行為の助長
+- spam: スパム、宣伝
 
-【重要】
-- 「ほめっぷ」はポジティブなSNSなので、軽い愚痴や不満も「ネガティブ」と判定します
-  - ただし、自分の頑張りや努力を共有する投稿は「none」です
-    - 他人を批判する内容は「harassment」です
-      - 判定は厳しめにお願いします
+【許可する内容（isNegative: false）】
+- 個人の感情表現：「悲しい」「辛い」「落ち込んだ」
+- 自分自身への軽い愚痴：「失敗した」「うまくいかない」
+- 日常の不満：「雨だ〜」「電車遅れた」
+- 頑張りや努力の共有
+
+【重要な判定基準】
+⚠️ 暴力的な言葉（殺す、死ね、殴るなど）は、対象が特定されていなくても「profanity」または「violence」としてブロックしてください。
+⚠️ 「他者を攻撃しているか」は厳しく見てください。
 
 【投稿内容】
 ${content}
@@ -1695,7 +1709,7 @@ ${content}
 必ず以下のJSON形式で回答してください。他の文字は含めないでください。
 {
   "isNegative": true または false,
-    "category": "harassment" | "hate_speech" | "profanity" | "self_harm" | "spam" | "none",
+    "category": "harassment" | "hate_speech" | "profanity" | "violence" | "self_harm" | "spam" | "none",
       "confidence": 0から1の数値,
         "reason": "判定理由（ユーザーに見せる優しい説明）",
           "suggestion": "より良い表現の提案"
@@ -1706,7 +1720,7 @@ ${content}
       const result = await model.generateContent(prompt);
       const responseText = result.response.text().trim();
 
-      // JSONを抽出（マークダウンコードブロックを考慮）
+      // JSONを抽出
       let jsonText = responseText;
       const jsonMatch = responseText.match(/```(?: json) ?\s * ([\s\S] *?) \s * ```/);
       if (jsonMatch) {
@@ -1724,17 +1738,17 @@ ${content}
       return parsed;
     } catch (error) {
       console.error("Moderation error:", error);
-      // エラー時は安全側に倒す（投稿を許可）
-      return {
-        isNegative: false,
-        category: "none",
-        confidence: 0,
-        reason: "",
-        suggestion: "",
-      };
+      // Fail Closed: エラー時は判定不能として安全側に倒す（あるいはエラーを返す）
+      // ここではクライアントがハンドリングしやすいようにエラーを投げる
+      throw new HttpsError("internal", "モデレーション処理に失敗しました。");
     }
   }
 );
+
+// ===============================================
+// NGワード設定 (静的フィルタ)
+// ===============================================
+const NG_WORDS = ["殺す", "殺し", "死ね", "死にたい", "消えたい", "暴力", "レイプ", "自殺"];
 
 /**
  * 徳ポイントを減少させる（ネガティブ発言検出時）
@@ -1806,42 +1820,63 @@ export const createPostWithModeration = onCall(
     }
 
     const apiKey = geminiApiKey.value();
+
+    // Fail Closed: APIキーがない場合はエラー
     if (!apiKey) {
       console.error("GEMINI_API_KEY is not set");
-      // APIキーがない場合はモデレーションをスキップして投稿を許可
+      throw new HttpsError("internal", "システムエラーが発生しました。しばらくしてから再度お試しください。");
     }
 
-    const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
-    const model = genAI?.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     // ===============================================
-    // 1. テキストモデレーション
+    // 0. 静的NGワードチェック (Internal Logic)
+    // ===============================================
+    if (content) {
+      const hasNgWord = NG_WORDS.some(word => content.includes(word));
+      if (hasNgWord) {
+        // 徳ポイントを減少
+        const virtueResult = await decreaseVirtue(
+          userId,
+          "NGワード使用",
+          VIRTUE_CONFIG.lossPerNegative * 2 // NGワードは厳しめに
+        );
+
+        throw new HttpsError(
+          "invalid-argument",
+          `不適切な表現が含まれています。\n「ほめっぷ」はポジティブなSNSです。\n\n(徳ポイント: ${virtueResult.newVirtue})`
+        );
+      }
+    }
+
+    // ===============================================
+    // 1. テキストモデレーション (AI)
     // ===============================================
     if (model && content) {
       const textPrompt = `
 あなたはSNS「ほめっぷ」のコンテンツモデレーターです。
 「ほめっぷ」は「世界一優しいSNS」を目指しています。
 
-以下の投稿内容を分析して、「他者への攻撃」があるかどうか判定してください。
+以下の投稿内容を分析して、「他者への攻撃」や「暴力的な表現」があるかどうか厳格に判定してください。
 
 【ブロック対象（isNegative: true）】
 - harassment: 他者への誹謗中傷、人格攻撃、悪口
-  - hate_speech: 差別、ヘイトスピーチ、特定の属性への攻撃
-    - profanity: 他者への暴言、罵倒
-      - self_harm: 自傷行為の助長（※これは安全上ブロック）
+- hate_speech: 差別、ヘイトスピーチ
+- profanity: 暴言、罵倒、汚い言葉（「死ね」「殺す」などは対象なしでもNG）
+- violence: 暴力的な表現、脅迫
+- self_harm: 自傷行為の助長
 - spam: スパム、宣伝
 
 【許可する内容（isNegative: false）】
-- 個人の感情表現：「悲しい」「辛い」「落ち込んだ」「疲れた」「しんどい」
-- 自分自身への愚痴：「自分ダメだな」「失敗した」「うまくいかない」
-- 日常の不満：「雨だ〜」「電車遅れた」「眠い」
+- 個人の感情表現：「悲しい」「辛い」「落ち込んだ」
+- 自分自身への軽い愚痴：「失敗した」「うまくいかない」
+- 日常の不満：「雨だ〜」「電車遅れた」
 - 頑張りや努力の共有
-  - 共感を求める投稿
 
 【重要な判定基準】
-⚠️ 「他者を攻撃しているか」が最重要ポイントです
-⚠️ 自分の気持ちを素直に表現することは許可します
-⚠️ 誰かを傷つける意図がない限り「none」と判定してください
+⚠️ 暴力的な言葉（殺す、死ね、殴るなど）は、対象が特定されていなくても「profanity」または「violence」としてブロックしてください。
+⚠️ 「他者を攻撃しているか」は厳しく見てください。
 
 【投稿内容】
 ${content}
@@ -1850,7 +1885,7 @@ ${content}
 必ず以下のJSON形式で回答してください。他の文字は含めないでください。
 {
   "isNegative": true または false,
-    "category": "harassment" | "hate_speech" | "profanity" | "self_harm" | "spam" | "none",
+    "category": "harassment" | "hate_speech" | "profanity" | "violence" | "self_harm" | "spam" | "none",
       "confidence": 0から1の数値,
         "reason": "判定理由（ユーザーに見せる優しい説明）",
           "suggestion": "より良い表現の提案"
@@ -1898,7 +1933,8 @@ ${content}
           throw error;
         }
         console.error("Text moderation error:", error);
-        // エラー時は投稿を許可
+        // Fail Closed: AIエラー時は投稿を許可しない（安全のため、internal errorとする）
+        throw new HttpsError("internal", "モデレーション処理に失敗しました。もう一度お試しください。");
       }
     }
 
@@ -1952,7 +1988,8 @@ ${content}
           throw error;
         }
         console.error("Media moderation error:", error);
-        // エラー時は投稿を許可（厳しくしすぎない）
+        // Fail Closed for Media as well
+        throw new HttpsError("internal", "メディアの確認中にエラーが発生しました。");
       }
     }
 
@@ -2001,6 +2038,7 @@ ${content}
     return { success: true, postId: postRef.id };
   }
 );
+
 
 
 
@@ -2489,113 +2527,113 @@ export const getTasks = onCall(
 
     return { tasks };
   }
+);
 /**
  * (Trigger) タスクが更新された時の処理
  * - 完了状態になった場合: 徳ポイントとストリークの計算
  */
 export const onTaskUpdated = onDocumentUpdated("tasks/{taskId}", async (event) => {
-    const before = event.data?.before.data();
-    const after = event.data?.after.data();
+  const before = event.data?.before.data();
+  const after = event.data?.after.data();
 
-    if (!before || !after) return;
+  if (!before || !after) return;
 
-    // 1. 完了状態への変化を検知 (false -> true)
-    if (!before.isCompleted && after.isCompleted) {
-      const userId = after.userId;
-      const taskId = event.params.taskId;
+  // 1. 完了状態への変化を検知 (false -> true)
+  if (!before.isCompleted && after.isCompleted) {
+    const userId = after.userId;
 
-      // ストリーク計算のための前回完了日時取得
-      // Firestore上で、このユーザーの直近の完了タスク(自分以外)を取得
-      // ※単純化のため、Userドキュメントに持たせるのがベストだが、ここではクエリで頑張るか、
-      // あるいはTaskService側でStreakを計算して投げているのを「正」とするか？
-      // -> セキュリティ重視ならサーバーで計算すべき。
-      // しかしクエリコストが高い。
-      // 折衷案: ユーザーデータに `lastTaskCompletedAt` と `currentStreak` を持たせる。
+    // ストリーク計算のための前回完了日時取得
+    // Firestore上で、このユーザーの直近の完了タスク(自分以外)を取得
+    // ※単純化のため、Userドキュメントに持たせるのがベストだが、ここではクエリで頑張るか、
+    // あるいはTaskService側でStreakを計算して投げているのを「正」とするか？
+    // -> セキュリティ重視ならサーバーで計算すべき。
+    // しかしクエリコストが高い。
+    // 折衷案: ユーザーデータに `lastTaskCompletedAt` と `currentStreak` を持たせる。
 
-      const userRef = db.collection("users").doc(userId);
+    const userRef = db.collection("users").doc(userId);
 
-      await db.runTransaction(async (transaction) => {
-        const userDoc = await transaction.get(userRef);
-        if (!userDoc.exists) return; // ユーザーがいない
+    await db.runTransaction(async (transaction) => {
+      const userDoc = await transaction.get(userRef);
+      if (!userDoc.exists) return; // ユーザーがいない
 
-        const userData = userDoc.data()!;
-        const now = new Date();
-        const lastCompleted = userData.lastTaskCompletedAt?.toDate();
+      const userData = userDoc.data()!;
+      const now = new Date();
+      const lastCompleted = userData.lastTaskCompletedAt?.toDate();
 
-        let newStreak = 1;
-        let streakBonus = 0;
+      let newStreak = 1;
+      let streakBonus = 0;
 
-        if (lastCompleted) {
-          // 日付の差分計算 (JST考慮が必要だが、UTCベースの日付差分で簡易判定)
-          // 厳密には「営業日」的なロジックが必要だが、24時間以内かどうか等で判定
-          const diffTime = now.getTime() - lastCompleted.getTime();
-          const diffDays = diffTime / (1000 * 3600 * 24);
+      if (lastCompleted) {
+        // 日付の差分計算 (JST考慮が必要だが、UTCベースの日付差分で簡易判定)
+        // 厳密には「営業日」的なロジックが必要だが、24時間以内かどうか等で判定
+        const diffTime = now.getTime() - lastCompleted.getTime();
+        const diffDays = diffTime / (1000 * 3600 * 24);
 
-          if (diffDays < 1.5 && now.getDate() !== lastCompleted.getDate()) {
-            // "昨日"完了している（大体36時間以内かつ日付が違う）
-            // ※もっと厳密なロジックは必要だが、一旦簡易実装
-            newStreak = (userData.currentStreak || 0) + 1;
-          } else if (now.getDate() === lastCompleted.getDate()) {
-            // 今日すでに完了している -> ストリーク維持
-            newStreak = userData.currentStreak || 1;
-          } else {
-            // 途切れた
-            newStreak = 1;
-          }
+        if (diffDays < 1.5 && now.getDate() !== lastCompleted.getDate()) {
+          // "昨日"完了している（大体36時間以内かつ日付が違う）
+          // ※もっと厳密なロジックは必要だが、一旦簡易実装
+          newStreak = (userData.currentStreak || 0) + 1;
+        } else if (now.getDate() === lastCompleted.getDate()) {
+          // 今日すでに完了している -> ストリーク維持
+          newStreak = userData.currentStreak || 1;
+        } else {
+          // 途切れた
+          newStreak = 1;
         }
+      }
 
-        // ポイント計算
-        const baseVirtue = 2;
-        streakBonus = Math.min(newStreak - 1, 5);
-        const virtueGain = baseVirtue + streakBonus;
+      // ポイント計算
+      const baseVirtue = 2;
+      streakBonus = Math.min(newStreak - 1, 5);
+      const virtueGain = baseVirtue + streakBonus;
 
-        // User更新
-        transaction.update(userRef, {
-          virtue: admin.firestore.FieldValue.increment(virtueGain),
-          currentStreak: newStreak,
-          lastTaskCompletedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-
-        // 履歴記録
-        const historyRef = db.collection("virtueHistory").doc();
-        transaction.set(historyRef, {
-          userId: userId,
-          change: virtueGain,
-          reason: `タスク完了: ${after.content} ${newStreak > 1 ? `(${newStreak}連!)` : ''}`,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-
-        // タスク自体のStreak値も更新しておく（事後更新になるが結果整合性）
-        // ※トリガー内で自身のドキュメントを更新すると無限ループのリスクがあるため注意。
-        // ここでは `streak` が変化した場合のみ...だが、今回はやめておく。
-        // アプリ側で表示用Streakは計算済みのはず。
+      // User更新
+      transaction.update(userRef, {
+        virtue: admin.firestore.FieldValue.increment(virtueGain),
+        currentStreak: newStreak,
+        lastTaskCompletedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-    }
 
-    // 2. 完了取り消し (true -> false)
-    if (before.isCompleted && !after.isCompleted) {
-      // ポイント減算
-      const userId = after.userId;
-      // 減算ロジックは複雑（どのボーナス分だったか不明）なので、一律 -2 とする、等の運用が一般的
-      // ここでは簡易的に Base + StreakBonus(Userの現在値から推測) を引く
-
-      await db.runTransaction(async (transaction) => {
-        const userRef = db.collection("users").doc(userId);
-        transaction.update(userRef, {
-          virtue: admin.firestore.FieldValue.increment(-2), // 最低限引く
-        });
-
-        // 履歴
-        const historyRef = db.collection("virtueHistory").doc();
-        transaction.set(historyRef, {
-          userId: userId,
-          change: -2,
-          reason: `タスク完了取消: ${after.content}`,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
+      // 履歴記録
+      const historyRef = db.collection("virtueHistory").doc();
+      transaction.set(historyRef, {
+        userId: userId,
+        change: virtueGain,
+        reason: `タスク完了: ${after.content} ${newStreak > 1 ? `(${newStreak}連!)` : ''}`,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-    }
-  });
+
+      // タスク自体のStreak値も更新しておく（事後更新になるが結果整合性）
+      // ※トリガー内で自身のドキュメントを更新すると無限ループのリスクがあるため注意。
+      // ここでは `streak` が変化した場合のみ...だが、今回はやめておく。
+      // アプリ側で表示用Streakは計算済みのはず。
+    });
+  }
+
+  // 2. 完了取り消し (true -> false)
+  if (before.isCompleted && !after.isCompleted) {
+    // ポイント減算
+    const userId = after.userId;
+    // 減算ロジックは複雑（どのボーナス分だったか不明）なので、一律 -2 とする、等の運用が一般的
+    // ここでは簡易的に Base + StreakBonus(Userの現在値から推測) を引く
+
+    await db.runTransaction(async (transaction) => {
+      const userRef = db.collection("users").doc(userId);
+      transaction.update(userRef, {
+        virtue: admin.firestore.FieldValue.increment(-2), // 最低限引く
+      });
+
+      // 履歴
+      const historyRef = db.collection("virtueHistory").doc();
+      transaction.set(historyRef, {
+        userId: userId,
+        change: -2,
+        reason: `タスク完了取消: ${after.content}`,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    });
+  }
+});
 
 
 
