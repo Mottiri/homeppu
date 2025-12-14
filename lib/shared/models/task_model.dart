@@ -72,6 +72,7 @@ class TaskModel {
   // Attachments & Memo
   final String? memo;
   final List<String> attachmentUrls;
+  final String? goalId;
 
   TaskModel({
     required this.id,
@@ -99,6 +100,7 @@ class TaskModel {
     this.recurrenceEndDate,
     this.memo,
     this.attachmentUrls = const [],
+    this.goalId,
   });
 
   factory TaskModel.fromFirestore(DocumentSnapshot doc) {
@@ -165,6 +167,7 @@ class TaskModel {
           : null,
       memo: data['memo'],
       attachmentUrls: List<String>.from(data['attachmentUrls'] ?? []),
+      goalId: data['goalId'],
     );
   }
 
@@ -193,6 +196,7 @@ class TaskModel {
       'recurrenceEndDate': recurrenceEndDate,
       'memo': memo,
       'attachmentUrls': attachmentUrls,
+      'goalId': goalId,
     };
   }
 
@@ -222,6 +226,7 @@ class TaskModel {
     DateTime? recurrenceEndDate,
     String? memo,
     List<String>? attachmentUrls,
+    String? goalId,
   }) {
     return TaskModel(
       id: id ?? this.id,
@@ -250,6 +255,7 @@ class TaskModel {
       recurrenceEndDate: recurrenceEndDate ?? this.recurrenceEndDate,
       memo: memo ?? this.memo,
       attachmentUrls: attachmentUrls ?? this.attachmentUrls,
+      goalId: goalId ?? this.goalId,
     );
   }
 

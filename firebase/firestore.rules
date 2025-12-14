@@ -57,6 +57,21 @@ service cloud.firestore {
       // 削除: 本人のみ (存在しないドキュメントの削除も許可してエラーを防ぐ)
       allow delete: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid);
     }
+
+    // 目標コレクション
+    match /goals/{goalId} {
+      // 読み取り: 本人 または 公開設定がtrueの場合
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || resource.data.isPublic == true);
+      
+      // 作成: 本人のみ
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      
+      // 更新: 本人のみ
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      
+      // 削除: 本人のみ
+      allow delete: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid);
+    }
     
     // 投稿コレクション
     match /posts/{postId} {

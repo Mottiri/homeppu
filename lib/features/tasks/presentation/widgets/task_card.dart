@@ -19,6 +19,10 @@ class TaskCard extends StatefulWidget {
   final Animation<double>? shakeAnimation;
   final Future<bool> Function()? onConfirmDismiss;
 
+  // ハイライト表示
+  final bool isHighlighted;
+  final VoidCallback? onDismissHighlight;
+
   const TaskCard({
     super.key,
     required this.task,
@@ -32,14 +36,15 @@ class TaskCard extends StatefulWidget {
     required this.onLongPress,
     this.shakeAnimation,
     this.onConfirmDismiss,
+    this.isHighlighted = false,
+    this.onDismissHighlight,
   });
 
   @override
   State<TaskCard> createState() => _TaskCardState();
 }
 
-class _TaskCardState extends State<TaskCard>
-    with SingleTickerProviderStateMixin {
+class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
   late AnimationController _completeController;
   late Animation<double> _scaleAnimation;
   bool _isProcessing = false;
@@ -47,6 +52,11 @@ class _TaskCardState extends State<TaskCard>
   // Random shake parameters
   late final double _randomAmplitude;
   late final int _randomDirection;
+
+  // ハイライトアニメーション
+  late AnimationController _highlightController;
+  late Animation<double> _pulseAnimation;
+  late Animation<double> _glowAnimation;
 
   @override
   void initState() {
@@ -64,6 +74,23 @@ class _TaskCardState extends State<TaskCard>
     _randomDirection = random.nextBool() ? 1 : -1;
     // 0.5 ~ 1.5倍の振れ幅
     _randomAmplitude = 0.5 + random.nextDouble();
+
+    // ハイライトアニメーション設定
+    _highlightController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.03).animate(
+      CurvedAnimation(parent: _highlightController, curve: Curves.easeInOut),
+    );
+    _glowAnimation = Tween<double>(begin: 0.3, end: 0.6).animate(
+      CurvedAnimation(parent: _highlightController, curve: Curves.easeInOut),
+    );
+
+    // ハイライト時にアニメーション開始
+    if (widget.isHighlighted) {
+      _highlightController.repeat(reverse: true);
+    }
   }
 
   @override
@@ -76,11 +103,22 @@ class _TaskCardState extends State<TaskCard>
         setState(() => _isProcessing = false);
       }
     }
+
+    // ハイライト状態の変化を監視
+    if (widget.isHighlighted != oldWidget.isHighlighted) {
+      if (widget.isHighlighted) {
+        _highlightController.repeat(reverse: true);
+      } else {
+        _highlightController.stop();
+        _highlightController.reset();
+      }
+    }
   }
 
   @override
   void dispose() {
     _completeController.dispose();
+    _highlightController.dispose();
     super.dispose();
   }
 
@@ -134,7 +172,10 @@ class _TaskCardState extends State<TaskCard>
     }
 
     // 編集モード中の背景色
-    Color getBackgroundColor() {
+    Color getBackgroundColor(double glowValue) {
+      if (widget.isHighlighted) {
+        return AppColors.primary.withOpacity(0.1 + glowValue * 0.1);
+      }
       if (widget.isEditMode && widget.isSelected) {
         return Colors.red.shade50;
       }
@@ -142,37 +183,277 @@ class _TaskCardState extends State<TaskCard>
     }
 
     Widget contentCallback() {
+      // カード内容を共通で構築
+      Widget buildContent() => Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            // 左側のボタン (編集モードのみ表示)
+            if (widget.isEditMode)
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: GestureDetector(
+                  onTap: widget.onToggleSelection,
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      decoration: BoxDecoration(
+                        color: widget.isSelected
+                            ? AppColors.primary
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(
+                          color: widget.isSelected
+                              ? AppColors.primary
+                              : Colors.grey.shade400,
+                          width: 2,
+                        ),
+                      ),
+                      child: widget.isSelected
+                          ? const Icon(
+                              Icons.check,
+                              color: Colors.white,
+                              size: 18,
+                            )
+                          : null,
+                    ),
+                  ),
+                ),
+              ),
+
+            // 中央の情報エリア
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${widget.task.emoji} ${widget.task.content}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                      decoration: isCompletedToday
+                          ? TextDecoration.lineThrough
+                          : null,
+                      color: isCompletedToday ? Colors.grey : Colors.black87,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      if (widget.task.streak > 0)
+                        Container(
+                          margin: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withAlpha(25),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.local_fire_department,
+                                size: 12,
+                                color: Colors.orange.shade700,
+                              ),
+                              Text(
+                                ' ${widget.task.streak}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.orange.shade800,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      if (widget.task.priority > 0 && !isCompletedToday)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: Text(
+                            widget.task.priority == 2 ? '🔴' : '🟡',
+                            style: const TextStyle(fontSize: 10),
+                          ),
+                        ),
+                      if (dateLabel.isNotEmpty && !isCompletedToday)
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.access_time,
+                              size: 12,
+                              color: Colors.grey,
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              dateLabel,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                        ),
+                      if (widget.task.subtasks.isNotEmpty)
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.checklist,
+                              size: 14,
+                              color: widget.task.progress == 1.0
+                                  ? Colors.green
+                                  : Colors.grey,
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              '${widget.task.completedSubtaskCount}/${widget.task.subtasks.length}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            // 右側の完了ボタン (編集モード以外)
+            if (!widget.isEditMode) ...[
+              const SizedBox(width: 8),
+              if (_isProcessing)
+                const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else if (isCompletedToday)
+                IconButton(
+                  icon: Icon(
+                    Icons.check_circle,
+                    color: Colors.green.shade600,
+                    size: 32,
+                  ),
+                  onPressed: _handleUncomplete,
+                  tooltip: '完了を取り消す',
+                )
+              else
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    shape: const StadiumBorder(),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 0,
+                    ),
+                    minimumSize: const Size(60, 32),
+                    elevation: 0,
+                  ),
+                  onPressed: _handleComplete,
+                  child: const Text(
+                    '完了',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                ),
+            ],
+          ],
+        ),
+      );
+
+      // ハイライト時はアニメーションを使用
+      if (widget.isHighlighted) {
+        return AnimatedBuilder(
+          animation: _highlightController,
+          builder: (context, child) {
+            return GestureDetector(
+              onLongPress: widget.onLongPress,
+              onTap: () {
+                // ハイライト解除
+                widget.onDismissHighlight?.call();
+                // 通常のタップ処理
+                if (widget.isEditMode) {
+                  widget.onToggleSelection();
+                } else {
+                  widget.onTap();
+                }
+              },
+              child: Transform.scale(
+                scale: _pulseAnimation.value,
+                child: Container(
+                  margin: const EdgeInsets.symmetric(vertical: 4),
+                  decoration: BoxDecoration(
+                    color: getBackgroundColor(_glowAnimation.value),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withOpacity(
+                          _glowAnimation.value,
+                        ),
+                        blurRadius: 12 + (_glowAnimation.value * 8),
+                        spreadRadius: 1 + (_glowAnimation.value * 2),
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                    border: Border.all(
+                      color: AppColors.primary.withOpacity(
+                        0.6 + _glowAnimation.value * 0.4,
+                      ),
+                      width: 2.5,
+                    ),
+                  ),
+                  child: child,
+                ),
+              ),
+            );
+          },
+          child: buildContent(),
+        );
+      }
+
       return GestureDetector(
         onLongPress: widget.onLongPress, // 編集モード開始
         onTap: widget.isEditMode ? widget.onToggleSelection : widget.onTap,
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
           margin: const EdgeInsets.symmetric(vertical: 4),
           decoration: BoxDecoration(
-            color: getBackgroundColor(),
+            color: getBackgroundColor(0),
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withAlpha(13),
-                blurRadius: 10,
+                blurRadius: widget.isHighlighted ? 16 : 10,
                 offset: const Offset(0, 2),
               ),
             ],
             // 選択中のボーダー
-            border: widget.isEditMode && widget.isSelected
-                ? Border.all(color: Colors.red.shade300, width: 2)
-                : (widget.task.priority > 0 && !isCompletedToday
-                      ? Border.all(
-                          color: _getPriorityColor(
-                            widget.task.priority,
-                          ).withAlpha(255),
-                          width: 2,
-                        )
-                      : (isCompletedToday
+            border: widget.isHighlighted
+                ? Border.all(color: AppColors.primary, width: 2.5)
+                : (widget.isEditMode && widget.isSelected
+                      ? Border.all(color: Colors.red.shade300, width: 2)
+                      : (widget.task.priority > 0 && !isCompletedToday
                             ? Border.all(
-                                color: Colors.green.shade300,
-                                width: 1.5,
+                                color: _getPriorityColor(
+                                  widget.task.priority,
+                                ).withAlpha(255),
+                                width: 2,
                               )
-                            : null)),
+                            : (isCompletedToday
+                                  ? Border.all(
+                                      color: Colors.green.shade300,
+                                      width: 1.5,
+                                    )
+                                  : null))),
           ),
           child: Padding(
             padding: const EdgeInsets.all(12),

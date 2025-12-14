@@ -27,6 +27,7 @@ class TaskService {
     DateTime? recurrenceEndDate,
     String? memo,
     List<String>? attachmentUrls,
+    String? goalId,
   }) async {
     final batch = _firestore.batch();
 
@@ -50,6 +51,7 @@ class TaskService {
       'shareToCircleIds': [],
       'memo': memo,
       'attachmentUrls': attachmentUrls ?? [],
+      'goalId': goalId,
     };
 
     // 繰り返しなしの場合
@@ -161,6 +163,7 @@ class TaskService {
             : null,
         'memo': task.memo,
         'attachmentUrls': task.attachmentUrls,
+        'goalId': task.goalId,
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
@@ -197,6 +200,7 @@ class TaskService {
               : null,
           'memo': task.memo,
           'attachmentUrls': [], // 未来分は空にする
+          'goalId': task.goalId,
         };
 
         batch.set(docRef, {
@@ -230,9 +234,7 @@ class TaskService {
             : null,
         'memo': task.memo,
         'attachmentUrls': task.attachmentUrls,
-        // 繰り返し解除の場合、ここでGroupIDをnullにする必要があるかも？
-        // UI側で制御されている前提だが、念のため task.recurrenceUnit == 'none' なら null化すべき？
-        // 今回の要件では「繰り返し設定」の不具合修正なので、既存ロジックを維持
+        'goalId': task.goalId,
         'updatedAt': FieldValue.serverTimestamp(),
       });
     } else {
@@ -294,6 +296,7 @@ class TaskService {
             : null,
         'memo': task.memo,
         'attachmentUrls': [], // 未来分は空にする
+        'goalId': task.goalId,
       };
 
       for (var date in dates) {
@@ -406,6 +409,19 @@ class TaskService {
       data['id'] = doc.id; // ID埋め込み
       return TaskModel.fromMap(data);
     }).toList();
+  }
+
+  /// Get tasks linked to a goal (Stream)
+  /// userIdが必要なのはFirestoreセキュリティルールがuserIdでのフィルタリングを要求するため
+  Stream<QuerySnapshot<Map<String, dynamic>>> getGoalsTasksStream(
+    String goalId,
+    String userId,
+  ) {
+    return _firestore
+        .collection('tasks')
+        .where('userId', isEqualTo: userId)
+        .where('goalId', isEqualTo: goalId)
+        .snapshots();
   }
 
   // ------------------------------------------------------------------------

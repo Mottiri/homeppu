@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../shared/models/task_model.dart';
@@ -12,7 +13,10 @@ import '../widgets/week_calendar_strip.dart';
 import 'monthly_calendar_screen.dart';
 
 class TasksScreen extends StatefulWidget {
-  const TasksScreen({super.key});
+  final String? highlightTaskId;
+  final DateTime? targetDate;
+
+  const TasksScreen({super.key, this.highlightTaskId, this.targetDate});
 
   @override
   State<TasksScreen> createState() => _TasksScreenState();
@@ -48,6 +52,9 @@ class _TasksScreenState extends State<TasksScreen>
   // 直近で完了したタスクのID (即時ソートによるジャンプを防ぐため)
   final Set<String> _recentlyCompletedTaskIds = {};
 
+  // ハイライト対象タスクID
+  String? _highlightTaskId;
+
   @override
   void initState() {
     super.initState();
@@ -65,7 +72,30 @@ class _TasksScreenState extends State<TasksScreen>
       duration: const Duration(milliseconds: 100),
     );
 
-    _loadData();
+    // ハイライト対象の設定
+    _highlightTaskId = widget.highlightTaskId;
+
+    // 目標日付がある場合はその日付に移動
+    if (widget.targetDate != null) {
+      _selectedDate = widget.targetDate!;
+    }
+
+    _loadData().then((_) {
+      // データ読み込み後に日付ページに移動
+      if (widget.targetDate != null && mounted) {
+        final page = _getPageIndex(widget.targetDate!);
+        _pageController.jumpToPage(page);
+      }
+
+      // ハイライトは3秒後に解除
+      if (_highlightTaskId != null) {
+        Future.delayed(const Duration(seconds: 3), () {
+          if (mounted) {
+            setState(() => _highlightTaskId = null);
+          }
+        });
+      }
+    });
   }
 
   @override
@@ -675,6 +705,10 @@ class _TasksScreenState extends State<TasksScreen>
               ]
             : [
                 IconButton(
+                  icon: const Icon(Icons.flag_outlined),
+                  onPressed: () => context.push('/goals'),
+                ),
+                IconButton(
                   icon: const Icon(Icons.calendar_month),
                   onPressed: () async {
                     final selectedDate = await Navigator.push<DateTime>(
@@ -974,6 +1008,10 @@ class _TasksScreenState extends State<TasksScreen>
 
     return GestureDetector(
       onTap: () {
+        // ハイライト解除
+        if (_highlightTaskId != null) {
+          setState(() => _highlightTaskId = null);
+        }
         if (_isEditMode) {
           _toggleEditMode(false);
         }
@@ -992,6 +1030,8 @@ class _TasksScreenState extends State<TasksScreen>
             onDelete: () => _deleteTask(task),
             isEditMode: _isEditMode,
             isSelected: _selectedTaskIds.contains(task.id),
+            isHighlighted: _highlightTaskId == task.id,
+            onDismissHighlight: () => setState(() => _highlightTaskId = null),
             onToggleSelection: () => _toggleTaskSelection(task.id),
             onLongPress: () {
               if (!_isEditMode) {
@@ -1188,6 +1228,7 @@ class _TasksScreenState extends State<TasksScreen>
         final recurrenceEndDate = result['recurrenceEndDate'] as DateTime?;
 
         final memo = result['memo'] as String?;
+        final goalId = result['goalId'] as String?;
 
         await _taskService.createTask(
           userId: user.uid,
@@ -1202,6 +1243,7 @@ class _TasksScreenState extends State<TasksScreen>
           recurrenceDaysOfWeek: recurrenceDaysOfWeek,
           recurrenceEndDate: recurrenceEndDate,
           memo: memo,
+          goalId: goalId,
         );
         await _loadData();
 

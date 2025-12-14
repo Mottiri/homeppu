@@ -15,6 +15,9 @@ import '../../features/circle/presentation/screens/circles_screen.dart';
 import '../../features/circle/presentation/screens/circle_detail_screen.dart';
 import '../../features/circle/presentation/screens/create_circle_screen.dart';
 import '../../features/tasks/presentation/screens/tasks_screen.dart';
+import '../../features/goals/presentation/screens/goal_list_screen.dart';
+import '../../features/goals/presentation/screens/create_goal_screen.dart';
+import '../../features/goals/presentation/screens/goal_detail_screen.dart';
 import '../../features/notifications/presentation/screens/notifications_screen.dart';
 import '../../shared/providers/auth_provider.dart';
 
@@ -79,7 +82,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/tasks',
             name: 'tasks',
-            builder: (context, state) => const TasksScreen(),
+            builder: (context, state) {
+              final extra = state.extra as Map<String, dynamic>?;
+              final highlightTaskId = extra?['highlightTaskId'] as String?;
+              final targetDate = extra?['targetDate'] as DateTime?;
+              // ハイライトIDがある場合はキーを設定して強制的に再作成
+              return TasksScreen(
+                key: highlightTaskId != null
+                    ? ValueKey('tasks_$highlightTaskId')
+                    : null,
+                highlightTaskId: highlightTaskId,
+                targetDate: targetDate,
+              );
+            },
           ),
           GoRoute(
             path: '/profile',
@@ -148,6 +163,30 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/notifications',
         name: 'notifications',
         builder: (context, state) => const NotificationsScreen(),
+      ),
+
+      // 目標作成
+      GoRoute(
+        path: '/goals/create',
+        name: 'createGoal',
+        builder: (context, state) => const CreateGoalScreen(),
+      ),
+
+      // 目標一覧
+      GoRoute(
+        path: '/goals',
+        name: 'goals',
+        builder: (context, state) => const GoalListScreen(),
+      ),
+
+      // 目標詳細
+      GoRoute(
+        path: '/goals/detail/:goalId',
+        name: 'goalDetail',
+        builder: (context, state) {
+          final goalId = state.pathParameters['goalId']!;
+          return GoalDetailScreen(goalId: goalId);
+        },
       ),
 
       // 投稿詳細画面からの遷移用（ナビバーなし）

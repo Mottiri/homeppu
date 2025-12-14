@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:homeppu/core/constants/app_colors.dart';
 import 'package:homeppu/shared/models/task_model.dart';
 import 'package:homeppu/features/tasks/presentation/widgets/recurrence_settings_sheet.dart';
 import 'package:homeppu/shared/services/media_service.dart';
+import 'package:homeppu/shared/models/goal_model.dart';
+import 'package:homeppu/shared/providers/goal_provider.dart';
 import 'package:intl/intl.dart';
 
-class TaskDetailSheet extends StatefulWidget {
+class TaskDetailSheet extends ConsumerStatefulWidget {
   final TaskModel task;
   final Function(TaskModel, String) onUpdate;
   final Function({bool deleteAll}) onDelete;
@@ -18,16 +22,17 @@ class TaskDetailSheet extends StatefulWidget {
   });
 
   @override
-  State<TaskDetailSheet> createState() => _TaskDetailSheetState();
+  ConsumerState<TaskDetailSheet> createState() => _TaskDetailSheetState();
 }
 
-class _TaskDetailSheetState extends State<TaskDetailSheet> {
+class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
   late TextEditingController _titleController;
   late TextEditingController _memoController;
   late int _priority;
   late DateTime? _scheduledAt;
   late List<TaskItem> _subtasks;
   late List<String> _attachmentUrls;
+  String? _selectedGoalId;
 
   final MediaService _mediaService = MediaService();
   bool _isUploading = false;
@@ -57,6 +62,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         : null;
     _recurrenceEndDate = widget.task.recurrenceEndDate;
     _attachmentUrls = List.from(widget.task.attachmentUrls);
+    _selectedGoalId = widget.task.goalId;
   }
 
   @override
@@ -82,6 +88,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
           ? null
           : _memoController.text.trim(),
       attachmentUrls: _attachmentUrls,
+      goalId: _selectedGoalId,
     );
     widget.onUpdate(updatedTask, editMode);
   }
@@ -675,6 +682,142 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
                             ],
                           ),
                         ),
+                        const Divider(height: 1),
+
+                        // Goal Linking Section
+                        if (FirebaseAuth.instance.currentUser != null)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.flag_rounded,
+                                      color: _selectedGoalId != null
+                                          ? AppColors.primary
+                                          : Colors.grey,
+                                    ),
+                                    const SizedBox(width: 16),
+                                    const Text(
+                                      '目標と紐づけ',
+                                      style: TextStyle(fontSize: 16),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Consumer(
+                                  builder: (context, ref, child) {
+                                    final goalService = ref.watch(
+                                      goalServiceProvider,
+                                    );
+                                    return StreamBuilder<List<GoalModel>>(
+                                      stream: goalService.streamActiveGoals(
+                                        FirebaseAuth.instance.currentUser!.uid,
+                                      ),
+                                      builder: (context, snapshot) {
+                                        if (!snapshot.hasData ||
+                                            snapshot.data!.isEmpty) {
+                                          return Padding(
+                                            padding: const EdgeInsets.only(
+                                              left: 40,
+                                            ),
+                                            child: Text(
+                                              '紐づけ可能な目標がありません',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                color: Colors.grey[500],
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                        final goals = snapshot.data!;
+                                        return SingleChildScrollView(
+                                          scrollDirection: Axis.horizontal,
+                                          padding: const EdgeInsets.only(
+                                            left: 40,
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              // 目標なしオプション
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                  right: 8,
+                                                ),
+                                                child: ChoiceChip(
+                                                  label: const Text('なし'),
+                                                  selected:
+                                                      _selectedGoalId == null,
+                                                  onSelected: (val) {
+                                                    if (val) {
+                                                      setState(
+                                                        () => _selectedGoalId =
+                                                            null,
+                                                      );
+                                                    }
+                                                  },
+                                                  selectedColor:
+                                                      Colors.grey[300],
+                                                  backgroundColor:
+                                                      Colors.grey[100],
+                                                  showCheckmark: false,
+                                                ),
+                                              ),
+                                              // 目標リスト
+                                              ...goals.map((goal) {
+                                                final isSelected =
+                                                    _selectedGoalId == goal.id;
+                                                final goalColor = Color(
+                                                  goal.colorValue,
+                                                );
+                                                return Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                        right: 8,
+                                                      ),
+                                                  child: ChoiceChip(
+                                                    avatar: Icon(
+                                                      Icons.flag_rounded,
+                                                      size: 16,
+                                                      color: isSelected
+                                                          ? Colors.white
+                                                          : goalColor,
+                                                    ),
+                                                    label: Text(goal.title),
+                                                    selected: isSelected,
+                                                    onSelected: (val) {
+                                                      setState(() {
+                                                        _selectedGoalId = val
+                                                            ? goal.id
+                                                            : null;
+                                                      });
+                                                    },
+                                                    selectedColor: goalColor,
+                                                    backgroundColor: goalColor
+                                                        .withOpacity(0.1),
+                                                    labelStyle: TextStyle(
+                                                      color: isSelected
+                                                          ? Colors.white
+                                                          : Colors.black87,
+                                                      fontWeight: isSelected
+                                                          ? FontWeight.bold
+                                                          : FontWeight.normal,
+                                                    ),
+                                                    showCheckmark: false,
+                                                  ),
+                                                );
+                                              }),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
 
                         const Divider(height: 1),
                         const SizedBox(height: 12),
@@ -805,6 +948,7 @@ class _TaskDetailSheetState extends State<TaskDetailSheet> {
         !listEquals(_subtasks, widget.task.subtasks) ||
         (_memoController.text.trim() != (widget.task.memo ?? '')) ||
         !listEquals(_attachmentUrls, widget.task.attachmentUrls) ||
+        _selectedGoalId != widget.task.goalId ||
         _hasRecurrenceRuleChanges();
   }
 

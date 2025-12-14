@@ -3,8 +3,12 @@ import 'package:homeppu/core/constants/app_colors.dart';
 import 'package:homeppu/shared/models/category_model.dart';
 import 'package:intl/intl.dart';
 import 'package:homeppu/features/tasks/presentation/widgets/recurrence_settings_sheet.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../../../shared/models/goal_model.dart';
+import '../../../../shared/providers/goal_provider.dart';
 
-class AddTaskBottomSheet extends StatefulWidget {
+class AddTaskBottomSheet extends ConsumerStatefulWidget {
   final List<CategoryModel> categories;
   final String? initialCategoryId;
   final DateTime? initialScheduledDate;
@@ -17,16 +21,17 @@ class AddTaskBottomSheet extends StatefulWidget {
   });
 
   @override
-  State<AddTaskBottomSheet> createState() => _AddTaskBottomSheetState();
+  ConsumerState<AddTaskBottomSheet> createState() => _AddTaskBottomSheetState();
 }
 
-class _AddTaskBottomSheetState extends State<AddTaskBottomSheet> {
+class _AddTaskBottomSheetState extends ConsumerState<AddTaskBottomSheet> {
   final _titleController = TextEditingController();
   final _memoController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
 
   // Selection State
   String? _selectedCategoryId; // null = 'Task' (Default)
+  String? _selectedGoalId; // null = No Goal
 
   int _priority = 0; // 0, 1, 2
   DateTime? _scheduledDate;
@@ -77,6 +82,7 @@ class _AddTaskBottomSheetState extends State<AddTaskBottomSheet> {
       'recurrenceUnit': _recurrenceUnit,
       'recurrenceDaysOfWeek': _recurrenceDaysOfWeek,
       'recurrenceEndDate': _recurrenceEndDate,
+      'goalId': _selectedGoalId,
     });
   }
 
@@ -399,6 +405,67 @@ class _AddTaskBottomSheetState extends State<AddTaskBottomSheet> {
                     ],
                   ),
                 ),
+                if (FirebaseAuth.instance.currentUser != null) ...[
+                  const SizedBox(height: 12),
+                  Consumer(
+                    builder: (context, ref, child) {
+                      final goalService = ref.watch(goalServiceProvider);
+                      return StreamBuilder<List<GoalModel>>(
+                        stream: goalService.streamActiveGoals(
+                          FirebaseAuth.instance.currentUser!.uid,
+                        ),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData || snapshot.data!.isEmpty)
+                            return const SizedBox.shrink();
+                          final goals = snapshot.data!;
+                          return SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: ActionChip(
+                                    label: const Text('目標なし'),
+                                    backgroundColor: _selectedGoalId == null
+                                        ? Colors.grey[300]
+                                        : Colors.white,
+                                    onPressed: () =>
+                                        setState(() => _selectedGoalId = null),
+                                  ),
+                                ),
+                                ...goals.map((goal) {
+                                  final isSelected = _selectedGoalId == goal.id;
+                                  return Padding(
+                                    padding: const EdgeInsets.only(right: 8),
+                                    child: ChoiceChip(
+                                      label: Text(goal.title),
+                                      selected: isSelected,
+                                      onSelected: (val) {
+                                        setState(
+                                          () => _selectedGoalId = val
+                                              ? goal.id
+                                              : null,
+                                        );
+                                      },
+                                      selectedColor: Color(goal.colorValue),
+                                      backgroundColor: Colors.white,
+                                      labelStyle: TextStyle(
+                                        color: isSelected
+                                            ? Colors.white
+                                            : Colors.black87,
+                                      ),
+                                      showCheckmark: false,
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ],
               ],
             ),
           ),
