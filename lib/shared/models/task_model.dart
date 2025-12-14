@@ -69,6 +69,9 @@ class TaskModel {
   final String? recurrenceUnit; // 'daily', 'weekly', 'monthly', 'yearly'
   final List<int>? recurrenceDaysOfWeek; // 週次の場合の曜日 (1=Mon ... 7=Sun)
   final DateTime? recurrenceEndDate; // 繰り返しの終了日
+  // Attachments & Memo
+  final String? memo;
+  final List<String> attachmentUrls;
 
   TaskModel({
     required this.id,
@@ -94,6 +97,8 @@ class TaskModel {
     this.recurrenceUnit,
     this.recurrenceDaysOfWeek,
     this.recurrenceEndDate,
+    this.memo,
+    this.attachmentUrls = const [],
   });
 
   factory TaskModel.fromFirestore(DocumentSnapshot doc) {
@@ -158,6 +163,8 @@ class TaskModel {
                 ? (data['recurrenceEndDate'] as Timestamp).toDate()
                 : DateTime.parse(data['recurrenceEndDate'].toString()))
           : null,
+      memo: data['memo'],
+      attachmentUrls: List<String>.from(data['attachmentUrls'] ?? []),
     );
   }
 
@@ -184,6 +191,8 @@ class TaskModel {
       'recurrenceUnit': recurrenceUnit,
       'recurrenceDaysOfWeek': recurrenceDaysOfWeek,
       'recurrenceEndDate': recurrenceEndDate,
+      'memo': memo,
+      'attachmentUrls': attachmentUrls,
     };
   }
 
@@ -211,6 +220,8 @@ class TaskModel {
     String? recurrenceUnit,
     List<int>? recurrenceDaysOfWeek,
     DateTime? recurrenceEndDate,
+    String? memo,
+    List<String>? attachmentUrls,
   }) {
     return TaskModel(
       id: id ?? this.id,
@@ -237,6 +248,8 @@ class TaskModel {
       recurrenceUnit: recurrenceUnit ?? this.recurrenceUnit,
       recurrenceDaysOfWeek: recurrenceDaysOfWeek ?? this.recurrenceDaysOfWeek,
       recurrenceEndDate: recurrenceEndDate ?? this.recurrenceEndDate,
+      memo: memo ?? this.memo,
+      attachmentUrls: attachmentUrls ?? this.attachmentUrls,
     );
   }
 

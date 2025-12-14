@@ -54,8 +54,8 @@ service cloud.firestore {
       // 更新: 本人のみ
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
       
-      // 削除: 本人のみ
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      // 削除: 本人のみ (存在しないドキュメントの削除も許可してエラーを防ぐ)
+      allow delete: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid);
     }
     
     // 投稿コレクション

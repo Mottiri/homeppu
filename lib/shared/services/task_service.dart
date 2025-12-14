@@ -25,6 +25,8 @@ class TaskService {
     String? recurrenceUnit,
     List<int>? recurrenceDaysOfWeek,
     DateTime? recurrenceEndDate,
+    String? memo,
+    List<String>? attachmentUrls,
   }) async {
     final batch = _firestore.batch();
 
@@ -46,6 +48,8 @@ class TaskService {
       'categoryId': categoryId,
       'isPublic': false, // デフォルト
       'shareToCircleIds': [],
+      'memo': memo,
+      'attachmentUrls': attachmentUrls ?? [],
     };
 
     // 繰り返しなしの場合
@@ -92,6 +96,18 @@ class TaskService {
           'recurrenceEndDate': recurrenceEndDate != null
               ? Timestamp.fromDate(recurrenceEndDate)
               : null,
+          // 未来のタスクには添付ファイルを引き継がない
+          'attachmentUrls': [],
+          // 未来のタスクのサブタスクは未完了にする
+          'subtasks': baseTaskData['subtasks'] is List
+              ? (baseTaskData['subtasks'] as List).map((item) {
+                  return {
+                    'id': item['id'],
+                    'title': item['title'],
+                    'isCompleted': false, // Reset
+                  };
+                }).toList()
+              : [],
         };
 
         batch.set(docRef, taskData);
@@ -143,6 +159,8 @@ class TaskService {
         'recurrenceEndDate': task.recurrenceEndDate != null
             ? Timestamp.fromDate(task.recurrenceEndDate!)
             : null,
+        'memo': task.memo,
+        'attachmentUrls': task.attachmentUrls,
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
@@ -163,7 +181,10 @@ class TaskService {
           'createdAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
           'priority': task.priority,
-          'subtasks': task.subtasks.map((e) => e.toMap()).toList(),
+          // サブタスクは引き継ぐが完了状態はリセット
+          'subtasks': task.subtasks
+              .map((e) => e.toMap()..['isCompleted'] = false)
+              .toList(),
           'categoryId': task.categoryId,
           'isPublic': task.isPublic,
           'shareToCircleIds': task.shareToCircleIds,
@@ -174,6 +195,8 @@ class TaskService {
           'recurrenceEndDate': task.recurrenceEndDate != null
               ? Timestamp.fromDate(task.recurrenceEndDate!)
               : null,
+          'memo': task.memo,
+          'attachmentUrls': [], // 未来分は空にする
         };
 
         batch.set(docRef, {
@@ -205,6 +228,8 @@ class TaskService {
         'recurrenceEndDate': task.recurrenceEndDate != null
             ? Timestamp.fromDate(task.recurrenceEndDate!)
             : null,
+        'memo': task.memo,
+        'attachmentUrls': task.attachmentUrls,
         // 繰り返し解除の場合、ここでGroupIDをnullにする必要があるかも？
         // UI側で制御されている前提だが、念のため task.recurrenceUnit == 'none' なら null化すべき？
         // 今回の要件では「繰り返し設定」の不具合修正なので、既存ロジックを維持
@@ -253,7 +278,10 @@ class TaskService {
         'createdAt': FieldValue.serverTimestamp(), // 再生成扱い
         'updatedAt': FieldValue.serverTimestamp(),
         'priority': task.priority,
-        'subtasks': task.subtasks.map((e) => e.toMap()).toList(),
+        // サブタスクは引き継ぐが完了状態はリセット
+        'subtasks': task.subtasks
+            .map((e) => e.toMap()..['isCompleted'] = false)
+            .toList(),
         'categoryId': task.categoryId,
         'isPublic': task.isPublic,
         'shareToCircleIds': task.shareToCircleIds,
@@ -264,6 +292,8 @@ class TaskService {
         'recurrenceEndDate': task.recurrenceEndDate != null
             ? Timestamp.fromDate(task.recurrenceEndDate!)
             : null,
+        'memo': task.memo,
+        'attachmentUrls': [], // 未来分は空にする
       };
 
       for (var date in dates) {

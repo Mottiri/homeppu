@@ -22,6 +22,7 @@ class AddTaskBottomSheet extends StatefulWidget {
 
 class _AddTaskBottomSheetState extends State<AddTaskBottomSheet> {
   final _titleController = TextEditingController();
+  final _memoController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
 
   // Selection State
@@ -51,6 +52,7 @@ class _AddTaskBottomSheetState extends State<AddTaskBottomSheet> {
   @override
   void dispose() {
     _titleController.dispose();
+    _memoController.dispose();
     _focusNode.dispose();
     super.dispose();
   }
@@ -63,6 +65,9 @@ class _AddTaskBottomSheetState extends State<AddTaskBottomSheet> {
 
     Navigator.pop(context, {
       'content': title,
+      'memo': _memoController.text.trim().isEmpty
+          ? null
+          : _memoController.text.trim(),
       'type': type,
       'categoryId': _selectedCategoryId,
       'priority': _priority,
@@ -256,6 +261,29 @@ class _AddTaskBottomSheetState extends State<AddTaskBottomSheet> {
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 8),
+                // メモ入力 (Optional)
+                TextField(
+                  controller: _memoController,
+                  decoration: InputDecoration(
+                    hintText: 'メモを追加',
+                    hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
+                    border: InputBorder.none,
+                    isCollapsed: true,
+                    prefixIcon: const Icon(
+                      Icons.notes,
+                      size: 16,
+                      color: Colors.grey,
+                    ),
+                    prefixIconConstraints: const BoxConstraints(
+                      minWidth: 24,
+                      minHeight: 24,
+                    ),
+                  ),
+                  style: const TextStyle(fontSize: 13, color: Colors.black87),
+                  maxLines: 3,
+                  minLines: 1,
                 ),
                 const SizedBox(height: 12),
 

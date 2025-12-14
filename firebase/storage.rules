@@ -97,6 +97,13 @@ service firebase.storage {
                    && isValidProfileSize() 
                    && isImage();
     }
+    // タスク添付ファイル (画像・ファイル)
+    match /task_attachments/{userId}/{taskId}/{fileName} {
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow write: if isAuthenticated() 
+                   && request.auth.uid == userId 
+                   && isValidFileSize(); // 50MB limit
+    }
   }
 }
 

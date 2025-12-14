@@ -19,9 +19,28 @@ class MediaService {
   static const int maxMediaCount = 4; // 最大4つのメディア
 
   // 許可される拡張子
-  static const List<String> allowedImageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-  static const List<String> allowedVideoExtensions = ['mp4', 'mov', 'avi', 'mkv'];
-  static const List<String> allowedFileExtensions = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'zip'];
+  static const List<String> allowedImageExtensions = [
+    'jpg',
+    'jpeg',
+    'png',
+    'gif',
+    'webp',
+  ];
+  static const List<String> allowedVideoExtensions = [
+    'mp4',
+    'mov',
+    'avi',
+    'mkv',
+  ];
+  static const List<String> allowedFileExtensions = [
+    'pdf',
+    'doc',
+    'docx',
+    'xls',
+    'xlsx',
+    'txt',
+    'zip',
+  ];
 
   /// ギャラリーから画像を選択
   Future<List<XFile>> pickImages({int maxCount = 4}) async {
@@ -82,10 +101,13 @@ class MediaService {
   }) async {
     final file = File(filePath);
     final fileSize = await file.length();
-    
+
     // サイズチェック
-    final maxSize = type == MediaType.video ? maxVideoSize :
-                    type == MediaType.image ? maxImageSize : maxFileSize;
+    final maxSize = type == MediaType.video
+        ? maxVideoSize
+        : type == MediaType.image
+        ? maxImageSize
+        : maxFileSize;
     if (fileSize > maxSize) {
       throw Exception('ファイルサイズが大きすぎます（最大${maxSize ~/ (1024 * 1024)}MB）');
     }
@@ -137,7 +159,7 @@ class MediaService {
     Function(int current, int total, double progress)? onProgress,
   }) async {
     final List<MediaItem> results = [];
-    
+
     for (int i = 0; i < filePaths.length; i++) {
       final item = await uploadFile(
         filePath: filePaths[i],
@@ -149,8 +171,54 @@ class MediaService {
       );
       results.add(item);
     }
-    
+
     return results;
+  }
+
+  /// タスク添付ファイルをアップロード
+  Future<String> uploadTaskAttachment({
+    required String filePath,
+    required String userId,
+    required String taskId,
+    Function(double)? onProgress,
+  }) async {
+    final file = File(filePath);
+    final fileSize = await file.length();
+
+    // サイズチェック (50MB)
+    if (fileSize > maxFileSize) {
+      throw Exception('ファイルサイズが大きすぎます（最大${maxFileSize ~/ (1024 * 1024)}MB）');
+    }
+
+    // ファイル名を生成
+    final extension = path.extension(filePath).toLowerCase();
+    final uniqueFileName = '${_uuid.v4()}$extension';
+    final storagePath = 'task_attachments/$userId/$taskId/$uniqueFileName';
+
+    // アップロード
+    final ref = _storage.ref().child(storagePath);
+    final uploadTask = ref.putFile(
+      file,
+      SettableMetadata(
+        contentType: _getMimeType(extension),
+        customMetadata: {
+          'originalFileName': path.basename(filePath),
+          'uploadedAt': DateTime.now().toIso8601String(),
+        },
+      ),
+    );
+
+    // 進捗を通知
+    if (onProgress != null) {
+      uploadTask.snapshotEvents.listen((event) {
+        final progress = event.bytesTransferred / event.totalBytes;
+        onProgress(progress);
+      });
+    }
+
+    // 完了を待つ
+    final snapshot = await uploadTask;
+    return await snapshot.ref.getDownloadURL();
   }
 
   /// メディアを削除
@@ -216,4 +284,3 @@ class MediaService {
     }
   }
 }
-

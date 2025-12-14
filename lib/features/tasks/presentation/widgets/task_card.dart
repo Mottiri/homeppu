@@ -393,9 +393,7 @@ class _TaskCardState extends State<TaskCard>
 
     return Dismissible(
       key: Key(widget.task.id),
-      direction: widget.isEditMode
-          ? DismissDirection.endToStart
-          : DismissDirection.none, // 編集モードのみスワイプ削除有効
+      direction: DismissDirection.none, // スワイプ削除を無効化（編集モードでもページ移動を優先）
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),

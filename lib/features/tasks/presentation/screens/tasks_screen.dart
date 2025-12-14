@@ -265,6 +265,8 @@ class _TasksScreenState extends State<TasksScreen>
       } else {
         _removeTaskLocally(task.id);
       }
+      // 選択中リストからも削除（一括削除でエラーにならないように）
+      _selectedTaskIds.remove(task.id);
     });
 
     try {
@@ -712,9 +714,7 @@ class _TasksScreenState extends State<TasksScreen>
                 ? const Center(child: CircularProgressIndicator())
                 : PageView.builder(
                     controller: _pageController,
-                    physics: _isEditMode
-                        ? const NeverScrollableScrollPhysics()
-                        : const PageScrollPhysics(),
+                    physics: const PageScrollPhysics(),
                     onPageChanged: (index) {
                       final newDate = _getDateFromIndex(index);
                       setState(() {
@@ -1187,10 +1187,12 @@ class _TasksScreenState extends State<TasksScreen>
             result['recurrenceDaysOfWeek'] as List<int>?;
         final recurrenceEndDate = result['recurrenceEndDate'] as DateTime?;
 
+        final memo = result['memo'] as String?;
+
         await _taskService.createTask(
           userId: user.uid,
           content: content,
-          emoji: emoji,
+          emoji: emoji, // Use extracted emoji or default if logic changes
           type: type,
           scheduledAt: scheduledAt,
           priority: priority,
@@ -1199,8 +1201,8 @@ class _TasksScreenState extends State<TasksScreen>
           recurrenceUnit: recurrenceUnit,
           recurrenceDaysOfWeek: recurrenceDaysOfWeek,
           recurrenceEndDate: recurrenceEndDate,
+          memo: memo,
         );
-
         await _loadData();
 
         if (mounted) {
