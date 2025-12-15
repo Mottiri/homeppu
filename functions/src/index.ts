@@ -1720,11 +1720,13 @@ ${content}
       const result = await model.generateContent(prompt);
       const responseText = result.response.text().trim();
 
-      // JSONを抽出
+      // JSONを抽出（様々な形式に対応）
       let jsonText = responseText;
-      const jsonMatch = responseText.match(/```(?: json) ?\s * ([\s\S] *?) \s * ```/);
-      if (jsonMatch) {
-        jsonText = jsonMatch[1];
+      const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (jsonMatch && jsonMatch[1]) {
+        jsonText = jsonMatch[1].trim();
+      } else if (responseText.startsWith("{")) {
+        jsonText = responseText;
       }
 
       const parsed = JSON.parse(jsonText) as ModerationResult;
@@ -1803,32 +1805,40 @@ export const createPostWithModeration = onCall(
     memory: "1GiB", // 動画処理のためメモリを増加
   },
   async (request) => {
+    console.log("=== createPostWithModeration START ===");
+
     if (!request.auth) {
+      console.log("ERROR: Not authenticated");
       throw new HttpsError("unauthenticated", "ログインが必要です");
     }
 
     const userId = request.auth.uid;
     const { content, userDisplayName, userAvatarIndex, postMode, circleId, mediaItems } = request.data;
+    console.log(`User: ${userId}, Content: ${content?.substring(0, 30)}...`);
 
     // ユーザーがBANされているかチェック
     const userDoc = await db.collection("users").doc(userId).get();
     if (userDoc.exists && userDoc.data()?.isBanned) {
+      console.log("ERROR: User is banned");
       throw new HttpsError(
         "permission-denied",
         "申し訳ありませんが、現在投稿できません。運営にお問い合わせください。"
       );
     }
+    console.log("STEP 1: User check passed");
 
     const apiKey = geminiApiKey.value();
 
     // Fail Closed: APIキーがない場合はエラー
     if (!apiKey) {
-      console.error("GEMINI_API_KEY is not set");
+      console.error("ERROR: GEMINI_API_KEY is not set");
       throw new HttpsError("internal", "システムエラーが発生しました。しばらくしてから再度お試しください。");
     }
+    console.log("STEP 2: API key loaded");
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    console.log("STEP 3: Model initialized");
 
     // ===============================================
     // 0. 静的NGワードチェック (Internal Logic)
@@ -1853,6 +1863,7 @@ export const createPostWithModeration = onCall(
     // ===============================================
     // 1. テキストモデレーション (AI)
     // ===============================================
+    console.log("STEP 4: Starting text moderation");
     if (model && content) {
       const textPrompt = `
 あなたはSNS「ほめっぷ」のコンテンツモデレーターです。
@@ -1892,17 +1903,36 @@ ${content}
 }
 `;
 
+      let rawResponseText = "";
       try {
         const result = await model.generateContent(textPrompt);
         const responseText = result.response.text().trim();
+        rawResponseText = responseText; // エラー時の記録用
+        console.log("STEP 5: Got Gemini response, length:", responseText.length);
+        console.log("STEP 5a: Raw response preview:", responseText.substring(0, 300));
 
+        // JSONを抽出（複数の方法で試行）
         let jsonText = responseText;
-        const jsonMatch = responseText.match(/```(?: json) ?\s * ([\s\S] *?) \s * ```/);
-        if (jsonMatch) {
-          jsonText = jsonMatch[1];
+
+        // 方法1: ```json ... ``` または ``` ... ``` を抽出
+        const codeBlockMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+        if (codeBlockMatch && codeBlockMatch[1]) {
+          jsonText = codeBlockMatch[1].trim();
+          console.log("STEP 5b: Extracted from code block");
+        }
+        // 方法2: 最初の { から最後の } までを抽出
+        else {
+          const firstBrace = responseText.indexOf("{");
+          const lastBrace = responseText.lastIndexOf("}");
+          if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+            jsonText = responseText.substring(firstBrace, lastBrace + 1);
+            console.log("STEP 5b: Extracted by brace matching");
+          }
         }
 
+        console.log("STEP 5c: JSON to parse:", jsonText.substring(0, 200));
         const modResult = JSON.parse(jsonText) as ModerationResult;
+        console.log("STEP 5d: Parsed successfully, isNegative:", modResult.isNegative);
 
         if (modResult.isNegative && modResult.confidence >= 0.7) {
           // 徳ポイントを減少
@@ -1933,8 +1963,22 @@ ${content}
           throw error;
         }
         console.error("Text moderation error:", error);
-        // Fail Closed: AIエラー時は投稿を許可しない（安全のため、internal errorとする）
-        throw new HttpsError("internal", "モデレーション処理に失敗しました。もう一度お試しください。");
+
+        // エラーをFirestoreに記録（デバッグ用）- エラーが発生しても無視
+        try {
+          await db.collection("moderationErrors").add({
+            userId: userId,
+            content: content?.substring(0, 100) || "",
+            error: String(error),
+            rawResponse: rawResponseText ? rawResponseText.substring(0, 500) : "empty",
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        } catch (firestoreError) {
+          console.error("Failed to save moderation error:", firestoreError);
+        }
+
+        // Fail Open: AIエラー時は投稿を許可する（UX優先）
+        console.log("Moderation failed, allowing post (fail-open)");
       }
     }
 
@@ -2035,6 +2079,7 @@ ${content}
       totalPosts: admin.firestore.FieldValue.increment(1),
     });
 
+    console.log(`=== createPostWithModeration SUCCESS: postId=${postRef.id} ===`);
     return { success: true, postId: postRef.id };
   }
 );
