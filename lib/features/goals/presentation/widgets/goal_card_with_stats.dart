@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../shared/models/goal_model.dart';
 import '../../../../shared/models/task_model.dart';
@@ -10,13 +11,15 @@ import '../../../../shared/services/task_service.dart';
 class GoalCardWithStats extends StatefulWidget {
   final GoalModel goal;
   final bool isArchived;
-  final VoidCallback? onTap;
+  final bool isReorderMode; // 並び替えモード（タスク非表示）
+  final VoidCallback? onDetailTap; // 詳細画面への遷移用
 
   const GoalCardWithStats({
     super.key,
     required this.goal,
     this.isArchived = false,
-    this.onTap,
+    this.isReorderMode = false,
+    this.onDetailTap,
   });
 
   @override
@@ -25,6 +28,9 @@ class GoalCardWithStats extends StatefulWidget {
 
 class _GoalCardWithStatsState extends State<GoalCardWithStats> {
   static final TaskService _taskService = TaskService();
+
+  // カード展開状態
+  bool _isCardExpanded = true;
 
   // 展開されているタスクのID
   final Set<String> _expandedTaskIds = {};
@@ -81,6 +87,26 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
     );
   }
 
+  // 日付をフォーマット
+  String _formatTaskDate(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final taskDate = DateTime(date.year, date.month, date.day);
+    final diff = taskDate.difference(today).inDays;
+
+    if (diff == 0) {
+      return '今日';
+    } else if (diff == 1) {
+      return '明日';
+    } else if (diff == -1) {
+      return '昨日';
+    } else if (diff > 0 && diff < 7) {
+      return '${diff}日後';
+    } else {
+      return DateFormat('M/d').format(date);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final goalColor = Color(widget.goal.colorValue);
@@ -99,18 +125,59 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
           int totalCount = 0;
 
           if (taskSnapshot.hasData) {
-            tasks = taskSnapshot.data!.docs
+            final allTasks = taskSnapshot.data!.docs
                 .map((d) => TaskModel.fromFirestore(d))
                 .toList();
-            // 未完了タスクを先に、完了タスクを後に
-            tasks.sort((a, b) {
+
+            // 繰り返しタスクをフィルタリング：直近の未完了タスクのみ表示
+            final Map<String, TaskModel> recurringGroupNearest = {};
+            final List<TaskModel> displayTasks = [];
+
+            for (final task in allTasks) {
+              if (task.recurrenceGroupId != null) {
+                // 繰り返しタスク：グループごとに直近の未完了タスクを選択
+                final groupId = task.recurrenceGroupId!;
+                final existing = recurringGroupNearest[groupId];
+
+                if (existing == null) {
+                  recurringGroupNearest[groupId] = task;
+                } else {
+                  // 未完了を優先、同じ完了状態なら日付が近い方を優先
+                  final existingCompleted = existing.isCompleted;
+                  final taskCompleted = task.isCompleted;
+
+                  if (!taskCompleted && existingCompleted) {
+                    // 未完了を優先
+                    recurringGroupNearest[groupId] = task;
+                  } else if (taskCompleted == existingCompleted) {
+                    // 同じ完了状態なら日付が近い（scheduledAtが小さい）方
+                    final existingDate = existing.scheduledAt ?? DateTime.now();
+                    final taskDate = task.scheduledAt ?? DateTime.now();
+                    if (taskDate.isBefore(existingDate)) {
+                      recurringGroupNearest[groupId] = task;
+                    }
+                  }
+                }
+              } else {
+                // 非繰り返しタスクはそのまま表示
+                displayTasks.add(task);
+              }
+            }
+
+            // 繰り返しグループの代表タスクを追加
+            displayTasks.addAll(recurringGroupNearest.values);
+
+            // ソート：未完了タスクを先に、完了タスクを後に
+            displayTasks.sort((a, b) {
               if (a.isCompleted != b.isCompleted) {
                 return a.isCompleted ? 1 : -1;
               }
               return b.priority.compareTo(a.priority);
             });
-            totalCount = tasks.length;
-            completedCount = tasks.where((t) => t.isCompleted).length;
+
+            tasks = displayTasks;
+            totalCount = allTasks.length; // 全タスク数（プログレス計算用）
+            completedCount = allTasks.where((t) => t.isCompleted).length;
           }
 
           return AnimatedContainer(
@@ -153,8 +220,11 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
                 // ヘッダー部分（タップで詳細画面へ）
                 _buildHeader(goalColor, completedCount, totalCount),
 
-                // タスク一覧
-                if (tasks.isNotEmpty && !widget.isArchived) ...[
+                // タスク一覧（展開時のみ表示、並び替えモード時は非表示）
+                if (!widget.isReorderMode &&
+                    _isCardExpanded &&
+                    tasks.isNotEmpty &&
+                    !widget.isArchived) ...[
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Divider(
@@ -193,7 +263,7 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
     final progress = totalCount > 0 ? completedCount / totalCount : 0.0;
 
     return InkWell(
-      onTap: widget.onTap,
+      onTap: () => setState(() => _isCardExpanded = !_isCardExpanded),
       borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -273,12 +343,38 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
               ),
             ),
 
-            // 矢印
-            Icon(
-              Icons.chevron_right_rounded,
-              color: widget.isArchived
-                  ? AppColors.textHint
-                  : goalColor.withOpacity(0.5),
+            // 展開/折りたたみアイコン + 詳細ボタン
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 詳細画面へ（長押しまたはダブルタップ）
+                GestureDetector(
+                  onTap: widget.onDetailTap,
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: goalColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.open_in_new_rounded,
+                      size: 18,
+                      color: goalColor,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // 展開/折りたたみ
+                Icon(
+                  _isCardExpanded
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  size: 20,
+                  color: widget.isArchived
+                      ? AppColors.textHint
+                      : goalColor.withOpacity(0.5),
+                ),
+              ],
             ),
           ],
         ),
@@ -391,22 +487,51 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
 
                   // タスクタイトル
                   Expanded(
-                    child: Text(
-                      task.content,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: task.isCompleted
-                            ? AppColors.textHint
-                            : AppColors.textPrimary,
-                        decoration: task.isCompleted
-                            ? TextDecoration.lineThrough
-                            : null,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      maxLines: isExpanded ? null : 1,
-                      overflow: isExpanded ? null : TextOverflow.ellipsis,
+                    child: Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            task.content,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: task.isCompleted
+                                  ? AppColors.textHint
+                                  : AppColors.textPrimary,
+                              decoration: task.isCompleted
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: isExpanded ? null : 1,
+                            overflow: isExpanded ? null : TextOverflow.ellipsis,
+                          ),
+                        ),
+                        // 繰り返しアイコン
+                        if (task.recurrenceGroupId != null)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 6),
+                            child: Icon(
+                              Icons.repeat,
+                              size: 14,
+                              color: goalColor.withOpacity(0.7),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
+
+                  // 日付表示
+                  if (task.scheduledAt != null)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: Text(
+                        _formatTaskDate(task.scheduledAt!),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textHint,
+                        ),
+                      ),
+                    ),
 
                   // サブタスク展開アイコン（タップで展開）
                   if (hasSubtasks) ...[

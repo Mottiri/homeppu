@@ -55,6 +55,10 @@ class _TasksScreenState extends State<TasksScreen>
   // ハイライト対象タスクID
   String? _highlightTaskId;
 
+  // タスクリストのScrollController
+  final ScrollController _taskListScrollController = ScrollController();
+  bool _hasScrolledToHighlight = false;
+
   // FAB表示制御
   bool _isFabVisible = true;
 
@@ -63,11 +67,25 @@ class _TasksScreenState extends State<TasksScreen>
     super.initState();
     _tabController = TabController(length: 2, vsync: this); // 初期値
     _tabController.addListener(_handleTabSelection);
-    _pageController = PageController(initialPage: _initialPage);
 
     // アンカー日付を固定（セッション中に日付が変わってもインデックスがずれないように）
     final now = DateTime.now();
     _anchorDate = DateTime(now.year, now.month, now.day);
+
+    // 目標日付がある場合はその日付に移動
+    if (widget.targetDate != null) {
+      _selectedDate = widget.targetDate!;
+      // 初期ページをtargetDateに基づいて計算
+      final targetDateOnly = DateTime(
+        widget.targetDate!.year,
+        widget.targetDate!.month,
+        widget.targetDate!.day,
+      );
+      final diff = targetDateOnly.difference(_anchorDate).inDays;
+      _pageController = PageController(initialPage: _initialPage + diff);
+    } else {
+      _pageController = PageController(initialPage: _initialPage);
+    }
 
     // 振動アニメーション用 (小刻みに震える)
     _shakeController = AnimationController(
@@ -78,18 +96,7 @@ class _TasksScreenState extends State<TasksScreen>
     // ハイライト対象の設定
     _highlightTaskId = widget.highlightTaskId;
 
-    // 目標日付がある場合はその日付に移動
-    if (widget.targetDate != null) {
-      _selectedDate = widget.targetDate!;
-    }
-
     _loadData().then((_) {
-      // データ読み込み後に日付ページに移動
-      if (widget.targetDate != null && mounted) {
-        final page = _getPageIndex(widget.targetDate!);
-        _pageController.jumpToPage(page);
-      }
-
       // ハイライトは3秒後に解除
       if (_highlightTaskId != null) {
         Future.delayed(const Duration(seconds: 3), () {
@@ -106,6 +113,7 @@ class _TasksScreenState extends State<TasksScreen>
     _tabController.dispose();
     _pageController.dispose();
     _shakeController.dispose();
+    _taskListScrollController.dispose();
     super.dispose();
   }
 
@@ -1039,30 +1047,60 @@ class _TasksScreenState extends State<TasksScreen>
           }
           return false;
         },
-        child: ListView.builder(
-          padding: const EdgeInsets.only(bottom: 150),
-          itemCount: filteredTasks.length,
-          itemBuilder: (context, index) {
-            final task = filteredTasks[index];
-            return TaskCard(
-              task: task,
-              onTap: () => _showTaskDetail(task),
-              onComplete: () => _completeTask(task),
-              onUncomplete: () => _uncompleteTask(task),
-              onDelete: () => _deleteTask(task),
-              isEditMode: _isEditMode,
-              isSelected: _selectedTaskIds.contains(task.id),
-              isHighlighted: _highlightTaskId == task.id,
-              onDismissHighlight: () => setState(() => _highlightTaskId = null),
-              onToggleSelection: () => _toggleTaskSelection(task.id),
-              onLongPress: () {
-                if (!_isEditMode) {
-                  _toggleEditMode(true);
-                  _toggleTaskSelection(task.id);
-                }
+        child: Builder(
+          builder: (context) {
+            // ハイライトタスクへの自動スクロール
+            if (_highlightTaskId != null && !_hasScrolledToHighlight) {
+              final highlightIndex = filteredTasks.indexWhere(
+                (t) => t.id == _highlightTaskId,
+              );
+              if (highlightIndex >= 0) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted && _taskListScrollController.hasClients) {
+                    // タスクカードの高さ（約100px）× インデックス
+                    final offset = highlightIndex * 100.0;
+                    _taskListScrollController.animateTo(
+                      offset.clamp(
+                        0.0,
+                        _taskListScrollController.position.maxScrollExtent,
+                      ),
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeOut,
+                    );
+                    _hasScrolledToHighlight = true;
+                  }
+                });
+              }
+            }
+
+            return ListView.builder(
+              controller: _taskListScrollController,
+              padding: const EdgeInsets.only(bottom: 150),
+              itemCount: filteredTasks.length,
+              itemBuilder: (context, index) {
+                final task = filteredTasks[index];
+                return TaskCard(
+                  task: task,
+                  onTap: () => _showTaskDetail(task),
+                  onComplete: () => _completeTask(task),
+                  onUncomplete: () => _uncompleteTask(task),
+                  onDelete: () => _deleteTask(task),
+                  isEditMode: _isEditMode,
+                  isSelected: _selectedTaskIds.contains(task.id),
+                  isHighlighted: _highlightTaskId == task.id,
+                  onDismissHighlight: () =>
+                      setState(() => _highlightTaskId = null),
+                  onToggleSelection: () => _toggleTaskSelection(task.id),
+                  onLongPress: () {
+                    if (!_isEditMode) {
+                      _toggleEditMode(true);
+                      _toggleTaskSelection(task.id);
+                    }
+                  },
+                  shakeAnimation: shakeAnimation,
+                  onConfirmDismiss: () => _confirmDelete(1),
+                );
               },
-              shakeAnimation: shakeAnimation,
-              onConfirmDismiss: () => _confirmDelete(1),
             );
           },
         ),

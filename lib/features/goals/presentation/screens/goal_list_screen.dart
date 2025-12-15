@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -17,10 +18,12 @@ class GoalListScreen extends ConsumerStatefulWidget {
 }
 
 class _GoalListScreenState extends ConsumerState<GoalListScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   bool _isArchiveExpanded = false;
+  bool _isReorderMode = false; // 並び替えモード
   late AnimationController _fabController;
   late Animation<double> _fabScaleAnimation;
+  late AnimationController _jiggleController; // プルプルアニメーション用
 
   @override
   void initState() {
@@ -33,12 +36,30 @@ class _GoalListScreenState extends ConsumerState<GoalListScreen>
       begin: 1.0,
       end: 0.9,
     ).animate(CurvedAnimation(parent: _fabController, curve: Curves.easeInOut));
+
+    _jiggleController = AnimationController(
+      duration: const Duration(milliseconds: 150),
+      vsync: this,
+    );
   }
 
   @override
   void dispose() {
     _fabController.dispose();
+    _jiggleController.dispose();
     super.dispose();
+  }
+
+  void _toggleReorderMode() {
+    setState(() {
+      _isReorderMode = !_isReorderMode;
+      if (_isReorderMode) {
+        _jiggleController.repeat(reverse: true);
+      } else {
+        _jiggleController.stop();
+        _jiggleController.reset();
+      }
+    });
   }
 
   @override
@@ -141,19 +162,102 @@ class _GoalListScreenState extends ConsumerState<GoalListScreen>
                               ),
                             ),
                           ),
+                          const Spacer(),
+                          // 並び替えボタン
+                          if (goals.length > 1)
+                            TextButton.icon(
+                              onPressed: _toggleReorderMode,
+                              icon: Icon(
+                                _isReorderMode ? Icons.check : Icons.swap_vert,
+                                size: 18,
+                                color: _isReorderMode
+                                    ? Colors.green
+                                    : AppColors.textSecondary,
+                              ),
+                              label: Text(
+                                _isReorderMode ? '完了' : '並替',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: _isReorderMode
+                                      ? Colors.green
+                                      : AppColors.textSecondary,
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ),
-                    ListView.builder(
+                    ReorderableListView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
+                      buildDefaultDragHandles: false,
                       itemCount: goals.length,
+                      proxyDecorator: (child, index, animation) {
+                        return AnimatedBuilder(
+                          animation: animation,
+                          builder: (context, child) {
+                            final elevation = lerpDouble(
+                              0,
+                              8,
+                              animation.value,
+                            )!;
+                            return Material(
+                              elevation: elevation,
+                              color: Colors.transparent,
+                              shadowColor: Colors.black.withOpacity(0.3),
+                              borderRadius: BorderRadius.circular(20),
+                              child: child,
+                            );
+                          },
+                          child: child,
+                        );
+                      },
+                      onReorder: (oldIndex, newIndex) async {
+                        // Optimistic Update
+                        final reorderedGoals = List<GoalModel>.from(goals);
+                        if (oldIndex < newIndex) {
+                          newIndex -= 1;
+                        }
+                        final item = reorderedGoals.removeAt(oldIndex);
+                        reorderedGoals.insert(newIndex, item);
+
+                        // Firestore更新
+                        await goalService.reorderGoals(reorderedGoals);
+                      },
                       itemBuilder: (context, index) {
                         final goal = goals[index];
-                        return GoalCardWithStats(
-                          key: ValueKey(goal.id),
+                        // ランダムなオフセットで各カードが異なるタイミングで震える
+                        final randomOffset = (index % 3) * 0.3;
+
+                        Widget cardWidget = GoalCardWithStats(
                           goal: goal,
-                          onTap: () => context.push('/goals/detail/${goal.id}'),
+                          isReorderMode: _isReorderMode,
+                          onDetailTap: _isReorderMode
+                              ? null
+                              : () => context.push('/goals/detail/${goal.id}'),
+                        );
+                        // 並び替えモード時のみプルプル
+                        if (_isReorderMode) {
+                          cardWidget = AnimatedBuilder(
+                            animation: _jiggleController,
+                            builder: (context, child) {
+                              // -1.5度 〜 +1.5度 の回転
+                              final angle =
+                                  (_jiggleController.value - 0.5) * 0.05;
+                              return Transform.rotate(
+                                angle: angle + (randomOffset * 0.01),
+                                child: child,
+                              );
+                            },
+                            child: cardWidget,
+                          );
+                        }
+
+                        return ReorderableDragStartListener(
+                          key: ValueKey(goal.id),
+                          index: index,
+                          enabled: _isReorderMode, // 並び替えモード時のみ即座にドラッグ可能
+                          child: cardWidget,
                         );
                       },
                     ),

@@ -11,6 +11,7 @@ class GoalModel {
   final DateTime updatedAt;
   final DateTime? completedAt; // If not null, goal is completed (Archived)
   final bool isPublic;
+  final int order; // 並び順（0が最上位）
 
   GoalModel({
     required this.id,
@@ -23,6 +24,7 @@ class GoalModel {
     required this.updatedAt,
     this.completedAt,
     this.isPublic = false, // Defaults to private, but tasks can inherit this
+    this.order = 0,
   });
 
   bool get isCompleted => completedAt != null;
@@ -60,6 +62,7 @@ class GoalModel {
                 : DateTime.parse(data['completedAt'].toString()))
           : null,
       isPublic: data['isPublic'] ?? false,
+      order: data['order'] ?? 0,
     );
   }
 
@@ -74,6 +77,7 @@ class GoalModel {
       'updatedAt': updatedAt,
       'completedAt': completedAt,
       'isPublic': isPublic,
+      'order': order,
     };
   }
 
@@ -88,6 +92,7 @@ class GoalModel {
     DateTime? updatedAt,
     DateTime? completedAt,
     bool? isPublic,
+    int? order,
     bool forceClearCompletedAt = false, // Helper to un-complete
   }) {
     return GoalModel(
@@ -103,6 +108,7 @@ class GoalModel {
           ? null
           : (completedAt ?? this.completedAt),
       isPublic: isPublic ?? this.isPublic,
+      order: order ?? this.order,
     );
   }
 }

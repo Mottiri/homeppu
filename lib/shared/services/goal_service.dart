@@ -80,12 +80,14 @@ class GoalService {
     return _goalsCollection
         .where('userId', isEqualTo: userId)
         .where('completedAt', isNull: true)
-        .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs
+          final goals = snapshot.docs
               .map((doc) => GoalModel.fromFirestore(doc))
               .toList();
+          // orderでソート（クライアント側でソート）
+          goals.sort((a, b) => a.order.compareTo(b.order));
+          return goals;
         });
   }
 
@@ -124,5 +126,14 @@ class GoalService {
         .length;
 
     return [completed, total];
+  }
+
+  // 目標の並び替え
+  Future<void> reorderGoals(List<GoalModel> goals) async {
+    final batch = _firestore.batch();
+    for (var i = 0; i < goals.length; i++) {
+      batch.update(_goalsCollection.doc(goals[i].id), {'order': i});
+    }
+    await batch.commit();
   }
 }

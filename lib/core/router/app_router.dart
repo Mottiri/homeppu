@@ -86,10 +86,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               final extra = state.extra as Map<String, dynamic>?;
               final highlightTaskId = extra?['highlightTaskId'] as String?;
               final targetDate = extra?['targetDate'] as DateTime?;
-              // ハイライトIDがある場合はキーを設定して強制的に再作成
+              // ハイライトIDがある場合はキーを設定して強制的に再作成（タイムスタンプで毎回ユニーク）
               return TasksScreen(
                 key: highlightTaskId != null
-                    ? ValueKey('tasks_$highlightTaskId')
+                    ? ValueKey(
+                        'tasks_${highlightTaskId}_${DateTime.now().millisecondsSinceEpoch}',
+                      )
                     : null,
                 highlightTaskId: highlightTaskId,
                 targetDate: targetDate,
