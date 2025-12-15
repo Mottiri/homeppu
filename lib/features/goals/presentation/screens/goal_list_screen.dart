@@ -6,7 +6,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../shared/models/goal_model.dart';
 import '../../../../shared/providers/goal_provider.dart';
-import '../widgets/goal_card.dart';
 import '../widgets/goal_card_with_stats.dart';
 import '../widgets/empty_goals_view.dart';
 
@@ -19,7 +18,6 @@ class GoalListScreen extends ConsumerStatefulWidget {
 
 class _GoalListScreenState extends ConsumerState<GoalListScreen>
     with TickerProviderStateMixin {
-  bool _isArchiveExpanded = false;
   bool _isReorderMode = false; // 並び替えモード
   late AnimationController _fabController;
   late Animation<double> _fabScaleAnimation;
@@ -370,135 +368,60 @@ class _GoalListScreenState extends ConsumerState<GoalListScreen>
   }
 
   Widget _buildArchiveSection(dynamic goalService, String userId) {
-    return Column(
-      children: [
-        // 殿堂入りヘッダー
-        GestureDetector(
-          onTap: () {
-            setState(() {
-              _isArchiveExpanded = !_isArchiveExpanded;
-            });
-          },
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [const Color(0xFFFFFBE6), const Color(0xFFFFF8E1)],
+    // 殿堂入りボタン（タップで遷移）
+    return GestureDetector(
+      onTap: () => context.push('/goals/completed'),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [const Color(0xFFFFFBE6), const Color(0xFFFFF8E1)],
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.3)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFFD700), Color(0xFFFFC107)],
+                ),
+                borderRadius: BorderRadius.circular(10),
               ),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: const Color(0xFFFFD700).withOpacity(0.3),
+              child: const Icon(
+                Icons.emoji_events_rounded,
+                size: 18,
+                color: Colors.white,
               ),
             ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFFFD700), Color(0xFFFFC107)],
-                    ),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.emoji_events_rounded,
-                    size: 18,
-                    color: Colors.white,
-                  ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                '殿堂入り',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFFB8860B),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    '殿堂入り',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFFB8860B),
-                    ),
-                  ),
-                ),
-                Text(
-                  '達成した目標',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: const Color(0xFFB8860B).withOpacity(0.7),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                AnimatedRotation(
-                  turns: _isArchiveExpanded ? 0.25 : 0,
-                  duration: const Duration(milliseconds: 200),
-                  child: Icon(
-                    Icons.chevron_right_rounded,
-                    color: const Color(0xFFB8860B),
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
+            Text(
+              '達成した目標を見る',
+              style: TextStyle(
+                fontSize: 12,
+                color: const Color(0xFFB8860B).withOpacity(0.7),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(Icons.chevron_right_rounded, color: const Color(0xFFB8860B)),
+          ],
         ),
-
-        // 殿堂入りリスト
-        AnimatedCrossFade(
-          firstChild: const SizedBox.shrink(),
-          secondChild: StreamBuilder<List<GoalModel>>(
-            stream: goalService.streamCompletedGoals(userId),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) return const SizedBox.shrink();
-              final completedGoals = snapshot.data ?? [];
-
-              if (completedGoals.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Center(
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.emoji_events_outlined,
-                          size: 40,
-                          color: AppColors.textHint,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'まだ達成した目標はありません',
-                          style: TextStyle(
-                            color: AppColors.textHint,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }
-
-              return Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: completedGoals.length,
-                  itemBuilder: (context, index) {
-                    final goal = completedGoals[index];
-                    return GoalCard(
-                      goal: goal,
-                      isArchived: true,
-                      onTap: () => context.push('/goals/detail/${goal.id}'),
-                    );
-                  },
-                ),
-              );
-            },
-          ),
-          crossFadeState: _isArchiveExpanded
-              ? CrossFadeState.showSecond
-              : CrossFadeState.showFirst,
-          duration: const Duration(milliseconds: 200),
-        ),
-      ],
+      ),
     );
   }
 

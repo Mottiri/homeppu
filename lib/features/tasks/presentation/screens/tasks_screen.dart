@@ -6,7 +6,7 @@ import '../../../../shared/models/task_model.dart';
 import '../../../../shared/models/category_model.dart';
 import '../../../../shared/services/task_service.dart';
 import '../../../../shared/services/category_service.dart';
-import '../widgets/add_task_bottom_sheet.dart';
+
 import '../widgets/task_detail_sheet.dart';
 import '../widgets/task_card.dart';
 import '../widgets/week_calendar_strip.dart';
@@ -23,7 +23,7 @@ class TasksScreen extends StatefulWidget {
 }
 
 class _TasksScreenState extends State<TasksScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   final TaskService _taskService = TaskService();
   final CategoryService _categoryService = CategoryService();
   late TabController _tabController;
@@ -44,7 +44,6 @@ class _TasksScreenState extends State<TasksScreen>
   List<TaskModel> _defaultTasks = []; // カテゴリなしタスク
 
   bool _isLoading = true;
-  bool _isAdding = false;
 
   DateTime _selectedDate = DateTime.now();
   Map<DateTime, List<TaskModel>> _taskData = {};
@@ -65,6 +64,8 @@ class _TasksScreenState extends State<TasksScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+
     _tabController = TabController(length: 2, vsync: this); // 初期値
     _tabController.addListener(_handleTabSelection);
 
@@ -110,11 +111,20 @@ class _TasksScreenState extends State<TasksScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _tabController.dispose();
     _pageController.dispose();
     _shakeController.dispose();
     _taskListScrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // アプリがフォアグラウンドに戻ったときにサーバーからリフレッシュ
+    if (state == AppLifecycleState.resumed) {
+      _loadData(showLoading: false, forceRefresh: true);
+    }
   }
 
   DateTime _getDateFromIndex(int index) {
@@ -130,7 +140,10 @@ class _TasksScreenState extends State<TasksScreen>
     return _initialPage + diff;
   }
 
-  Future<void> _loadData({bool showLoading = true}) async {
+  Future<void> _loadData({
+    bool showLoading = true,
+    bool forceRefresh = true, // デフォルトでサーバーから取得
+  }) async {
     if (!mounted) return;
     if (showLoading) {
       setState(() => _isLoading = true);
@@ -148,7 +161,7 @@ class _TasksScreenState extends State<TasksScreen>
       // カテゴリとタスクを並行取得
       final results = await Future.wait([
         _categoryService.getCategories(),
-        _taskService.getTasks(userId: user.uid),
+        _taskService.getTasks(userId: user.uid, forceRefresh: forceRefresh),
       ]);
 
       if (!mounted) return;
@@ -789,31 +802,7 @@ class _TasksScreenState extends State<TasksScreen>
           ),
         ],
       ),
-      floatingActionButton: AnimatedScale(
-        scale: _isFabVisible ? 1.0 : 0.0,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeInOut,
-        child: Padding(
-          padding: const EdgeInsets.only(bottom: 100),
-          child: FloatingActionButton(
-            onPressed: _isAdding || !_isFabVisible ? null : _addTask,
-            backgroundColor: Theme.of(context).primaryColor,
-            foregroundColor: Colors.white,
-            elevation: 4,
-            child: _isAdding
-                ? const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2,
-                    ),
-                  )
-                : const Icon(Icons.add, size: 28),
-          ),
-        ),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      // FABは削除（ボトムナビの中央ボタンに移動）
     );
   }
 
@@ -1241,92 +1230,5 @@ class _TasksScreenState extends State<TasksScreen>
 
   bool isSameDay(DateTime a, DateTime b) {
     return a.year == b.year && a.month == b.month && a.day == b.day;
-  }
-
-  Future<void> _addTask() async {
-    if (_isAdding) return;
-    setState(() => _isAdding = true);
-
-    try {
-      // 現在選択中のタブから初期値を決定
-      final currentIndex = _tabController.index;
-      String? initialCategoryId;
-
-      // Tab mapping: 0=Default, 1..N=Categories
-      if (currentIndex > 0 && currentIndex <= _categories.length) {
-        final catIndex = currentIndex - 1;
-        if (catIndex >= 0 && catIndex < _categories.length) {
-          initialCategoryId = _categories[catIndex].id;
-        }
-      }
-
-      final result = await showModalBottomSheet<Map<String, dynamic>>(
-        context: context,
-        isScrollControlled: true,
-        useRootNavigator: true, // BottomNavigationBarの上に出すために必要
-        builder: (context) => AddTaskBottomSheet(
-          categories: _categories,
-          initialCategoryId: initialCategoryId,
-          initialScheduledDate: _selectedDate,
-        ),
-        backgroundColor: Colors.transparent,
-      );
-
-      if (result != null) {
-        final user = FirebaseAuth.instance.currentUser;
-        if (user == null) return; // Should not happen if logged in
-
-        final content = result['content'] as String;
-        final type = result['type'] as String;
-        final priority = result['priority'] as int;
-        final scheduledAt = result['scheduledAt'] as DateTime?;
-        final emoji = result['emoji'] as String;
-        final categoryId = result['categoryId'] as String?;
-        final recurrenceInterval = result['recurrenceInterval'] as int?;
-        final recurrenceUnit = result['recurrenceUnit'] as String?;
-        final recurrenceDaysOfWeek =
-            result['recurrenceDaysOfWeek'] as List<int>?;
-        final recurrenceEndDate = result['recurrenceEndDate'] as DateTime?;
-
-        final memo = result['memo'] as String?;
-        final goalId = result['goalId'] as String?;
-
-        await _taskService.createTask(
-          userId: user.uid,
-          content: content,
-          emoji: emoji, // Use extracted emoji or default if logic changes
-          type: type,
-          scheduledAt: scheduledAt,
-          priority: priority,
-          categoryId: categoryId,
-          recurrenceInterval: recurrenceInterval,
-          recurrenceUnit: recurrenceUnit,
-          recurrenceDaysOfWeek: recurrenceDaysOfWeek,
-          recurrenceEndDate: recurrenceEndDate,
-          memo: memo,
-          goalId: goalId,
-        );
-        await _loadData();
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('タスクを追加しました！がんばろう！'),
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('追加に失敗しました: $e')));
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isAdding = false);
-      }
-    }
   }
 }

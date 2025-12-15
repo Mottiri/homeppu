@@ -2,12 +2,44 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../tasks/presentation/widgets/add_task_bottom_sheet.dart';
+import '../../../../shared/services/task_service.dart';
+import '../../../../shared/services/category_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 /// メイン画面のシェル（ボトムナビゲーション）
-class MainShell extends StatelessWidget {
+class MainShell extends StatefulWidget {
   final Widget child;
 
   const MainShell({super.key, required this.child});
+
+  @override
+  State<MainShell> createState() => _MainShellState();
+}
+
+class _MainShellState extends State<MainShell>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _rotationController;
+  late Animation<double> _rotationAnimation;
+  int _previousIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _rotationController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    _rotationAnimation = Tween<double>(begin: 0, end: 0.5).animate(
+      CurvedAnimation(parent: _rotationController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _rotationController.dispose();
+    super.dispose();
+  }
 
   int _getCurrentIndex(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
@@ -19,13 +51,103 @@ class MainShell extends StatelessWidget {
     return 0;
   }
 
+  void _handleCenterButtonTap(BuildContext context, bool isTaskScreen) async {
+    if (isTaskScreen) {
+      // タスク作成ボトムシートを表示
+      await _showAddTaskSheet(context);
+    } else {
+      // 投稿作成画面へ遷移
+      context.push('/create-post');
+    }
+  }
+
+  Future<void> _showAddTaskSheet(BuildContext context) async {
+    final categoryService = CategoryService();
+    final taskService = TaskService();
+    final categories = await categoryService.getCategories();
+
+    if (!mounted) return;
+
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      useRootNavigator: true,
+      builder: (context) => AddTaskBottomSheet(
+        categories: categories,
+        initialCategoryId: null,
+        initialScheduledDate: DateTime.now(),
+      ),
+      backgroundColor: Colors.transparent,
+    );
+
+    if (result != null) {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      final content = result['content'] as String;
+      final type = result['type'] as String;
+      final priority = result['priority'] as int;
+      final scheduledAt = result['scheduledAt'] as DateTime?;
+      final emoji = result['emoji'] as String;
+      final categoryId = result['categoryId'] as String?;
+      final recurrenceInterval = result['recurrenceInterval'] as int?;
+      final recurrenceUnit = result['recurrenceUnit'] as String?;
+      final recurrenceDaysOfWeek = result['recurrenceDaysOfWeek'] as List<int>?;
+      final recurrenceEndDate = result['recurrenceEndDate'] as DateTime?;
+      final memo = result['memo'] as String?;
+      final goalId = result['goalId'] as String?;
+
+      await taskService.createTask(
+        userId: user.uid,
+        content: content,
+        emoji: emoji,
+        type: type,
+        scheduledAt: scheduledAt,
+        priority: priority,
+        categoryId: categoryId,
+        recurrenceInterval: recurrenceInterval,
+        recurrenceUnit: recurrenceUnit,
+        recurrenceDaysOfWeek: recurrenceDaysOfWeek,
+        recurrenceEndDate: recurrenceEndDate,
+        memo: memo,
+        goalId: goalId,
+      );
+
+      // タスク画面をリフレッシュ
+      if (mounted) {
+        context.go('/tasks', extra: {'forceRefresh': true});
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentIndex = _getCurrentIndex(context);
+    final isTaskScreen = currentIndex == 2;
+
+    // 画面が変わったときにアニメーション
+    if (currentIndex != _previousIndex) {
+      if (isTaskScreen) {
+        _rotationController.forward();
+      } else if (_previousIndex == 2) {
+        _rotationController.reverse();
+      }
+      _previousIndex = currentIndex;
+    }
+
+    // タスク画面用の色
+    final taskButtonGradient = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        const Color(0xFF81C784), // 淡いグリーン
+        const Color(0xFF66BB6A),
+      ],
+    );
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
-      body: child,
+      body: widget.child,
       extendBody: true,
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
@@ -63,28 +185,41 @@ class MainShell extends StatelessWidget {
                   onTap: () => context.go('/circles'),
                 ),
 
-                // 投稿ボタン（中央・大きめ）
+                // 中央ボタン（投稿/タスク作成）
                 GestureDetector(
-                  onTap: () => context.push('/create-post'),
-                  child: Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      gradient: AppColors.primaryGradient,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withOpacity(0.4),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
+                  onTap: () => _handleCenterButtonTap(context, isTaskScreen),
+                  child: AnimatedBuilder(
+                    animation: _rotationAnimation,
+                    builder: (context, child) {
+                      return Transform.rotate(
+                        angle: _rotationAnimation.value * 3.14159, // 180度回転
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          width: 64,
+                          height: 64,
+                          decoration: BoxDecoration(
+                            gradient: isTaskScreen
+                                ? taskButtonGradient
+                                : AppColors.primaryGradient,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: isTaskScreen
+                                    ? const Color(0xFF66BB6A).withOpacity(0.4)
+                                    : AppColors.primary.withOpacity(0.4),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            isTaskScreen ? Icons.add_task : Icons.add_rounded,
+                            color: Colors.white,
+                            size: 32,
+                          ),
                         ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.add_rounded,
-                      color: Colors.white,
-                      size: 32,
-                    ),
+                      );
+                    },
                   ),
                 ),
 

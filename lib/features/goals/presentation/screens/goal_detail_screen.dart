@@ -657,8 +657,12 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
     );
 
     if (confirm == true) {
-      await service.deleteGoal(widget.goalId);
-      if (context.mounted) context.pop();
+      final userId = FirebaseAuth.instance.currentUser?.uid;
+      if (userId != null) {
+        await service.deleteGoal(widget.goalId, userId);
+      }
+      // タスク画面を完全に再初期化（削除された関連タスクをUIから反映）
+      if (context.mounted) context.go('/tasks', extra: {'forceRefresh': true});
     }
   }
 
@@ -748,30 +752,42 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
 
       if (shouldDeleteFuture == null) return;
 
-      await service.toggleComplete(
-        goal,
-        isCompleted: true,
-        deleteFutureTasks: shouldDeleteFuture,
-      );
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: const [
-                Icon(Icons.emoji_events, color: Colors.white),
-                SizedBox(width: 8),
-                Text('おめでとう！目標を達成しました！🎊'),
-              ],
-            ),
-            backgroundColor: const Color(0xFFFFB300),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
+      try {
+        await service.toggleComplete(
+          goal,
+          isCompleted: true,
+          deleteFutureTasks: shouldDeleteFuture,
         );
-        context.pop();
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: const [
+                  Icon(Icons.emoji_events, color: Colors.white),
+                  SizedBox(width: 8),
+                  Text('おめでとう！目標を達成しました！🎊'),
+                ],
+              ),
+              backgroundColor: const Color(0xFFFFB300),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          );
+          // タスク画面を完全に再初期化（削除されたタスクをUIから反映）
+          context.go('/tasks', extra: {'forceRefresh': true});
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('目標達成に失敗しました: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } else {
       await service.toggleComplete(goal, isCompleted: false);

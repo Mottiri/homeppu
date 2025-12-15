@@ -433,10 +433,14 @@ class TaskService {
 
   /// タスク一覧を取得
   /// 基本はStreamを使うべきだが、Future版も維持
+  /// forceRefresh: trueの場合、キャッシュを無視してサーバーから取得
   Future<List<TaskModel>> getTasks({
     String? type,
     required String userId,
+    bool forceRefresh = false,
   }) async {
+    print('DEBUG getTasks: forceRefresh=$forceRefresh');
+
     var query = _firestore
         .collection('tasks')
         .where('userId', isEqualTo: userId);
@@ -445,15 +449,38 @@ class TaskService {
       query = query.where('type', isEqualTo: type);
     }
 
-    // 期限順などに並べる
-    // query = query.orderBy('scheduledAt'); // 必要に応じてInventory設定
+    // キャッシュを無視してサーバーから取得
+    final GetOptions? options = forceRefresh
+        ? const GetOptions(source: Source.server)
+        : null;
 
-    final snapshot = await query.get();
-    return snapshot.docs.map((doc) {
-      final data = doc.data();
-      data['id'] = doc.id; // ID埋め込み
-      return TaskModel.fromMap(data);
-    }).toList();
+    try {
+      final snapshot = options != null
+          ? await query.get(options)
+          : await query.get();
+
+      print(
+        'DEBUG getTasks: fetched ${snapshot.docs.length} tasks, fromCache=${snapshot.metadata.isFromCache}',
+      );
+
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id; // ID埋め込み
+        return TaskModel.fromMap(data);
+      }).toList();
+    } catch (e) {
+      print('DEBUG getTasks: error fetching from server: $e');
+      // サーバーからの取得に失敗した場合はキャッシュから取得
+      final snapshot = await query.get();
+      print(
+        'DEBUG getTasks: fallback to cache, fetched ${snapshot.docs.length} tasks',
+      );
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        return TaskModel.fromMap(data);
+      }).toList();
+    }
   }
 
   /// Get tasks linked to a goal (Stream)

@@ -23,21 +23,26 @@ class GoalService {
   }
 
   // Delete (Cascade)
-  Future<void> deleteGoal(String goalId) async {
+  Future<void> deleteGoal(String goalId, String userId) async {
     final batch = _firestore.batch();
 
     // 1. Delete the Goal
     batch.delete(_goalsCollection.doc(goalId));
 
     // 2. Delete all linked Tasks
-    // Note: If there are more than 500 tasks, this needs pagination.
-    // Assuming reasonable number for now.
-    final linkedTasksSnapshot = await _tasksCollection
-        .where('goalId', isEqualTo: goalId)
-        .get();
+    // userIdフィルターを追加してセキュリティルールを満たす
+    try {
+      final linkedTasksSnapshot = await _tasksCollection
+          .where('userId', isEqualTo: userId)
+          .where('goalId', isEqualTo: goalId)
+          .get();
 
-    for (var doc in linkedTasksSnapshot.docs) {
-      batch.delete(doc.reference);
+      for (var doc in linkedTasksSnapshot.docs) {
+        batch.delete(doc.reference);
+      }
+    } catch (e) {
+      // タスク削除に失敗してもgoal削除は続行
+      print('Warning: Could not delete linked tasks: $e');
     }
 
     await batch.commit();
@@ -49,30 +54,43 @@ class GoalService {
     bool isCompleted = true,
     bool deleteFutureTasks = false,
   }) async {
-    final batch = _firestore.batch();
-
     // 1. Update Goal Status
     final updatedGoal = goal.copyWith(
       completedAt: isCompleted ? DateTime.now() : null,
       forceClearCompletedAt: !isCompleted,
     );
-    batch.update(_goalsCollection.doc(goal.id), updatedGoal.toMap());
+    await _goalsCollection.doc(goal.id).update(updatedGoal.toMap());
 
     // 2. Delete Future Tasks (if requested and we are completing)
     if (isCompleted && deleteFutureTasks) {
-      final now = DateTime.now();
-      // Find future tasks linked to this goal
-      final futureTasksSnapshot = await _tasksCollection
-          .where('goalId', isEqualTo: goal.id)
-          .where('scheduledAt', isGreaterThan: now)
-          .get();
+      try {
+        final now = Timestamp.now();
+        // userIdフィルターを追加してセキュリティルールを満たす
+        final futureTasksSnapshot = await _tasksCollection
+            .where('userId', isEqualTo: goal.userId)
+            .where('goalId', isEqualTo: goal.id)
+            .where('scheduledAt', isGreaterThan: now)
+            .get();
 
-      for (var doc in futureTasksSnapshot.docs) {
-        batch.delete(doc.reference);
+        print(
+          'DEBUG: Found ${futureTasksSnapshot.docs.length} future tasks to delete',
+        );
+
+        if (futureTasksSnapshot.docs.isNotEmpty) {
+          final batch = _firestore.batch();
+          for (var doc in futureTasksSnapshot.docs) {
+            batch.delete(doc.reference);
+          }
+          await batch.commit();
+          print(
+            'DEBUG: Deleted ${futureTasksSnapshot.docs.length} future tasks',
+          );
+        }
+      } catch (e) {
+        // エラーの場合はログ出力（目標完了は成功済み）
+        print('Error: Could not delete future tasks: $e');
       }
     }
-
-    await batch.commit();
   }
 
   // Stream Active Goals
@@ -93,16 +111,18 @@ class GoalService {
 
   // Stream Completed Goals (Archive)
   Stream<List<GoalModel>> streamCompletedGoals(String userId) {
-    return _goalsCollection
-        .where('userId', isEqualTo: userId)
-        .where('completedAt', isNull: false)
-        .orderBy('completedAt', descending: true)
-        .snapshots()
-        .map((snapshot) {
-          return snapshot.docs
-              .map((doc) => GoalModel.fromFirestore(doc))
-              .toList();
-        });
+    // Firestoreのnullクエリは制限があるため、クライアント側でフィルタリング
+    return _goalsCollection.where('userId', isEqualTo: userId).snapshots().map((
+      snapshot,
+    ) {
+      final goals = snapshot.docs
+          .map((doc) => GoalModel.fromFirestore(doc))
+          .where((goal) => goal.completedAt != null) // クライアント側フィルタ
+          .toList();
+      // 完了日時で降順ソート
+      goals.sort((a, b) => b.completedAt!.compareTo(a.completedAt!));
+      return goals;
+    });
   }
 
   // Stream Single Goal

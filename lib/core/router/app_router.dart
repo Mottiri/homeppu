@@ -18,6 +18,7 @@ import '../../features/tasks/presentation/screens/tasks_screen.dart';
 import '../../features/goals/presentation/screens/goal_list_screen.dart';
 import '../../features/goals/presentation/screens/create_goal_screen.dart';
 import '../../features/goals/presentation/screens/goal_detail_screen.dart';
+import '../../features/goals/presentation/screens/completed_goals_screen.dart';
 import '../../features/notifications/presentation/screens/notifications_screen.dart';
 import '../../shared/providers/auth_provider.dart';
 
@@ -86,12 +87,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               final extra = state.extra as Map<String, dynamic>?;
               final highlightTaskId = extra?['highlightTaskId'] as String?;
               final targetDate = extra?['targetDate'] as DateTime?;
-              // ハイライトIDがある場合はキーを設定して強制的に再作成（タイムスタンプで毎回ユニーク）
+              final forceRefresh = extra?['forceRefresh'] as bool? ?? false;
+              // forceRefresh または highlightTaskId がある場合は強制的に再作成
               return TasksScreen(
-                key: highlightTaskId != null
-                    ? ValueKey(
-                        'tasks_${highlightTaskId}_${DateTime.now().millisecondsSinceEpoch}',
-                      )
+                key: (forceRefresh || highlightTaskId != null)
+                    ? ValueKey('tasks_${DateTime.now().millisecondsSinceEpoch}')
                     : null,
                 highlightTaskId: highlightTaskId,
                 targetDate: targetDate,
@@ -179,6 +179,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/goals',
         name: 'goals',
         builder: (context, state) => const GoalListScreen(),
+      ),
+
+      // 殿堂入り（達成した目標）
+      GoRoute(
+        path: '/goals/completed',
+        name: 'completedGoals',
+        builder: (context, state) => const CompletedGoalsScreen(),
       ),
 
       // 目標詳細
