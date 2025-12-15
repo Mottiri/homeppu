@@ -227,6 +227,7 @@ class TaskModel {
     String? memo,
     List<String>? attachmentUrls,
     String? goalId,
+    bool clearRecurrence = false, // 繰り返し設定をクリアするフラグ
   }) {
     return TaskModel(
       id: id ?? this.id,
@@ -248,11 +249,20 @@ class TaskModel {
       priority: priority ?? this.priority,
       subtasks: subtasks ?? this.subtasks,
       categoryId: categoryId ?? this.categoryId,
+      // recurrenceGroupIdはupdateTaskでクエリに使用するため、ここではクリアしない
       recurrenceGroupId: recurrenceGroupId ?? this.recurrenceGroupId,
-      recurrenceInterval: recurrenceInterval ?? this.recurrenceInterval,
-      recurrenceUnit: recurrenceUnit ?? this.recurrenceUnit,
-      recurrenceDaysOfWeek: recurrenceDaysOfWeek ?? this.recurrenceDaysOfWeek,
-      recurrenceEndDate: recurrenceEndDate ?? this.recurrenceEndDate,
+      recurrenceInterval: clearRecurrence
+          ? null
+          : (recurrenceInterval ?? this.recurrenceInterval),
+      recurrenceUnit: clearRecurrence
+          ? null
+          : (recurrenceUnit ?? this.recurrenceUnit),
+      recurrenceDaysOfWeek: clearRecurrence
+          ? null
+          : (recurrenceDaysOfWeek ?? this.recurrenceDaysOfWeek),
+      recurrenceEndDate: clearRecurrence
+          ? null
+          : (recurrenceEndDate ?? this.recurrenceEndDate),
       memo: memo ?? this.memo,
       attachmentUrls: attachmentUrls ?? this.attachmentUrls,
       goalId: goalId ?? this.goalId,

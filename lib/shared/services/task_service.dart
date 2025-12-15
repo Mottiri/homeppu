@@ -214,8 +214,9 @@ class TaskService {
     }
 
     // ケース2: 通常の更新 (editModeによる分岐)
-    if (editMode == 'single' || task.recurrenceGroupId == null) {
-      // 単発更新 (または繰り返し解除)
+    // 繰り返し解除（editMode='future' かつ recurrenceUnitがnull）は elseブロックで処理
+    if (editMode == 'single') {
+      // 単発更新
       await _firestore.collection('tasks').doc(task.id).update({
         'content': task.content,
         'emoji': task.emoji,
@@ -226,6 +227,7 @@ class TaskService {
         'priority': task.priority,
         'subtasks': task.subtasks.map((e) => e.toMap()).toList(),
         'categoryId': task.categoryId,
+        'recurrenceGroupId': task.recurrenceGroupId, // nullの場合は繰り返し解除
         'recurrenceInterval': task.recurrenceInterval,
         'recurrenceUnit': task.recurrenceUnit,
         'recurrenceDaysOfWeek': task.recurrenceDaysOfWeek,
@@ -241,6 +243,49 @@ class TaskService {
       // 未来分一括更新
       // 1. 自分以降の同グループタスクを取得
       final scheduledAt = task.scheduledAt ?? DateTime.now();
+
+      // 繰り返し解除の場合
+      if (task.recurrenceUnit == null) {
+        // 未来のタスク（自分より後）を削除
+        final futureQuery = await _firestore
+            .collection('tasks')
+            .where('userId', isEqualTo: task.userId)
+            .where('recurrenceGroupId', isEqualTo: task.recurrenceGroupId)
+            .where(
+              'scheduledAt',
+              isGreaterThan: Timestamp.fromDate(scheduledAt),
+            )
+            .get();
+
+        final batch = _firestore.batch();
+        for (var doc in futureQuery.docs) {
+          batch.delete(doc.reference);
+        }
+
+        // 自分自身を単発タスクに更新（繰り返し情報をクリア）
+        batch.update(_firestore.collection('tasks').doc(task.id), {
+          'content': task.content,
+          'emoji': task.emoji,
+          'type': task.type,
+          'scheduledAt': Timestamp.fromDate(scheduledAt),
+          'priority': task.priority,
+          'subtasks': task.subtasks.map((e) => e.toMap()).toList(),
+          'categoryId': task.categoryId,
+          'recurrenceGroupId': null,
+          'recurrenceInterval': null,
+          'recurrenceUnit': null,
+          'recurrenceDaysOfWeek': null,
+          'recurrenceEndDate': null,
+          'memo': task.memo,
+          'attachmentUrls': task.attachmentUrls,
+          'goalId': task.goalId,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        await batch.commit();
+        return;
+      }
+
       final query = await _firestore
           .collection('tasks')
           .where('userId', isEqualTo: task.userId) // Security Rule requirement

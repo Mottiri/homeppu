@@ -74,6 +74,10 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
   }
 
   void _notifyUpdate([String editMode = 'single']) {
+    // 繰り返し設定がクリアされたかどうか
+    final clearRecurrence =
+        widget.task.recurrenceGroupId != null && _recurrenceUnit == null;
+
     // 変更内容を親に通知（保存）
     final updatedTask = widget.task.copyWith(
       content: _titleController.text.trim(),
@@ -89,6 +93,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
           : _memoController.text.trim(),
       attachmentUrls: _attachmentUrls,
       goalId: _selectedGoalId,
+      clearRecurrence: clearRecurrence,
     );
     widget.onUpdate(updatedTask, editMode);
   }
@@ -346,10 +351,18 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
 
     if (result != null && mounted) {
       setState(() {
-        _recurrenceInterval = result['interval'];
-        _recurrenceUnit = result['unit'];
-        _recurrenceDaysOfWeek = result['daysOfWeek'];
-        _recurrenceEndDate = result['endDate'];
+        if (result['unit'] == 'none') {
+          // 繰り返しを解除
+          _recurrenceInterval = null;
+          _recurrenceUnit = null;
+          _recurrenceDaysOfWeek = null;
+          _recurrenceEndDate = null;
+        } else {
+          _recurrenceInterval = result['interval'];
+          _recurrenceUnit = result['unit'];
+          _recurrenceDaysOfWeek = result['daysOfWeek'];
+          _recurrenceEndDate = result['endDate'];
+        }
       });
     }
   }
@@ -604,6 +617,19 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                                     ),
                                   ),
                                 ),
+                                // 繰り返し解除ボタン
+                                if (_recurrenceUnit != null)
+                                  IconButton(
+                                    icon: const Icon(Icons.close, size: 20),
+                                    onPressed: () {
+                                      setState(() {
+                                        _recurrenceInterval = null;
+                                        _recurrenceUnit = null;
+                                        _recurrenceDaysOfWeek = null;
+                                        _recurrenceEndDate = null;
+                                      });
+                                    },
+                                  ),
                               ],
                             ),
                           ),

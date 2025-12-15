@@ -384,6 +384,27 @@ class _RecurrenceSettingsSheetState extends State<RecurrenceSettingsSheet> {
                   ),
 
                   const SizedBox(height: 24),
+
+                  // 繰り返し解除ボタン
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context, {
+                        'unit': 'none', // 特別な値で「解除」を示す
+                        'interval': null,
+                        'daysOfWeek': null,
+                        'endDate': null,
+                      });
+                    },
+                    icon: const Icon(Icons.cancel_outlined, color: Colors.red),
+                    label: const Text(
+                      '繰り返しを解除',
+                      style: TextStyle(color: Colors.red),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.red),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
                 ],
               ),
             ),

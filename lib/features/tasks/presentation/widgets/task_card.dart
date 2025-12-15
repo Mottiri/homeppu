@@ -150,6 +150,138 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
     }
   }
 
+  /// 画像ギャラリーを表示
+  void _showImageGallery(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 閉じるボタン
+            Align(
+              alignment: Alignment.topRight,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.5),
+                  shape: BoxShape.circle,
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+            ),
+            // 画像一覧
+            Container(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.7,
+              ),
+              child: widget.task.attachmentUrls.length == 1
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.network(
+                        widget.task.attachmentUrls.first,
+                        fit: BoxFit.contain,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return const Center(
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                            ),
+                          );
+                        },
+                      ),
+                    )
+                  : GridView.builder(
+                      shrinkWrap: true,
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 8,
+                            mainAxisSpacing: 8,
+                          ),
+                      itemCount: widget.task.attachmentUrls.length,
+                      itemBuilder: (context, index) {
+                        final url = widget.task.attachmentUrls[index];
+                        return GestureDetector(
+                          onTap: () => _showFullImage(context, url),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              url,
+                              fit: BoxFit.cover,
+                              loadingBuilder:
+                                  (context, child, loadingProgress) {
+                                    if (loadingProgress == null) return child;
+                                    return Container(
+                                      color: Colors.grey.shade800,
+                                      child: const Center(
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 個別画像をフルスクリーン表示
+  void _showFullImage(BuildContext context, String url) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          children: [
+            // 画像
+            Center(
+              child: InteractiveViewer(
+                child: Image.network(
+                  url,
+                  fit: BoxFit.contain,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return const Center(
+                      child: CircularProgressIndicator(color: Colors.white),
+                    );
+                  },
+                ),
+              ),
+            ),
+            // 閉じるボタン
+            Positioned(
+              top: 40,
+              right: 16,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.5),
+                  shape: BoxShape.circle,
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white, size: 32),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// 完了ボタンウィジェットを構築（共通化）
   Widget _buildCompleteButton(bool isCompletedToday) {
     if (_isProcessing) {
@@ -354,10 +486,124 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
                                 color: Colors.grey,
                               ),
                             ),
+                            const SizedBox(width: 8),
                           ],
+                        ),
+                      // 繰り返しアイコン
+                      if (widget.task.recurrenceGroupId != null)
+                        const Padding(
+                          padding: EdgeInsets.only(right: 8),
+                          child: Icon(
+                            Icons.repeat,
+                            size: 14,
+                            color: Colors.blueGrey,
+                          ),
+                        ),
+                      // メモアイコン
+                      if (widget.task.memo != null &&
+                          widget.task.memo!.isNotEmpty)
+                        const Padding(
+                          padding: EdgeInsets.only(right: 8),
+                          child: Icon(
+                            Icons.notes,
+                            size: 14,
+                            color: Colors.blueGrey,
+                          ),
+                        ),
+                      // 画像サムネイル
+                      if (widget.task.attachmentUrls.isNotEmpty)
+                        GestureDetector(
+                          onTap: () => _showImageGallery(context),
+                          child: Container(
+                            margin: const EdgeInsets.only(right: 4),
+                            child: Row(
+                              children: [
+                                // 最初の画像のサムネイル
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: Image.network(
+                                    widget.task.attachmentUrls.first,
+                                    width: 36,
+                                    height: 36,
+                                    fit: BoxFit.cover,
+                                    loadingBuilder:
+                                        (context, child, loadingProgress) {
+                                          if (loadingProgress == null)
+                                            return child;
+                                          return Container(
+                                            width: 36,
+                                            height: 36,
+                                            color: Colors.grey.shade200,
+                                            child: const Center(
+                                              child: SizedBox(
+                                                width: 16,
+                                                height: 16,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                    ),
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Container(
+                                        width: 36,
+                                        height: 36,
+                                        color: Colors.grey.shade200,
+                                        child: const Icon(
+                                          Icons.image,
+                                          size: 20,
+                                          color: Colors.grey,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                // 複数枚の場合は枚数表示
+                                if (widget.task.attachmentUrls.length > 1)
+                                  Container(
+                                    margin: const EdgeInsets.only(left: 4),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black54,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      '+${widget.task.attachmentUrls.length - 1}',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
                         ),
                     ],
                   ),
+                  // メモ抜粋表示
+                  if (widget.task.memo != null && widget.task.memo!.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        widget.task.memo!.length > 30
+                            ? '${widget.task.memo!.substring(0, 30)}...'
+                            : widget.task.memo!,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                          fontStyle: FontStyle.italic,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -600,10 +846,126 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
                                     color: Colors.grey,
                                   ),
                                 ),
+                                const SizedBox(width: 8),
                               ],
+                            ),
+                          // 繰り返しアイコン
+                          if (widget.task.recurrenceGroupId != null)
+                            const Padding(
+                              padding: EdgeInsets.only(right: 8),
+                              child: Icon(
+                                Icons.repeat,
+                                size: 14,
+                                color: Colors.blueGrey,
+                              ),
+                            ),
+                          // メモアイコン
+                          if (widget.task.memo != null &&
+                              widget.task.memo!.isNotEmpty)
+                            const Padding(
+                              padding: EdgeInsets.only(right: 8),
+                              child: Icon(
+                                Icons.notes,
+                                size: 14,
+                                color: Colors.blueGrey,
+                              ),
+                            ),
+                          // 画像サムネイル
+                          if (widget.task.attachmentUrls.isNotEmpty)
+                            GestureDetector(
+                              onTap: () => _showImageGallery(context),
+                              child: Container(
+                                margin: const EdgeInsets.only(right: 4),
+                                child: Row(
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(4),
+                                      child: Image.network(
+                                        widget.task.attachmentUrls.first,
+                                        width: 36,
+                                        height: 36,
+                                        fit: BoxFit.cover,
+                                        loadingBuilder:
+                                            (context, child, loadingProgress) {
+                                              if (loadingProgress == null)
+                                                return child;
+                                              return Container(
+                                                width: 36,
+                                                height: 36,
+                                                color: Colors.grey.shade200,
+                                                child: const Center(
+                                                  child: SizedBox(
+                                                    width: 16,
+                                                    height: 16,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                          strokeWidth: 2,
+                                                        ),
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                        errorBuilder:
+                                            (context, error, stackTrace) {
+                                              return Container(
+                                                width: 36,
+                                                height: 36,
+                                                color: Colors.grey.shade200,
+                                                child: const Icon(
+                                                  Icons.image,
+                                                  size: 20,
+                                                  color: Colors.grey,
+                                                ),
+                                              );
+                                            },
+                                      ),
+                                    ),
+                                    if (widget.task.attachmentUrls.length > 1)
+                                      Container(
+                                        margin: const EdgeInsets.only(left: 4),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black54,
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          '+${widget.task.attachmentUrls.length - 1}',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
                             ),
                         ],
                       ),
+                      // メモ抜粋表示
+                      if (widget.task.memo != null &&
+                          widget.task.memo!.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            widget.task.memo!.length > 30
+                                ? '${widget.task.memo!.substring(0, 30)}...'
+                                : widget.task.memo!,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
+                              fontStyle: FontStyle.italic,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                     ],
                   ),
                 ),
