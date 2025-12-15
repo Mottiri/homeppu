@@ -150,6 +150,41 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
     }
   }
 
+  /// 完了ボタンウィジェットを構築（共通化）
+  Widget _buildCompleteButton(bool isCompletedToday) {
+    if (_isProcessing) {
+      return const SizedBox(
+        width: 24,
+        height: 24,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
+    }
+
+    if (isCompletedToday) {
+      return IconButton(
+        icon: Icon(Icons.check_circle, color: Colors.green.shade600, size: 32),
+        onPressed: _handleUncomplete,
+        tooltip: '完了を取り消す',
+      );
+    }
+
+    return ElevatedButton(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.green.shade300,
+        foregroundColor: Colors.white,
+        shape: const StadiumBorder(),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+        minimumSize: const Size(60, 32),
+        elevation: 0,
+      ),
+      onPressed: _handleComplete,
+      child: const Text(
+        '完了',
+        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isCompletedToday =
@@ -330,41 +365,7 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
             // 右側の完了ボタン (編集モード以外)
             if (!widget.isEditMode) ...[
               const SizedBox(width: 8),
-              if (_isProcessing)
-                const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              else if (isCompletedToday)
-                IconButton(
-                  icon: Icon(
-                    Icons.check_circle,
-                    color: Colors.green.shade600,
-                    size: 32,
-                  ),
-                  onPressed: _handleUncomplete,
-                  tooltip: '完了を取り消す',
-                )
-              else
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    shape: const StadiumBorder(),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 0,
-                    ),
-                    minimumSize: const Size(60, 32),
-                    elevation: 0,
-                  ),
-                  onPressed: _handleComplete,
-                  child: const Text(
-                    '完了',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                  ),
-                ),
+              _buildCompleteButton(isCompletedToday),
             ],
           ],
         ),
@@ -610,44 +611,7 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
                 // 右側の完了ボタン (編集モード以外)
                 if (!widget.isEditMode) ...[
                   const SizedBox(width: 8),
-                  if (_isProcessing)
-                    const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  else if (isCompletedToday)
-                    IconButton(
-                      icon: Icon(
-                        Icons.check_circle,
-                        color: Colors.green.shade600,
-                        size: 32,
-                      ),
-                      onPressed: _handleUncomplete,
-                      tooltip: '完了を取り消す',
-                    )
-                  else
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        shape: const StadiumBorder(),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 0, // Compact height
-                        ),
-                        minimumSize: const Size(60, 32), // Smaller height
-                        elevation: 0,
-                      ),
-                      onPressed: _handleComplete,
-                      child: const Text(
-                        '完了',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
+                  _buildCompleteButton(isCompletedToday),
                 ],
               ],
             ),

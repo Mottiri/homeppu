@@ -55,6 +55,9 @@ class _TasksScreenState extends State<TasksScreen>
   // ハイライト対象タスクID
   String? _highlightTaskId;
 
+  // FAB表示制御
+  bool _isFabVisible = true;
+
   @override
   void initState() {
     super.initState();
@@ -778,23 +781,28 @@ class _TasksScreenState extends State<TasksScreen>
           ),
         ],
       ),
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 120),
-        child: FloatingActionButton(
-          onPressed: _isAdding ? null : _addTask,
-          backgroundColor: Theme.of(context).primaryColor,
-          foregroundColor: Colors.white,
-          elevation: 4,
-          child: _isAdding
-              ? const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2,
-                  ),
-                )
-              : const Icon(Icons.add, size: 28),
+      floatingActionButton: AnimatedScale(
+        scale: _isFabVisible ? 1.0 : 0.0,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 100),
+          child: FloatingActionButton(
+            onPressed: _isAdding || !_isFabVisible ? null : _addTask,
+            backgroundColor: Theme.of(context).primaryColor,
+            foregroundColor: Colors.white,
+            elevation: 4,
+            child: _isAdding
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : const Icon(Icons.add, size: 28),
+          ),
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
@@ -1017,32 +1025,47 @@ class _TasksScreenState extends State<TasksScreen>
         }
       },
       behavior: HitTestBehavior.opaque,
-      child: ListView.builder(
-        padding: const EdgeInsets.only(bottom: 100),
-        itemCount: filteredTasks.length,
-        itemBuilder: (context, index) {
-          final task = filteredTasks[index];
-          return TaskCard(
-            task: task,
-            onTap: () => _showTaskDetail(task),
-            onComplete: () => _completeTask(task),
-            onUncomplete: () => _uncompleteTask(task),
-            onDelete: () => _deleteTask(task),
-            isEditMode: _isEditMode,
-            isSelected: _selectedTaskIds.contains(task.id),
-            isHighlighted: _highlightTaskId == task.id,
-            onDismissHighlight: () => setState(() => _highlightTaskId = null),
-            onToggleSelection: () => _toggleTaskSelection(task.id),
-            onLongPress: () {
-              if (!_isEditMode) {
-                _toggleEditMode(true);
-                _toggleTaskSelection(task.id); // 長押ししたアイテムを選択状態にする
-              }
-            },
-            shakeAnimation: shakeAnimation,
-            onConfirmDismiss: () => _confirmDelete(1),
-          );
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          if (notification is ScrollUpdateNotification) {
+            final scrollDelta = notification.scrollDelta ?? 0;
+            if (scrollDelta > 2 && _isFabVisible) {
+              // スクロールダウン: FABを隠す
+              setState(() => _isFabVisible = false);
+            } else if (scrollDelta < -2 && !_isFabVisible) {
+              // スクロールアップ: FABを表示
+              setState(() => _isFabVisible = true);
+            }
+          }
+          return false;
         },
+        child: ListView.builder(
+          padding: const EdgeInsets.only(bottom: 150),
+          itemCount: filteredTasks.length,
+          itemBuilder: (context, index) {
+            final task = filteredTasks[index];
+            return TaskCard(
+              task: task,
+              onTap: () => _showTaskDetail(task),
+              onComplete: () => _completeTask(task),
+              onUncomplete: () => _uncompleteTask(task),
+              onDelete: () => _deleteTask(task),
+              isEditMode: _isEditMode,
+              isSelected: _selectedTaskIds.contains(task.id),
+              isHighlighted: _highlightTaskId == task.id,
+              onDismissHighlight: () => setState(() => _highlightTaskId = null),
+              onToggleSelection: () => _toggleTaskSelection(task.id),
+              onLongPress: () {
+                if (!_isEditMode) {
+                  _toggleEditMode(true);
+                  _toggleTaskSelection(task.id);
+                }
+              },
+              shakeAnimation: shakeAnimation,
+              onConfirmDismiss: () => _confirmDelete(1),
+            );
+          },
+        ),
       ),
     );
   }
