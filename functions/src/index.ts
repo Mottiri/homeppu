@@ -1,6 +1,7 @@
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import * as functionsV1 from "firebase-functions/v1";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
 
 import * as admin from "firebase-admin";
@@ -3751,3 +3752,201 @@ ${getSystemPrompt(persona, "みんな")}
     response.status(500).send("Internal Server Error");
   }
 });
+
+// ===============================================
+// タスクリマインダー通知
+// ===============================================
+
+/**
+ * タスクリマインダー通知を送信するスケジュール関数
+ * 毎分実行され、送信すべきリマインダーをチェックして通知を送信
+ */
+export const sendTaskReminders = onSchedule(
+  {
+    schedule: "every 1 minutes",
+    region: "asia-northeast1",
+    timeoutSeconds: 60,
+  },
+  async () => {
+    const now = new Date();
+    const oneMinuteAgo = new Date(now.getTime() - 60 * 1000);
+
+    console.log(`[Reminder] Checking reminders at ${now.toISOString()}`);
+
+    try {
+      // 今後24時間以内にスケジュールされているタスクを取得
+      const tasksSnapshot = await db
+        .collection("tasks")
+        .where("scheduledAt", ">=", admin.firestore.Timestamp.fromDate(oneMinuteAgo))
+        .where("scheduledAt", "<=", admin.firestore.Timestamp.fromDate(
+          new Date(now.getTime() + 24 * 60 * 60 * 1000)
+        ))
+        .where("isCompleted", "==", false)
+        .get();
+
+      console.log(`[Reminder] Found ${tasksSnapshot.size} upcoming tasks`);
+
+      let sentCount = 0;
+
+      for (const taskDoc of tasksSnapshot.docs) {
+        const task = taskDoc.data();
+        const taskId = taskDoc.id;
+        const reminders = task.reminders as Array<{ unit: string; value: number }> | undefined;
+        const scheduledAt = (task.scheduledAt as admin.firestore.Timestamp).toDate();
+        const userId = task.userId as string;
+        const taskContent = task.content as string || "タスク";
+
+        // ユーザーのFCMトークンを取得（共通で使用）
+        const userDoc = await db.collection("users").doc(userId).get();
+        if (!userDoc.exists) continue;
+        const fcmToken = userDoc.data()?.fcmToken;
+        if (!fcmToken) {
+          console.log(`[Reminder] No FCM token for user: ${userId}`);
+          continue;
+        }
+
+        // 1. 事前リマインダー通知
+        if (reminders && reminders.length > 0) {
+          for (const reminder of reminders) {
+            // リマインダー時刻を計算
+            let reminderTime: Date;
+            if (reminder.unit === "minutes") {
+              reminderTime = new Date(scheduledAt.getTime() - reminder.value * 60 * 1000);
+            } else if (reminder.unit === "hours") {
+              reminderTime = new Date(scheduledAt.getTime() - reminder.value * 60 * 60 * 1000);
+            } else if (reminder.unit === "days") {
+              reminderTime = new Date(scheduledAt.getTime() - reminder.value * 24 * 60 * 60 * 1000);
+            } else {
+              continue;
+            }
+
+            // リマインダー時刻が「過去1分以内」かチェック（未来の通知は送らない）
+            if (reminderTime <= now && reminderTime > oneMinuteAgo) {
+              // 送信済みかチェック
+              const reminderKey = `${reminder.unit}_${reminder.value}`;
+              const sentReminderRef = db
+                .collection("sentReminders")
+                .doc(`${taskId}_${reminderKey}`);
+
+              const sentReminder = await sentReminderRef.get();
+              if (sentReminder.exists) {
+                console.log(`[Reminder] Already sent: ${taskId} - ${reminderKey}`);
+                continue;
+              }
+
+              // 通知を送信
+              const timeLabel = reminder.unit === "minutes"
+                ? `${reminder.value}分前`
+                : reminder.unit === "hours"
+                  ? `${reminder.value}時間前`
+                  : `${reminder.value}日前`;
+
+              try {
+                await admin.messaging().send({
+                  token: fcmToken,
+                  notification: {
+                    title: "🔔 タスクリマインダー",
+                    body: `「${taskContent}」の${timeLabel}です`,
+                  },
+                  data: {
+                    type: "task_reminder",
+                    taskId: taskId,
+                  },
+                  android: {
+                    priority: "high",
+                    notification: {
+                      sound: "default",
+                      channelId: "task_reminders",
+                    },
+                  },
+                  apns: {
+                    payload: {
+                      aps: {
+                        sound: "default",
+                        badge: 1,
+                      },
+                    },
+                  },
+                });
+
+                // 送信済みとして記録
+                await sentReminderRef.set({
+                  taskId,
+                  userId,
+                  reminderKey,
+                  sentAt: admin.firestore.FieldValue.serverTimestamp(),
+                });
+
+                sentCount++;
+                console.log(`[Reminder] Sent notification: ${taskContent} - ${timeLabel}`);
+              } catch (error) {
+                console.error(`[Reminder] Failed to send notification:`, error);
+              }
+            }
+          }
+        }
+
+        // 2. 予定時刻ちょうどの通知
+        if (scheduledAt <= now && scheduledAt > oneMinuteAgo) {
+          // 送信済みかチェック
+          const onTimeKey = "on_time";
+          const sentOnTimeRef = db
+            .collection("sentReminders")
+            .doc(`${taskId}_${onTimeKey}`);
+
+          const sentOnTime = await sentOnTimeRef.get();
+          if (sentOnTime.exists) {
+            console.log(`[Reminder] Already sent on-time: ${taskId}`);
+            continue;
+          }
+
+          try {
+            await admin.messaging().send({
+              token: fcmToken,
+              notification: {
+                title: "📋 タスクの時間です",
+                body: `「${taskContent}」の予定時刻になりました`,
+              },
+              data: {
+                type: "task_due",
+                taskId: taskId,
+              },
+              android: {
+                priority: "high",
+                notification: {
+                  sound: "default",
+                  channelId: "task_reminders",
+                },
+              },
+              apns: {
+                payload: {
+                  aps: {
+                    sound: "default",
+                    badge: 1,
+                  },
+                },
+              },
+            });
+
+            // 送信済みとして記録
+            await sentOnTimeRef.set({
+              taskId,
+              userId,
+              reminderKey: onTimeKey,
+              sentAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+
+            sentCount++;
+            console.log(`[Reminder] Sent on-time notification: ${taskContent}`);
+          } catch (error) {
+            console.error(`[Reminder] Failed to send on-time notification:`, error);
+          }
+        }
+      }
+
+      console.log(`[Reminder] Sent ${sentCount} notifications`);
+    } catch (error) {
+      console.error("[Reminder] Error processing reminders:", error);
+    }
+  }
+);

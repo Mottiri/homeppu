@@ -50,7 +50,24 @@ class _AddTaskBottomSheetState extends ConsumerState<AddTaskBottomSheet> {
   void initState() {
     super.initState();
     _selectedCategoryId = widget.initialCategoryId;
-    _scheduledDate = widget.initialScheduledDate;
+
+    // 日付が渡された場合、時間が0:00なら現在時刻を設定
+    if (widget.initialScheduledDate != null) {
+      final date = widget.initialScheduledDate!;
+      final now = DateTime.now();
+      if (date.hour == 0 && date.minute == 0) {
+        // 日付は渡された日付、時間は現在時刻
+        _scheduledDate = DateTime(
+          date.year,
+          date.month,
+          date.day,
+          now.hour,
+          now.minute,
+        );
+      } else {
+        _scheduledDate = date;
+      }
+    }
 
     // ボトムシートが開いたら自動でフォーカス
     WidgetsBinding.instance.addPostFrameCallback((_) {

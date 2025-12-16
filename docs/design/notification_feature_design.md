@@ -1,0 +1,161 @@
+# 通知機能 設計書
+
+## 概要
+ほめっぷアプリにおける通知機能の設計をまとめます。
+
+---
+
+## 通知の種類
+
+| 通知タイプ | トリガー | タイトル | 備考 |
+|-----------|---------|---------|------|
+| コメント通知 | コメント作成時 | コメントが来たよ！ | Firestoreトリガー |
+| リアクション通知 | リアクション追加時 | いいね！されたよ！ | Firestoreトリガー |
+| タスクリマインダー | 設定時刻の前 | 🔔 タスクリマインダー | スケジュール実行 |
+| タスク予定時刻通知 | 予定時刻ちょうど | 📋 タスクの時間です | スケジュール実行 |
+
+---
+
+## アーキテクチャ
+
+### イベントドリブン通知（コメント・リアクション）
+
+```mermaid
+sequenceDiagram
+    participant User as ユーザー
+    participant App as アプリ
+    participant FS as Firestore
+    participant CF as Cloud Functions
+    participant FCM as Firebase Cloud Messaging
+
+    User->>App: コメント/リアクション
+    App->>FS: ドキュメント作成
+    FS->>CF: onDocumentCreated トリガー
+    CF->>FS: 投稿者のFCMトークン取得
+    CF->>FCM: プッシュ通知送信
+    FCM->>App: 通知表示
+```
+
+### スケジュール通知（タスクリマインダー）
+
+```mermaid
+sequenceDiagram
+    participant CS as Cloud Scheduler
+    participant CF as Cloud Functions
+    participant FS as Firestore
+    participant FCM as Firebase Cloud Messaging
+    participant App as アプリ
+
+    CS->>CF: 毎分実行
+    CF->>FS: 送信すべき通知をクエリ
+    FS-->>CF: 該当タスク一覧
+    loop 各タスク
+        CF->>FS: 送信済みチェック
+        CF->>FCM: プッシュ通知送信
+        CF->>FS: 送信済みフラグ記録
+    end
+    FCM->>App: 通知表示
+```
+
+---
+
+## Cloud Functions 実装
+
+### コメント通知 (`onCommentCreatedNotify`)
+- **トリガー**: `comments/{commentId}` ドキュメント作成時
+- **処理**: 投稿者にプッシュ通知を送信
+- **除外条件**: 自分へのコメント、スケジュール投稿
+
+### リアクション通知 (`onReactionAddedNotify`)
+- **トリガー**: `reactions/{reactionId}` ドキュメント作成時
+- **処理**: 投稿者にプッシュ通知を送信
+- **除外条件**: 自分へのリアクション
+
+### タスクリマインダー (`sendTaskReminders`)
+- **トリガー**: Cloud Scheduler（毎分実行）
+- **処理**:
+  1. 今後24時間以内の未完了タスクを取得
+  2. 各タスクのリマインダー設定をチェック
+  3. 送信時刻が過去1分以内なら通知送信
+  4. 予定時刻ちょうどの場合も通知送信
+- **重複防止**: `sentReminders` コレクションで送信済みを記録
+
+---
+
+## データ構造
+
+### ユーザー (`users`)
+```json
+{
+  "fcmToken": "string",
+  "fcmTokenUpdatedAt": "timestamp"
+}
+```
+
+### 送信済みリマインダー (`sentReminders`)
+```json
+{
+  "taskId": "string",
+  "userId": "string",
+  "reminderKey": "minutes_30 | hours_1 | on_time",
+  "sentAt": "timestamp"
+}
+```
+
+### タスクのリマインダー設定
+```json
+{
+  "reminders": [
+    { "unit": "minutes", "value": 30 },
+    { "unit": "hours", "value": 1 }
+  ]
+}
+```
+
+---
+
+## クライアント側実装
+
+### NotificationService (`notification_service.dart`)
+- FCMトークンの取得・保存
+- フォアグラウンドメッセージ処理
+- ローカル通知表示
+- 通知タップ時のナビゲーション
+
+### 通知チャンネル (Android)
+| チャンネルID | 名前 | 用途 |
+|-------------|------|------|
+| `default_channel` | デフォルト | 一般通知 |
+| `task_reminders` | タスクリマインダー | タスク通知 |
+
+---
+
+## Firestore インデックス
+
+タスクリマインダー機能に必要なインデックス：
+- `tasks` コレクション
+  - `isCompleted` (ASC) + `scheduledAt` (ASC)
+
+---
+
+## 通知の匿名化（AIバレ防止）
+
+| 悪い例 | 良い例 |
+|--------|--------|
+| 「ゆうきさんからコメントが届きました！」 | 「投稿にコメントがつきました！」 |
+
+送信者名を表示するとAIアカウントがバレるリスクがあるため、可能な限り匿名化します。
+
+---
+
+## 関連ファイル
+
+### Cloud Functions
+- [index.ts](file:///c:/Dev/homeppu/functions/src/index.ts)
+  - `sendPushNotification` - プッシュ通知送信ヘルパー
+  - `onCommentCreatedNotify` - コメント通知
+  - `onReactionAddedNotify` - リアクション通知
+  - `sendTaskReminders` - タスクリマインダー
+
+### クライアント
+- [notification_service.dart](file:///c:/Dev/homeppu/lib/shared/services/notification_service.dart)
