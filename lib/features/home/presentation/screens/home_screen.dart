@@ -324,9 +324,13 @@ class _PostsList extends StatelessWidget {
         // AIアカウント: 全モードの投稿を見れる
         // 人間アカウント: 'mix'と'human'の投稿のみ見れる（'ai'モードは見えない）
         // ただし、自分の投稿は常に見える
+        // サークル投稿は除外（circleIdがnullまたは空でない場合）
         var posts =
             snapshot.data?.docs
                 .map((doc) => PostModel.fromFirestore(doc))
+                .where(
+                  (post) => post.circleId == null || post.circleId!.isEmpty,
+                ) // サークル投稿を除外
                 .toList() ??
             [];
 

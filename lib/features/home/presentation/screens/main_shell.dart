@@ -53,12 +53,15 @@ class _MainShellState extends ConsumerState<MainShell>
     return 0;
   }
 
-  void _handleCenterButtonTap(BuildContext context, bool isTaskScreen) async {
-    if (isTaskScreen) {
-      // タスク作成ボトムシートを表示
+  void _handleCenterButtonTap(BuildContext context, int currentIndex) async {
+    if (currentIndex == 2) {
+      // タスク画面：タスク作成ボトムシートを表示
       await _showAddTaskSheet(context);
+    } else if (currentIndex == 1) {
+      // サークル画面：サークル作成画面へ遷移
+      context.push('/create-circle');
     } else {
-      // 投稿作成画面へ遷移
+      // その他（ホーム等）：投稿作成画面へ遷移
       context.push('/create-post');
     }
   }
@@ -135,14 +138,23 @@ class _MainShellState extends ConsumerState<MainShell>
   @override
   Widget build(BuildContext context) {
     final currentIndex = _getCurrentIndex(context);
-    final isTaskScreen = currentIndex == 2;
 
     // 画面が変わったときにアニメーション
     if (currentIndex != _previousIndex) {
-      if (isTaskScreen) {
+      final wasSpecialScreen = _previousIndex == 1 || _previousIndex == 2;
+      final isSpecialScreen = currentIndex == 1 || currentIndex == 2;
+
+      if (isSpecialScreen && !wasSpecialScreen) {
+        // ホーム/マイページ → サークル/タスク: 回転アニメーション
         _rotationController.forward();
-      } else if (_previousIndex == 2) {
+      } else if (!isSpecialScreen && wasSpecialScreen) {
+        // サークル/タスク → ホーム/マイページ: 逆回転
         _rotationController.reverse();
+      } else if (isSpecialScreen && wasSpecialScreen) {
+        // サークル ↔ タスク: 一度戻して再び回転
+        _rotationController.reverse().then((_) {
+          if (mounted) _rotationController.forward();
+        });
       }
       _previousIndex = currentIndex;
     }
@@ -197,37 +209,81 @@ class _MainShellState extends ConsumerState<MainShell>
                   onTap: () => context.go('/circles'),
                 ),
 
-                // 中央ボタン（投稿/タスク作成）
+                // 中央ボタン（投稿/タスク作成/サークル作成）
                 GestureDetector(
-                  onTap: () => _handleCenterButtonTap(context, isTaskScreen),
+                  onTap: () => _handleCenterButtonTap(context, currentIndex),
                   child: AnimatedBuilder(
                     animation: _rotationAnimation,
                     builder: (context, child) {
-                      return Transform.rotate(
-                        angle: _rotationAnimation.value * 3.14159, // 180度回転
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
-                          width: 64,
-                          height: 64,
-                          decoration: BoxDecoration(
-                            gradient: isTaskScreen
-                                ? taskButtonGradient
-                                : AppColors.primaryGradient,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: isTaskScreen
-                                    ? const Color(0xFF66BB6A).withOpacity(0.4)
-                                    : AppColors.primary.withOpacity(0.4),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Icon(
-                            isTaskScreen ? Icons.add_task : Icons.add_rounded,
-                            color: Colors.white,
-                            size: 32,
+                      // 画面ごとのカラーとアイコン
+                      final isTaskScreen = currentIndex == 2;
+                      final isCircleScreen = currentIndex == 1;
+                      final isSpecialScreen = isTaskScreen || isCircleScreen;
+
+                      // サークル用シアングラデーション
+                      const circleButtonGradient = LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Color(0xFF4DD0E1), // シアン明
+                          Color(0xFF00ACC1), // シアン暗
+                        ],
+                      );
+
+                      LinearGradient buttonGradient;
+                      Color shadowColor;
+                      IconData buttonIcon;
+                      double iconSize;
+
+                      if (isTaskScreen) {
+                        buttonGradient = taskButtonGradient;
+                        shadowColor = const Color(0xFF66BB6A);
+                        buttonIcon = Icons.add_task;
+                        iconSize = 28;
+                      } else if (isCircleScreen) {
+                        buttonGradient = circleButtonGradient;
+                        shadowColor = const Color(0xFF00ACC1);
+                        buttonIcon = Icons.group_add_rounded;
+                        iconSize = 26; // サークルアイコンを小さく
+                      } else {
+                        buttonGradient = AppColors.primaryGradient;
+                        shadowColor = AppColors.primary;
+                        buttonIcon = Icons.add_rounded;
+                        iconSize = 32;
+                      }
+
+                      // 回転角度: ホーム→特別画面で180度回転
+                      final rotationAngle = isSpecialScreen
+                          ? _rotationAnimation.value * 3.14159
+                          : 0.0;
+
+                      return AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          gradient: buttonGradient,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: shadowColor.withOpacity(0.4),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Transform.rotate(
+                          angle: rotationAngle,
+                          child: Transform.rotate(
+                            // タスク・サークルアイコンを90度左回転で正しい向きに
+                            angle: (isTaskScreen || isCircleScreen)
+                                ? -1.5708
+                                : 0, // -90度
+                            child: Icon(
+                              buttonIcon,
+                              color: Colors.white,
+                              size: iconSize,
+                            ),
                           ),
                         ),
                       );

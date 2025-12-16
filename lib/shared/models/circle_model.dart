@@ -16,6 +16,10 @@ class CircleModel {
   final DateTime createdAt;
   final DateTime? recentActivity;
   final String goal;
+  final String? coverImageUrl;
+  final String? iconImageUrl;
+  final int memberCount;
+  final int postCount;
 
   CircleModel({
     required this.id,
@@ -31,6 +35,10 @@ class CircleModel {
     required this.createdAt,
     this.recentActivity,
     required this.goal,
+    this.coverImageUrl,
+    this.iconImageUrl,
+    this.memberCount = 0,
+    this.postCount = 0,
   });
 
   factory CircleModel.fromFirestore(DocumentSnapshot doc) {
@@ -52,6 +60,10 @@ class CircleModel {
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       recentActivity: (data['recentActivity'] as Timestamp?)?.toDate(),
       goal: data['goal'] ?? '',
+      coverImageUrl: data['coverImageUrl'],
+      iconImageUrl: data['iconImageUrl'],
+      memberCount: data['memberCount'] ?? 0,
+      postCount: data['postCount'] ?? 0,
     );
   }
 
@@ -71,6 +83,10 @@ class CircleModel {
           ? Timestamp.fromDate(recentActivity!)
           : null,
       'goal': goal,
+      'coverImageUrl': coverImageUrl,
+      'iconImageUrl': iconImageUrl,
+      'memberCount': memberCount,
+      'postCount': postCount,
     };
   }
 
@@ -88,6 +104,10 @@ class CircleModel {
     DateTime? createdAt,
     DateTime? recentActivity,
     String? goal,
+    String? coverImageUrl,
+    String? iconImageUrl,
+    int? memberCount,
+    int? postCount,
   }) {
     return CircleModel(
       id: id ?? this.id,
@@ -103,6 +123,10 @@ class CircleModel {
       createdAt: createdAt ?? this.createdAt,
       recentActivity: recentActivity ?? this.recentActivity,
       goal: goal ?? this.goal,
+      coverImageUrl: coverImageUrl ?? this.coverImageUrl,
+      iconImageUrl: iconImageUrl ?? this.iconImageUrl,
+      memberCount: memberCount ?? this.memberCount,
+      postCount: postCount ?? this.postCount,
     );
   }
 }

@@ -99,10 +99,21 @@ class _PostCardState extends State<PostCard> {
         {'totalPosts': FieldValue.increment(-1)},
       );
 
+      // 5. サークル投稿の場合、postCountをデクリメント
+      if (post.circleId != null && post.circleId!.isNotEmpty) {
+        batch.update(
+          FirebaseFirestore.instance.collection('circles').doc(post.circleId),
+          {'postCount': FieldValue.increment(-1)},
+        );
+      }
+
       // コミット
+      debugPrint('Deleting post: ${post.id}');
       await batch.commit();
+      debugPrint('Post deleted successfully');
 
       if (mounted) {
+        setState(() => _isDeleting = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('投稿を削除しました'),
@@ -111,7 +122,9 @@ class _PostCardState extends State<PostCard> {
         );
         widget.onDeleted?.call();
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('Delete failed: $e');
+      debugPrint('Stack trace: $stackTrace');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
