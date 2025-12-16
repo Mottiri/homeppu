@@ -337,6 +337,23 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
                           totalCount,
                           goalColor,
                         ),
+                      if (widget.goal.reminders.isNotEmpty &&
+                          !widget.isArchived)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: goalColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            Icons.notifications_active_outlined,
+                            size: 14,
+                            color: goalColor,
+                          ),
+                        ),
                     ],
                   ),
                 ],

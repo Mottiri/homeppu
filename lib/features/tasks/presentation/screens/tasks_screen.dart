@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../shared/models/task_model.dart';
 import '../../../../shared/models/category_model.dart';
+import '../../../../shared/providers/task_screen_provider.dart';
 import '../../../../shared/services/task_service.dart';
 import '../../../../shared/services/category_service.dart';
 
@@ -12,17 +14,17 @@ import '../widgets/task_card.dart';
 import '../widgets/week_calendar_strip.dart';
 import 'monthly_calendar_screen.dart';
 
-class TasksScreen extends StatefulWidget {
+class TasksScreen extends ConsumerStatefulWidget {
   final String? highlightTaskId;
   final DateTime? targetDate;
 
   const TasksScreen({super.key, this.highlightTaskId, this.targetDate});
 
   @override
-  State<TasksScreen> createState() => _TasksScreenState();
+  ConsumerState<TasksScreen> createState() => _TasksScreenState();
 }
 
-class _TasksScreenState extends State<TasksScreen>
+class _TasksScreenState extends ConsumerState<TasksScreen>
     with TickerProviderStateMixin, WidgetsBindingObserver {
   final TaskService _taskService = TaskService();
   final CategoryService _categoryService = CategoryService();
@@ -88,6 +90,13 @@ class _TasksScreenState extends State<TasksScreen>
       _pageController = PageController(initialPage: _initialPage);
     }
 
+    // プロバイダーの初期値を設定
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(selectedDateProvider.notifier).state = _selectedDate;
+      }
+    });
+
     // 振動アニメーション用 (小刻みに震える)
     _shakeController = AnimationController(
       vsync: this,
@@ -107,6 +116,27 @@ class _TasksScreenState extends State<TasksScreen>
         });
       }
     });
+  }
+
+  @override
+  void didUpdateWidget(TasksScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.targetDate != null &&
+        widget.targetDate != oldWidget.targetDate) {
+      setState(() {
+        _selectedDate = widget.targetDate!;
+      });
+      final page = _getPageIndex(_selectedDate);
+      if (_pageController.hasClients) {
+        _pageController.jumpToPage(page);
+      }
+      // プロバイダー更新
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ref.read(selectedDateProvider.notifier).state = _selectedDate;
+        }
+      });
+    }
   }
 
   @override
@@ -749,6 +779,8 @@ class _TasksScreenState extends State<TasksScreen>
                       setState(() {
                         _selectedDate = selectedDate;
                       });
+                      ref.read(selectedDateProvider.notifier).state =
+                          selectedDate;
                       final page = _getPageIndex(selectedDate);
                       _pageController.jumpToPage(page);
                     }
@@ -762,6 +794,7 @@ class _TasksScreenState extends State<TasksScreen>
             selectedDate: _selectedDate,
             onDateSelected: (date) {
               setState(() => _selectedDate = date);
+              ref.read(selectedDateProvider.notifier).state = date;
               final page = _getPageIndex(date);
               _pageController.jumpToPage(page);
             },
@@ -778,6 +811,7 @@ class _TasksScreenState extends State<TasksScreen>
                       setState(() {
                         _selectedDate = newDate;
                       });
+                      ref.read(selectedDateProvider.notifier).state = newDate;
                     },
                     itemBuilder: (context, index) {
                       final date = _getDateFromIndex(index);

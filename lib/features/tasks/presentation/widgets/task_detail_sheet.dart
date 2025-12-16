@@ -7,6 +7,7 @@ import 'package:homeppu/features/tasks/presentation/widgets/recurrence_settings_
 import 'package:homeppu/shared/services/media_service.dart';
 import 'package:homeppu/shared/models/goal_model.dart';
 import 'package:homeppu/shared/providers/goal_provider.dart';
+import 'package:homeppu/shared/widgets/reminder_setting_widget.dart';
 import 'package:intl/intl.dart';
 
 class TaskDetailSheet extends ConsumerStatefulWidget {
@@ -43,6 +44,9 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
   List<int>? _recurrenceDaysOfWeek;
   DateTime? _recurrenceEndDate;
 
+  // Reminders State
+  List<Map<String, dynamic>> _reminders = [];
+
   // サブタスク追加用
   final _subtaskController = TextEditingController();
   bool _isAddingSubtask = false;
@@ -63,6 +67,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
     _recurrenceEndDate = widget.task.recurrenceEndDate;
     _attachmentUrls = List.from(widget.task.attachmentUrls);
     _selectedGoalId = widget.task.goalId;
+    _reminders = List.from(widget.task.reminders);
   }
 
   @override
@@ -93,6 +98,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
           : _memoController.text.trim(),
       attachmentUrls: _attachmentUrls,
       goalId: _selectedGoalId,
+      reminders: _reminders,
       clearRecurrence: clearRecurrence,
     );
     widget.onUpdate(updatedTask, editMode);
@@ -591,6 +597,19 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                             ),
                           ),
                         ),
+
+                        // リマインダー設定（日時が設定されている場合のみ）
+                        if (_scheduledAt != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: ReminderSettingWidget(
+                              reminders: _reminders,
+                              onChanged: (reminders) {
+                                setState(() => _reminders = reminders);
+                              },
+                              isGoal: false,
+                            ),
+                          ),
 
                         // Recurrence
                         InkWell(

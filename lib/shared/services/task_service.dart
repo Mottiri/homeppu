@@ -28,6 +28,7 @@ class TaskService {
     String? memo,
     List<String>? attachmentUrls,
     String? goalId,
+    List<Map<String, dynamic>>? reminders,
   }) async {
     final batch = _firestore.batch();
 
@@ -52,6 +53,7 @@ class TaskService {
       'memo': memo,
       'attachmentUrls': attachmentUrls ?? [],
       'goalId': goalId,
+      'reminders': reminders ?? [],
     };
 
     // 繰り返しなしの場合
@@ -237,6 +239,7 @@ class TaskService {
         'memo': task.memo,
         'attachmentUrls': task.attachmentUrls,
         'goalId': task.goalId,
+        'reminders': task.reminders,
         'updatedAt': FieldValue.serverTimestamp(),
       });
     } else {
@@ -279,6 +282,7 @@ class TaskService {
           'memo': task.memo,
           'attachmentUrls': task.attachmentUrls,
           'goalId': task.goalId,
+          'reminders': task.reminders,
           'updatedAt': FieldValue.serverTimestamp(),
         });
 
@@ -342,6 +346,7 @@ class TaskService {
         'memo': task.memo,
         'attachmentUrls': [], // 未来分は空にする
         'goalId': task.goalId,
+        'reminders': task.reminders,
       };
 
       for (var date in dates) {
@@ -439,8 +444,6 @@ class TaskService {
     required String userId,
     bool forceRefresh = false,
   }) async {
-    print('DEBUG getTasks: forceRefresh=$forceRefresh');
-
     var query = _firestore
         .collection('tasks')
         .where('userId', isEqualTo: userId);
@@ -459,22 +462,15 @@ class TaskService {
           ? await query.get(options)
           : await query.get();
 
-      print(
-        'DEBUG getTasks: fetched ${snapshot.docs.length} tasks, fromCache=${snapshot.metadata.isFromCache}',
-      );
-
       return snapshot.docs.map((doc) {
         final data = doc.data();
         data['id'] = doc.id; // ID埋め込み
         return TaskModel.fromMap(data);
       }).toList();
     } catch (e) {
-      print('DEBUG getTasks: error fetching from server: $e');
       // サーバーからの取得に失敗した場合はキャッシュから取得
       final snapshot = await query.get();
-      print(
-        'DEBUG getTasks: fallback to cache, fetched ${snapshot.docs.length} tasks',
-      );
+
       return snapshot.docs.map((doc) {
         final data = doc.data();
         data['id'] = doc.id;

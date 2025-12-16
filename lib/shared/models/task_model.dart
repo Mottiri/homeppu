@@ -74,6 +74,9 @@ class TaskModel {
   final List<String> attachmentUrls;
   final String? goalId;
 
+  // Reminders - [{value: 30, unit: 'minutes'}, ...]
+  final List<Map<String, dynamic>> reminders;
+
   TaskModel({
     required this.id,
     required this.userId,
@@ -101,6 +104,7 @@ class TaskModel {
     this.memo,
     this.attachmentUrls = const [],
     this.goalId,
+    this.reminders = const [],
   });
 
   factory TaskModel.fromFirestore(DocumentSnapshot doc) {
@@ -168,6 +172,11 @@ class TaskModel {
       memo: data['memo'],
       attachmentUrls: List<String>.from(data['attachmentUrls'] ?? []),
       goalId: data['goalId'],
+      reminders:
+          (data['reminders'] as List<dynamic>?)
+              ?.map((r) => Map<String, dynamic>.from(r as Map))
+              .toList() ??
+          [],
     );
   }
 
@@ -197,6 +206,7 @@ class TaskModel {
       'memo': memo,
       'attachmentUrls': attachmentUrls,
       'goalId': goalId,
+      'reminders': reminders,
     };
   }
 
@@ -227,6 +237,7 @@ class TaskModel {
     String? memo,
     List<String>? attachmentUrls,
     String? goalId,
+    List<Map<String, dynamic>>? reminders,
     bool clearRecurrence = false, // 繰り返し設定をクリアするフラグ
   }) {
     return TaskModel(
@@ -266,6 +277,7 @@ class TaskModel {
       memo: memo ?? this.memo,
       attachmentUrls: attachmentUrls ?? this.attachmentUrls,
       goalId: goalId ?? this.goalId,
+      reminders: reminders ?? this.reminders,
     );
   }
 

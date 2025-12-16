@@ -395,21 +395,45 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '${widget.task.emoji} ${widget.task.content}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
-                      decoration: isCompletedToday
-                          ? TextDecoration.lineThrough
-                          : null,
-                      color: isCompletedToday ? Colors.grey : Colors.black87,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${widget.task.emoji} ${widget.task.content}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                            decoration: isCompletedToday
+                                ? TextDecoration.lineThrough
+                                : null,
+                            color: isCompletedToday
+                                ? Colors.grey
+                                : Colors.black87,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      // リマインダーアイコン
+                      if (widget.task.reminders.isNotEmpty)
+                        Container(
+                          margin: const EdgeInsets.only(left: 8),
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade100,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            Icons.notifications_active_outlined,
+                            size: 14,
+                            color: Colors.orange.shade700,
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 4),
-                  Row(
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       if (widget.task.streak > 0)
                         Container(
@@ -848,6 +872,21 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
                                 ),
                                 const SizedBox(width: 8),
                               ],
+                            ),
+                          // リマインダーアイコン
+                          if (widget.task.reminders.isNotEmpty)
+                            Container(
+                              margin: const EdgeInsets.only(right: 8),
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade100,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.notifications_active_outlined,
+                                size: 14,
+                                color: Colors.orange.shade700,
+                              ),
                             ),
                           // 繰り返しアイコン
                           if (widget.task.recurrenceGroupId != null)

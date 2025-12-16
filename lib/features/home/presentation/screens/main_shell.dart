@@ -5,19 +5,21 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../tasks/presentation/widgets/add_task_bottom_sheet.dart';
 import '../../../../shared/services/task_service.dart';
 import '../../../../shared/services/category_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../shared/providers/task_screen_provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 /// メイン画面のシェル（ボトムナビゲーション）
-class MainShell extends StatefulWidget {
+class MainShell extends ConsumerStatefulWidget {
   final Widget child;
 
   const MainShell({super.key, required this.child});
 
   @override
-  State<MainShell> createState() => _MainShellState();
+  ConsumerState<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell>
+class _MainShellState extends ConsumerState<MainShell>
     with SingleTickerProviderStateMixin {
   late AnimationController _rotationController;
   late Animation<double> _rotationAnimation;
@@ -75,7 +77,7 @@ class _MainShellState extends State<MainShell>
       builder: (context) => AddTaskBottomSheet(
         categories: categories,
         initialCategoryId: null,
-        initialScheduledDate: DateTime.now(),
+        initialScheduledDate: ref.read(selectedDateProvider),
       ),
       backgroundColor: Colors.transparent,
     );
@@ -96,6 +98,7 @@ class _MainShellState extends State<MainShell>
       final recurrenceEndDate = result['recurrenceEndDate'] as DateTime?;
       final memo = result['memo'] as String?;
       final goalId = result['goalId'] as String?;
+      final reminders = result['reminders'] as List<Map<String, dynamic>>?;
 
       await taskService.createTask(
         userId: user.uid,
@@ -111,11 +114,20 @@ class _MainShellState extends State<MainShell>
         recurrenceEndDate: recurrenceEndDate,
         memo: memo,
         goalId: goalId,
+        reminders: reminders,
       );
 
       // タスク画面をリフレッシュ
       if (mounted) {
-        context.go('/tasks', extra: {'forceRefresh': true});
+        // 作成したタスクの日付を渡し、リフレッシュを要求
+        // TasksScreen側で targetDate を受け取ってその日付にジャンプする
+        context.go(
+          '/tasks',
+          extra: {
+            'forceRefresh': true,
+            'targetDate': scheduledAt ?? DateTime.now(),
+          },
+        );
       }
     }
   }

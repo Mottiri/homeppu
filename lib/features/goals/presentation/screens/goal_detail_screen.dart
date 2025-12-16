@@ -22,6 +22,36 @@ class GoalDetailScreen extends ConsumerStatefulWidget {
 class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
   final TaskService _taskService = TaskService();
 
+  String _getRemindersText(List<Map<String, dynamic>> reminders) {
+    if (reminders.isEmpty) return '';
+
+    final sorted = List<Map<String, dynamic>>.from(reminders);
+    // 時間順にソートするロジックを入れても良いが、一旦入力順で表示
+
+    return sorted
+        .map((r) {
+          final value = r['value'] as int? ?? 0;
+          final unit = r['unit'] as String? ?? 'minutes';
+
+          String unitLabel;
+          switch (unit) {
+            case 'minutes':
+              unitLabel = '分';
+              break;
+            case 'hours':
+              unitLabel = '時間';
+              break;
+            case 'days':
+              unitLabel = '日';
+              break;
+            default:
+              unitLabel = '';
+          }
+          return '$value$unitLabel前';
+        })
+        .join(', ');
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
@@ -261,6 +291,28 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
                   ],
                 ],
               ),
+              if (goal.reminders.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.notifications_active_outlined,
+                      size: 16,
+                      color: AppColors.textSecondary,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _getRemindersText(goal.reminders),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),

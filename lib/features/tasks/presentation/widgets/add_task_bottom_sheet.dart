@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../../shared/models/goal_model.dart';
 import '../../../../shared/providers/goal_provider.dart';
+import '../../../../shared/widgets/reminder_setting_widget.dart';
 
 class AddTaskBottomSheet extends ConsumerStatefulWidget {
   final List<CategoryModel> categories;
@@ -41,6 +42,9 @@ class _AddTaskBottomSheetState extends ConsumerState<AddTaskBottomSheet> {
   String? _recurrenceUnit; // null means no recurrence
   List<int>? _recurrenceDaysOfWeek;
   DateTime? _recurrenceEndDate;
+
+  // Reminders State
+  List<Map<String, dynamic>> _reminders = [];
 
   @override
   void initState() {
@@ -83,6 +87,7 @@ class _AddTaskBottomSheetState extends ConsumerState<AddTaskBottomSheet> {
       'recurrenceDaysOfWeek': _recurrenceDaysOfWeek,
       'recurrenceEndDate': _recurrenceEndDate,
       'goalId': _selectedGoalId,
+      'reminders': _reminders,
     });
   }
 
@@ -178,10 +183,12 @@ class _AddTaskBottomSheetState extends ConsumerState<AddTaskBottomSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final maxHeight = MediaQuery.of(context).size.height * 0.8;
 
     return Padding(
       padding: EdgeInsets.only(bottom: bottomInset),
       child: Container(
+        constraints: BoxConstraints(maxHeight: maxHeight),
         decoration: const BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -190,283 +197,303 @@ class _AddTaskBottomSheetState extends ConsumerState<AddTaskBottomSheet> {
           top: false,
           child: Padding(
             padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // カテゴリ・タイプ選択 (横スクロール)
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      // 1. Task (Default)
-                      _buildOptionChip(
-                        label: 'タスク',
-                        icon: Icons.check_circle_outline,
-                        isSelected: _selectedCategoryId == null,
-                        onSelected: (val) {
-                          if (val)
-                            setState(() {
-                              _selectedCategoryId = null;
-                            });
-                        },
-                        color: Colors.blue,
-                      ),
-                      const SizedBox(width: 8),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // カテゴリ・タイプ選択 (横スクロール)
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        // 1. Task (Default)
+                        _buildOptionChip(
+                          label: 'タスク',
+                          icon: Icons.check_circle_outline,
+                          isSelected: _selectedCategoryId == null,
+                          onSelected: (val) {
+                            if (val)
+                              setState(() {
+                                _selectedCategoryId = null;
+                              });
+                          },
+                          color: Colors.blue,
+                        ),
+                        const SizedBox(width: 8),
 
-                      // 2. Custom Categories
-                      ...widget.categories.map((cat) {
-                        final isSelected = _selectedCategoryId == cat.id;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8.0),
-                          child: _buildOptionChip(
-                            label: cat.name,
-                            icon: Icons.label_outline,
-                            isSelected: isSelected,
-                            onSelected: (val) {
-                              if (val)
-                                setState(() {
-                                  _selectedCategoryId = cat.id;
-                                });
-                            },
-                            color: Colors
-                                .orange, // Fixed color for now, or use cat specific
+                        // 2. Custom Categories
+                        ...widget.categories.map((cat) {
+                          final isSelected = _selectedCategoryId == cat.id;
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8.0),
+                            child: _buildOptionChip(
+                              label: cat.name,
+                              icon: Icons.label_outline,
+                              isSelected: isSelected,
+                              onSelected: (val) {
+                                if (val)
+                                  setState(() {
+                                    _selectedCategoryId = cat.id;
+                                  });
+                              },
+                              color: Colors
+                                  .orange, // Fixed color for now, or use cat specific
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // 入力エリア
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _titleController,
+                          focusNode: _focusNode,
+                          decoration: const InputDecoration(
+                            hintText: '新しいタスクを入力...',
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.zero,
                           ),
-                        );
-                      }),
+                          style: const TextStyle(fontSize: 18),
+                          maxLines: 1,
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (_) => _submit(),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: _submit,
+                        icon: const Icon(Icons.arrow_upward_rounded),
+                        style: IconButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 12),
-
-                // 入力エリア
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _titleController,
-                        focusNode: _focusNode,
-                        decoration: const InputDecoration(
-                          hintText: '新しいタスクを入力...',
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                        style: const TextStyle(fontSize: 18),
-                        maxLines: 1,
-                        textInputAction: TextInputAction.done,
-                        onSubmitted: (_) => _submit(),
+                  const SizedBox(height: 8),
+                  // メモ入力 (Optional)
+                  TextField(
+                    controller: _memoController,
+                    decoration: InputDecoration(
+                      hintText: 'メモを追加',
+                      hintStyle: TextStyle(
+                        color: Colors.grey[400],
+                        fontSize: 13,
+                      ),
+                      border: InputBorder.none,
+                      isCollapsed: true,
+                      prefixIcon: const Icon(
+                        Icons.notes,
+                        size: 16,
+                        color: Colors.grey,
+                      ),
+                      prefixIconConstraints: const BoxConstraints(
+                        minWidth: 24,
+                        minHeight: 24,
                       ),
                     ),
-                    IconButton(
-                      onPressed: _submit,
-                      icon: const Icon(Icons.arrow_upward_rounded),
-                      style: IconButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                // メモ入力 (Optional)
-                TextField(
-                  controller: _memoController,
-                  decoration: InputDecoration(
-                    hintText: 'メモを追加',
-                    hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
-                    border: InputBorder.none,
-                    isCollapsed: true,
-                    prefixIcon: const Icon(
-                      Icons.notes,
-                      size: 16,
-                      color: Colors.grey,
-                    ),
-                    prefixIconConstraints: const BoxConstraints(
-                      minWidth: 24,
-                      minHeight: 24,
-                    ),
+                    style: const TextStyle(fontSize: 13, color: Colors.black87),
+                    maxLines: 3,
+                    minLines: 1,
                   ),
-                  style: const TextStyle(fontSize: 13, color: Colors.black87),
-                  maxLines: 3,
-                  minLines: 1,
-                ),
-                const SizedBox(height: 12),
+                  const SizedBox(height: 12),
 
-                // オプションエリア (日付・優先度・同期)
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      // 日付選択
-                      ActionChip(
-                        avatar: Icon(
-                          Icons.calendar_today_outlined,
-                          size: 16,
-                          color: _scheduledDate != null
-                              ? AppColors.primary
-                              : Colors.grey,
-                        ),
-                        label: Text(
-                          _scheduledDate != null
-                              ? DateFormat('M/d H:mm').format(_scheduledDate!)
-                              : '日時',
-                          style: TextStyle(
+                  // オプションエリア (日付・優先度・同期)
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        // 日付選択
+                        ActionChip(
+                          avatar: Icon(
+                            Icons.calendar_today_outlined,
+                            size: 16,
                             color: _scheduledDate != null
                                 ? AppColors.primary
-                                : Colors.grey[700],
+                                : Colors.grey,
+                          ),
+                          label: Text(
+                            _scheduledDate != null
+                                ? DateFormat('M/d H:mm').format(_scheduledDate!)
+                                : '日時',
+                            style: TextStyle(
+                              color: _scheduledDate != null
+                                  ? AppColors.primary
+                                  : Colors.grey[700],
+                            ),
+                          ),
+                          onPressed: _pickDate,
+                          backgroundColor: _scheduledDate != null
+                              ? AppColors.primary.withOpacity(0.1)
+                              : Colors.white,
+                          shape: StadiumBorder(
+                            side: BorderSide(
+                              color: _scheduledDate != null
+                                  ? AppColors.primary
+                                  : Colors.grey[300]!,
+                            ),
                           ),
                         ),
-                        onPressed: _pickDate,
-                        backgroundColor: _scheduledDate != null
-                            ? AppColors.primary.withOpacity(0.1)
-                            : Colors.white,
-                        shape: StadiumBorder(
+                        const SizedBox(width: 8),
+
+                        // 繰り返し設定
+                        ActionChip(
+                          avatar: Icon(
+                            Icons.repeat,
+                            size: 16,
+                            color: _recurrenceUnit != null
+                                ? AppColors.primary
+                                : Colors.grey,
+                          ),
+                          label: Text(
+                            _recurrenceUnit != null
+                                ? _getRecurrenceLabel()
+                                : '繰り返し',
+                            style: TextStyle(
+                              color: _recurrenceUnit != null
+                                  ? AppColors.primary
+                                  : Colors.grey[700],
+                            ),
+                          ),
+                          onPressed: _openRecurrenceSettings,
+                          backgroundColor: _recurrenceUnit != null
+                              ? AppColors.primary.withOpacity(0.1)
+                              : Colors.white,
                           side: BorderSide(
-                            color: _scheduledDate != null
+                            color: _recurrenceUnit != null
                                 ? AppColors.primary
                                 : Colors.grey[300]!,
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
+                        const SizedBox(width: 8),
 
-                      // 繰り返し設定
-                      ActionChip(
-                        avatar: Icon(
-                          Icons.repeat,
-                          size: 16,
-                          color: _recurrenceUnit != null
-                              ? AppColors.primary
-                              : Colors.grey,
-                        ),
-                        label: Text(
-                          _recurrenceUnit != null
-                              ? _getRecurrenceLabel()
-                              : '繰り返し',
-                          style: TextStyle(
-                            color: _recurrenceUnit != null
-                                ? AppColors.primary
-                                : Colors.grey[700],
-                          ),
-                        ),
-                        onPressed: _openRecurrenceSettings,
-                        backgroundColor: _recurrenceUnit != null
-                            ? AppColors.primary.withOpacity(0.1)
-                            : Colors.white,
-                        side: BorderSide(
-                          color: _recurrenceUnit != null
-                              ? AppColors.primary
-                              : Colors.grey[300]!,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-
-                      // 優先度
-                      PopupMenuButton<int>(
-                        initialValue: _priority,
-                        onSelected: (int item) {
-                          setState(() {
-                            _priority = item;
-                          });
-                        },
-                        itemBuilder: (BuildContext context) =>
-                            <PopupMenuEntry<int>>[
-                              const PopupMenuItem<int>(
-                                value: 0,
-                                child: Text('優先度: 低 🟢'),
-                              ),
-                              const PopupMenuItem<int>(
-                                value: 1,
-                                child: Text('優先度: 中 🟡'),
-                              ),
-                              const PopupMenuItem<int>(
-                                value: 2,
-                                child: Text('優先度: 高 🔴'),
-                              ),
-                            ],
-                        child: Chip(
-                          avatar: Text(
-                            _priority == 0
-                                ? '🟢'
-                                : (_priority == 1 ? '🟡' : '🔴'),
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                          label: Text(
-                            _priority == 0 ? '低' : (_priority == 1 ? '中' : '高'),
-                            style: TextStyle(color: Colors.grey[700]),
-                          ),
-                          backgroundColor: Colors.white,
-                          shape: StadiumBorder(
-                            side: BorderSide(color: Colors.grey[300]!),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (FirebaseAuth.instance.currentUser != null) ...[
-                  const SizedBox(height: 12),
-                  Consumer(
-                    builder: (context, ref, child) {
-                      final goalService = ref.watch(goalServiceProvider);
-                      return StreamBuilder<List<GoalModel>>(
-                        stream: goalService.streamActiveGoals(
-                          FirebaseAuth.instance.currentUser!.uid,
-                        ),
-                        builder: (context, snapshot) {
-                          if (!snapshot.hasData || snapshot.data!.isEmpty)
-                            return const SizedBox.shrink();
-                          final goals = snapshot.data!;
-                          return SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.only(right: 8),
-                                  child: ActionChip(
-                                    label: const Text('目標なし'),
-                                    backgroundColor: _selectedGoalId == null
-                                        ? Colors.grey[300]
-                                        : Colors.white,
-                                    onPressed: () =>
-                                        setState(() => _selectedGoalId = null),
-                                  ),
+                        // 優先度
+                        PopupMenuButton<int>(
+                          initialValue: _priority,
+                          onSelected: (int item) {
+                            setState(() {
+                              _priority = item;
+                            });
+                          },
+                          itemBuilder: (BuildContext context) =>
+                              <PopupMenuEntry<int>>[
+                                const PopupMenuItem<int>(
+                                  value: 0,
+                                  child: Text('優先度: 低 🟢'),
                                 ),
-                                ...goals.map((goal) {
-                                  final isSelected = _selectedGoalId == goal.id;
-                                  return Padding(
-                                    padding: const EdgeInsets.only(right: 8),
-                                    child: ChoiceChip(
-                                      label: Text(goal.title),
-                                      selected: isSelected,
-                                      onSelected: (val) {
-                                        setState(
-                                          () => _selectedGoalId = val
-                                              ? goal.id
-                                              : null,
-                                        );
-                                      },
-                                      selectedColor: Color(goal.colorValue),
-                                      backgroundColor: Colors.white,
-                                      labelStyle: TextStyle(
-                                        color: isSelected
-                                            ? Colors.white
-                                            : Colors.black87,
-                                      ),
-                                      showCheckmark: false,
-                                    ),
-                                  );
-                                }),
+                                const PopupMenuItem<int>(
+                                  value: 1,
+                                  child: Text('優先度: 中 🟡'),
+                                ),
+                                const PopupMenuItem<int>(
+                                  value: 2,
+                                  child: Text('優先度: 高 🔴'),
+                                ),
                               ],
+                          child: Chip(
+                            avatar: Text(
+                              _priority == 0
+                                  ? '🟢'
+                                  : (_priority == 1 ? '🟡' : '🔴'),
+                              style: const TextStyle(fontSize: 12),
                             ),
-                          );
-                        },
-                      );
-                    },
+                            label: Text(
+                              _priority == 0
+                                  ? '低'
+                                  : (_priority == 1 ? '中' : '高'),
+                              style: TextStyle(color: Colors.grey[700]),
+                            ),
+                            backgroundColor: Colors.white,
+                            shape: StadiumBorder(
+                              side: BorderSide(color: Colors.grey[300]!),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+                  if (FirebaseAuth.instance.currentUser != null) ...[
+                    const SizedBox(height: 12),
+                    Consumer(
+                      builder: (context, ref, child) {
+                        final goalService = ref.watch(goalServiceProvider);
+                        return StreamBuilder<List<GoalModel>>(
+                          stream: goalService.streamActiveGoals(
+                            FirebaseAuth.instance.currentUser!.uid,
+                          ),
+                          builder: (context, snapshot) {
+                            if (!snapshot.hasData || snapshot.data!.isEmpty)
+                              return const SizedBox.shrink();
+                            final goals = snapshot.data!;
+                            return SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 8),
+                                    child: ActionChip(
+                                      label: const Text('目標なし'),
+                                      backgroundColor: _selectedGoalId == null
+                                          ? Colors.grey[300]
+                                          : Colors.white,
+                                      onPressed: () => setState(
+                                        () => _selectedGoalId = null,
+                                      ),
+                                    ),
+                                  ),
+                                  ...goals.map((goal) {
+                                    final isSelected =
+                                        _selectedGoalId == goal.id;
+                                    return Padding(
+                                      padding: const EdgeInsets.only(right: 8),
+                                      child: ChoiceChip(
+                                        label: Text(goal.title),
+                                        selected: isSelected,
+                                        onSelected: (val) {
+                                          setState(
+                                            () => _selectedGoalId = val
+                                                ? goal.id
+                                                : null,
+                                          );
+                                        },
+                                        selectedColor: Color(goal.colorValue),
+                                        backgroundColor: Colors.white,
+                                        labelStyle: TextStyle(
+                                          color: isSelected
+                                              ? Colors.white
+                                              : Colors.black87,
+                                        ),
+                                        showCheckmark: false,
+                                      ),
+                                    );
+                                  }),
+                                ],
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ],
+                  // リマインダー設定（日時が設定されている場合のみ表示）
+                  if (_scheduledDate != null) ...[
+                    const SizedBox(height: 16),
+                    ReminderSettingWidget(
+                      reminders: _reminders,
+                      onChanged: (reminders) {
+                        setState(() => _reminders = reminders);
+                      },
+                      isGoal: false,
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),

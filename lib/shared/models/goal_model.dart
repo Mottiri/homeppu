@@ -13,6 +13,9 @@ class GoalModel {
   final bool isPublic;
   final int order; // 並び順（0が最上位）
 
+  // Reminders - [{value: 3, unit: 'days'}, ...]
+  final List<Map<String, dynamic>> reminders;
+
   GoalModel({
     required this.id,
     required this.userId,
@@ -25,6 +28,7 @@ class GoalModel {
     this.completedAt,
     this.isPublic = false, // Defaults to private, but tasks can inherit this
     this.order = 0,
+    this.reminders = const [],
   });
 
   bool get isCompleted => completedAt != null;
@@ -63,6 +67,11 @@ class GoalModel {
           : null,
       isPublic: data['isPublic'] ?? false,
       order: data['order'] ?? 0,
+      reminders:
+          (data['reminders'] as List<dynamic>?)
+              ?.map((r) => Map<String, dynamic>.from(r as Map))
+              .toList() ??
+          [],
     );
   }
 
@@ -78,6 +87,7 @@ class GoalModel {
       'completedAt': completedAt,
       'isPublic': isPublic,
       'order': order,
+      'reminders': reminders,
     };
   }
 
@@ -93,6 +103,7 @@ class GoalModel {
     DateTime? completedAt,
     bool? isPublic,
     int? order,
+    List<Map<String, dynamic>>? reminders,
     bool forceClearCompletedAt = false, // Helper to un-complete
   }) {
     return GoalModel(
@@ -109,6 +120,7 @@ class GoalModel {
           : (completedAt ?? this.completedAt),
       isPublic: isPublic ?? this.isPublic,
       order: order ?? this.order,
+      reminders: reminders ?? this.reminders,
     );
   }
 }

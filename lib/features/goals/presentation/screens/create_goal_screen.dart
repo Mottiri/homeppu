@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:uuid/uuid.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../shared/widgets/reminder_setting_widget.dart';
 import '../../../../shared/models/goal_model.dart';
 import '../../../../shared/providers/goal_provider.dart';
 
@@ -24,6 +25,7 @@ class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen> {
   int _selectedColorValue = 0xFFFF8A80; // Default: AppColors.primary
   bool _isPublic = false;
   bool _isLoading = false;
+  List<Map<String, dynamic>> _reminders = [];
 
   final List<Map<String, dynamic>> _colorOptions = [
     {'color': 0xFFFF8A80, 'name': 'コーラル'},
@@ -66,6 +68,7 @@ class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen> {
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
         isPublic: _isPublic,
+        reminders: _reminders,
       );
 
       await goalService.createGoal(newGoal);
@@ -246,60 +249,102 @@ class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen> {
               icon: Icons.event_rounded,
               iconColor: _deadline != null ? selectedColor : AppColors.textHint,
               title: '期限を設定（任意）',
-              child: InkWell(
-                onTap: _selectDeadline,
-                borderRadius: BorderRadius.circular(12),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _deadline == null
-                            ? Text(
-                                '期限を選択してモチベーションUP！',
-                                style: TextStyle(
-                                  color: AppColors.textHint,
-                                  fontSize: 14,
-                                ),
-                              )
-                            : Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    DateFormat('yyyy年M月d日').format(_deadline!),
+              child: Column(
+                children: [
+                  InkWell(
+                    onTap: _selectDeadline,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _deadline == null
+                                ? Text(
+                                    '期限を選択してモチベーションUP！',
                                     style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: selectedColor,
+                                      color: AppColors.textHint,
+                                      fontSize: 14,
                                     ),
+                                  )
+                                : Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        DateFormat(
+                                          'yyyy年M月d日',
+                                        ).format(_deadline!),
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: selectedColor,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'あと${_deadline!.difference(DateTime.now()).inDays}日',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'あと${_deadline!.difference(DateTime.now()).inDays}日',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.textSecondary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                      ),
-                      if (_deadline != null)
-                        IconButton(
-                          icon: Icon(
-                            Icons.close_rounded,
-                            color: AppColors.textHint,
                           ),
-                          onPressed: () => setState(() => _deadline = null),
-                        )
-                      else
-                        Icon(
-                          Icons.calendar_today_rounded,
-                          color: AppColors.textHint,
-                        ),
-                    ],
+                          if (_deadline != null)
+                            IconButton(
+                              icon: Icon(
+                                Icons.close_rounded,
+                                color: AppColors.textHint,
+                              ),
+                              onPressed: () => setState(() => _deadline = null),
+                            )
+                          else
+                            Icon(
+                              Icons.calendar_today_rounded,
+                              color: AppColors.textHint,
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
+                  if (_deadline != null) ...[
+                    const Divider(height: 1),
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: ReminderSettingWidget(
+                        reminders: _reminders,
+                        onChanged: (reminders) {
+                          setState(() => _reminders = reminders);
+                        },
+                        isGoal: true,
+                      ),
+                    ),
+                  ] else ...[
+                    const Divider(height: 1),
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.notifications_off_outlined,
+                            size: 18,
+                            color: Colors.grey[400],
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '期限を設定すると事前通知が可能になります',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey[500],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
 
