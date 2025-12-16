@@ -203,6 +203,7 @@ class TaskService {
           'memo': task.memo,
           'attachmentUrls': [], // 未来分は空にする
           'goalId': task.goalId,
+          'reminders': task.reminders,
         };
 
         batch.set(docRef, {

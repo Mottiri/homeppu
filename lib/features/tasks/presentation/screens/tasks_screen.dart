@@ -287,10 +287,19 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
 
   Future<void> _handleUpdateTask(TaskModel task, String editMode) async {
     try {
+      // Optimistic Update: 即座にローカルUIを更新
+      setState(() {
+        _updateTaskLocally(task);
+      });
+
       // カレンダー連携削除済み
       await _taskService.updateTask(task, editMode: editMode);
-      await _loadData();
+
+      // サーバー同期（サイレント）
+      await _loadData(showLoading: false);
     } catch (e) {
+      // エラー時はリロード
+      await _loadData(showLoading: false);
       if (mounted) {
         ScaffoldMessenger.of(
           context,

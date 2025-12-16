@@ -397,12 +397,25 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
         }
 
         // 繰り返しタスクの場合、更新範囲を確認
-        // 繰り返しルールの変更がある場合のみ、今後も変更するか聞く
-        if (_hasRecurrenceRuleChanges()) {
+        // 繰り返しルールまたはリマインダー設定の変更がある場合のみ、今後も変更するか聞く
+        final hasRuleChanges = _hasRecurrenceRuleChanges();
+        final hasReminderChanges = _hasRemindersChanges();
+
+        if (hasRuleChanges || hasReminderChanges) {
+          // ダイアログタイトルを変更内容に応じて設定
+          String dialogTitle;
+          if (hasRuleChanges && hasReminderChanges) {
+            dialogTitle = '設定の変更';
+          } else if (hasRuleChanges) {
+            dialogTitle = '繰り返し設定の変更';
+          } else {
+            dialogTitle = '通知設定の変更';
+          }
+
           final editMode = await showDialog<String>(
             context: context,
             builder: (context) => SimpleDialog(
-              title: const Text('繰り返し設定の変更'), // 文言修正
+              title: Text(dialogTitle),
               children: [
                 SimpleDialogOption(
                   onPressed: () => Navigator.pop(context, 'single'),
@@ -994,7 +1007,22 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
         (_memoController.text.trim() != (widget.task.memo ?? '')) ||
         !listEquals(_attachmentUrls, widget.task.attachmentUrls) ||
         _selectedGoalId != widget.task.goalId ||
+        !_remindersEqual(_reminders, widget.task.reminders) ||
         _hasRecurrenceRuleChanges();
+  }
+
+  /// リマインダーリストが等しいかチェック
+  bool _remindersEqual(
+    List<Map<String, dynamic>> a,
+    List<Map<String, dynamic>> b,
+  ) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i]['unit'] != b[i]['unit'] || a[i]['value'] != b[i]['value']) {
+        return false;
+      }
+    }
+    return true;
   }
 
   bool _hasRecurrenceRuleChanges() {
@@ -1002,6 +1030,11 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
         _recurrenceUnit != widget.task.recurrenceUnit ||
         !listEquals(_recurrenceDaysOfWeek, widget.task.recurrenceDaysOfWeek) ||
         _recurrenceEndDate != widget.task.recurrenceEndDate;
+  }
+
+  /// リマインダー設定に変更があるかチェック
+  bool _hasRemindersChanges() {
+    return !_remindersEqual(_reminders, widget.task.reminders);
   }
 
   bool listEquals<T>(List<T>? a, List<T>? b) {
