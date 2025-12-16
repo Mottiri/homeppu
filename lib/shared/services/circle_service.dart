@@ -42,7 +42,7 @@ class CircleService {
     });
   }
 
-  // サークル一覧を取得（全サークル表示）
+  // サークル一覧を取得（AIモードは作成者のみ表示）
   Stream<List<CircleModel>> streamPublicCircles({
     String? category,
     String? userId,
@@ -51,7 +51,12 @@ class CircleService {
     return _firestore.collection('circles').snapshots().map((snapshot) {
       var circles = snapshot.docs
           .map((doc) => CircleModel.fromFirestore(doc))
-          .toList(); // 全サークル表示
+          .where(
+            (c) =>
+                c.aiMode != CircleAIMode.aiOnly || // AIモードでない
+                c.ownerId == userId,
+          ) // または自分が作成者
+          .toList();
 
       // カテゴリフィルター
       if (category != null && category != '全て') {

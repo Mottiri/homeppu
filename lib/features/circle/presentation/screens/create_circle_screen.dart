@@ -178,7 +178,13 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
                   ],
                   selected: {_aiMode},
                   onSelectionChanged: (Set<CircleAIMode> newSelection) {
-                    setState(() => _aiMode = newSelection.first);
+                    setState(() {
+                      _aiMode = newSelection.first;
+                      // AIモード選択時は自動で非公開に
+                      if (_aiMode == CircleAIMode.aiOnly) {
+                        _isPublic = false;
+                      }
+                    });
                   },
                   style: ButtonStyle(
                     backgroundColor: WidgetStateProperty.resolveWith((states) {
@@ -192,35 +198,37 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
               ),
 
               // 公開設定
-              _buildSection(
-                title: '公開設定',
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey[200]!),
-                  ),
-                  child: Column(
-                    children: [
-                      _buildRadioTile(
-                        title: '公開',
-                        subtitle: '誰でも参加できます',
-                        value: true,
-                        groupValue: _isPublic,
-                        onChanged: (val) => setState(() => _isPublic = val!),
-                      ),
-                      Divider(height: 1, color: Colors.grey[200]),
-                      _buildRadioTile(
-                        title: '招待制',
-                        subtitle: '参加には管理者の承認が必要です',
-                        value: false,
-                        groupValue: _isPublic,
-                        onChanged: (val) => setState(() => _isPublic = val!),
-                      ),
-                    ],
+              // 公開設定（AIモード時は非表示・自動で非公開）
+              if (_aiMode != CircleAIMode.aiOnly)
+                _buildSection(
+                  title: '公開設定',
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey[200]!),
+                    ),
+                    child: Column(
+                      children: [
+                        _buildRadioTile(
+                          title: '公開',
+                          subtitle: '誰でも参加できます',
+                          value: true,
+                          groupValue: _isPublic,
+                          onChanged: (val) => setState(() => _isPublic = val!),
+                        ),
+                        Divider(height: 1, color: Colors.grey[200]),
+                        _buildRadioTile(
+                          title: '招待制',
+                          subtitle: '参加には管理者の承認が必要です',
+                          value: false,
+                          groupValue: _isPublic,
+                          onChanged: (val) => setState(() => _isPublic = val!),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
 
               const SizedBox(height: 32),
 
