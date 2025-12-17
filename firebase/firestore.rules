@@ -88,8 +88,13 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions', 'commentCount'])
       );
       
-      // 削除: 投稿者のみ
-      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+      // 削除: 投稿者 または サークル投稿の場合はサークルオーナーも可
+      allow delete: if isAuthenticated() && (
+        isOwner(resource.data.userId) ||
+        (resource.data.circleId != null && 
+         exists(/databases/$(database)/documents/circles/$(resource.data.circleId)) &&
+         get(/databases/$(database)/documents/circles/$(resource.data.circleId)).data.ownerId == request.auth.uid)
+      );
     }
     
     // コメントコレクション
@@ -101,10 +106,12 @@ service cloud.firestore {
       allow create: if isAuthenticated() && isNotBanned() && 
         request.resource.data.userId == request.auth.uid;
       
-      // 削除: コメント投稿者 または 元投稿の所有者
+      // 削除: コメント投稿者 または 元投稿の所有者 または サークルオーナー
       allow delete: if isAuthenticated() && (
         isOwner(resource.data.userId) ||
-        isOwner(get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.userId)
+        isOwner(get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.userId) ||
+        (get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.circleId != null &&
+         get(/databases/$(database)/documents/circles/$(get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.circleId)).data.ownerId == request.auth.uid)
       );
     }
     
@@ -117,10 +124,12 @@ service cloud.firestore {
       allow create: if isAuthenticated() && isNotBanned() && 
         request.resource.data.userId == request.auth.uid;
       
-      // 削除: リアクションした本人 または 元投稿の所有者
+      // 削除: リアクションした本人 または 元投稿の所有者 または サークルオーナー
       allow delete: if isAuthenticated() && (
         isOwner(resource.data.userId) ||
-        isOwner(get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.userId)
+        isOwner(get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.userId) ||
+        (get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.circleId != null &&
+         get(/databases/$(database)/documents/circles/$(get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.circleId)).data.ownerId == request.auth.uid)
       );
     }
 
@@ -142,6 +151,28 @@ service cloud.firestore {
       
       // 削除: オーナーのみ
       allow delete: if isAuthenticated() && isOwner(resource.data.ownerId);
+    }
+    
+    // サークル参加申請コレクション
+    match /circleJoinRequests/{requestId} {
+      // 読み取り: サークルオーナーまたは申請者
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        get(/databases/$(database)/documents/circles/$(resource.data.circleId)).data.ownerId == request.auth.uid
+      );
+      
+      // 作成: 認証済みユーザー
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      
+      // 更新: サークルオーナーのみ（承認/拒否）
+      allow update: if isAuthenticated() && 
+        get(/databases/$(database)/documents/circles/$(resource.data.circleId)).data.ownerId == request.auth.uid;
+      
+      // 削除: 申請者またはサークルオーナー
+      allow delete: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        get(/databases/$(database)/documents/circles/$(resource.data.circleId)).data.ownerId == request.auth.uid
+      );
     }
     
     // 通報コレクション
