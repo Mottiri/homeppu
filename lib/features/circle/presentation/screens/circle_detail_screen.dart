@@ -147,35 +147,37 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
             const Text('サークルを削除'),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '「${circle.name}」を削除しますか？',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '• 全ての投稿・コメントが削除されます\n'
-              '• メンバーに通知が送信されます\n'
-              '• この操作は取り消せません',
-              style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: reasonController,
-              decoration: InputDecoration(
-                labelText: '削除理由（任意）',
-                hintText: 'メンバーに伝えたいことがあれば',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                prefixIcon: const Icon(Icons.message_outlined),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '「${circle.name}」を削除しますか？',
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
-              maxLines: 2,
-            ),
-          ],
+              const SizedBox(height: 8),
+              Text(
+                '• 全ての投稿・コメントが削除されます\n'
+                '• メンバーに通知が送信されます\n'
+                '• この操作は取り消せません',
+                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: reasonController,
+                decoration: InputDecoration(
+                  labelText: '削除理由（任意）',
+                  hintText: 'メンバーに伝えたいことがあれば',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  prefixIcon: const Icon(Icons.message_outlined),
+                ),
+                maxLines: 2,
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
