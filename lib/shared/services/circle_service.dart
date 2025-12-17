@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/circle_model.dart';
 
@@ -227,89 +228,13 @@ class CircleService {
     });
   }
 
-  /// サークルを削除（オーナーのみ）
+  /// サークルを削除（Cloud Function経由）
   /// 関連データ（投稿、コメント、リアクション、申請）も削除
   /// メンバーに通知を送信
-  Future<void> deleteCircle({
-    required String circleId,
-    required String ownerId,
-    required String circleName,
-    required List<String> memberIds,
-    String? reason,
-  }) async {
-    // 1. サークル内の投稿を取得
-    final postsSnapshot = await _firestore
-        .collection('posts')
-        .where('circleId', isEqualTo: circleId)
-        .get();
+  Future<void> deleteCircle({required String circleId, String? reason}) async {
+    final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+    final callable = functions.httpsCallable('deleteCircle');
 
-    // 2. 各投稿の関連データを削除（バッチ1: コメント・リアクション）
-    final batch1 = _firestore.batch();
-    for (final postDoc in postsSnapshot.docs) {
-      final postId = postDoc.id;
-
-      // コメント削除
-      final comments = await _firestore
-          .collection('comments')
-          .where('postId', isEqualTo: postId)
-          .get();
-      for (final comment in comments.docs) {
-        batch1.delete(comment.reference);
-      }
-
-      // リアクション削除
-      final reactions = await _firestore
-          .collection('reactions')
-          .where('postId', isEqualTo: postId)
-          .get();
-      for (final reaction in reactions.docs) {
-        batch1.delete(reaction.reference);
-      }
-    }
-    await batch1.commit();
-
-    // 3. 投稿を削除（バッチ2）
-    final batch2 = _firestore.batch();
-    for (final postDoc in postsSnapshot.docs) {
-      batch2.delete(postDoc.reference);
-    }
-    await batch2.commit();
-
-    // 4. 参加申請を削除（バッチ3）
-    final batch3 = _firestore.batch();
-    final joinRequests = await _firestore
-        .collection('circleJoinRequests')
-        .where('circleId', isEqualTo: circleId)
-        .get();
-    for (final request in joinRequests.docs) {
-      batch3.delete(request.reference);
-    }
-    await batch3.commit();
-
-    // 5. サークル本体を削除
-    await _firestore.collection('circles').doc(circleId).delete();
-
-    // 6. メンバーに通知送信（オーナー以外）
-    final notificationMessage = reason != null && reason.isNotEmpty
-        ? '$circleNameが削除されました。理由: $reason'
-        : '$circleNameが削除されました';
-
-    for (final memberId in memberIds) {
-      if (memberId == ownerId) continue; // オーナーには通知しない
-
-      await _firestore
-          .collection('users')
-          .doc(memberId)
-          .collection('notifications')
-          .add({
-            'type': 'circle_deleted',
-            'title': 'サークル削除',
-            'body': notificationMessage,
-            'circleName': circleName,
-            'reason': reason,
-            'isRead': false,
-            'createdAt': FieldValue.serverTimestamp(),
-          });
-    }
+    await callable.call({'circleId': circleId, 'reason': reason});
   }
 }

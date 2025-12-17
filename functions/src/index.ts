@@ -3959,3 +3959,176 @@ export const sendTaskReminders = onSchedule(
     }
   }
 );
+
+// ===============================================
+// サークル削除（Cloud Function）
+// 関連データ（投稿、コメント、リアクション、申請）も削除
+// メンバーに通知を送信
+// ===============================================
+export const deleteCircle = onCall(
+  {
+    region: "asia-northeast1",
+    timeoutSeconds: 300, // 大量データ削除のため長めに
+    memory: "512MiB",
+  },
+  async (request) => {
+    // 認証チェック
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "認証が必要です");
+    }
+
+    const { circleId, reason } = request.data;
+    const userId = request.auth.uid;
+
+    if (!circleId) {
+      throw new HttpsError("invalid-argument", "circleIdが必要です");
+    }
+
+    console.log(`=== deleteCircle START: circleId=${circleId}, userId=${userId} ===`);
+
+    try {
+      // 1. サークル情報を取得
+      const circleDoc = await db.collection("circles").doc(circleId).get();
+      if (!circleDoc.exists) {
+        throw new HttpsError("not-found", "サークルが見つかりません");
+      }
+
+      const circleData = circleDoc.data()!;
+      const ownerId = circleData.ownerId;
+      const circleName = circleData.name;
+      const memberIds: string[] = circleData.memberIds || [];
+
+      // オーナーチェック
+      if (ownerId !== userId) {
+        throw new HttpsError("permission-denied", "サークル削除はオーナーのみ可能です");
+      }
+
+      // 2. サークル内の投稿を取得
+      const postsSnapshot = await db
+        .collection("posts")
+        .where("circleId", "==", circleId)
+        .get();
+
+      console.log(`Found ${postsSnapshot.size} posts to delete`);
+
+      // 3. 各投稿の関連データを削除
+      for (const postDoc of postsSnapshot.docs) {
+        const postId = postDoc.id;
+        const postData = postDoc.data();
+
+        // コメント削除
+        const comments = await db
+          .collection("comments")
+          .where("postId", "==", postId)
+          .get();
+        for (const comment of comments.docs) {
+          await comment.ref.delete();
+        }
+        console.log(`Deleted ${comments.size} comments for post ${postId}`);
+
+        // リアクション削除
+        const reactions = await db
+          .collection("reactions")
+          .where("postId", "==", postId)
+          .get();
+        for (const reaction of reactions.docs) {
+          await reaction.ref.delete();
+        }
+        console.log(`Deleted ${reactions.size} reactions for post ${postId}`);
+
+        // メディアファイル削除（Firebase Storage）
+        const mediaItems = postData.mediaItems || [];
+        for (const media of mediaItems) {
+          try {
+            if (media.url && media.url.includes("firebasestorage.googleapis.com")) {
+              // URLからパスを抽出
+              const urlParts = media.url.split("/o/")[1];
+              if (urlParts) {
+                const filePath = decodeURIComponent(urlParts.split("?")[0]);
+                await admin.storage().bucket().file(filePath).delete();
+                console.log(`Deleted storage file: ${filePath}`);
+              }
+            }
+          } catch (storageError) {
+            console.error(`Failed to delete storage file:`, storageError);
+            // ストレージ削除失敗は無視して続行
+          }
+        }
+
+        // 投稿削除
+        await postDoc.ref.delete();
+      }
+      console.log(`Deleted ${postsSnapshot.size} posts`);
+
+      // 4. 参加申請を削除
+      const joinRequests = await db
+        .collection("circleJoinRequests")
+        .where("circleId", "==", circleId)
+        .get();
+      for (const request of joinRequests.docs) {
+        await request.ref.delete();
+      }
+      console.log(`Deleted ${joinRequests.size} join requests`);
+
+      // 5. サークル本体を削除
+      await circleDoc.ref.delete();
+      console.log(`Deleted circle: ${circleName}`);
+
+      // 6. メンバーに通知送信（オーナー以外）
+      const notificationMessage = reason && reason.trim()
+        ? `${circleName}が削除されました。理由: ${reason}`
+        : `${circleName}が削除されました`;
+
+      for (const memberId of memberIds) {
+        if (memberId === ownerId) continue;
+
+        try {
+          // アプリ内通知を作成
+          await db
+            .collection("users")
+            .doc(memberId)
+            .collection("notifications")
+            .add({
+              type: "circle_deleted",
+              title: "サークル削除",
+              body: notificationMessage,
+              circleName: circleName,
+              reason: reason || null,
+              isRead: false,
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+
+          // プッシュ通知を送信
+          const userDoc = await db.collection("users").doc(memberId).get();
+          const userData = userDoc.data();
+          if (userData?.fcmToken) {
+            await admin.messaging().send({
+              token: userData.fcmToken,
+              notification: {
+                title: "サークル削除",
+                body: notificationMessage,
+              },
+              data: {
+                type: "circle_deleted",
+                circleName: circleName,
+              },
+            });
+          }
+        } catch (notifyError) {
+          console.error(`Failed to notify member ${memberId}:`, notifyError);
+          // 通知失敗は無視して続行
+        }
+      }
+
+      console.log(`=== deleteCircle SUCCESS: ${circleName} ===`);
+      return { success: true, message: `${circleName}を削除しました` };
+
+    } catch (error) {
+      console.error(`=== deleteCircle ERROR:`, error);
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+      throw new HttpsError("internal", `削除に失敗しました: ${error}`);
+    }
+  }
+);

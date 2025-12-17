@@ -209,9 +209,6 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
 
       await circleService.deleteCircle(
         circleId: circle.id,
-        ownerId: circle.ownerId,
-        circleName: circle.name,
-        memberIds: circle.memberIds,
         reason: reason?.isEmpty == true ? null : reason,
       );
 
@@ -242,6 +239,21 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
       stream: circleService.streamCircle(widget.circleId),
       builder: (context, snapshot) {
         if (!snapshot.hasData || snapshot.data == null) {
+          // サークルが削除された場合、一覧画面に戻る
+          if (snapshot.connectionState == ConnectionState.active &&
+              snapshot.data == null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('このサークルは削除されました'),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+                context.go('/circles');
+              }
+            });
+          }
           return Scaffold(
             backgroundColor: Colors.grey[50],
             body: const Center(
