@@ -966,9 +966,12 @@ export const onPostCreated = onDocumentCreated(
     const postData = snap.data();
     const postId = event.params.postId;
 
+    console.log(`=== onPostCreated: postId=${postId}, circleId=${postData.circleId}, postMode=${postData.postMode} ===`);
+
     // サークル投稿にはAIコメントを付けない（サークルAI未実装のため）
-    if (postData.circleId) {
-      console.log("Circle post, skipping AI comments");
+    // null, undefined, 空文字列以外の場合はスキップ
+    if (postData.circleId && postData.circleId !== "" && postData.circleId !== null) {
+      console.log(`Circle post detected (circleId=${postData.circleId}), skipping AI comments`);
       return;
     }
 
