@@ -237,15 +237,14 @@ class CircleService {
     required List<String> memberIds,
     String? reason,
   }) async {
-    final batch = _firestore.batch();
-
     // 1. サークル内の投稿を取得
     final postsSnapshot = await _firestore
         .collection('posts')
         .where('circleId', isEqualTo: circleId)
         .get();
 
-    // 2. 各投稿の関連データを削除
+    // 2. 各投稿の関連データを削除（バッチ1: コメント・リアクション）
+    final batch1 = _firestore.batch();
     for (final postDoc in postsSnapshot.docs) {
       final postId = postDoc.id;
 
@@ -255,7 +254,7 @@ class CircleService {
           .where('postId', isEqualTo: postId)
           .get();
       for (final comment in comments.docs) {
-        batch.delete(comment.reference);
+        batch1.delete(comment.reference);
       }
 
       // リアクション削除
@@ -264,27 +263,31 @@ class CircleService {
           .where('postId', isEqualTo: postId)
           .get();
       for (final reaction in reactions.docs) {
-        batch.delete(reaction.reference);
+        batch1.delete(reaction.reference);
       }
-
-      // 投稿削除
-      batch.delete(postDoc.reference);
     }
+    await batch1.commit();
 
-    // 3. 参加申請を削除
+    // 3. 投稿を削除（バッチ2）
+    final batch2 = _firestore.batch();
+    for (final postDoc in postsSnapshot.docs) {
+      batch2.delete(postDoc.reference);
+    }
+    await batch2.commit();
+
+    // 4. 参加申請を削除（バッチ3）
+    final batch3 = _firestore.batch();
     final joinRequests = await _firestore
         .collection('circleJoinRequests')
         .where('circleId', isEqualTo: circleId)
         .get();
     for (final request in joinRequests.docs) {
-      batch.delete(request.reference);
+      batch3.delete(request.reference);
     }
+    await batch3.commit();
 
-    // 4. サークル本体を削除
-    batch.delete(_firestore.collection('circles').doc(circleId));
-
-    // 5. バッチコミット
-    await batch.commit();
+    // 5. サークル本体を削除
+    await _firestore.collection('circles').doc(circleId).delete();
 
     // 6. メンバーに通知送信（オーナー以外）
     final notificationMessage = reason != null && reason.isNotEmpty
