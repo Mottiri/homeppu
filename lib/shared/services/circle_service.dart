@@ -145,11 +145,6 @@ class CircleService {
     });
   }
 
-  // サークル削除
-  Future<void> deleteCircle(String circleId) async {
-    await _firestore.collection('circles').doc(circleId).delete();
-  }
-
   // ユーザーが参加しているサークル一覧
   Stream<List<CircleModel>> streamMyCircles(String userId) {
     return _firestore
