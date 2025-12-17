@@ -165,14 +165,24 @@ class CircleService {
     await _firestore.collection('circles').doc(circleId).update(data);
   }
 
-  // 参加申請を送信
+  // 申請中かどうかをチェック
+  Future<bool> hasPendingRequest(String circleId, String userId) async {
+    final snapshot = await _firestore
+        .collection('circleJoinRequests')
+        .where('circleId', isEqualTo: circleId)
+        .where('userId', isEqualTo: userId)
+        .where('status', isEqualTo: 'pending')
+        .limit(1)
+        .get();
+    return snapshot.docs.isNotEmpty;
+  }
+
+  // 参加申請を送信（Cloud Function経由）
   Future<void> sendJoinRequest(String circleId, String userId) async {
-    await _firestore.collection('circleJoinRequests').add({
-      'circleId': circleId,
-      'userId': userId,
-      'status': 'pending',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+    final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+    final callable = functions.httpsCallable('sendJoinRequest');
+
+    await callable.call({'circleId': circleId});
   }
 
   // 参加申請一覧を取得（管理者用）
@@ -192,22 +202,56 @@ class CircleService {
         });
   }
 
-  // 参加申請を承認
+  // 複数サークルの申請数をまとめて取得（オーナー用）
+  Stream<Map<String, int>> streamPendingRequestCounts(List<String> circleIds) {
+    if (circleIds.isEmpty) {
+      return Stream.value({});
+    }
+
+    return _firestore
+        .collection('circleJoinRequests')
+        .where('circleId', whereIn: circleIds)
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .map((snapshot) {
+          final counts = <String, int>{};
+          for (final doc in snapshot.docs) {
+            final circleId = doc.data()['circleId'] as String;
+            counts[circleId] = (counts[circleId] ?? 0) + 1;
+          }
+          return counts;
+        });
+  }
+
+  // 参加申請を承認（Cloud Function経由）
   Future<void> approveJoinRequest(
     String requestId,
     String circleId,
-    String userId,
+    String circleName,
   ) async {
-    await _firestore.collection('circleJoinRequests').doc(requestId).update({
-      'status': 'approved',
+    final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+    final callable = functions.httpsCallable('approveJoinRequest');
+
+    await callable.call({
+      'requestId': requestId,
+      'circleId': circleId,
+      'circleName': circleName,
     });
-    await joinCircle(circleId, userId);
   }
 
-  // 参加申請を拒否
-  Future<void> rejectJoinRequest(String requestId) async {
-    await _firestore.collection('circleJoinRequests').doc(requestId).update({
-      'status': 'rejected',
+  // 参加申請を拒否（Cloud Function経由）
+  Future<void> rejectJoinRequest(
+    String requestId,
+    String circleId,
+    String circleName,
+  ) async {
+    final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+    final callable = functions.httpsCallable('rejectJoinRequest');
+
+    await callable.call({
+      'requestId': requestId,
+      'circleId': circleId,
+      'circleName': circleName,
     });
   }
 

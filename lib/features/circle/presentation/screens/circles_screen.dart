@@ -16,6 +16,7 @@ class CirclesScreen extends ConsumerStatefulWidget {
 }
 
 class _CirclesScreenState extends ConsumerState<CirclesScreen> {
+  int _selectedTab = 0; // 0: みんなの, 1: 参加中
   String _selectedCategory = '全て';
   final TextEditingController _searchController = TextEditingController();
   List<CircleModel> _searchResults = [];
@@ -143,6 +144,22 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
             ),
 
             const SliverToBoxAdapter(child: SizedBox(height: 16)),
+
+            // タブセレクター（みんなの / 参加中）
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    _buildTabButton('みんなの', 0),
+                    const SizedBox(width: 12),
+                    _buildTabButton('参加中', 1),
+                  ],
+                ),
+              ),
+            ),
+
+            const SliverToBoxAdapter(child: SizedBox(height: 12)),
 
             // カテゴリチップ
             SliverToBoxAdapter(
@@ -329,25 +346,104 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         final keyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
         final bottomPadding = keyboardVisible ? 16.0 : 100.0;
 
+        // タブに応じてフィルタリング
+        List<CircleModel> filteredCircles = circles;
+        if (_selectedTab == 1 && userId != null) {
+          // 参加中タブ: 自分がメンバーのサークルのみ
+          filteredCircles = circles
+              .where((c) => c.memberIds.contains(userId))
+              .toList();
+        }
+
+        if (filteredCircles.isEmpty) {
+          return SliverFillRemaining(
+            hasScrollBody: false,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 100),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.group_off, size: 64, color: Colors.grey[300]),
+                  const SizedBox(height: 16),
+                  Text(
+                    _selectedTab == 1 ? '参加中のサークルがありません' : 'サークルがありません',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
         return SliverPadding(
           padding: EdgeInsets.only(bottom: bottomPadding),
           sliver: SliverList(
             delegate: SliverChildBuilderDelegate(
-              (context, index) => _CircleCard(circle: circles[index]),
-              childCount: circles.length,
+              (context, index) => _CircleCard(
+                circle: filteredCircles[index],
+                currentUserId: userId,
+              ),
+              childCount: filteredCircles.length,
             ),
           ),
         );
       },
     );
   }
+
+  Widget _buildTabButton(String label, int index) {
+    final isSelected = _selectedTab == index;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedTab = index),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? AppColors.primary : Colors.grey[300]!,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: AppColors.primary.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              index == 0 ? Icons.public : Icons.group,
+              size: 16,
+              color: isSelected ? Colors.white : Colors.grey[600],
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : Colors.grey[700],
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// サークルカード
-class _CircleCard extends StatelessWidget {
+class _CircleCard extends ConsumerWidget {
   final CircleModel circle;
+  final String? currentUserId;
 
-  const _CircleCard({required this.circle});
+  const _CircleCard({required this.circle, this.currentUserId});
 
   static const Map<String, String> categoryIcons = {
     '勉強': '📚',
@@ -364,8 +460,9 @@ class _CircleCard extends StatelessWidget {
   };
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final icon = categoryIcons[circle.category] ?? '⭐';
+    final isOwner = currentUserId != null && circle.ownerId == currentUserId;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -389,35 +486,79 @@ class _CircleCard extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                // アイコン
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        AppColors.primary.withOpacity(0.1),
-                        AppColors.primaryLight.withOpacity(0.3),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: circle.iconImageUrl != null
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: Image.network(
-                            circle.iconImageUrl!,
-                            fit: BoxFit.cover,
-                          ),
-                        )
-                      : Center(
-                          child: Text(
-                            icon,
-                            style: const TextStyle(fontSize: 28),
-                          ),
+                // アイコン（オーナーの場合は申請バッジ付き）
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            AppColors.primary.withOpacity(0.1),
+                            AppColors.primaryLight.withOpacity(0.3),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                         ),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: circle.iconImageUrl != null
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: Image.network(
+                                circle.iconImageUrl!,
+                                fit: BoxFit.cover,
+                              ),
+                            )
+                          : Center(
+                              child: Text(
+                                icon,
+                                style: const TextStyle(fontSize: 28),
+                              ),
+                            ),
+                    ),
+                    // オーナーの場合は申請バッジを表示
+                    if (isOwner)
+                      StreamBuilder<List<Map<String, dynamic>>>(
+                        stream: ref
+                            .watch(circleServiceProvider)
+                            .streamJoinRequests(circle.id),
+                        builder: (context, snapshot) {
+                          final count = snapshot.data?.length ?? 0;
+                          if (count == 0) return const SizedBox.shrink();
+                          return Positioned(
+                            top: -4,
+                            right: -4,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 2,
+                                ),
+                              ),
+                              constraints: const BoxConstraints(
+                                minWidth: 20,
+                                minHeight: 20,
+                              ),
+                              child: Text(
+                                count > 9 ? '9+' : count.toString(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                  ],
                 ),
                 const SizedBox(width: 16),
 
@@ -426,10 +567,32 @@ class _CircleCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        circle.name,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
+                      Row(
+                        children: [
+                          // オーナーバッジ
+                          if (currentUserId != null &&
+                              circle.ownerId == currentUserId)
+                            Container(
+                              margin: const EdgeInsets.only(right: 6),
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Icon(
+                                Icons.workspace_premium,
+                                size: 14,
+                                color: Colors.amber,
+                              ),
+                            ),
+                          Expanded(
+                            child: Text(
+                              circle.name,
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 4),
                       Text(

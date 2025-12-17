@@ -163,9 +163,18 @@ class _NotificationTile extends ConsumerWidget {
               .markAsRead(user.uid, notification.id);
         }
 
-        // 投稿詳細へ遷移
+        // 遷移先を決定
         if (notification.postId != null && context.mounted) {
           context.push('/post/${notification.postId}');
+        } else if (notification.circleId != null && context.mounted) {
+          // 拒否/削除通知は遷移しない
+          final noNavigateTypes = [
+            NotificationType.joinRequestRejected,
+            NotificationType.circleDeleted,
+          ];
+          if (!noNavigateTypes.contains(notification.type)) {
+            context.push('/circle/${notification.circleId}');
+          }
         }
       },
       tileColor: !notification.isRead

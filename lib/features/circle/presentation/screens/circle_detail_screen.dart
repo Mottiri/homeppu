@@ -23,6 +23,27 @@ class CircleDetailScreen extends ConsumerStatefulWidget {
 
 class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
   bool _isJoining = false;
+  bool _hasPendingRequest = false;
+  bool _hasCheckedPending = false;
+  String? _lastCheckedUserId;
+
+  Future<void> _checkPendingRequest(String userId) async {
+    if (_hasCheckedPending && _lastCheckedUserId == userId) return;
+
+    final circleService = ref.read(circleServiceProvider);
+    final hasPending = await circleService.hasPendingRequest(
+      widget.circleId,
+      userId,
+    );
+
+    if (mounted) {
+      setState(() {
+        _hasPendingRequest = hasPending;
+        _hasCheckedPending = true;
+        _lastCheckedUserId = userId;
+      });
+    }
+  }
 
   static const Map<String, String> categoryIcons = {
     '勉強': '📚',
@@ -76,6 +97,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
         if (confirm == true) {
           await circleService.sendJoinRequest(widget.circleId, userId);
           if (mounted) {
+            setState(() => _hasPendingRequest = true);
             ScaffoldMessenger.of(
               context,
             ).showSnackBar(const SnackBar(content: Text('参加申請を送信しました')));
@@ -271,6 +293,11 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
             currentUser != null &&
             circleService.isOwner(circle, currentUser.uid);
 
+        // 非公開サークルで非メンバーの場合、申請中かチェック
+        if (!circle.isPublic && !isMember && currentUser != null) {
+          _checkPendingRequest(currentUser.uid);
+        }
+
         return Scaffold(
           backgroundColor: Colors.grey[50],
           floatingActionButton: isMember
@@ -330,9 +357,28 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                             onSelected: (value) {
                               if (value == 'delete') {
                                 _showDeleteDialog(circle);
+                              } else if (value == 'requests') {
+                                context.push(
+                                  '/circle/${circle.id}/requests',
+                                  extra: {'circleName': circle.name},
+                                );
                               }
                             },
                             itemBuilder: (context) => [
+                              const PopupMenuItem(
+                                value: 'requests',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.person_add_outlined,
+                                      color: Color(0xFF00ACC1),
+                                      size: 20,
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text('参加申請'),
+                                  ],
+                                ),
+                              ),
                               const PopupMenuItem(
                                 value: 'delete',
                                 child: Row(
@@ -574,6 +620,32 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                                             ? FontWeight.bold
                                             : FontWeight.normal,
                                       ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            // 申請中の場合
+                            : _hasPendingRequest && !circle.isPublic
+                            ? OutlinedButton(
+                                onPressed: null, // 非活性
+                                style: OutlinedButton.styleFrom(
+                                  side: BorderSide(color: Colors.grey[300]!),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.hourglass_empty,
+                                      color: Colors.grey[500],
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      '申請中',
+                                      style: TextStyle(color: Colors.grey[600]),
                                     ),
                                   ],
                                 ),

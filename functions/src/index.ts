@@ -4143,3 +4143,280 @@ export const deleteCircle = onCall(
     }
   }
 );
+
+/**
+ * 参加申請を承認
+ */
+export const approveJoinRequest = onCall(
+  {
+    region: "asia-northeast1",
+  },
+  async (request) => {
+    const { requestId, circleId, circleName } = request.data;
+    const userId = request.auth?.uid;
+
+    if (!userId) {
+      throw new HttpsError("unauthenticated", "認証が必要です");
+    }
+
+    if (!requestId || !circleId) {
+      throw new HttpsError("invalid-argument", "必要なパラメータがありません");
+    }
+
+    try {
+      const db = admin.firestore();
+
+      // サークル情報を取得してオーナーチェック
+      const circleDoc = await db.collection("circles").doc(circleId).get();
+      if (!circleDoc.exists) {
+        throw new HttpsError("not-found", "サークルが見つかりません");
+      }
+      if (circleDoc.data()?.ownerId !== userId) {
+        throw new HttpsError("permission-denied", "オーナーのみ承認できます");
+      }
+
+      // 申請情報を取得
+      const requestDoc = await db.collection("circleJoinRequests").doc(requestId).get();
+      if (!requestDoc.exists) {
+        throw new HttpsError("not-found", "申請が見つかりません");
+      }
+      const requestData = requestDoc.data()!;
+      const applicantId = requestData.userId;
+
+      // 申請を承認済みに更新
+      await db.collection("circleJoinRequests").doc(requestId).update({
+        status: "approved",
+      });
+
+      // サークルにメンバーを追加
+      await db.collection("circles").doc(circleId).update({
+        memberIds: admin.firestore.FieldValue.arrayUnion(applicantId),
+        memberCount: admin.firestore.FieldValue.increment(1),
+      });
+
+      // 申請者の表示名を取得
+      const ownerDoc = await db.collection("users").doc(userId).get();
+      const ownerName = ownerDoc.data()?.displayName || "オーナー";
+
+      // 申請者に通知を送信
+      await db.collection("users").doc(applicantId).collection("notifications").add({
+        type: "join_request_approved",
+        senderId: userId,
+        senderName: ownerName,
+        senderAvatarUrl: ownerDoc.data()?.avatarIndex?.toString() || "0",
+        title: "参加を承認しました",
+        body: `${circleName || "サークル"}への参加が承認されました！`,
+        circleName: circleName,
+        circleId: circleId,
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      console.log(`=== approveJoinRequest SUCCESS: ${requestId} ===`);
+      return { success: true };
+
+    } catch (error) {
+      console.error(`=== approveJoinRequest ERROR:`, error);
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+      throw new HttpsError("internal", `承認に失敗しました: ${error}`);
+    }
+  }
+);
+
+/**
+ * 参加申請を拒否
+ */
+export const rejectJoinRequest = onCall(
+  {
+    region: "asia-northeast1",
+  },
+  async (request) => {
+    const { requestId, circleId, circleName } = request.data;
+    const userId = request.auth?.uid;
+
+    if (!userId) {
+      throw new HttpsError("unauthenticated", "認証が必要です");
+    }
+
+    if (!requestId || !circleId) {
+      throw new HttpsError("invalid-argument", "必要なパラメータがありません");
+    }
+
+    try {
+      const db = admin.firestore();
+
+      // サークル情報を取得してオーナーチェック
+      const circleDoc = await db.collection("circles").doc(circleId).get();
+      if (!circleDoc.exists) {
+        throw new HttpsError("not-found", "サークルが見つかりません");
+      }
+      if (circleDoc.data()?.ownerId !== userId) {
+        throw new HttpsError("permission-denied", "オーナーのみ拒否できます");
+      }
+
+      // 申請情報を取得
+      const requestDoc = await db.collection("circleJoinRequests").doc(requestId).get();
+      if (!requestDoc.exists) {
+        throw new HttpsError("not-found", "申請が見つかりません");
+      }
+      const requestData = requestDoc.data()!;
+      const applicantId = requestData.userId;
+
+      // 申請を拒否済みに更新
+      await db.collection("circleJoinRequests").doc(requestId).update({
+        status: "rejected",
+      });
+
+      // オーナーの表示名を取得
+      const ownerDoc = await db.collection("users").doc(userId).get();
+      const ownerName = ownerDoc.data()?.displayName || "オーナー";
+
+      // 申請者に通知を送信
+      await db.collection("users").doc(applicantId).collection("notifications").add({
+        type: "join_request_rejected",
+        senderId: userId,
+        senderName: ownerName,
+        senderAvatarUrl: ownerDoc.data()?.avatarIndex?.toString() || "0",
+        title: "参加申請が拒否されました",
+        body: `${circleName || "サークル"}への参加申請は承認されませんでした`,
+        circleName: circleName,
+        circleId: circleId,
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      console.log(`=== rejectJoinRequest SUCCESS: ${requestId} ===`);
+      return { success: true };
+
+    } catch (error) {
+      console.error(`=== rejectJoinRequest ERROR:`, error);
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+      throw new HttpsError("internal", `拒否に失敗しました: ${error}`);
+    }
+  }
+);
+
+/**
+ * 参加申請を送信（オーナーに通知）
+ */
+export const sendJoinRequest = onCall(
+  {
+    region: "asia-northeast1",
+  },
+  async (request) => {
+    const { circleId } = request.data;
+    const userId = request.auth?.uid;
+
+    if (!userId) {
+      throw new HttpsError("unauthenticated", "認証が必要です");
+    }
+
+    if (!circleId) {
+      throw new HttpsError("invalid-argument", "サークルIDが必要です");
+    }
+
+    try {
+      const db = admin.firestore();
+
+      // サークル情報を取得
+      const circleDoc = await db.collection("circles").doc(circleId).get();
+      if (!circleDoc.exists) {
+        throw new HttpsError("not-found", "サークルが見つかりません");
+      }
+      const circleData = circleDoc.data()!;
+      const ownerId = circleData.ownerId;
+      const circleName = circleData.name;
+
+      // 既に申請中かチェック
+      const existingRequest = await db
+        .collection("circleJoinRequests")
+        .where("circleId", "==", circleId)
+        .where("userId", "==", userId)
+        .where("status", "==", "pending")
+        .limit(1)
+        .get();
+
+      if (!existingRequest.empty) {
+        throw new HttpsError("already-exists", "既に申請中です");
+      }
+
+      // 申請を作成
+      await db.collection("circleJoinRequests").add({
+        circleId: circleId,
+        userId: userId,
+        status: "pending",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // 申請者の情報を取得
+      const applicantDoc = await db.collection("users").doc(userId).get();
+      const applicantName = applicantDoc.data()?.displayName || "ユーザー";
+
+      // アプリ内通知を送信
+      await db.collection("users").doc(ownerId).collection("notifications").add({
+        type: "join_request_received",
+        senderId: userId,
+        senderName: applicantName,
+        senderAvatarUrl: applicantDoc.data()?.avatarIndex?.toString() || "0",
+        title: "参加申請が届きました",
+        body: `${applicantName}さんが${circleName}への参加を申請しました`,
+        circleName: circleName,
+        circleId: circleId,
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // プッシュ通知を送信
+      try {
+        const ownerDoc = await db.collection("users").doc(ownerId).get();
+        const ownerFcmToken = ownerDoc.data()?.fcmToken;
+
+        if (ownerFcmToken) {
+          await admin.messaging().send({
+            token: ownerFcmToken,
+            notification: {
+              title: `${applicantName}さんから参加申請`,
+              body: `${circleName}への参加申請が届きました`,
+            },
+            data: {
+              type: "join_request_received",
+              circleId: circleId,
+            },
+            android: {
+              priority: "high",
+              notification: {
+                channelId: "default",
+              },
+            },
+            apns: {
+              payload: {
+                aps: {
+                  sound: "default",
+                  badge: 1,
+                },
+              },
+            },
+          });
+          console.log(`Push notification sent to owner: ${ownerId}`);
+        }
+      } catch (pushError) {
+        console.error(`Failed to send push notification:`, pushError);
+        // プッシュ通知失敗は無視して続行
+      }
+
+      console.log(`=== sendJoinRequest SUCCESS: ${userId} -> ${circleId} ===`);
+      return { success: true };
+
+    } catch (error) {
+      console.error(`=== sendJoinRequest ERROR:`, error);
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+      throw new HttpsError("internal", `申請に失敗しました: ${error}`);
+    }
+  }
+);

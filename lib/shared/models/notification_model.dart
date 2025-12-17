@@ -1,6 +1,15 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-enum NotificationType { comment, reaction, system }
+enum NotificationType {
+  comment,
+  reaction,
+  system,
+  // サークル関連
+  joinRequestReceived,
+  joinRequestApproved,
+  joinRequestRejected,
+  circleDeleted,
+}
 
 class NotificationModel {
   final String id;
@@ -12,6 +21,7 @@ class NotificationModel {
   final String title;
   final String body;
   final String? postId; // 関連する投稿ID
+  final String? circleId; // 関連するサークルID
   final bool isRead;
   final DateTime createdAt;
 
@@ -25,6 +35,7 @@ class NotificationModel {
     required this.title,
     required this.body,
     this.postId,
+    this.circleId,
     this.isRead = false,
     required this.createdAt,
   });
@@ -37,13 +48,11 @@ class NotificationModel {
       senderId: data['senderId'] ?? '',
       senderName: data['senderName'] ?? 'Unknown',
       senderAvatarUrl: data['senderAvatarUrl'] ?? '',
-      type: NotificationType.values.firstWhere(
-        (e) => e.toString() == 'NotificationType.${data['type']}',
-        orElse: () => NotificationType.system,
-      ),
+      type: _parseNotificationType(data['type'] as String?),
       title: data['title'] ?? '',
       body: data['body'] ?? '',
       postId: data['postId'],
+      circleId: data['circleId'],
       isRead: data['isRead'] ?? false,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
@@ -59,8 +68,30 @@ class NotificationModel {
       'title': title,
       'body': body,
       'postId': postId,
+      'circleId': circleId,
       'isRead': isRead,
       'createdAt': Timestamp.fromDate(createdAt),
     };
+  }
+
+  static NotificationType _parseNotificationType(String? typeStr) {
+    if (typeStr == null) return NotificationType.system;
+
+    switch (typeStr) {
+      case 'comment':
+        return NotificationType.comment;
+      case 'reaction':
+        return NotificationType.reaction;
+      case 'join_request_received':
+        return NotificationType.joinRequestReceived;
+      case 'join_request_approved':
+        return NotificationType.joinRequestApproved;
+      case 'join_request_rejected':
+        return NotificationType.joinRequestRejected;
+      case 'circle_deleted':
+        return NotificationType.circleDeleted;
+      default:
+        return NotificationType.system;
+    }
   }
 }

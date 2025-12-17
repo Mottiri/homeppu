@@ -14,6 +14,7 @@ import '../../features/profile/presentation/screens/settings_screen.dart';
 import '../../features/circle/presentation/screens/circles_screen.dart';
 import '../../features/circle/presentation/screens/circle_detail_screen.dart';
 import '../../features/circle/presentation/screens/create_circle_screen.dart';
+import '../../features/circle/presentation/screens/join_requests_screen.dart';
 import '../../features/tasks/presentation/screens/tasks_screen.dart';
 import '../../features/goals/presentation/screens/goal_list_screen.dart';
 import '../../features/goals/presentation/screens/create_goal_screen.dart';
@@ -151,6 +152,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/create-circle',
         name: 'createCircle',
         builder: (context, state) => const CreateCircleScreen(),
+      ),
+
+      // 参加申請管理
+      GoRoute(
+        path: '/circle/:circleId/requests',
+        name: 'joinRequests',
+        builder: (context, state) {
+          final circleId = state.pathParameters['circleId']!;
+          final extra = state.extra as Map<String, dynamic>?;
+          final circleName = extra?['circleName'] as String? ?? '';
+          return JoinRequestsScreen(circleId: circleId, circleName: circleName);
+        },
       ),
 
       // 設定
