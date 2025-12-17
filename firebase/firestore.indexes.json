@@ -89,6 +89,20 @@
       ]
     },
     {
+      "collectionGroup": "circles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isPublic",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "name",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "virtueHistory",
       "queryScope": "COLLECTION",
       "fields": [

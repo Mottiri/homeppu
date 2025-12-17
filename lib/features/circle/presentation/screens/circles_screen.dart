@@ -53,6 +53,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       body: SafeArea(
+        bottom: false,
         child: CustomScrollView(
           slivers: [
             // ヘッダー（シアングラデーション）
@@ -210,9 +211,12 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
 
     if (_searchResults.isEmpty) {
       return SliverFillRemaining(
-        child: Center(
+        hasScrollBody: false,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 100),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(Icons.search_off, size: 64, color: Colors.grey[300]),
               const SizedBox(height: 16),
@@ -223,8 +227,12 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
       );
     }
 
+    // キーボード表示時はボトムパディングを減らす
+    final keyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
+    final bottomPadding = keyboardVisible ? 16.0 : 100.0;
+
     return SliverPadding(
-      padding: const EdgeInsets.only(bottom: 100),
+      padding: EdgeInsets.only(bottom: bottomPadding),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate(
           (context, index) => _CircleCard(circle: _searchResults[index]),
@@ -317,8 +325,12 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
           );
         }
 
+        // キーボード表示時はボトムパディングを減らす
+        final keyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
+        final bottomPadding = keyboardVisible ? 16.0 : 100.0;
+
         return SliverPadding(
-          padding: const EdgeInsets.only(bottom: 100),
+          padding: EdgeInsets.only(bottom: bottomPadding),
           sliver: SliverList(
             delegate: SliverChildBuilderDelegate(
               (context, index) => _CircleCard(circle: circles[index]),
