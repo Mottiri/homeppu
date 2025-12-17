@@ -132,6 +132,105 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
     }
   }
 
+  /// サークル削除ダイアログ
+  Future<void> _showDeleteDialog(CircleModel circle) async {
+    final reasonController = TextEditingController();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red[400], size: 28),
+            const SizedBox(width: 8),
+            const Text('サークルを削除'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '「${circle.name}」を削除しますか？',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '• 全ての投稿・コメントが削除されます\n'
+              '• メンバーに通知が送信されます\n'
+              '• この操作は取り消せません',
+              style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: reasonController,
+              decoration: InputDecoration(
+                labelText: '削除理由（任意）',
+                hintText: 'メンバーに伝えたいことがあれば',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                prefixIcon: const Icon(Icons.message_outlined),
+              ),
+              maxLines: 2,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('キャンセル'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('削除する'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    await _handleDeleteCircle(circle, reasonController.text.trim());
+    reasonController.dispose();
+  }
+
+  /// サークル削除処理
+  Future<void> _handleDeleteCircle(CircleModel circle, String? reason) async {
+    try {
+      final circleService = ref.read(circleServiceProvider);
+
+      await circleService.deleteCircle(
+        circleId: circle.id,
+        ownerId: circle.ownerId,
+        circleName: circle.name,
+        memberIds: circle.memberIds,
+        reason: reason?.isEmpty == true ? null : reason,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('サークルを削除しました'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        context.go('/circles'); // サークル一覧に戻る
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('削除に失敗しました: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUser = ref.watch(currentUserProvider).valueOrNull;
@@ -194,6 +293,54 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                     child: const Icon(Icons.arrow_back_rounded, size: 20),
                   ),
                 ),
+                // オーナー用メニュー
+                actions: isOwner
+                    ? [
+                        Container(
+                          margin: const EdgeInsets.only(right: 8),
+                          child: PopupMenuButton<String>(
+                            icon: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.9),
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.1),
+                                    blurRadius: 8,
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(Icons.more_vert, size: 20),
+                            ),
+                            onSelected: (value) {
+                              if (value == 'delete') {
+                                _showDeleteDialog(circle);
+                              }
+                            },
+                            itemBuilder: (context) => [
+                              const PopupMenuItem(
+                                value: 'delete',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.delete_outline,
+                                      color: Colors.red,
+                                      size: 20,
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'サークルを削除',
+                                      style: TextStyle(color: Colors.red),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ]
+                    : null,
                 flexibleSpace: FlexibleSpaceBar(
                   background: Stack(
                     fit: StackFit.expand,

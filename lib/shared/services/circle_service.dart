@@ -231,4 +231,87 @@ class CircleService {
       'postCount': FieldValue.increment(1),
     });
   }
+
+  /// サークルを削除（オーナーのみ）
+  /// 関連データ（投稿、コメント、リアクション、申請）も削除
+  /// メンバーに通知を送信
+  Future<void> deleteCircle({
+    required String circleId,
+    required String ownerId,
+    required String circleName,
+    required List<String> memberIds,
+    String? reason,
+  }) async {
+    final batch = _firestore.batch();
+
+    // 1. サークル内の投稿を取得
+    final postsSnapshot = await _firestore
+        .collection('posts')
+        .where('circleId', isEqualTo: circleId)
+        .get();
+
+    // 2. 各投稿の関連データを削除
+    for (final postDoc in postsSnapshot.docs) {
+      final postId = postDoc.id;
+
+      // コメント削除
+      final comments = await _firestore
+          .collection('comments')
+          .where('postId', isEqualTo: postId)
+          .get();
+      for (final comment in comments.docs) {
+        batch.delete(comment.reference);
+      }
+
+      // リアクション削除
+      final reactions = await _firestore
+          .collection('reactions')
+          .where('postId', isEqualTo: postId)
+          .get();
+      for (final reaction in reactions.docs) {
+        batch.delete(reaction.reference);
+      }
+
+      // 投稿削除
+      batch.delete(postDoc.reference);
+    }
+
+    // 3. 参加申請を削除
+    final joinRequests = await _firestore
+        .collection('circleJoinRequests')
+        .where('circleId', isEqualTo: circleId)
+        .get();
+    for (final request in joinRequests.docs) {
+      batch.delete(request.reference);
+    }
+
+    // 4. サークル本体を削除
+    batch.delete(_firestore.collection('circles').doc(circleId));
+
+    // 5. バッチコミット
+    await batch.commit();
+
+    // 6. メンバーに通知送信（オーナー以外）
+    final notificationMessage = reason != null && reason.isNotEmpty
+        ? '$circleNameが削除されました。理由: $reason'
+        : '$circleNameが削除されました';
+
+    for (final memberId in memberIds) {
+      if (memberId == ownerId) continue; // オーナーには通知しない
+
+      await _firestore
+          .collection('users')
+          .doc(memberId)
+          .collection('notifications')
+          .add({
+            'type': 'circle_deleted',
+            'title': 'サークル削除',
+            'body': notificationMessage,
+            'circleName': circleName,
+            'reason': reason,
+            'isRead': false,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+    }
+  }
 }
