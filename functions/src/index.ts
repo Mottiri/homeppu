@@ -966,6 +966,12 @@ export const onPostCreated = onDocumentCreated(
     const postData = snap.data();
     const postId = event.params.postId;
 
+    // サークル投稿にはAIコメントを付けない（サークルAI未実装のため）
+    if (postData.circleId) {
+      console.log("Circle post, skipping AI comments");
+      return;
+    }
+
     // 人間モードの投稿にはAIコメントを付けない
     if (postData.postMode === "human") {
       console.log("Human mode post, skipping AI comments");
