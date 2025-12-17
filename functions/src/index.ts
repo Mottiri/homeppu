@@ -4003,6 +4003,12 @@ export const deleteCircle = onCall(
         throw new HttpsError("permission-denied", "サークル削除はオーナーのみ可能です");
       }
 
+      // オーナーの表示名を取得
+      const ownerDoc = await db.collection("users").doc(ownerId).get();
+      const ownerName = ownerDoc.exists
+        ? ownerDoc.data()?.displayName || "オーナー"
+        : "オーナー";
+
       // 2. サークル内の投稿を取得
       const postsSnapshot = await db
         .collection("posts")
@@ -4079,6 +4085,8 @@ export const deleteCircle = onCall(
         ? `${circleName}が削除されました。理由: ${reason}`
         : `${circleName}が削除されました`;
 
+      const notificationTitle = `${ownerName}さんがサークルを削除しました`;
+
       for (const memberId of memberIds) {
         if (memberId === ownerId) continue;
 
@@ -4090,7 +4098,10 @@ export const deleteCircle = onCall(
             .collection("notifications")
             .add({
               type: "circle_deleted",
-              title: "サークル削除",
+              senderId: ownerId,
+              senderName: ownerName,
+              senderAvatarUrl: ownerDoc.data()?.avatarIndex?.toString() || "0",
+              title: "サークルを削除しました",
               body: notificationMessage,
               circleName: circleName,
               reason: reason || null,
@@ -4105,7 +4116,7 @@ export const deleteCircle = onCall(
             await admin.messaging().send({
               token: userData.fcmToken,
               notification: {
-                title: "サークル削除",
+                title: notificationTitle,
                 body: notificationMessage,
               },
               data: {
