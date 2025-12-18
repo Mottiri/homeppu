@@ -21,6 +21,7 @@ class CircleModel {
   final int memberCount;
   final int postCount;
   final String? rules; // サークルルール（500文字以内）
+  final bool isDeleted; // ソフトデリート済み
 
   CircleModel({
     required this.id,
@@ -41,6 +42,7 @@ class CircleModel {
     this.memberCount = 0,
     this.postCount = 0,
     this.rules,
+    this.isDeleted = false,
   });
 
   factory CircleModel.fromFirestore(DocumentSnapshot doc) {
@@ -67,6 +69,7 @@ class CircleModel {
       memberCount: data['memberCount'] ?? 0,
       postCount: data['postCount'] ?? 0,
       rules: data['rules'],
+      isDeleted: data['isDeleted'] ?? false,
     );
   }
 
@@ -113,6 +116,7 @@ class CircleModel {
     int? memberCount,
     int? postCount,
     String? rules,
+    bool? isDeleted,
   }) {
     return CircleModel(
       id: id ?? this.id,
@@ -133,6 +137,7 @@ class CircleModel {
       memberCount: memberCount ?? this.memberCount,
       postCount: postCount ?? this.postCount,
       rules: rules ?? this.rules,
+      isDeleted: isDeleted ?? this.isDeleted,
     );
   }
 }

@@ -31,6 +31,7 @@ class CircleService {
     return _firestore.collection('circles').snapshots().map((snapshot) {
       var circles = snapshot.docs
           .map((doc) => CircleModel.fromFirestore(doc))
+          .where((c) => !c.isDeleted) // ソフトデリート済みは除外
           .toList();
 
       // カテゴリフィルター
@@ -53,6 +54,7 @@ class CircleService {
     return _firestore.collection('circles').snapshots().map((snapshot) {
       var circles = snapshot.docs
           .map((doc) => CircleModel.fromFirestore(doc))
+          .where((c) => !c.isDeleted) // ソフトデリート済みは除外
           .where(
             (c) =>
                 c.aiMode != CircleAIMode.aiOnly || // AIモードでない
@@ -159,6 +161,7 @@ class CircleService {
         .map((snapshot) {
           return snapshot.docs
               .map((doc) => CircleModel.fromFirestore(doc))
+              .where((c) => !c.isDeleted) // ソフトデリート済みは除外
               .toList();
         });
   }
