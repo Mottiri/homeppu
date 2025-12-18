@@ -4151,7 +4151,19 @@ export const deleteCircle = onCall(
       }
       console.log(`Deleted ${joinRequests.size} join requests`);
 
-      // 5. サークル本体を削除
+      // 5. サークルAIアカウントを削除
+      const generatedAIs = circleData.generatedAIs || [];
+      for (const ai of generatedAIs) {
+        try {
+          await db.collection("users").doc(ai.id).delete();
+          console.log(`Deleted AI account: ${ai.id}`);
+        } catch (aiError) {
+          console.error(`Failed to delete AI account ${ai.id}:`, aiError);
+        }
+      }
+      console.log(`Deleted ${generatedAIs.length} AI accounts`);
+
+      // 6. サークル本体を削除
       await circleDoc.ref.delete();
       console.log(`Deleted circle: ${circleName}`);
 
