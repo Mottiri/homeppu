@@ -107,15 +107,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                   _pickVideo();
                 },
               ),
-              _MediaPickerOption(
-                icon: Icons.attach_file,
-                label: 'ファイルを添付',
-                color: Colors.purple,
-                onTap: () {
-                  Navigator.pop(context);
-                  _pickFiles();
-                },
-              ),
             ],
           ),
         ),
@@ -158,22 +149,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       }
     } catch (e) {
       _showError('動画の選択に失敗しました');
-    }
-  }
-
-  /// ファイルを選択
-  Future<void> _pickFiles() async {
-    try {
-      final remaining = MediaService.maxMediaCount - _selectedMedia.length;
-      final files = await _mediaService.pickFiles(maxCount: remaining);
-
-      for (final file in files) {
-        if (file.path != null) {
-          _addMedia(file.path!, MediaType.file, fileName: file.name);
-        }
-      }
-    } catch (e) {
-      _showError('ファイルの選択に失敗しました');
     }
   }
 

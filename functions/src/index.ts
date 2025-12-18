@@ -5072,6 +5072,14 @@ export const executeCircleAIPost = functionsV1.region("asia-northeast1").runWith
 
     console.log(`Executing AI post for circle ${circleName} by ${aiName}`);
 
+    // サークルが削除されていないか確認
+    const circleDoc = await db.collection("circles").doc(circleId).get();
+    if (!circleDoc.exists || circleDoc.data()?.isDeleted) {
+      console.log(`Circle ${circleId} is deleted or not found, skipping AI post`);
+      response.status(200).send("Circle deleted, skipping");
+      return;
+    }
+
     const apiKey = geminiApiKey.value();
     if (!apiKey) {
       throw new Error("GEMINI_API_KEY is not set");

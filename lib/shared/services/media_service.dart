@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
 import 'package:uuid/uuid.dart';
 import '../models/post_model.dart';
@@ -13,9 +12,8 @@ class MediaService {
   final Uuid _uuid = const Uuid();
 
   // アップロード制限
-  static const int maxImageSize = 10 * 1024 * 1024; // 10MB
-  static const int maxVideoSize = 100 * 1024 * 1024; // 100MB
-  static const int maxFileSize = 50 * 1024 * 1024; // 50MB
+  static const int maxImageSize = 5 * 1024 * 1024; // 5MB
+  static const int maxVideoSize = 30 * 1024 * 1024; // 30MB
   static const int maxMediaCount = 4; // 最大4つのメディア
 
   // 許可される拡張子
@@ -31,15 +29,6 @@ class MediaService {
     'mov',
     'avi',
     'mkv',
-  ];
-  static const List<String> allowedFileExtensions = [
-    'pdf',
-    'doc',
-    'docx',
-    'xls',
-    'xlsx',
-    'txt',
-    'zip',
   ];
 
   /// ギャラリーから画像を選択
@@ -78,19 +67,6 @@ class MediaService {
     );
   }
 
-  /// ファイルを選択
-  Future<List<PlatformFile>> pickFiles({int maxCount = 4}) async {
-    final result = await FilePicker.platform.pickFiles(
-      allowMultiple: true,
-      type: FileType.custom,
-      allowedExtensions: allowedFileExtensions,
-    );
-    if (result != null) {
-      return result.files.take(maxCount).toList();
-    }
-    return [];
-  }
-
   /// ファイルをFirebase Storageにアップロード
   Future<MediaItem> uploadFile({
     required String filePath,
@@ -102,12 +78,8 @@ class MediaService {
     final file = File(filePath);
     final fileSize = await file.length();
 
-    // サイズチェック
-    final maxSize = type == MediaType.video
-        ? maxVideoSize
-        : type == MediaType.image
-        ? maxImageSize
-        : maxFileSize;
+    // サイズチェック（画像: 5MB、動画: 30MB）
+    final maxSize = type == MediaType.video ? maxVideoSize : maxImageSize;
     if (fileSize > maxSize) {
       throw Exception('ファイルサイズが大きすぎます（最大${maxSize ~/ (1024 * 1024)}MB）');
     }
@@ -272,15 +244,13 @@ class MediaService {
     }
   }
 
-  /// 拡張子からMediaTypeを判定
+  /// 拡張子からMediaTypeを判定（画像または動画）
   MediaType getMediaType(String filePath) {
     final ext = path.extension(filePath).toLowerCase().replaceAll('.', '');
-    if (allowedImageExtensions.contains(ext)) {
-      return MediaType.image;
-    } else if (allowedVideoExtensions.contains(ext)) {
+    if (allowedVideoExtensions.contains(ext)) {
       return MediaType.video;
-    } else {
-      return MediaType.file;
     }
+    // デフォルトは画像
+    return MediaType.image;
   }
 }
