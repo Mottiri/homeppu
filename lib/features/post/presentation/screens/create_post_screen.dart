@@ -261,9 +261,13 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       }
     } catch (e) {
       if (mounted) {
+        // ファイルサイズエラーなど具体的なメッセージがある場合はそれを表示
+        final errorMessage = e.toString().contains('ファイルサイズ')
+            ? e.toString().replaceFirst('Exception: ', '')
+            : AppConstants.friendlyMessages['error_general']!;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(AppConstants.friendlyMessages['error_general']!),
+            content: Text(errorMessage),
             backgroundColor: AppColors.error,
           ),
         );
