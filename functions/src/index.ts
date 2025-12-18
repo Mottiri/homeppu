@@ -4762,7 +4762,8 @@ export const generateCircleAIPosts = functionsV1.region("asia-northeast1").runWi
       // Cloud Tasksにタスクを登録
       const queuePath = tasksClient.queuePath(project, location, queue);
       const targetUrl = `https://${location}-${project}.cloudfunctions.net/executeCircleAIPost`;
-      const serviceAccountEmail = `cloud-tasks-sa@${project}.iam.gserviceaccount.com`;
+      // デフォルトのApp Engineサービスアカウントを使用
+      const serviceAccountEmail = `${project}@appspot.gserviceaccount.com`;
 
       const payload = {
         circleId,
