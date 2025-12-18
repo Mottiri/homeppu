@@ -4707,24 +4707,20 @@ function getCircleAIPostPrompt(
  */
 export const generateCircleAIPosts = functionsV1.region("asia-northeast1").runWith({
   secrets: ["GEMINI_API_KEY"],
-  timeoutSeconds: 300,
-  memory: "512MB",
+  timeoutSeconds: 120,
+  memory: "256MB",
 }).pubsub.schedule("0 9,20 * * *").timeZone("Asia/Tokyo").onRun(async () => {
-  console.log("=== generateCircleAIPosts START ===");
-
-  const apiKey = geminiApiKey.value();
-  if (!apiKey) {
-    console.error("GEMINI_API_KEY is not set");
-    return;
-  }
-
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+  console.log("=== generateCircleAIPosts START (Scheduler) ===");
 
   try {
     // すべてのサークルを取得
     const circlesSnapshot = await db.collection("circles").get();
-    let totalPosts = 0;
+    const tasksClient = new CloudTasksClient();
+    const project = process.env.GCLOUD_PROJECT || PROJECT_ID;
+    const queue = "generate-circle-ai-posts";
+    const location = "asia-northeast1";
+
+    let scheduledCount = 0;
 
     for (const circleDoc of circlesSnapshot.docs) {
       const circleData = circleDoc.data();
@@ -4740,7 +4736,6 @@ export const generateCircleAIPosts = functionsV1.region("asia-northeast1").runWi
         continue;
       }
 
-      // サークルごとに1日1〜2回の投稿（ランダムに1体のAIが投稿）
       // すでに今日投稿があるかチェック
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -4760,66 +4755,125 @@ export const generateCircleAIPosts = functionsV1.region("asia-northeast1").runWi
       // ランダムにAIを1体選択
       const randomAI = generatedAIs[Math.floor(Math.random() * generatedAIs.length)];
 
-      // AIユーザー情報を取得
-      const aiUserDoc = await db.collection("users").doc(randomAI.id).get();
-      if (!aiUserDoc.exists) {
-        console.log(`AI user ${randomAI.id} not found, skipping`);
-        continue;
-      }
+      // 0〜3時間後のランダムな時間にスケジュール（分単位で分散）
+      const delayMinutes = Math.floor(Math.random() * 180); // 0〜180分（3時間）
+      const scheduleTime = new Date(Date.now() + delayMinutes * 60 * 1000);
 
-      // Geminiで投稿内容を生成
-      const prompt = getCircleAIPostPrompt(
-        randomAI.name,
-        circleData.name,
-        circleData.description || "",
-        circleData.category || "その他"
-      );
+      // Cloud Tasksにタスクを登録
+      const queuePath = tasksClient.queuePath(project, location, queue);
+      const targetUrl = `https://${location}-${project}.cloudfunctions.net/executeCircleAIPost`;
+      const serviceAccountEmail = `cloud-tasks-sa@${project}.iam.gserviceaccount.com`;
+
+      const payload = {
+        circleId,
+        circleName: circleData.name,
+        circleDescription: circleData.description || "",
+        circleCategory: circleData.category || "その他",
+        aiId: randomAI.id,
+        aiName: randomAI.name,
+        aiAvatarIndex: randomAI.avatarIndex,
+      };
+
+      const task = {
+        httpRequest: {
+          httpMethod: "POST" as const,
+          url: targetUrl,
+          body: Buffer.from(JSON.stringify(payload)).toString("base64"),
+          headers: { "Content-Type": "application/json" },
+          oidcToken: { serviceAccountEmail },
+        },
+        scheduleTime: { seconds: Math.floor(scheduleTime.getTime() / 1000) },
+      };
 
       try {
-        const result = await model.generateContent(prompt);
-        const postContent = result.response.text()?.trim();
-
-        if (!postContent) {
-          console.log(`Empty post generated for circle ${circleId}, skipping`);
-          continue;
-        }
-
-        // 投稿を作成
-        const postRef = db.collection("posts").doc();
-        await postRef.set({
-          userId: randomAI.id,
-          userDisplayName: randomAI.name,
-          userAvatarIndex: randomAI.avatarIndex,
-          content: postContent,
-          postMode: "mix",
-          circleId: circleId,
-          isVisible: true,
-          reactions: {},
-          commentCount: 0,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-
-        // サークルの投稿数を更新
-        await db.collection("circles").doc(circleId).update({
-          postCount: admin.firestore.FieldValue.increment(1),
-          recentActivity: admin.firestore.FieldValue.serverTimestamp(),
-        });
-
-        console.log(`Created AI post in circle ${circleData.name}: ${postContent.substring(0, 50)}...`);
-        totalPosts++;
-
-        // API呼び出しの間隔を空ける（レート制限対策）
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-
+        await tasksClient.createTask({ parent: queuePath, task });
+        console.log(`Scheduled post for ${circleData.name} at ${scheduleTime.toISOString()} (delay: ${delayMinutes}min)`);
+        scheduledCount++;
       } catch (error) {
-        console.error(`Error generating post for circle ${circleId}:`, error);
+        console.error(`Error scheduling task for circle ${circleId}:`, error);
       }
     }
 
-    console.log(`=== generateCircleAIPosts COMPLETE: Created ${totalPosts} posts ===`);
+    console.log(`=== generateCircleAIPosts COMPLETE: Scheduled ${scheduledCount} posts ===`);
 
   } catch (error) {
     console.error("=== generateCircleAIPosts ERROR:", error);
+  }
+});
+
+/**
+ * サークルAI投稿を実行するワーカー（Cloud Tasksから呼び出し）
+ */
+export const executeCircleAIPost = functionsV1.region("asia-northeast1").runWith({
+  secrets: ["GEMINI_API_KEY"],
+  timeoutSeconds: 60,
+}).https.onRequest(async (request, response) => {
+  // Cloud Tasksからのリクエスト以外は拒否
+  const authHeader = request.headers["authorization"];
+  if (!authHeader) {
+    response.status(403).send("Unauthorized");
+    return;
+  }
+
+  try {
+    const {
+      circleId,
+      circleName,
+      circleDescription,
+      circleCategory,
+      aiId,
+      aiName,
+      aiAvatarIndex,
+    } = request.body;
+
+    console.log(`Executing AI post for circle ${circleName} by ${aiName}`);
+
+    const apiKey = geminiApiKey.value();
+    if (!apiKey) {
+      throw new Error("GEMINI_API_KEY is not set");
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+    // Geminiで投稿内容を生成
+    const prompt = getCircleAIPostPrompt(aiName, circleName, circleDescription, circleCategory);
+    const result = await model.generateContent(prompt);
+    const postContent = result.response.text()?.trim();
+
+    if (!postContent) {
+      console.log(`Empty post generated for circle ${circleId}`);
+      response.status(200).send("Empty post, skipping");
+      return;
+    }
+
+    // 投稿を作成
+    const postRef = db.collection("posts").doc();
+    await postRef.set({
+      userId: aiId,
+      userDisplayName: aiName,
+      userAvatarIndex: aiAvatarIndex,
+      content: postContent,
+      postMode: "mix",
+      circleId: circleId,
+      isVisible: true,
+      reactions: {},
+      commentCount: 0,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // サークルの投稿数を更新
+    await db.collection("circles").doc(circleId).update({
+      postCount: admin.firestore.FieldValue.increment(1),
+      recentActivity: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    console.log(`Created AI post in circle ${circleName}: ${postContent.substring(0, 50)}...`);
+    response.status(200).send("Post created");
+
+  } catch (error) {
+    console.error("executeCircleAIPost ERROR:", error);
+    response.status(500).send(`Error: ${error}`);
   }
 });
 
