@@ -4151,17 +4151,24 @@ export const deleteCircle = onCall(
       }
       console.log(`Deleted ${joinRequests.size} join requests`);
 
-      // 5. サークルAIアカウントを削除
+      // 5. サークルAIアカウントを削除（安全チェック付き）
       const generatedAIs = circleData.generatedAIs || [];
+      let deletedAICount = 0;
       for (const ai of generatedAIs) {
+        // 安全チェック: circle_ai_ で始まるIDのみ削除（人間ユーザー誤削除防止）
+        if (!ai.id || !ai.id.startsWith("circle_ai_")) {
+          console.warn(`Skipping non-AI account: ${ai.id}`);
+          continue;
+        }
         try {
           await db.collection("users").doc(ai.id).delete();
           console.log(`Deleted AI account: ${ai.id}`);
+          deletedAICount++;
         } catch (aiError) {
           console.error(`Failed to delete AI account ${ai.id}:`, aiError);
         }
       }
-      console.log(`Deleted ${generatedAIs.length} AI accounts`);
+      console.log(`Deleted ${deletedAICount} AI accounts`);
 
       // 6. サークル本体を削除
       await circleDoc.ref.delete();
