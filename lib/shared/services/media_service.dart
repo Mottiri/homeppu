@@ -157,9 +157,9 @@ class MediaService {
     final file = File(filePath);
     final fileSize = await file.length();
 
-    // サイズチェック (50MB)
-    if (fileSize > maxFileSize) {
-      throw Exception('ファイルサイズが大きすぎます（最大${maxFileSize ~/ (1024 * 1024)}MB）');
+    // サイズチェック (5MB - 画像のみ対応)
+    if (fileSize > maxImageSize) {
+      throw Exception('ファイルサイズが大きすぎます（最大${maxImageSize ~/ (1024 * 1024)}MB）');
     }
 
     // ファイル名を生成
