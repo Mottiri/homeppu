@@ -4039,12 +4039,13 @@ export const sendTaskReminders = onSchedule(
 // サークル削除（Cloud Function）
 // 関連データ（投稿、コメント、リアクション、申請）も削除
 // メンバーに通知を送信
+// バッチ処理で大量データ（1000件以上）に対応
 // ===============================================
 export const deleteCircle = onCall(
   {
     region: "asia-northeast1",
-    timeoutSeconds: 300, // 大量データ削除のため長めに
-    memory: "512MiB",
+    timeoutSeconds: 540, // 9分（最大）に延長
+    memory: "1GiB", // メモリ増量
   },
   async (request) => {
     // 認証チェック
@@ -4092,54 +4093,82 @@ export const deleteCircle = onCall(
 
       console.log(`Found ${postsSnapshot.size} posts to delete`);
 
-      // 3. 各投稿の関連データを削除
+      // 3. 投稿関連データをバッチ削除
+      const MAX_BATCH_OPS = 400; // Firestore batch limit is 500, safe margin
+      let totalComments = 0;
+      let totalReactions = 0;
+      let totalMedia = 0;
+
+      // メディア削除用のPromise配列（並列処理）
+      const mediaDeletePromises: Promise<void>[] = [];
+
+      // 削除対象を収集
+      const deleteRefs: FirebaseFirestore.DocumentReference[] = [];
+
       for (const postDoc of postsSnapshot.docs) {
         const postId = postDoc.id;
         const postData = postDoc.data();
 
-        // コメント削除
+        // コメント収集
         const comments = await db
           .collection("comments")
           .where("postId", "==", postId)
           .get();
         for (const comment of comments.docs) {
-          await comment.ref.delete();
+          deleteRefs.push(comment.ref);
+          totalComments++;
         }
-        console.log(`Deleted ${comments.size} comments for post ${postId}`);
 
-        // リアクション削除
+        // リアクション収集
         const reactions = await db
           .collection("reactions")
           .where("postId", "==", postId)
           .get();
         for (const reaction of reactions.docs) {
-          await reaction.ref.delete();
+          deleteRefs.push(reaction.ref);
+          totalReactions++;
         }
-        console.log(`Deleted ${reactions.size} reactions for post ${postId}`);
 
-        // メディアファイル削除（Firebase Storage）
+        // メディアファイル削除（非同期並列で収集）
         const mediaItems = postData.mediaItems || [];
         for (const media of mediaItems) {
-          try {
-            if (media.url && media.url.includes("firebasestorage.googleapis.com")) {
-              // URLからパスを抽出
-              const urlParts = media.url.split("/o/")[1];
-              if (urlParts) {
-                const filePath = decodeURIComponent(urlParts.split("?")[0]);
-                await admin.storage().bucket().file(filePath).delete();
-                console.log(`Deleted storage file: ${filePath}`);
-              }
+          if (media.url && media.url.includes("firebasestorage.googleapis.com")) {
+            const urlParts = media.url.split("/o/")[1];
+            if (urlParts) {
+              const filePath = decodeURIComponent(urlParts.split("?")[0]);
+              mediaDeletePromises.push(
+                admin.storage().bucket().file(filePath).delete()
+                  .then(() => { totalMedia++; })
+                  .catch((err) => console.error(`Storage delete failed: ${filePath}`, err))
+              );
             }
-          } catch (storageError) {
-            console.error(`Failed to delete storage file:`, storageError);
-            // ストレージ削除失敗は無視して続行
           }
         }
 
-        // 投稿削除
-        await postDoc.ref.delete();
+        // 投稿自体を追加
+        deleteRefs.push(postDoc.ref);
       }
-      console.log(`Deleted ${postsSnapshot.size} posts`);
+
+      console.log(`Collected ${deleteRefs.length} documents to delete`);
+
+      // バッチ削除を実行
+      for (let i = 0; i < deleteRefs.length; i += MAX_BATCH_OPS) {
+        const batch = db.batch();
+        const chunk = deleteRefs.slice(i, i + MAX_BATCH_OPS);
+        for (const ref of chunk) {
+          batch.delete(ref);
+        }
+        await batch.commit();
+        console.log(`Batch deleted ${i + chunk.length}/${deleteRefs.length} documents`);
+      }
+
+      // メディア削除を並列実行（最大50件ずつ）
+      const PARALLEL_LIMIT = 50;
+      for (let i = 0; i < mediaDeletePromises.length; i += PARALLEL_LIMIT) {
+        await Promise.all(mediaDeletePromises.slice(i, i + PARALLEL_LIMIT));
+      }
+
+      console.log(`Deleted ${postsSnapshot.size} posts, ${totalComments} comments, ${totalReactions} reactions, ${totalMedia} media files`);
 
       // 4. 参加申請を削除
       const joinRequests = await db
