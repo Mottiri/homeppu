@@ -4662,6 +4662,134 @@ export const onCircleCreated = onDocumentCreated(
   }
 );
 
+/**
+ * サークル設定変更時にメンバーへ通知
+ */
+export const onCircleUpdated = onDocumentUpdated(
+  "circles/{circleId}",
+  async (event) => {
+    const beforeData = event.data?.before?.data();
+    const afterData = event.data?.after?.data();
+    const circleId = event.params.circleId;
+
+    if (!beforeData || !afterData) {
+      console.log("No document data");
+      return;
+    }
+
+    console.log(`=== onCircleUpdated START: ${circleId} ===`);
+
+    try {
+      // 通知すべき変更を検出
+      const changes: string[] = [];
+
+      // 変更された項目をチェック
+      if (beforeData.name !== afterData.name) {
+        changes.push(`名前: ${beforeData.name} → ${afterData.name}`);
+      }
+      if (beforeData.description !== afterData.description) {
+        changes.push("説明が変更されました");
+      }
+      if (beforeData.category !== afterData.category) {
+        changes.push(`カテゴリ: ${beforeData.category} → ${afterData.category}`);
+      }
+      if (beforeData.goal !== afterData.goal) {
+        changes.push("目標が変更されました");
+      }
+      if (beforeData.rules !== afterData.rules) {
+        changes.push("ルールが変更されました");
+      }
+      if (beforeData.isPublic !== afterData.isPublic) {
+        changes.push(afterData.isPublic ? "公開に変更" : "非公開に変更");
+      }
+      if (beforeData.isInviteOnly !== afterData.isInviteOnly) {
+        changes.push(afterData.isInviteOnly ? "招待制に変更" : "招待制を解除");
+      }
+      if (beforeData.participationMode !== afterData.participationMode) {
+        const modeLabels: { [key: string]: string } = {
+          ai: "AIモード",
+          mix: "MIXモード",
+          human: "人間モード",
+        };
+        const oldMode = modeLabels[beforeData.participationMode] || beforeData.participationMode;
+        const newMode = modeLabels[afterData.participationMode] || afterData.participationMode;
+        changes.push(`参加モード: ${oldMode} → ${newMode}`);
+      }
+
+      // AI情報やメンバー数など内部的な更新は通知しない
+      if (changes.length === 0) {
+        console.log("No user-facing changes detected, skipping notification");
+        return;
+      }
+
+      console.log(`Changes detected: ${changes.join(", ")}`);
+
+      // オーナー情報を取得
+      const ownerId = afterData.ownerId;
+      const ownerDoc = await db.collection("users").doc(ownerId).get();
+      const ownerName = ownerDoc.exists ? ownerDoc.data()?.displayName || "オーナー" : "オーナー";
+      const ownerAvatarIndex = ownerDoc.exists ? ownerDoc.data()?.avatarIndex?.toString() || "0" : "0";
+
+      // メンバー一覧を取得（オーナーとAI以外）
+      const memberIds: string[] = afterData.memberIds || [];
+      const circleName = afterData.name;
+
+      // 通知メッセージ
+      const notificationBody = changes.length === 1
+        ? changes[0]
+        : `${changes.length}件の設定が変更されました`;
+
+      // 各メンバーに通知
+      for (const memberId of memberIds) {
+        if (memberId === ownerId) continue;
+        if (memberId.startsWith("circle_ai_")) continue; // AIはスキップ
+
+        try {
+          // アプリ内通知を作成
+          await db.collection("users").doc(memberId).collection("notifications").add({
+            type: "circle_settings_changed",
+            senderId: ownerId,
+            senderName: ownerName,
+            senderAvatarUrl: ownerAvatarIndex,
+            title: "サークルが更新されました",
+            body: `${circleName}: ${notificationBody}`,
+            circleName: circleName,
+            circleId: circleId,
+            changes: changes,
+            isRead: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+
+          // プッシュ通知
+          const userDoc = await db.collection("users").doc(memberId).get();
+          const userData = userDoc.data();
+          if (userData?.fcmToken) {
+            await admin.messaging().send({
+              token: userData.fcmToken,
+              notification: {
+                title: `🔔 ${circleName}`,
+                body: notificationBody,
+              },
+              data: {
+                type: "circle_settings_changed",
+                circleId: circleId,
+                circleName: circleName,
+              },
+            });
+          }
+        } catch (notifyError) {
+          console.error(`Failed to notify member ${memberId}:`, notifyError);
+        }
+      }
+
+      console.log(`=== onCircleUpdated SUCCESS: Notified ${memberIds.length - 1} members ===`);
+
+    } catch (error) {
+      console.error(`=== onCircleUpdated ERROR:`, error);
+    }
+  }
+);
+
 // ===============================================
 // サークルAI投稿機能 (v1.1)
 // Cloud Schedulerで1日1回実行、各サークルのAIが投稿
