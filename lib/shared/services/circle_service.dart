@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/circle_model.dart';
+import '../models/post_model.dart';
 
 final circleServiceProvider = Provider((ref) => CircleService());
 
@@ -106,6 +107,7 @@ class CircleService {
     bool isPublic = true,
     String? coverImageUrl,
     String? iconImageUrl,
+    String? rules,
   }) async {
     final docRef = _firestore.collection('circles').doc();
 
@@ -124,6 +126,7 @@ class CircleService {
       iconImageUrl: iconImageUrl,
       memberCount: 1,
       postCount: 0,
+      rules: rules,
     );
 
     await docRef.set(circle.toFirestore());
@@ -280,5 +283,68 @@ class CircleService {
     final callable = functions.httpsCallable('deleteCircle');
 
     await callable.call({'circleId': circleId, 'reason': reason});
+  }
+
+  // 投稿をピン留め/解除
+  Future<void> togglePinPost(String postId, bool isPinned) async {
+    print('togglePinPost called: postId=$postId, isPinned=$isPinned');
+    try {
+      await _firestore.collection('posts').doc(postId).update({
+        'isPinned': isPinned,
+        'isPinnedTop': isPinned ? false : false, // ピン解除時はトップも解除
+      });
+      print('togglePinPost success');
+    } catch (e) {
+      print('togglePinPost error: $e');
+      rethrow;
+    }
+  }
+
+  // トップ表示を設定（既存のトップを解除して新しいトップを設定）
+  Future<void> setTopPinnedPost(String circleId, String postId) async {
+    final batch = _firestore.batch();
+
+    // 既存のトップピンを解除
+    final existingTop = await _firestore
+        .collection('posts')
+        .where('circleId', isEqualTo: circleId)
+        .where('isPinnedTop', isEqualTo: true)
+        .get();
+
+    for (final doc in existingTop.docs) {
+      batch.update(doc.reference, {'isPinnedTop': false});
+    }
+
+    // 新しいトップを設定
+    batch.update(_firestore.collection('posts').doc(postId), {
+      'isPinned': true,
+      'isPinnedTop': true,
+    });
+
+    await batch.commit();
+  }
+
+  // ピン留め投稿を取得
+  Stream<List<PostModel>> streamPinnedPosts(String circleId) {
+    return _firestore
+        .collection('posts')
+        .where('circleId', isEqualTo: circleId)
+        .where('isPinned', isEqualTo: true)
+        .snapshots()
+        .map((snapshot) {
+          print(
+            'streamPinnedPosts: found ${snapshot.docs.length} pinned posts',
+          );
+          final posts = snapshot.docs
+              .map((doc) => PostModel.fromFirestore(doc))
+              .toList();
+          // クライアント側でソート：トップピン優先、次に作成日降順
+          posts.sort((a, b) {
+            if (a.isPinnedTop && !b.isPinnedTop) return -1;
+            if (!a.isPinnedTop && b.isPinnedTop) return 1;
+            return b.createdAt.compareTo(a.createdAt);
+          });
+          return posts;
+        });
   }
 }

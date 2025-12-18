@@ -18,6 +18,7 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _goalController = TextEditingController();
+  final _rulesController = TextEditingController();
 
   String _selectedCategory = 'その他';
   CircleAIMode _aiMode = CircleAIMode.mix;
@@ -29,6 +30,7 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
     _nameController.dispose();
     _descriptionController.dispose();
     _goalController.dispose();
+    _rulesController.dispose();
     super.dispose();
   }
 
@@ -51,6 +53,9 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
         aiMode: _aiMode,
         goal: _goalController.text.trim(),
         isPublic: _isPublic,
+        rules: _rulesController.text.trim().isNotEmpty
+            ? _rulesController.text.trim()
+            : null,
       );
 
       if (mounted) {
@@ -229,6 +234,30 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
                     ),
                   ),
                 ),
+
+              // サークルルール（任意）
+              _buildSection(
+                title: 'サークルルール（任意）',
+                subtitle: 'メンバーに守ってほしいルールがあれば記載してください',
+                child: TextFormField(
+                  controller: _rulesController,
+                  maxLines: 4,
+                  maxLength: 500,
+                  decoration: InputDecoration(
+                    hintText: '例：みんなで励まし合って楽しく頑張りましょう🎉',
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey[300]!),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey[300]!),
+                    ),
+                  ),
+                ),
+              ),
 
               const SizedBox(height: 32),
 

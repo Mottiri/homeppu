@@ -82,10 +82,15 @@ service cloud.firestore {
       // 作成: クライアントからの直接作成を禁止（Cloud Functions経由のみ）
       allow create: if false;
       
-      // 更新: 投稿者のみ（リアクションは誰でも更新可能）
+      // 更新: 投稿者のみ（リアクションは誰でも更新可能、サークルオーナーはピン留めも可能）
       allow update: if isAuthenticated() && (
         isOwner(resource.data.userId) ||
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions', 'commentCount'])
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions', 'commentCount']) ||
+        // サークルオーナーはピン留めフィールドを更新可能
+        (resource.data.circleId != null && 
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isPinned', 'isPinnedTop']) &&
+         exists(/databases/$(database)/documents/circles/$(resource.data.circleId)) &&
+         get(/databases/$(database)/documents/circles/$(resource.data.circleId)).data.ownerId == request.auth.uid)
       );
       
       // 削除: 投稿者 または サークル投稿の場合はサークルオーナーも可

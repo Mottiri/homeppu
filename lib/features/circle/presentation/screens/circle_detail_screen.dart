@@ -61,6 +61,13 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
 
   Future<void> _handleJoin(CircleModel circle, String userId) async {
     if (_isJoining) return;
+
+    // ルールがある場合は同意ダイアログを表示
+    if (circle.rules != null && circle.rules!.isNotEmpty) {
+      final agreed = await _showRulesConsentDialog(circle.rules!);
+      if (agreed != true) return;
+    }
+
     setState(() => _isJoining = true);
 
     try {
@@ -252,6 +259,237 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
     }
   }
 
+  /// ルール同意ダイアログ（参加前）
+  Future<bool?> _showRulesConsentDialog(String rules) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.description_outlined, color: Colors.grey[700]),
+            const SizedBox(width: 8),
+            const Text('サークルルール'),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey[200]!),
+                ),
+                child: Text(
+                  rules,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[800],
+                    height: 1.5,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                '参加するにはルールに同意する必要があります',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('キャンセル'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00ACC1),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('同意して参加'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// ルール確認ダイアログ（メンバー用）
+  void _showRulesDialog(String rules) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.description_outlined, color: Colors.grey[700]),
+            const SizedBox(width: 8),
+            const Text('サークルルール'),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey[200]!),
+            ),
+            child: Text(
+              rules,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[800],
+                height: 1.5,
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('閉じる'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// ピン留め投稿一覧ボトムシート
+  void _showPinnedPostsList(List<PostModel> pinnedPosts, bool isOwner) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.7,
+        ),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ハンドル
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            // タイトル
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Icon(Icons.push_pin, color: Colors.amber[700]),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'ピン留め投稿',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            // リスト
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: pinnedPosts.length,
+                itemBuilder: (context, index) {
+                  final post = pinnedPosts[index];
+                  return ListTile(
+                    leading: post.isPinnedTop
+                        ? Icon(Icons.star, color: Colors.amber[700])
+                        : Icon(
+                            Icons.push_pin_outlined,
+                            color: Colors.grey[400],
+                          ),
+                    title: Text(
+                      post.content,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      post.isPinnedTop ? 'トップ表示' : '',
+                      style: TextStyle(color: Colors.amber[700], fontSize: 12),
+                    ),
+                    trailing: isOwner
+                        ? PopupMenuButton<String>(
+                            icon: const Icon(Icons.more_vert),
+                            onSelected: (value) async {
+                              final circleService = ref.read(
+                                circleServiceProvider,
+                              );
+                              Navigator.pop(context);
+                              if (value == 'top') {
+                                await circleService.setTopPinnedPost(
+                                  post.circleId!,
+                                  post.id,
+                                );
+                              } else if (value == 'unpin') {
+                                await circleService.togglePinPost(
+                                  post.id,
+                                  false,
+                                );
+                              }
+                            },
+                            itemBuilder: (context) => [
+                              if (!post.isPinnedTop)
+                                const PopupMenuItem(
+                                  value: 'top',
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.star,
+                                        color: Colors.amber,
+                                        size: 20,
+                                      ),
+                                      SizedBox(width: 8),
+                                      Text('トップに表示'),
+                                    ],
+                                  ),
+                                ),
+                              const PopupMenuItem(
+                                value: 'unpin',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.push_pin_outlined,
+                                      color: Colors.grey,
+                                      size: 20,
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text('ピン留め解除'),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          )
+                        : null,
+                    onTap: () {
+                      Navigator.pop(context);
+                      context.push('/post/${post.id}');
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUser = ref.watch(currentUserProvider).valueOrNull;
@@ -362,9 +600,28 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                                   '/circle/${circle.id}/requests',
                                   extra: {'circleName': circle.name},
                                 );
+                              } else if (value == 'edit') {
+                                context.push(
+                                  '/circle/${circle.id}/edit',
+                                  extra: circle,
+                                );
                               }
                             },
                             itemBuilder: (context) => [
+                              const PopupMenuItem(
+                                value: 'edit',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.edit_outlined,
+                                      color: Color(0xFF00ACC1),
+                                      size: 20,
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text('編集'),
+                                  ],
+                                ),
+                              ),
                               const PopupMenuItem(
                                 value: 'requests',
                                 child: Row(
@@ -496,9 +753,22 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                                   const SizedBox(height: 4),
                                   Row(
                                     children: [
-                                      _buildTag(
-                                        Icons.people_outline,
-                                        '${circle.memberCount}人',
+                                      GestureDetector(
+                                        onTap: () {
+                                          context.push(
+                                            '/circle/${circle.id}/members',
+                                            extra: {
+                                              'circleName': circle.name,
+                                              'ownerId': circle.ownerId,
+                                              'memberIds': circle.memberIds,
+                                            },
+                                          );
+                                        },
+                                        child: _buildTag(
+                                          Icons.people_outline,
+                                          '${circle.memberIds.length}人',
+                                          showArrow: true,
+                                        ),
                                       ),
                                       const SizedBox(width: 8),
                                       _buildTag(
@@ -572,6 +842,32 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                         ),
                       ],
                       const SizedBox(height: 16),
+                      // ルール確認ボタン（メンバーでルールがある場合のみ）
+                      if (isMember &&
+                          circle.rules != null &&
+                          circle.rules!.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: OutlinedButton.icon(
+                            onPressed: () => _showRulesDialog(circle.rules!),
+                            icon: Icon(
+                              Icons.description_outlined,
+                              color: Colors.grey[700],
+                              size: 18,
+                            ),
+                            label: Text(
+                              'サークルルール',
+                              style: TextStyle(color: Colors.grey[700]),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size(double.infinity, 44),
+                              side: BorderSide(color: Colors.grey[300]!),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                        ),
                       // 参加ボタン
                       SizedBox(
                         width: double.infinity,
@@ -691,6 +987,97 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                   ),
                 ),
               ),
+              // ピン留め投稿セクション（オーナーのみ管理可能）
+              if (isMember)
+                StreamBuilder<List<PostModel>>(
+                  stream: circleService.streamPinnedPosts(circle.id),
+                  builder: (context, pinnedSnapshot) {
+                    final pinnedPosts = pinnedSnapshot.data ?? [];
+                    if (pinnedPosts.isEmpty)
+                      return const SliverToBoxAdapter(child: SizedBox.shrink());
+
+                    // トップピン投稿を取得
+                    final topPinned = pinnedPosts.firstWhere(
+                      (p) => p.isPinnedTop,
+                      orElse: () => pinnedPosts.first,
+                    );
+
+                    return SliverToBoxAdapter(
+                      child: Container(
+                        margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.amber.withOpacity(0.3),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.push_pin,
+                                  size: 16,
+                                  color: Colors.amber[700],
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'ピン留め',
+                                  style: TextStyle(
+                                    color: Colors.amber[700],
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                const Spacer(),
+                                if (pinnedPosts.length > 1)
+                                  GestureDetector(
+                                    onTap: () => _showPinnedPostsList(
+                                      pinnedPosts,
+                                      isOwner,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Text(
+                                          '${pinnedPosts.length}件',
+                                          style: TextStyle(
+                                            color: Colors.grey[600],
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                        Icon(
+                                          Icons.chevron_right,
+                                          size: 16,
+                                          color: Colors.grey[600],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            GestureDetector(
+                              onTap: () =>
+                                  context.push('/post/${topPinned.id}'),
+                              child: Text(
+                                topPinned.content,
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.grey[800],
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
 
               // 投稿ヘッダー
               SliverToBoxAdapter(
@@ -777,13 +1164,22 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                   }
 
                   return SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) => PostCard(
-                        key: ValueKey(posts[index].id),
-                        post: posts[index],
-                      ),
-                      childCount: posts.length,
-                    ),
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final post = posts[index];
+                      return PostCard(
+                        key: ValueKey(post.id),
+                        post: post,
+                        isCircleOwner: isOwner,
+                        onPinToggle: isOwner
+                            ? (isPinned) async {
+                                await circleService.togglePinPost(
+                                  post.id,
+                                  isPinned,
+                                );
+                              }
+                            : null,
+                      );
+                    }, childCount: posts.length),
                   );
                 },
               ),
@@ -796,7 +1192,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
     );
   }
 
-  Widget _buildTag(IconData icon, String text) {
+  Widget _buildTag(IconData icon, String text, {bool showArrow = false}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
@@ -816,6 +1212,10 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
               fontWeight: FontWeight.w500,
             ),
           ),
+          if (showArrow) ...[
+            const SizedBox(width: 2),
+            Icon(Icons.chevron_right, size: 14, color: Colors.grey[500]),
+          ],
         ],
       ),
     );

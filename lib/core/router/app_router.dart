@@ -13,8 +13,11 @@ import '../../features/profile/presentation/screens/profile_screen.dart';
 import '../../features/profile/presentation/screens/settings_screen.dart';
 import '../../features/circle/presentation/screens/circles_screen.dart';
 import '../../features/circle/presentation/screens/circle_detail_screen.dart';
+import '../../features/circle/presentation/screens/edit_circle_screen.dart';
 import '../../features/circle/presentation/screens/create_circle_screen.dart';
+import '../../shared/models/circle_model.dart';
 import '../../features/circle/presentation/screens/join_requests_screen.dart';
+import '../../features/circle/presentation/screens/members_list_screen.dart';
 import '../../features/tasks/presentation/screens/tasks_screen.dart';
 import '../../features/goals/presentation/screens/goal_list_screen.dart';
 import '../../features/goals/presentation/screens/create_goal_screen.dart';
@@ -154,6 +157,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const CreateCircleScreen(),
       ),
 
+      // サークル編集
+      GoRoute(
+        path: '/circle/:circleId/edit',
+        name: 'editCircle',
+        builder: (context, state) {
+          final circleId = state.pathParameters['circleId']!;
+          final circle = state.extra as CircleModel;
+          return EditCircleScreen(circleId: circleId, circle: circle);
+        },
+      ),
+
       // 参加申請管理
       GoRoute(
         path: '/circle/:circleId/requests',
@@ -163,6 +177,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final extra = state.extra as Map<String, dynamic>?;
           final circleName = extra?['circleName'] as String? ?? '';
           return JoinRequestsScreen(circleId: circleId, circleName: circleName);
+        },
+      ),
+
+      // メンバー一覧
+      GoRoute(
+        path: '/circle/:circleId/members',
+        name: 'membersList',
+        builder: (context, state) {
+          final circleId = state.pathParameters['circleId']!;
+          final extra = state.extra as Map<String, dynamic>;
+          return MembersListScreen(
+            circleId: circleId,
+            circleName: extra['circleName'] as String,
+            ownerId: extra['ownerId'] as String,
+            memberIds: List<String>.from(extra['memberIds'] as List),
+          );
         },
       ),
 

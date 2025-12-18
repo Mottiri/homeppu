@@ -50,14 +50,16 @@ class PostModel {
   final String userDisplayName;
   final int userAvatarIndex;
   final String content;
-  final String? imageUrl;           // 後方互換性のため残す
+  final String? imageUrl; // 後方互換性のため残す
   final List<MediaItem> mediaItems; // 新しいメディアリスト
-  final String postMode;            // 'ai', 'mix', 'human'
-  final String? circleId;           // サークル投稿の場合
+  final String postMode; // 'ai', 'mix', 'human'
+  final String? circleId; // サークル投稿の場合
   final DateTime createdAt;
-  final Map<String, int> reactions;  // {'love': 5, 'praise': 3, ...}
+  final Map<String, int> reactions; // {'love': 5, 'praise': 3, ...}
   final int commentCount;
   final bool isVisible;
+  final bool isPinned; // ピン留め
+  final bool isPinnedTop; // トップ表示ピン
 
   PostModel({
     required this.id,
@@ -73,11 +75,13 @@ class PostModel {
     this.reactions = const {},
     this.commentCount = 0,
     this.isVisible = true,
+    this.isPinned = false,
+    this.isPinnedTop = false,
   });
 
   factory PostModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
-    
+
     // メディアアイテムのパース
     List<MediaItem> mediaItems = [];
     if (data['mediaItems'] != null) {
@@ -85,7 +89,7 @@ class PostModel {
           .map((item) => MediaItem.fromMap(Map<String, dynamic>.from(item)))
           .toList();
     }
-    
+
     return PostModel(
       id: doc.id,
       userId: data['userId'] ?? '',
@@ -100,6 +104,8 @@ class PostModel {
       reactions: Map<String, int>.from(data['reactions'] ?? {}),
       commentCount: data['commentCount'] ?? 0,
       isVisible: data['isVisible'] ?? true,
+      isPinned: data['isPinned'] ?? false,
+      isPinnedTop: data['isPinnedTop'] ?? false,
     );
   }
 
@@ -117,6 +123,8 @@ class PostModel {
       'reactions': reactions,
       'commentCount': commentCount,
       'isVisible': isVisible,
+      'isPinned': isPinned,
+      'isPinnedTop': isPinnedTop,
     };
   }
 
@@ -139,6 +147,8 @@ class PostModel {
     Map<String, int>? reactions,
     int? commentCount,
     bool? isVisible,
+    bool? isPinned,
+    bool? isPinnedTop,
   }) {
     return PostModel(
       id: id ?? this.id,
@@ -154,6 +164,8 @@ class PostModel {
       reactions: reactions ?? this.reactions,
       commentCount: commentCount ?? this.commentCount,
       isVisible: isVisible ?? this.isVisible,
+      isPinned: isPinned ?? this.isPinned,
+      isPinnedTop: isPinnedTop ?? this.isPinnedTop,
     );
   }
 
@@ -178,5 +190,3 @@ class PostModel {
   List<MediaItem> get files =>
       allMedia.where((m) => m.type == MediaType.file).toList();
 }
-
-

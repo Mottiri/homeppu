@@ -20,8 +20,16 @@ import 'reaction_selection_sheet.dart';
 class PostCard extends StatefulWidget {
   final PostModel post;
   final VoidCallback? onDeleted;
+  final bool isCircleOwner; // サークルオーナーかどうか
+  final Function(bool)? onPinToggle; // ピン留めトグルコールバック
 
-  const PostCard({super.key, required this.post, this.onDeleted});
+  const PostCard({
+    super.key,
+    required this.post,
+    this.onDeleted,
+    this.isCircleOwner = false,
+    this.onPinToggle,
+  });
 
   @override
   State<PostCard> createState() => _PostCardState();
@@ -216,9 +224,34 @@ class _PostCardState extends State<PostCard> {
                                   );
                                 } else if (value == 'delete') {
                                   _deletePost();
+                                } else if (value == 'pin') {
+                                  widget.onPinToggle?.call(!post.isPinned);
                                 }
                               },
                               itemBuilder: (context) => [
+                                // サークルオーナーならピン留めオプションを表示
+                                if (widget.isCircleOwner &&
+                                    post.circleId != null)
+                                  PopupMenuItem(
+                                    value: 'pin',
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          post.isPinned
+                                              ? Icons.push_pin
+                                              : Icons.push_pin_outlined,
+                                          size: 18,
+                                          color: post.isPinned
+                                              ? Colors.amber
+                                              : Colors.grey[700],
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          post.isPinned ? 'ピン留め解除' : 'ピン留めする',
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 // 自分の投稿なら削除オプションを表示
                                 if (isMyPost)
                                   const PopupMenuItem(

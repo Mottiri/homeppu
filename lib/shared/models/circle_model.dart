@@ -20,6 +20,7 @@ class CircleModel {
   final String? iconImageUrl;
   final int memberCount;
   final int postCount;
+  final String? rules; // サークルルール（500文字以内）
 
   CircleModel({
     required this.id,
@@ -39,6 +40,7 @@ class CircleModel {
     this.iconImageUrl,
     this.memberCount = 0,
     this.postCount = 0,
+    this.rules,
   });
 
   factory CircleModel.fromFirestore(DocumentSnapshot doc) {
@@ -64,6 +66,7 @@ class CircleModel {
       iconImageUrl: data['iconImageUrl'],
       memberCount: data['memberCount'] ?? 0,
       postCount: data['postCount'] ?? 0,
+      rules: data['rules'],
     );
   }
 
@@ -87,6 +90,7 @@ class CircleModel {
       'iconImageUrl': iconImageUrl,
       'memberCount': memberCount,
       'postCount': postCount,
+      'rules': rules,
     };
   }
 
@@ -108,6 +112,7 @@ class CircleModel {
     String? iconImageUrl,
     int? memberCount,
     int? postCount,
+    String? rules,
   }) {
     return CircleModel(
       id: id ?? this.id,
@@ -127,6 +132,7 @@ class CircleModel {
       iconImageUrl: iconImageUrl ?? this.iconImageUrl,
       memberCount: memberCount ?? this.memberCount,
       postCount: postCount ?? this.postCount,
+      rules: rules ?? this.rules,
     );
   }
 }
