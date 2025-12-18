@@ -1144,9 +1144,9 @@ export const onPostCreated = onDocumentCreated(
     }
 
     // ===========================================
-    // 2. AIリアクションの大量投下 (15〜30件)
+    // 2. AIリアクションの大量投下 (5〜15件、平均10件)
     // ===========================================
-    const reactionCount = Math.floor(Math.random() * 16) + 15; // 15〜30
+    const reactionCount = Math.floor(Math.random() * 11) + 5; // 5〜15
     console.log(`Scheduling ${reactionCount} reactions (burst)...`);
 
     const POSITIVE_REACTIONS = ["love", "praise", "cheer", "sparkles", "clap", "thumbsup", "smile", "flower", "fire", "nice"];
