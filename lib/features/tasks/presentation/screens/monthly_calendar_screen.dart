@@ -223,7 +223,19 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
                       const SizedBox(height: 2),
 
                       // タスク表示エリア
-                      ...taskList.take(3).map((task) {
+                      // 未完了タスクを優先表示（完了済みは後回し→省略時に優先非表示）
+                      ...(() {
+                        final sortedTasks = List<TaskModel>.from(taskList)
+                          ..sort((a, b) {
+                            // 未完了を先に (isCompleted: false = 0, true = 1)
+                            final compA = a.isCompleted ? 1 : 0;
+                            final compB = b.isCompleted ? 1 : 0;
+                            if (compA != compB) return compA - compB;
+                            // 同じ完了状態なら優先度で降順 (高い方が先)
+                            return b.priority - a.priority;
+                          });
+                        return sortedTasks.take(3);
+                      })().map((task) {
                         // 色設定 (Googleカレンダー風に濃い色で)
                         Color bgColor;
                         Color textColor = Colors.white;
