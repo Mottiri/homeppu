@@ -968,12 +968,8 @@ export const onPostCreated = onDocumentCreated(
 
     console.log(`=== onPostCreated: postId=${postId}, circleId=${postData.circleId}, postMode=${postData.postMode} ===`);
 
-    // サークル投稿にはAIコメントを付けない（サークルAI未実装のため）
-    // null, undefined, 空文字列以外の場合はスキップ
-    if (postData.circleId && postData.circleId !== "" && postData.circleId !== null) {
-      console.log(`Circle post detected (circleId=${postData.circleId}), skipping AI comments`);
-      return;
-    }
+    // サークル投稿かどうかを判定
+    const isCirclePost = postData.circleId && postData.circleId !== "" && postData.circleId !== null;
 
     // 人間モードの投稿にはAIコメントを付けない
     if (postData.postMode === "human") {
@@ -1006,11 +1002,66 @@ export const onPostCreated = onDocumentCreated(
       }
     }
 
-    // ランダムに3〜10人のAIを選択
-    const commentCount = Math.floor(Math.random() * 8) + 3;
-    const shuffledPersonas = [...AI_PERSONAS]
-      .sort(() => Math.random() - 0.5)
-      .slice(0, commentCount);
+    // サークル投稿の場合はサークルAIを使用、それ以外は一般AIを使用
+    let selectedPersonas: AIPersona[];
+    let circleContext = "";
+
+    if (isCirclePost) {
+      // サークル情報を取得
+      const circleDoc = await db.collection("circles").doc(postData.circleId).get();
+      if (!circleDoc.exists) {
+        console.log(`Circle ${postData.circleId} not found, skipping AI comments`);
+        return;
+      }
+
+      const circleData = circleDoc.data()!;
+      const generatedAIs = circleData.generatedAIs as Array<{
+        id: string;
+        name: string;
+        gender: Gender;
+        ageGroup: AgeGroup;
+        occupation: { id: string; name: string; bio: string };
+        personality: { id: string; name: string; trait: string; style: string; examples?: string[] };
+        avatarIndex: number;
+        circleContext?: string;
+      }> || [];
+
+      if (generatedAIs.length === 0) {
+        console.log(`No generated AIs for circle ${postData.circleId}, skipping AI comments`);
+        return;
+      }
+
+      // サークルコンテキストを設定
+      circleContext = `\n\n【サークル情報】\nあなたはサークル「${circleData.name}」のメンバーです。\nサークル説明: ${circleData.description}\n同じ目標に向かって頑張っている仲間として、投稿者を応援してください。\n専門用語があればそれを理解して、詳しく褒めてください。`;
+
+      // サークルAIをAIPersona形式に変換
+      selectedPersonas = generatedAIs.map((ai) => ({
+        id: ai.id,
+        name: ai.name,
+        namePrefixId: "",
+        nameSuffixId: "",
+        gender: ai.gender,
+        ageGroup: ai.ageGroup,
+        occupation: ai.occupation,
+        personality: {
+          ...ai.personality,
+          examples: ai.personality.examples || ["すごい！", "いいね！"],
+        },
+        praiseStyle: PRAISE_STYLES[Math.floor(Math.random() * PRAISE_STYLES.length)],
+        avatarIndex: ai.avatarIndex,
+        bio: "",
+      }));
+
+      console.log(`Using ${selectedPersonas.length} circle AIs for comments`);
+    } else {
+      // 一般投稿：ランダムに3〜10人のAIを選択
+      const commentCount = Math.floor(Math.random() * 8) + 3;
+      selectedPersonas = [...AI_PERSONAS]
+        .sort(() => Math.random() - 0.5)
+        .slice(0, commentCount);
+
+      console.log(`Using ${selectedPersonas.length} general AIs for comments`);
+    }
 
     const batch = db.batch();
     let totalComments = 0;
@@ -1022,15 +1073,15 @@ export const onPostCreated = onDocumentCreated(
 
     // ランダムな遅延時間を生成し、昇順にソート（順番にコメントが来るようにする）
     // 1〜10分の間で分散（テスト用）
-    const delays = Array.from({ length: commentCount }, () => Math.floor(Math.random() * 9) + 1)
+    const delays = Array.from({ length: selectedPersonas.length }, () => Math.floor(Math.random() * 9) + 1)
       .sort((a, b) => a - b);
 
     // Cloud Tasks クライアント
     const tasksClient = new CloudTasksClient();
     const queuePath = tasksClient.queuePath(process.env.GCLOUD_PROJECT || PROJECT_ID, LOCATION, QUEUE_NAME);
 
-    for (let i = 0; i < shuffledPersonas.length; i++) {
-      const persona = shuffledPersonas[i];
+    for (let i = 0; i < selectedPersonas.length; i++) {
+      const persona = selectedPersonas[i];
       const delayMinutes = delays[i];
 
       // タスクの実行時間を計算
@@ -1045,6 +1096,7 @@ export const onPostCreated = onDocumentCreated(
           personaId: persona.id,
           personaName: persona.name,
           mediaDescriptions: mediaDescriptions, // 分析済みデータを渡す
+          circleContext: circleContext, // サークルコンテキスト（空文字列 or サークル情報）
         };
 
         // v1関数のURL形式 (asia-northeast1-PROJECT_ID.cloudfunctions.net/FUNCTION_NAME)
@@ -3118,7 +3170,8 @@ export const generateAICommentV1 = functionsV1.region("asia-northeast1").runWith
       userDisplayName,
       personaId,
       personaName,
-      mediaDescriptions
+      mediaDescriptions,
+      circleContext, // サークルコンテキスト（サークル投稿の場合のみ）
     } = request.body;
 
     console.log(`Processing AI comment task for ${personaName} on post ${postId}`);
@@ -3132,13 +3185,32 @@ export const generateAICommentV1 = functionsV1.region("asia-northeast1").runWith
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-    // ペルソナを再構築（IDから検索）
-    // AI_PERSONAS はグローバルスコープにあるので直接参照
-    const persona = AI_PERSONAS.find(p => p.id === personaId);
+    // ペルソナを再構築
+    // まずAI_PERSONASから検索、見つからなければサークルAIとして処理
+    let persona = AI_PERSONAS.find(p => p.id === personaId);
+
     if (!persona) {
-      console.error(`Persona not found: ${personaId}`);
-      response.status(400).send("Persona not found");
-      return;
+      // サークルAIの場合、ペイロードから簡易ペルソナを構築
+      console.log(`Persona ${personaId} not in AI_PERSONAS, assuming circle AI`);
+      persona = {
+        id: personaId,
+        name: personaName,
+        namePrefixId: "",
+        nameSuffixId: "",
+        gender: "female" as Gender,
+        ageGroup: "twenties" as AgeGroup,
+        occupation: { id: "student", name: "頑張り中", bio: "" },
+        personality: {
+          id: "bright",
+          name: "明るい",
+          trait: "ポジティブで元気",
+          style: "「！」多め、絵文字使う",
+          examples: ["すごい！", "いいね！", "頑張ってる！"],
+        },
+        praiseStyle: PRAISE_STYLES[0],
+        avatarIndex: 0,
+        bio: "",
+      };
     }
 
     // プロンプト構築
@@ -3146,8 +3218,11 @@ export const generateAICommentV1 = functionsV1.region("asia-northeast1").runWith
       ? `\n\n【添付メディアの内容】\n${mediaDescriptions.join("\n")}`
       : "";
 
+    // サークルコンテキストがあればシステムプロンプトに追加
+    const circlePromptAddition = circleContext || "";
+
     const prompt = `
-${getSystemPrompt(persona, userDisplayName)}
+${getSystemPrompt(persona, userDisplayName)}${circlePromptAddition}
 
 【${userDisplayName}さんの投稿】
 ${postContent || "(テキストなし)"}${mediaContext}
@@ -4417,6 +4492,137 @@ export const sendJoinRequest = onCall(
         throw error;
       }
       throw new HttpsError("internal", `申請に失敗しました: ${error}`);
+    }
+  }
+);
+
+// ===============================================
+// サークルAI生成
+// サークル作成時に自動でAI3体を生成
+// ===============================================
+
+/**
+ * サークル専用AIペルソナを生成する関数
+ * サークルの説明からテーマ・レベル感を抽出してペルソナに反映
+ */
+function generateCircleAIPersona(
+  circleInfo: { name: string; description: string; category: string },
+  index: number
+): {
+  id: string;
+  name: string;
+  namePrefixId: string;
+  nameSuffixId: string;
+  gender: Gender;
+  ageGroup: AgeGroup;
+  occupation: { id: string; name: string; bio: string };
+  personality: { id: string; name: string; trait: string; style: string };
+  avatarIndex: number;
+  bio: string;
+  circleContext: string;
+  growthLevel: number;
+  lastGrowthAt: Date;
+} {
+  // 性別を決定（インデックスで分散）
+  const gender: Gender = index % 2 === 0 ? "female" : "male";
+
+  // 各カテゴリをランダムに選択
+  const occupations = OCCUPATIONS[gender];
+  const personalities = PERSONALITIES[gender];
+
+  const occupation = occupations[(index * 7) % occupations.length];
+  const personality = personalities[(index * 3) % personalities.length];
+  const ageGroup: AgeGroup = (["late_teens", "twenties", "thirties"] as const)[index % 3];
+
+  // 名前パーツからランダム選択
+  const prefixIndex = (index * 13) % AI_USABLE_PREFIXES.length;
+  const suffixIndex = (index * 17) % AI_USABLE_SUFFIXES.length;
+  const namePrefix = AI_USABLE_PREFIXES[prefixIndex];
+  const nameSuffix = AI_USABLE_SUFFIXES[suffixIndex];
+  const name = `${namePrefix.text}${nameSuffix.text}`;
+
+  // アバターインデックス
+  const avatarIndex = (index * 11) % 10;
+
+  // サークルのコンテキストを生成
+  const circleContext = `サークル「${circleInfo.name}」のメンバー。${circleInfo.description}`;
+
+  // bioをサークルに関連づける
+  const bios = [
+    `${circleInfo.name}で頑張ってる！初心者だけどよろしく✨`,
+    `${circleInfo.name}に参加してます。一緒に頑張りましょう！`,
+    `${circleInfo.name}仲間！まだまだ練習中です💪`,
+  ];
+  const bio = bios[index % bios.length];
+
+  return {
+    id: `circle_ai_${Date.now()}_${index}`,
+    name: name.trim(),
+    namePrefixId: `prefix_${namePrefix.id}`,
+    nameSuffixId: `suffix_${nameSuffix.id}`,
+    gender,
+    ageGroup,
+    occupation,
+    personality,
+    avatarIndex,
+    bio,
+    circleContext,
+    growthLevel: 0, // 初期成長レベル（初心者）
+    lastGrowthAt: new Date(),
+  };
+}
+
+/**
+ * サークル作成時にAI3体を自動生成
+ */
+export const onCircleCreated = onDocumentCreated(
+  "circles/{circleId}",
+  async (event) => {
+    const snapshot = event.data;
+    if (!snapshot) {
+      console.log("No document data");
+      return;
+    }
+
+    const circleData = snapshot.data();
+    const circleId = event.params.circleId;
+
+    console.log(`=== onCircleCreated: ${circleId} ===`);
+    console.log(`Circle name: ${circleData.name}, AI mode: ${circleData.aiMode}`);
+
+    try {
+      // サークル情報を取得
+      const circleInfo = {
+        name: circleData.name || "",
+        description: circleData.description || "",
+        category: circleData.category || "その他",
+      };
+
+      // AI3体を生成
+      const generatedAIs = [];
+      const aiMemberIds = [];
+
+      for (let i = 0; i < 3; i++) {
+        const aiPersona = generateCircleAIPersona(circleInfo, i);
+        generatedAIs.push(aiPersona);
+        aiMemberIds.push(aiPersona.id);
+        console.log(`Generated AI ${i + 1}: ${aiPersona.name} (${aiPersona.id})`);
+      }
+
+      // サークルドキュメントを更新（AI情報とメンバー数を更新）
+      const currentMemberIds = circleData.memberIds || [];
+      const updatedMemberIds = [...currentMemberIds, ...aiMemberIds];
+
+      await db.collection("circles").doc(circleId).update({
+        generatedAIs: generatedAIs,
+        memberIds: updatedMemberIds,
+        memberCount: updatedMemberIds.length,
+      });
+
+      console.log(`=== onCircleCreated SUCCESS: Added ${generatedAIs.length} AIs to ${circleId} ===`);
+
+    } catch (error) {
+      console.error(`=== onCircleCreated ERROR:`, error);
     }
   }
 );
