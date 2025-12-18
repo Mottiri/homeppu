@@ -4661,3 +4661,375 @@ export const onCircleCreated = onDocumentCreated(
     }
   }
 );
+
+// ===============================================
+// サークルAI投稿機能 (v1.1)
+// Cloud Schedulerで1日1回実行、各サークルのAIが投稿
+// ===============================================
+
+/**
+ * サークルAIの投稿を生成するシステムプロンプト
+ */
+function getCircleAIPostPrompt(
+  aiName: string,
+  circleName: string,
+  circleDescription: string,
+  category: string
+): string {
+  return `
+あなたは「ほめっぷ」というSNSのユーザー「${aiName}」です。
+サークル「${circleName}」のメンバーとして投稿します。
+
+【サークル情報】
+- サークル名: ${circleName}
+- カテゴリ: ${category}
+- 説明: ${circleDescription}
+
+【投稿のルール】
+1. サークルのテーマに沿った「頑張り報告」や「進捗報告」を投稿してください
+2. 初心者〜中級者の視点で、「完璧じゃない」「成長途中」を演出してください
+3. 自然な日本語で、SNSらしいカジュアルな投稿にしてください
+4. 絵文字を1〜2個使ってください
+5. 30〜80文字程度の短い投稿にしてください
+
+【投稿例】
+- 「今日も${circleName}頑張った！まだまだだけど少しずつ進歩してる気がする💪」
+- 「${category}始めて1週間。最初は全然だったけど、ちょっとずつ成長してるかも✨」
+- 「今日は調子悪かったけど、とりあえずやった！継続することが大事🔥」
+
+【あなたの投稿】
+`;
+}
+
+/**
+ * サークルAI投稿を定期実行（Cloud Scheduler用）
+ * 毎日朝9時と夜20時に実行を想定
+ */
+export const generateCircleAIPosts = functionsV1.region("asia-northeast1").runWith({
+  secrets: ["GEMINI_API_KEY"],
+  timeoutSeconds: 300,
+  memory: "512MB",
+}).pubsub.schedule("0 9,20 * * *").timeZone("Asia/Tokyo").onRun(async () => {
+  console.log("=== generateCircleAIPosts START ===");
+
+  const apiKey = geminiApiKey.value();
+  if (!apiKey) {
+    console.error("GEMINI_API_KEY is not set");
+    return;
+  }
+
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+  try {
+    // すべてのサークルを取得
+    const circlesSnapshot = await db.collection("circles").get();
+    let totalPosts = 0;
+
+    for (const circleDoc of circlesSnapshot.docs) {
+      const circleData = circleDoc.data();
+      const circleId = circleDoc.id;
+      const generatedAIs = circleData.generatedAIs as Array<{
+        id: string;
+        name: string;
+        avatarIndex: number;
+      }> || [];
+
+      if (generatedAIs.length === 0) {
+        console.log(`Circle ${circleId} has no AIs, skipping`);
+        continue;
+      }
+
+      // サークルごとに1日1〜2回の投稿（ランダムに1体のAIが投稿）
+      // すでに今日投稿があるかチェック
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayTimestamp = admin.firestore.Timestamp.fromDate(today);
+
+      const todayPosts = await db.collection("posts")
+        .where("circleId", "==", circleId)
+        .where("createdAt", ">=", todayTimestamp)
+        .get();
+
+      // 今日すでに2件以上投稿があればスキップ
+      if (todayPosts.size >= 2) {
+        console.log(`Circle ${circleId} already has ${todayPosts.size} posts today, skipping`);
+        continue;
+      }
+
+      // ランダムにAIを1体選択
+      const randomAI = generatedAIs[Math.floor(Math.random() * generatedAIs.length)];
+
+      // AIユーザー情報を取得
+      const aiUserDoc = await db.collection("users").doc(randomAI.id).get();
+      if (!aiUserDoc.exists) {
+        console.log(`AI user ${randomAI.id} not found, skipping`);
+        continue;
+      }
+
+      // Geminiで投稿内容を生成
+      const prompt = getCircleAIPostPrompt(
+        randomAI.name,
+        circleData.name,
+        circleData.description || "",
+        circleData.category || "その他"
+      );
+
+      try {
+        const result = await model.generateContent(prompt);
+        const postContent = result.response.text()?.trim();
+
+        if (!postContent) {
+          console.log(`Empty post generated for circle ${circleId}, skipping`);
+          continue;
+        }
+
+        // 投稿を作成
+        const postRef = db.collection("posts").doc();
+        await postRef.set({
+          userId: randomAI.id,
+          userDisplayName: randomAI.name,
+          userAvatarIndex: randomAI.avatarIndex,
+          content: postContent,
+          postMode: "mix",
+          circleId: circleId,
+          isVisible: true,
+          reactions: {},
+          commentCount: 0,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        // サークルの投稿数を更新
+        await db.collection("circles").doc(circleId).update({
+          postCount: admin.firestore.FieldValue.increment(1),
+          recentActivity: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        console.log(`Created AI post in circle ${circleData.name}: ${postContent.substring(0, 50)}...`);
+        totalPosts++;
+
+        // API呼び出しの間隔を空ける（レート制限対策）
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      } catch (error) {
+        console.error(`Error generating post for circle ${circleId}:`, error);
+      }
+    }
+
+    console.log(`=== generateCircleAIPosts COMPLETE: Created ${totalPosts} posts ===`);
+
+  } catch (error) {
+    console.error("=== generateCircleAIPosts ERROR:", error);
+  }
+});
+
+/**
+ * サークルAI投稿を手動トリガー（テスト用）
+ */
+export const triggerCircleAIPosts = onCall(
+  { region: "asia-northeast1", secrets: [geminiApiKey], timeoutSeconds: 300 },
+  async () => {
+    console.log("=== triggerCircleAIPosts (manual) START ===");
+
+    const apiKey = geminiApiKey.value();
+    if (!apiKey) {
+      return { success: false, message: "GEMINI_API_KEY is not set" };
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+    let totalPosts = 0;
+
+    try {
+      const circlesSnapshot = await db.collection("circles").get();
+
+      for (const circleDoc of circlesSnapshot.docs) {
+        const circleData = circleDoc.data();
+        const circleId = circleDoc.id;
+        const generatedAIs = circleData.generatedAIs as Array<{
+          id: string;
+          name: string;
+          avatarIndex: number;
+        }> || [];
+
+        if (generatedAIs.length === 0) continue;
+
+        const randomAI = generatedAIs[Math.floor(Math.random() * generatedAIs.length)];
+
+        const prompt = getCircleAIPostPrompt(
+          randomAI.name,
+          circleData.name,
+          circleData.description || "",
+          circleData.category || "その他"
+        );
+
+        try {
+          const result = await model.generateContent(prompt);
+          const postContent = result.response.text()?.trim();
+
+          if (!postContent) continue;
+
+          const postRef = db.collection("posts").doc();
+          await postRef.set({
+            userId: randomAI.id,
+            userDisplayName: randomAI.name,
+            userAvatarIndex: randomAI.avatarIndex,
+            content: postContent,
+            postMode: "mix",
+            circleId: circleId,
+            isVisible: true,
+            reactions: {},
+            commentCount: 0,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+
+          await db.collection("circles").doc(circleId).update({
+            postCount: admin.firestore.FieldValue.increment(1),
+            recentActivity: admin.firestore.FieldValue.serverTimestamp(),
+          });
+
+          totalPosts++;
+          await new Promise((resolve) => setTimeout(resolve, 500));
+
+        } catch (error) {
+          console.error(`Error generating post for circle ${circleId}:`, error);
+        }
+      }
+
+      return {
+        success: true,
+        message: `サークルAI投稿を${totalPosts}件作成しました`,
+        totalPosts,
+      };
+
+    } catch (error) {
+      console.error("triggerCircleAIPosts ERROR:", error);
+      return { success: false, message: `エラー: ${error}` };
+    }
+  }
+);
+
+// ===============================================
+// サークルAI成長システム (v1.2)
+// 月1回実行、AIのgrowthLevelを上げる
+// growthLevel: 0=初心者, 1-2=初級, 3-4=中級初め, 5=中級（上限）
+// ===============================================
+
+/**
+ * サークルAIの成長イベント（毎月1日に実行）
+ */
+export const evolveCircleAIs = functionsV1.region("asia-northeast1").runWith({
+  timeoutSeconds: 300,
+  memory: "256MB",
+}).pubsub.schedule("0 10 1 * *").timeZone("Asia/Tokyo").onRun(async () => {
+  console.log("=== evolveCircleAIs START (Monthly Growth Event) ===");
+
+  try {
+    // growthLevel < 5 のサークルAIを取得
+    const aiUsersSnapshot = await db.collection("users")
+      .where("isAI", "==", true)
+      .where("circleId", "!=", null)
+      .get();
+
+    let evolvedCount = 0;
+    const batch = db.batch();
+    const now = new Date();
+
+    for (const userDoc of aiUsersSnapshot.docs) {
+      const userData = userDoc.data();
+      const currentLevel = userData.growthLevel || 0;
+      const lastGrowthAt = userData.lastGrowthAt?.toDate() || new Date(0);
+
+      // 30日以上経過していない場合はスキップ
+      const daysSinceLastGrowth = Math.floor((now.getTime() - lastGrowthAt.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysSinceLastGrowth < 30) {
+        console.log(`${userData.displayName}: Only ${daysSinceLastGrowth} days since last growth, skipping`);
+        continue;
+      }
+
+      // 上限チェック（中級者=5で成長停止）
+      if (currentLevel >= 5) {
+        console.log(`${userData.displayName}: Already at max level (${currentLevel}), skipping`);
+        continue;
+      }
+
+      // 成長ロジック：80%の確率で成長（運も演出）
+      if (Math.random() > 0.8) {
+        console.log(`${userData.displayName}: Unlucky this month, no growth`);
+        continue;
+      }
+
+      // レベルアップ
+      const newLevel = currentLevel + 1;
+      batch.update(userDoc.ref, {
+        growthLevel: newLevel,
+        lastGrowthAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      console.log(`${userData.displayName}: Level up! ${currentLevel} -> ${newLevel}`);
+      evolvedCount++;
+    }
+
+    if (evolvedCount > 0) {
+      await batch.commit();
+    }
+
+    console.log(`=== evolveCircleAIs COMPLETE: ${evolvedCount} AIs evolved ===`);
+
+  } catch (error) {
+    console.error("=== evolveCircleAIs ERROR:", error);
+  }
+});
+
+/**
+ * サークルAI成長を手動トリガー（テスト用）
+ */
+export const triggerEvolveCircleAIs = onCall(
+  { region: "asia-northeast1", timeoutSeconds: 120 },
+  async () => {
+    console.log("=== triggerEvolveCircleAIs (manual) START ===");
+
+    try {
+      const aiUsersSnapshot = await db.collection("users")
+        .where("isAI", "==", true)
+        .where("circleId", "!=", null)
+        .get();
+
+      let evolvedCount = 0;
+      const batch = db.batch();
+
+      for (const userDoc of aiUsersSnapshot.docs) {
+        const userData = userDoc.data();
+        const currentLevel = userData.growthLevel || 0;
+
+        if (currentLevel >= 5) continue;
+
+        // テスト用：100%成長
+        const newLevel = currentLevel + 1;
+        batch.update(userDoc.ref, {
+          growthLevel: newLevel,
+          lastGrowthAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        evolvedCount++;
+      }
+
+      if (evolvedCount > 0) {
+        await batch.commit();
+      }
+
+      return {
+        success: true,
+        message: `${evolvedCount}体のサークルAIが成長しました`,
+        evolvedCount,
+      };
+
+    } catch (error) {
+      console.error("triggerEvolveCircleAIs ERROR:", error);
+      return { success: false, message: `エラー: ${error}` };
+    }
+  }
+);
