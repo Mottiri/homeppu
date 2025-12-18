@@ -4547,13 +4547,23 @@ function generateCircleAIPersona(
   // サークルのコンテキストを生成
   const circleContext = `サークル「${circleInfo.name}」のメンバー。${circleInfo.description}`;
 
-  // bioをサークルに関連づける
-  const bios = [
-    `${circleInfo.name}で頑張ってる！初心者だけどよろしく✨`,
-    `${circleInfo.name}に参加してます。一緒に頑張りましょう！`,
-    `${circleInfo.name}仲間！まだまだ練習中です💪`,
-  ];
-  const bio = bios[index % bios.length];
+  // 一般AIと同じbio生成ロジックを使用
+  const occupationBios = BIO_TEMPLATES[occupation.id] || {};
+  const personalityBios = occupationBios[personality.id] || [];
+
+  // bioが見つからない場合はデフォルト
+  let bio: string;
+  if (personalityBios.length > 0) {
+    bio = personalityBios[index % personalityBios.length];
+  } else {
+    // フォールバック：シンプルだけど自然なbio
+    const defaultBios = [
+      `${occupation.name} してます！よろしくね✨`,
+      `${occupation.name} やってます。毎日頑張ってる`,
+      `${occupation.name} です。趣味は読書と散歩`,
+    ];
+    bio = defaultBios[index % defaultBios.length];
+  }
 
   return {
     id: `circle_ai_${Date.now()}_${index}`,
@@ -4598,16 +4608,41 @@ export const onCircleCreated = onDocumentCreated(
         category: circleData.category || "その他",
       };
 
-      // AI3体を生成
+      // AI3体を生成してusersコレクションに作成
       const generatedAIs = [];
       const aiMemberIds = [];
+      const batch = db.batch();
 
       for (let i = 0; i < 3; i++) {
         const aiPersona = generateCircleAIPersona(circleInfo, i);
         generatedAIs.push(aiPersona);
+
+        // usersコレクションにAIユーザードキュメントを作成
+        const aiUserRef = db.collection("users").doc(aiPersona.id);
+        batch.set(aiUserRef, {
+          uid: aiPersona.id,
+          displayName: aiPersona.name,
+          bio: aiPersona.bio,
+          avatarIndex: aiPersona.avatarIndex,
+          namePrefixId: aiPersona.namePrefixId,
+          nameSuffixId: aiPersona.nameSuffixId,
+          isAI: true,
+          circleId: circleId, // このAIが所属するサークル
+          circleContext: aiPersona.circleContext,
+          growthLevel: aiPersona.growthLevel,
+          lastGrowthAt: admin.firestore.Timestamp.fromDate(aiPersona.lastGrowthAt),
+          publicMode: "mix", // AIはmixモードで動作
+          virtue: 100, // 初期徳ポイント
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
         aiMemberIds.push(aiPersona.id);
         console.log(`Generated AI ${i + 1}: ${aiPersona.name} (${aiPersona.id})`);
       }
+
+      // バッチでAIユーザーを作成
+      await batch.commit();
 
       // サークルドキュメントを更新（AI情報とメンバー数を更新）
       const currentMemberIds = circleData.memberIds || [];
