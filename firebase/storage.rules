@@ -90,8 +90,8 @@ service firebase.storage {
                    && isImage();
     }
     
-    // サークルアイコン
-    match /circles/{circleId}/{fileName} {
+    // サークル画像（アイコン・ヘッダー）
+    match /circles/{circleId}/{imageType}/{fileName} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() 
                    && isValidProfileSize() 

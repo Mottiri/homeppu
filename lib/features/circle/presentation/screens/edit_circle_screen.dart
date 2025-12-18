@@ -1,9 +1,13 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../shared/models/circle_model.dart';
 import '../../../../shared/services/circle_service.dart';
+import '../../../../shared/services/media_service.dart';
 
 class EditCircleScreen extends ConsumerStatefulWidget {
   final String circleId;
@@ -30,6 +34,12 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen> {
   late bool _isPublic;
   bool _isLoading = false;
 
+  // 画像設定
+  File? _iconImage;
+  File? _coverImage;
+  String? _iconImageUrl;
+  String? _coverImageUrl;
+
   @override
   void initState() {
     super.initState();
@@ -41,6 +51,8 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen> {
     _rulesController = TextEditingController(text: widget.circle.rules ?? '');
     _selectedCategory = widget.circle.category;
     _isPublic = widget.circle.isPublic;
+    _iconImageUrl = widget.circle.iconImageUrl;
+    _coverImageUrl = widget.circle.coverImageUrl;
   }
 
   @override
@@ -52,6 +64,51 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen> {
     super.dispose();
   }
 
+  Future<void> _pickImage({required bool isIcon}) async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
+
+    if (picked != null) {
+      // クロッピング
+      final croppedFile = await ImageCropper().cropImage(
+        sourcePath: picked.path,
+        aspectRatio: isIcon
+            ? const CropAspectRatio(ratioX: 1, ratioY: 1) // アイコンは1:1
+            : const CropAspectRatio(ratioX: 16, ratioY: 9), // ヘッダーは16:9
+        compressQuality: 85,
+        maxWidth: isIcon ? 512 : 1920,
+        maxHeight: isIcon ? 512 : 1080,
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: isIcon ? 'アイコンを調整' : 'ヘッダーを調整',
+            toolbarColor: AppColors.primary,
+            toolbarWidgetColor: Colors.white,
+            initAspectRatio: CropAspectRatioPreset.original,
+            lockAspectRatio: true,
+            hideBottomControls: false,
+          ),
+          IOSUiSettings(
+            title: isIcon ? 'アイコンを調整' : 'ヘッダーを調整',
+            aspectRatioLockEnabled: true,
+          ),
+        ],
+      );
+
+      if (croppedFile != null) {
+        setState(() {
+          if (isIcon) {
+            _iconImage = File(croppedFile.path);
+          } else {
+            _coverImage = File(croppedFile.path);
+          }
+        });
+      }
+    }
+  }
+
   Future<void> _saveChanges() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -59,6 +116,27 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen> {
 
     try {
       final circleService = ref.read(circleServiceProvider);
+      final mediaService = MediaService();
+
+      // 画像をアップロード
+      String? newIconUrl = _iconImageUrl;
+      String? newCoverUrl = _coverImageUrl;
+
+      if (_iconImage != null) {
+        newIconUrl = await mediaService.uploadCircleImage(
+          filePath: _iconImage!.path,
+          circleId: widget.circleId,
+          imageType: 'icon',
+        );
+      }
+
+      if (_coverImage != null) {
+        newCoverUrl = await mediaService.uploadCircleImage(
+          filePath: _coverImage!.path,
+          circleId: widget.circleId,
+          imageType: 'cover',
+        );
+      }
 
       await circleService.updateCircle(widget.circleId, {
         'name': _nameController.text.trim(),
@@ -69,6 +147,8 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen> {
             ? null
             : _rulesController.text.trim(),
         'isPublic': _isPublic,
+        'iconImageUrl': newIconUrl,
+        'coverImageUrl': newCoverUrl,
       });
 
       if (mounted) {
@@ -124,6 +204,170 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            // アイコン・ヘッダー画像
+            _buildSection(
+              title: 'サークル画像',
+              subtitle: 'アイコンとヘッダーをカスタマイズ（任意）',
+              child: Row(
+                children: [
+                  // アイコン
+                  Column(
+                    children: [
+                      Stack(
+                        children: [
+                          GestureDetector(
+                            onTap: () => _pickImage(isIcon: true),
+                            child: Container(
+                              width: 80,
+                              height: 80,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.grey[200],
+                                border: Border.all(color: Colors.grey[300]!),
+                                image: _iconImage != null
+                                    ? DecorationImage(
+                                        image: FileImage(_iconImage!),
+                                        fit: BoxFit.cover,
+                                      )
+                                    : _iconImageUrl != null
+                                    ? DecorationImage(
+                                        image: NetworkImage(_iconImageUrl!),
+                                        fit: BoxFit.cover,
+                                      )
+                                    : null,
+                              ),
+                              child: _iconImage == null && _iconImageUrl == null
+                                  ? Icon(
+                                      Icons.camera_alt,
+                                      color: Colors.grey[400],
+                                    )
+                                  : null,
+                            ),
+                          ),
+                          // 削除ボタン
+                          if (_iconImage != null || _iconImageUrl != null)
+                            Positioned(
+                              top: -4,
+                              right: -4,
+                              child: GestureDetector(
+                                onTap: () => setState(() {
+                                  _iconImage = null;
+                                  _iconImageUrl = null;
+                                }),
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: const Icon(
+                                    Icons.close,
+                                    size: 14,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'アイコン',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 24),
+                  // ヘッダー
+                  Expanded(
+                    child: Column(
+                      children: [
+                        Stack(
+                          children: [
+                            GestureDetector(
+                              onTap: () => _pickImage(isIcon: false),
+                              child: Container(
+                                height: 80,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(8),
+                                  color: Colors.grey[200],
+                                  border: Border.all(color: Colors.grey[300]!),
+                                  image: _coverImage != null
+                                      ? DecorationImage(
+                                          image: FileImage(_coverImage!),
+                                          fit: BoxFit.cover,
+                                        )
+                                      : _coverImageUrl != null
+                                      ? DecorationImage(
+                                          image: NetworkImage(_coverImageUrl!),
+                                          fit: BoxFit.cover,
+                                        )
+                                      : null,
+                                ),
+                                child:
+                                    _coverImage == null &&
+                                        _coverImageUrl == null
+                                    ? Center(
+                                        child: Icon(
+                                          Icons.panorama,
+                                          color: Colors.grey[400],
+                                          size: 32,
+                                        ),
+                                      )
+                                    : null,
+                              ),
+                            ),
+                            // 削除ボタン
+                            if (_coverImage != null || _coverImageUrl != null)
+                              Positioned(
+                                top: -4,
+                                right: -4,
+                                child: GestureDetector(
+                                  onTap: () => setState(() {
+                                    _coverImage = null;
+                                    _coverImageUrl = null;
+                                  }),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.white,
+                                        width: 2,
+                                      ),
+                                    ),
+                                    child: const Icon(
+                                      Icons.close,
+                                      size: 14,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'ヘッダー',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
             // サークル名
             _buildSection(
               title: 'サークル名',
