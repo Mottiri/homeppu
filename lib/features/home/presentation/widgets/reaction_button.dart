@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../shared/providers/auth_provider.dart';
+import '../../../../shared/services/recent_reactions_service.dart';
 
 /// リアクションボタン
 class ReactionButton extends ConsumerStatefulWidget {
@@ -78,6 +79,9 @@ class _ReactionButtonState extends ConsumerState<ReactionButton>
           'reactionType': widget.type.value,
           'createdAt': FieldValue.serverTimestamp(),
         });
+
+        // 直近使用リストに追加
+        await RecentReactionsService.addReaction(widget.type.value);
       }
     } catch (e) {
       // エラー時は状態を戻す
