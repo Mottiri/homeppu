@@ -1149,6 +1149,17 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
       _tabController.animateTo(_tabController.previousIndex);
       _showAddCategoryDialog();
     } else {
+      // 選択中のカテゴリIDをProviderに設定
+      String? selectedCategoryId;
+      if (_tabController.index == 0) {
+        // デフォルト（タスク）タブ
+        selectedCategoryId = null;
+      } else if (_tabController.index > 0 &&
+          _tabController.index <= _categories.length) {
+        // カスタムカテゴリタブ
+        selectedCategoryId = _categories[_tabController.index - 1].id;
+      }
+      ref.read(selectedCategoryIdProvider.notifier).state = selectedCategoryId;
       setState(() {});
     }
   }

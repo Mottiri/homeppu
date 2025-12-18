@@ -73,13 +73,16 @@ class _MainShellState extends ConsumerState<MainShell>
 
     if (!mounted) return;
 
+    // 現在選択中のカテゴリIDを取得
+    final selectedCategoryId = ref.read(selectedCategoryIdProvider);
+
     final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
       useRootNavigator: true,
       builder: (context) => AddTaskBottomSheet(
         categories: categories,
-        initialCategoryId: null,
+        initialCategoryId: selectedCategoryId,
         initialScheduledDate: ref.read(selectedDateProvider),
       ),
       backgroundColor: Colors.transparent,
