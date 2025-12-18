@@ -4177,12 +4177,32 @@ export const cleanupDeletedCircle = functionsV1.region("asia-northeast1").runWit
     // 認証チェック
     const authHeader = request.headers.authorization || "";
     if (!authHeader.startsWith("Bearer ")) {
+      console.error("Missing or invalid authorization header");
       response.status(401).send("Unauthorized");
       return;
     }
 
-    const payload = JSON.parse(Buffer.from(request.body, "base64").toString());
+    // リクエストボディを取得（Cloud Tasksからは既にパース済みの場合がある）
+    let payload: { circleId: string; circleName: string };
+    if (typeof request.body === "string") {
+      // Base64文字列の場合
+      payload = JSON.parse(Buffer.from(request.body, "base64").toString());
+    } else if (request.body && typeof request.body === "object") {
+      // 既にJSONオブジェクトの場合
+      payload = request.body as { circleId: string; circleName: string };
+    } else {
+      console.error("Invalid request body:", request.body);
+      response.status(400).send("Invalid request body");
+      return;
+    }
+
     const { circleId, circleName } = payload;
+
+    if (!circleId) {
+      console.error("Missing circleId in payload");
+      response.status(400).send("Missing circleId");
+      return;
+    }
 
     console.log(`=== cleanupDeletedCircle START: ${circleId} ===`);
 
