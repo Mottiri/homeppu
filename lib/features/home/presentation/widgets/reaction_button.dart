@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
@@ -58,33 +59,46 @@ class _ReactionButtonState extends ConsumerState<ReactionButton>
 
     setState(() => _isReacted = !_isReacted);
 
-    // Firestoreに反映
     try {
-      final postRef = FirebaseFirestore.instance
-          .collection('posts')
-          .doc(widget.postId);
-
-      await postRef.update({
-        'reactions.${widget.type.value}': FieldValue.increment(
-          _isReacted ? 1 : -1,
-        ),
-      });
-
-      // リアクション追加時のみ、通知トリガー用にサブコレクションに書き込む
       if (_isReacted) {
-        await FirebaseFirestore.instance.collection('reactions').add({
+        // リアクション追加: Cloud Functions経由（回数制限あり）
+        final functions = FirebaseFunctions.instanceFor(
+          region: 'asia-northeast1',
+        );
+        final callable = functions.httpsCallable('addUserReaction');
+
+        await callable.call({
           'postId': widget.postId,
-          'userId': user.uid,
-          'userDisplayName': user.displayName,
           'reactionType': widget.type.value,
-          'createdAt': FieldValue.serverTimestamp(),
         });
 
         // 直近使用リストに追加
         await RecentReactionsService.addReaction(widget.type.value);
+      } else {
+        // リアクション削除: 直接Firestoreを更新（カウントのみ）
+        final postRef = FirebaseFirestore.instance
+            .collection('posts')
+            .doc(widget.postId);
+
+        await postRef.update({
+          'reactions.${widget.type.value}': FieldValue.increment(-1),
+        });
+      }
+    } on FirebaseFunctionsException catch (e) {
+      // エラー時は状態を戻す
+      setState(() => _isReacted = !_isReacted);
+
+      // 回数制限エラーの場合はSnackBarで通知
+      if (e.code == 'resource-exhausted' && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message ?? 'リアクション回数の上限に達しました'),
+            backgroundColor: Colors.orange,
+          ),
+        );
       }
     } catch (e) {
-      // エラー時は状態を戻す
+      // その他のエラー時
       setState(() => _isReacted = !_isReacted);
     }
   }

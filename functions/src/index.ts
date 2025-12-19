@@ -3582,6 +3582,71 @@ export const createCommentWithModeration = onCall(
 );
 
 /**
+ * ユーザーリアクション追加関数
+ * 1人あたり1投稿に対して最大5回までの制限あり
+ */
+export const addUserReaction = onCall(
+  { region: LOCATION, enforceAppCheck: false },
+  async (request) => {
+    const { postId, reactionType } = request.data;
+    const userId = request.auth?.uid;
+
+    if (!userId) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    if (!postId || !reactionType) {
+      throw new HttpsError("invalid-argument", "postIdとreactionTypeが必要です");
+    }
+
+    const MAX_REACTIONS_PER_USER = 5;
+
+    // 既存リアクション数をカウント
+    const existingReactions = await db.collection("reactions")
+      .where("postId", "==", postId)
+      .where("userId", "==", userId)
+      .get();
+
+    if (existingReactions.size >= MAX_REACTIONS_PER_USER) {
+      throw new HttpsError(
+        "resource-exhausted",
+        `1つの投稿に対するリアクションは${MAX_REACTIONS_PER_USER}回までです`
+      );
+    }
+
+    // ユーザー情報を取得
+    const userDoc = await db.collection("users").doc(userId).get();
+    const displayName = userDoc.data()?.displayName || "ユーザー";
+
+    const batch = db.batch();
+
+    // 1. リアクション保存
+    const reactionRef = db.collection("reactions").doc();
+    batch.set(reactionRef, {
+      postId: postId,
+      userId: userId,
+      userDisplayName: displayName,
+      reactionType: reactionType,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // 2. 投稿のリアクションカウント更新
+    const postRef = db.collection("posts").doc(postId);
+    batch.update(postRef, {
+      [`reactions.${reactionType}`]: admin.firestore.FieldValue.increment(1),
+    });
+
+    await batch.commit();
+
+    console.log(`User reaction added: ${displayName} -> ${reactionType} on ${postId}`);
+    return {
+      success: true,
+      remainingReactions: MAX_REACTIONS_PER_USER - existingReactions.size - 1
+    };
+  }
+);
+
+/**
  * Cloud Tasks から呼び出される AI リアクション生成関数 (v1)
  * 単体リアクション用
  */
