@@ -9,6 +9,7 @@ import '../../../../shared/models/circle_model.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/services/circle_service.dart';
 import '../../../../shared/services/media_service.dart';
+import '../../../../shared/services/image_moderation_service.dart';
 
 class CreateCircleScreen extends ConsumerStatefulWidget {
   const CreateCircleScreen({super.key});
@@ -98,8 +99,36 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
     try {
       final circleService = ref.read(circleServiceProvider);
       final mediaService = MediaService();
+      final moderationService = ImageModerationService();
 
-      // サークルを先に作成（IDを取得するため）
+      // 画像のモデレーションを先に実行
+      if (_iconImage != null) {
+        final error = await moderationService.moderateImage(_iconImage!);
+        if (error != null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(error), backgroundColor: Colors.red),
+            );
+            setState(() => _isLoading = false);
+          }
+          return;
+        }
+      }
+
+      if (_coverImage != null) {
+        final error = await moderationService.moderateImage(_coverImage!);
+        if (error != null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(error), backgroundColor: Colors.red),
+            );
+            setState(() => _isLoading = false);
+          }
+          return;
+        }
+      }
+
+      // モデレーション通過後、サークルを作成
       final circleId = await circleService.createCircle(
         name: _nameController.text.trim(),
         description: _descriptionController.text.trim(),

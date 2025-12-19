@@ -5391,3 +5391,91 @@ export const onReactionCreated = onDocumentCreated(
     }
   }
 );
+
+// ===============================================
+// 画像モデレーションCallable関数
+// ===============================================
+
+/**
+ * アップロード前の画像をモデレーション
+ * Base64エンコードされた画像データを受け取り、不適切かどうか判定
+ */
+export const moderateImageCallable = onCall(
+  { secrets: [geminiApiKey], region: "asia-northeast1" },
+  async (request) => {
+    const { imageBase64, mimeType = "image/jpeg" } = request.data;
+
+    if (!imageBase64) {
+      throw new HttpsError("invalid-argument", "imageBase64 is required");
+    }
+
+    // 認証チェック
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication required");
+    }
+
+    try {
+      const apiKey = geminiApiKey.value();
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+
+      const prompt = `
+この画像がSNSへの投稿として適切かどうか判定してください。
+
+【ブロック対象（isInappropriate: true）】
+- adult: 成人向けコンテンツ、露出の多い画像、性的な内容
+- violence: 暴力的な画像、血液、怪我、残虐な内容
+- hate: ヘイトシンボル、差別的な画像
+- dangerous: 危険な行為、違法行為、武器
+
+【許可する内容（isInappropriate: false）】
+- 通常の人物写真（水着でも一般的なものはOK）
+- 風景、食べ物、ペット
+- 趣味の写真
+- 芸術作品（明らかにアダルトでない限り）
+
+【回答形式】
+必ず以下のJSON形式のみで回答してください：
+{
+  "isInappropriate": true または false,
+  "category": "adult" | "violence" | "hate" | "dangerous" | "none",
+  "confidence": 0から1の数値,
+  "reason": "判定理由"
+}
+`;
+
+      const imagePart: Part = {
+        inlineData: {
+          mimeType: mimeType,
+          data: imageBase64,
+        },
+      };
+
+      const result = await model.generateContent([prompt, imagePart]);
+      const responseText = result.response.text().trim();
+
+      let jsonText = responseText;
+      // JSONブロックを抽出
+      const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (jsonMatch) {
+        jsonText = jsonMatch[1];
+      }
+
+      const moderationResult = JSON.parse(jsonText) as MediaModerationResult;
+
+      console.log(`Image moderation result: ${JSON.stringify(moderationResult)}`);
+
+      return moderationResult;
+
+    } catch (error) {
+      console.error("moderateImageCallable ERROR:", error);
+      // エラー時は許可（サービス継続性を優先）
+      return {
+        isInappropriate: false,
+        category: "none",
+        confidence: 0,
+        reason: "モデレーションエラー",
+      };
+    }
+  }
+);

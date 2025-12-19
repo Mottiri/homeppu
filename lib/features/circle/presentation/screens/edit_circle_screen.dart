@@ -8,6 +8,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../shared/models/circle_model.dart';
 import '../../../../shared/services/circle_service.dart';
 import '../../../../shared/services/media_service.dart';
+import '../../../../shared/services/image_moderation_service.dart';
 
 class EditCircleScreen extends ConsumerStatefulWidget {
   final String circleId;
@@ -117,8 +118,36 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen> {
     try {
       final circleService = ref.read(circleServiceProvider);
       final mediaService = MediaService();
+      final moderationService = ImageModerationService();
 
-      // 画像をアップロード
+      // 新しい画像のモデレーションを先に実行
+      if (_iconImage != null) {
+        final error = await moderationService.moderateImage(_iconImage!);
+        if (error != null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(error), backgroundColor: Colors.red),
+            );
+            setState(() => _isLoading = false);
+          }
+          return;
+        }
+      }
+
+      if (_coverImage != null) {
+        final error = await moderationService.moderateImage(_coverImage!);
+        if (error != null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(error), backgroundColor: Colors.red),
+            );
+            setState(() => _isLoading = false);
+          }
+          return;
+        }
+      }
+
+      // モデレーション通過後、画像をアップロード
       String? newIconUrl = _iconImageUrl;
       String? newCoverUrl = _coverImageUrl;
 
