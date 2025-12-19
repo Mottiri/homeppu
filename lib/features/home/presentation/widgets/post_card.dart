@@ -11,6 +11,7 @@ import '../../../../shared/models/post_model.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
 import '../../../../shared/widgets/report_dialog.dart';
 import '../../../../shared/widgets/video_player_screen.dart';
+import '../../../../shared/services/media_service.dart';
 import 'reaction_button.dart';
 import 'reaction_background.dart';
 
@@ -119,6 +120,15 @@ class _PostCardState extends State<PostCard> {
       debugPrint('Deleting post: ${post.id}');
       await batch.commit();
       debugPrint('Post deleted successfully');
+
+      // 6. Storageからメディアを削除（バッチ外で実行）
+      if (post.allMedia.isNotEmpty) {
+        final mediaService = MediaService();
+        for (final media in post.allMedia) {
+          await mediaService.deleteMedia(media.url);
+        }
+        debugPrint('Deleted ${post.allMedia.length} media files from Storage');
+      }
 
       if (mounted) {
         setState(() => _isDeleting = false);

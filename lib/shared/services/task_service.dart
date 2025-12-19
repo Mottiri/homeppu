@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uuid/uuid.dart';
 import '../models/task_model.dart';
 import 'package:flutter/foundation.dart';
+import 'media_service.dart';
 
 class TaskService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -429,10 +430,37 @@ class TaskService {
 
       final batch = _firestore.batch();
       for (var doc in docsToDelete) {
+        // Storage削除（各タスクのattachmentUrls）
+        final data = doc.data();
+        final attachmentUrls = List<String>.from(data['attachmentUrls'] ?? []);
+        if (attachmentUrls.isNotEmpty) {
+          final mediaService = MediaService();
+          for (final url in attachmentUrls) {
+            await mediaService.deleteMedia(url);
+          }
+          debugPrint(
+            'Deleted ${attachmentUrls.length} attachment files for task ${doc.id}',
+          );
+        }
         batch.delete(doc.reference);
       }
       await batch.commit();
     } else {
+      // 単一タスク削除の場合もStorage削除
+      final taskDoc = await _firestore.collection('tasks').doc(taskId).get();
+      if (taskDoc.exists) {
+        final data = taskDoc.data()!;
+        final attachmentUrls = List<String>.from(data['attachmentUrls'] ?? []);
+        if (attachmentUrls.isNotEmpty) {
+          final mediaService = MediaService();
+          for (final url in attachmentUrls) {
+            await mediaService.deleteMedia(url);
+          }
+          debugPrint(
+            'Deleted ${attachmentUrls.length} attachment files from Storage',
+          );
+        }
+      }
       await _firestore.collection('tasks').doc(taskId).delete();
     }
   }

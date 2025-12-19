@@ -4309,7 +4309,20 @@ export const cleanupDeletedCircle = functionsV1.region("asia-northeast1").runWit
     if (joinRequests.size > 0) await reqBatch.commit();
     console.log(`Deleted ${joinRequests.size} join requests`);
 
-    // 3. サークルAIアカウント削除
+    // 3. サークル画像をStorageから削除（icon, cover）
+    try {
+      const bucket = admin.storage().bucket();
+      const [files] = await bucket.getFiles({ prefix: `circles/${circleId}/` });
+      for (const file of files) {
+        await file.delete().catch((e) => console.error(`Storage delete failed: ${file.name}`, e));
+      }
+      console.log(`Deleted ${files.length} circle image files from Storage`);
+    } catch (storageError) {
+      console.error("Circle image storage cleanup error:", storageError);
+      // Storage削除失敗しても処理は継続
+    }
+
+    // 4. サークルAIアカウント削除
     const circleDoc = await db.collection("circles").doc(circleId).get();
     if (circleDoc.exists) {
       const generatedAIs = circleDoc.data()?.generatedAIs || [];
@@ -4320,7 +4333,7 @@ export const cleanupDeletedCircle = functionsV1.region("asia-northeast1").runWit
       }
       console.log(`Deleted ${generatedAIs.length} AI accounts`);
 
-      // 4. サークル本体を完全削除
+      // 5. サークル本体を完全削除
       await circleDoc.ref.delete();
       console.log(`Permanently deleted circle: ${circleName}`);
     }
