@@ -45,19 +45,6 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
     }
   }
 
-  static const Map<String, String> categoryIcons = {
-    '勉強': '📚',
-    'ダイエット': '🥗',
-    '運動': '💪',
-    '趣味': '🎨',
-    '仕事': '💼',
-    '資格': '📝',
-    '読書': '📖',
-    '語学': '🌍',
-    '音楽': '🎵',
-    'その他': '⭐',
-  };
-
   Future<void> _handleJoin(CircleModel circle, String userId) async {
     if (_isJoining) return;
 
@@ -522,7 +509,8 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
         }
 
         final circle = snapshot.data!;
-        final icon = categoryIcons[circle.category] ?? '⭐';
+        // CircleServiceのカテゴリアイコンを使用
+        final icon = CircleService.categoryIcons[circle.category] ?? '⭐';
         final isMember =
             currentUser != null &&
             circleService.isMember(circle, currentUser.uid);

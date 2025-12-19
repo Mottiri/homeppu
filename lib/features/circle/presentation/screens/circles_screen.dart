@@ -445,22 +445,10 @@ class _CircleCard extends ConsumerWidget {
 
   const _CircleCard({required this.circle, this.currentUserId});
 
-  static const Map<String, String> categoryIcons = {
-    '勉強': '📚',
-    'ダイエット': '🥗',
-    '運動': '💪',
-    '趣味': '🎨',
-    '仕事': '💼',
-    '資格': '📝',
-    '読書': '📖',
-    '語学': '🌍',
-    '音楽': '🎵',
-    'その他': '⭐',
-  };
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final icon = categoryIcons[circle.category] ?? '⭐';
+    // CircleServiceのカテゴリアイコンを使用
+    final icon = CircleService.categoryIcons[circle.category] ?? '⭐';
     final isOwner = currentUserId != null && circle.ownerId == currentUserId;
 
     return Container(

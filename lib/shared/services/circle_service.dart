@@ -9,20 +9,23 @@ final circleServiceProvider = Provider((ref) => CircleService());
 class CircleService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // カテゴリ一覧
-  static const List<String> categories = [
-    '全て',
-    '勉強',
-    'ダイエット',
-    '運動',
-    '趣味',
-    '仕事',
-    '資格',
-    '読書',
-    '語学',
-    '音楽',
-    'その他',
-  ];
+  // カテゴリとアイコンのマッピング（唯一の定義元）
+  static const Map<String, String> categoryIcons = {
+    '全て': '📋',
+    '勉強': '📚',
+    'ダイエット': '🥗',
+    '運動': '💪',
+    '趣味': '🎨',
+    '仕事': '💼',
+    '資格': '📝',
+    '読書': '📖',
+    '語学': '🌍',
+    '音楽': '🎵',
+    'その他': '⭐',
+  };
+
+  // カテゴリ一覧（categoryIconsのキーから生成）
+  static List<String> get categories => categoryIcons.keys.toList();
 
   // サークル一覧を取得
   Stream<List<CircleModel>> streamCircles({String? category}) {
