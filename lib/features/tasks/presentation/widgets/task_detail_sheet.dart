@@ -104,6 +104,8 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
       attachmentUrls: _attachmentUrls,
       goalId: _selectedGoalId,
       categoryId: _selectedCategoryId,
+      clearCategoryId:
+          _selectedCategoryId == null && widget.task.categoryId != null,
       reminders: _reminders,
       clearRecurrence: clearRecurrence,
     );

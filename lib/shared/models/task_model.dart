@@ -239,6 +239,7 @@ class TaskModel {
     String? goalId,
     List<Map<String, dynamic>>? reminders,
     bool clearRecurrence = false, // 繰り返し設定をクリアするフラグ
+    bool clearCategoryId = false, // カテゴリをnullに戻すフラグ
   }) {
     return TaskModel(
       id: id ?? this.id,
@@ -259,7 +260,7 @@ class TaskModel {
           googleCalendarEventId ?? this.googleCalendarEventId,
       priority: priority ?? this.priority,
       subtasks: subtasks ?? this.subtasks,
-      categoryId: categoryId ?? this.categoryId,
+      categoryId: clearCategoryId ? null : (categoryId ?? this.categoryId),
       // recurrenceGroupIdはupdateTaskでクエリに使用するため、ここではクリアしない
       recurrenceGroupId: recurrenceGroupId ?? this.recurrenceGroupId,
       recurrenceInterval: clearRecurrence
