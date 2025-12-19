@@ -54,7 +54,6 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
     '資格': '📝',
     '読書': '📖',
     '語学': '🌍',
-    'プログラミング': '💻',
     '音楽': '🎵',
     'その他': '⭐',
   };
