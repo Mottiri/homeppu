@@ -114,32 +114,25 @@ async function moderateImage(
   mimeType: string = "image/jpeg"
 ): Promise<MediaModerationResult> {
   try {
+    console.log(`moderateImage: Starting moderation for ${imageUrl.substring(0, 100)}...`);
     const imageBuffer = await downloadFile(imageUrl);
     const base64Image = imageBuffer.toString("base64");
+    console.log(`moderateImage: Downloaded image, size=${imageBuffer.length} bytes`);
 
     const prompt = `
 この画像がSNSへの投稿として適切かどうか判定してください。
 
 【ブロック対象（isInappropriate: true）】
 - adult: 成人向けコンテンツ、露出の多い画像、性的な内容
-  - violence: 暴力的な画像、血液、怪我、残虐な内容
-    - hate: ヘイトシンボル、差別的な画像
-      - dangerous: 危険な行為、違法行為、武器
+- violence: 暴力的な画像、血液、怪我、残虐な内容、血まみれ
+- hate: ヘイトシンボル、差別的な画像
+- dangerous: 危険な行為、違法行為、武器
 
-【許可する内容（isInappropriate: false）】
-- 通常の人物写真（水着でも一般的なものはOK）
-- 風景、食べ物、ペット
-  - 趣味の写真
-  - 芸術作品（明らかにアダルトでない限り）
+上記に該当しない場合は isInappropriate: false としてください。
 
 【回答形式】
-必ず以下のJSON形式のみで回答してください：
-{
-  "isInappropriate": true または false,
-    "category": "adult" | "violence" | "hate" | "dangerous" | "none",
-      "confidence": 0から1の数値,
-        "reason": "判定理由"
-}
+JSON形式のみで回答:
+{"isInappropriate": true/false, "category": "adult"|"violence"|"hate"|"dangerous"|"none", "confidence": 0-1, "reason": "理由"}
 `;
 
     const imagePart: Part = {
@@ -151,22 +144,32 @@ async function moderateImage(
 
     const result = await model.generateContent([prompt, imagePart]);
     const responseText = result.response.text().trim();
+    console.log(`moderateImage: Raw response: ${responseText.substring(0, 200)}`);
 
     let jsonText = responseText;
-    const jsonMatch = responseText.match(/```(?: json) ?\s * ([\s\S] *?) \s * ```/);
+    // JSON部分を抽出
+    const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
     if (jsonMatch) {
       jsonText = jsonMatch[1];
+    } else {
+      // ブレースで囲まれた部分を抽出
+      const braceMatch = responseText.match(/\{[\s\S]*\}/);
+      if (braceMatch) {
+        jsonText = braceMatch[0];
+      }
     }
 
-    return JSON.parse(jsonText) as MediaModerationResult;
+    const parsed = JSON.parse(jsonText) as MediaModerationResult;
+    console.log(`moderateImage: Parsed result: isInappropriate=${parsed.isInappropriate}, category=${parsed.category}, confidence=${parsed.confidence}`);
+    return parsed;
   } catch (error) {
-    console.error("Image moderation error:", error);
-    // エラー時は許可
+    console.error("moderateImage error:", error);
+    // Fail Closed: エラー時は不適切として扱う（安全第一）
     return {
-      isInappropriate: false,
-      category: "none",
-      confidence: 0,
-      reason: "モデレーションエラー",
+      isInappropriate: true,
+      category: "dangerous",
+      confidence: 1.0,
+      reason: "モデレーション処理エラー - 安全のためブロック",
     };
   }
 }

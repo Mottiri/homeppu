@@ -11,6 +11,7 @@ import '../../../../shared/providers/moderation_provider.dart';
 import '../../../../shared/services/circle_service.dart';
 import '../../../../shared/services/media_service.dart';
 import '../../../../shared/services/moderation_service.dart';
+import '../../../../shared/services/nsfw_detector_service.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
 import '../../../../shared/widgets/report_dialog.dart';
 import '../../../../shared/widgets/virtue_indicator.dart';
@@ -120,7 +121,16 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       final remaining = MediaService.maxMediaCount - _selectedMedia.length;
       final images = await _mediaService.pickImages(maxCount: remaining);
 
+      // NSFWチェック
+      final nsfwService = NsfwDetectorService.instance;
+      await nsfwService.initialize();
+
       for (final image in images) {
+        final error = await nsfwService.checkImage(image.path);
+        if (error != null) {
+          _showError(error);
+          continue; // この画像はスキップ
+        }
         _addMedia(image.path, MediaType.image);
       }
     } catch (e) {
@@ -133,6 +143,15 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     try {
       final photo = await _mediaService.takePhoto();
       if (photo != null) {
+        // NSFWチェック
+        final nsfwService = NsfwDetectorService.instance;
+        await nsfwService.initialize();
+
+        final error = await nsfwService.checkImage(photo.path);
+        if (error != null) {
+          _showError(error);
+          return;
+        }
         _addMedia(photo.path, MediaType.image);
       }
     } catch (e) {

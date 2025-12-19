@@ -122,12 +122,24 @@ class _PostCardState extends State<PostCard> {
       debugPrint('Post deleted successfully');
 
       // 6. Storageからメディアを削除（バッチ外で実行）
+      debugPrint(
+        '=== Media deletion: post.allMedia.length = ${post.allMedia.length} ===',
+      );
+      for (int i = 0; i < post.allMedia.length; i++) {
+        final media = post.allMedia[i];
+        debugPrint('Media[$i]: URL=${media.url}, type=${media.type}');
+      }
       if (post.allMedia.isNotEmpty) {
         final mediaService = MediaService();
         for (final media in post.allMedia) {
+          debugPrint('Deleting media from Storage: ${media.url}');
           await mediaService.deleteMedia(media.url);
         }
         debugPrint('Deleted ${post.allMedia.length} media files from Storage');
+      } else {
+        debugPrint('No media to delete (post.allMedia is empty)');
+        debugPrint('post.mediaItems.length = ${post.mediaItems.length}');
+        debugPrint('post.imageUrl = ${post.imageUrl}');
       }
 
       if (mounted) {

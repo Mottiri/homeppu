@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as path;
 import 'package:uuid/uuid.dart';
@@ -239,11 +240,13 @@ class MediaService {
   /// メディアを削除
   Future<void> deleteMedia(String url) async {
     try {
+      debugPrint('MediaService.deleteMedia: Attempting to delete $url');
       final ref = _storage.refFromURL(url);
       await ref.delete();
+      debugPrint('MediaService.deleteMedia: Successfully deleted $url');
     } catch (e) {
       // 削除に失敗しても続行
-      print('Failed to delete media: $e');
+      debugPrint('MediaService.deleteMedia: Failed to delete $url - $e');
     }
   }
 
