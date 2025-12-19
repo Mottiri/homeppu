@@ -147,6 +147,20 @@ class _AdminReviewScreenState extends ConsumerState<AdminReviewScreen> {
                               ],
                             ),
                           ),
+                          // 投稿詳細遷移ボタン
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: () =>
+                                    context.push('/post/${post.id}'),
+                                icon: const Icon(Icons.open_in_new),
+                                label: const Text('投稿詳細を見る'),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
                           // アクションボタン
                           Padding(
                             padding: const EdgeInsets.all(16),

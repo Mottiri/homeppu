@@ -2169,7 +2169,6 @@ ${content}
       needsReviewReason: needsReviewReason,
     });
 
-    // 管理者に通知（フラグ付き投稿の場合）
     // ADMIN_UIDは上部で定義済み
     if (needsReview) {
       console.log(`Notifying admin about flagged post: ${postRef.id}`);
@@ -2182,6 +2181,18 @@ ${content}
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           reviewed: false,
         });
+
+        // アプリ内通知を作成（管理者のnotificationsサブコレクション）
+        await db.collection("users").doc(ADMIN_UID).collection("notifications").add({
+          type: "review_needed",
+          title: "要審査投稿",
+          body: `フラグ付き投稿があります: ${needsReviewReason}`,
+          postId: postRef.id,
+          fromUserId: userId,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          read: false,
+        });
+        console.log("Admin in-app notification created");
 
         // 管理者にFCM通知を送信
         const adminUserDoc = await db.collection("users").doc(ADMIN_UID).get();
@@ -2198,7 +2209,7 @@ ${content}
               postId: postRef.id,
             },
           });
-          console.log("Admin notification sent successfully");
+          console.log("Admin FCM notification sent successfully");
         }
       } catch (notifyError) {
         console.error("Failed to notify admin:", notifyError);
