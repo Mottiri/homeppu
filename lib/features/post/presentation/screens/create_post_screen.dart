@@ -164,6 +164,15 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     try {
       final video = await _mediaService.pickVideo();
       if (video != null) {
+        // NSFWチェック（サムネイル抽出して検出）
+        final nsfwService = NsfwDetectorService.instance;
+        await nsfwService.initialize();
+
+        final error = await nsfwService.checkVideo(video.path);
+        if (error != null) {
+          _showError(error);
+          return;
+        }
         _addMedia(video.path, MediaType.video);
       }
     } catch (e) {

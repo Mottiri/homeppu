@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:nsfw_detector_flutter/nsfw_detector_flutter.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
+import 'package:path_provider/path_provider.dart';
 
 /// クライアント側NSFW検出サービス
 /// 画像選択時に即座にNSFW判定を行い、不適切な画像をブロックする
@@ -68,6 +70,53 @@ class NsfwDetectorService {
     } catch (e) {
       debugPrint('NsfwDetectorService: Error during check - $e');
       // エラー時はスキップ（Cloud Functionsで二重チェック）
+      return null;
+    }
+  }
+
+  /// 動画がNSFWかどうか判定（サムネイルを抽出してチェック）
+  ///
+  /// Returns: エラーメッセージ（NSFWの場合）、または null（安全な場合）
+  Future<String?> checkVideo(String videoPath) async {
+    if (!_isInitialized || _detector == null) {
+      debugPrint('NsfwDetectorService: Not initialized, skipping video check');
+      return null;
+    }
+
+    try {
+      debugPrint('NsfwDetectorService: Checking video: $videoPath');
+
+      // 動画からサムネイルを抽出
+      final tempDir = await getTemporaryDirectory();
+      final thumbnailPath = await VideoThumbnail.thumbnailFile(
+        video: videoPath,
+        thumbnailPath: tempDir.path,
+        imageFormat: ImageFormat.JPEG,
+        quality: 75,
+      );
+
+      if (thumbnailPath == null) {
+        debugPrint('NsfwDetectorService: Failed to extract thumbnail');
+        return null;
+      }
+
+      debugPrint('NsfwDetectorService: Thumbnail extracted: $thumbnailPath');
+
+      // サムネイルをNSFWチェック
+      final result = await checkImage(thumbnailPath);
+
+      // 一時ファイルを削除
+      try {
+        await File(thumbnailPath).delete();
+      } catch (_) {}
+
+      if (result != null) {
+        return '不適切な動画が検出されました。別の動画を選んでください。';
+      }
+
+      return null;
+    } catch (e) {
+      debugPrint('NsfwDetectorService: Error during video check - $e');
       return null;
     }
   }

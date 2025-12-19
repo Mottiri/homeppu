@@ -1905,6 +1905,10 @@ export const createPostWithModeration = onCall(
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
     console.log("STEP 3: Model initialized");
 
+    // 曖昧コンテンツフラグ用変数
+    let needsReview = false;
+    let needsReviewReason = "";
+
     // ===============================================
     // 0. 静的NGワードチェック (Internal Logic)
     // ===============================================
@@ -1999,6 +2003,13 @@ ${content}
         const modResult = JSON.parse(jsonText) as ModerationResult;
         console.log("STEP 5d: Parsed successfully, isNegative:", modResult.isNegative);
 
+        // 曖昧コンテンツ判定 (0.5-0.7) → フラグ付き投稿
+        if (modResult.isNegative && modResult.confidence >= 0.5 && modResult.confidence < 0.7) {
+          needsReview = true;
+          needsReviewReason = `テキスト: ${modResult.category} (confidence: ${modResult.confidence})`;
+          console.log(`FLAGGED for review: ${needsReviewReason}`);
+        }
+
         if (modResult.isNegative && modResult.confidence >= 0.7) {
           // 徳ポイントを減少
           const virtueResult = await decreaseVirtue(
@@ -2057,38 +2068,45 @@ ${content}
         const mediaResult = await moderateMedia(apiKey, model, mediaItems as MediaItem[]);
 
         if (!mediaResult.passed && mediaResult.result) {
-          // 徳ポイントを減少
-          const virtueResult = await decreaseVirtue(
-            userId,
-            `不適切なメディア検出: ${mediaResult.result.category} `,
-            VIRTUE_CONFIG.lossPerNegative
-          );
+          // 曖昧コンテンツ判定 (0.5-0.7) → フラグ付き投稿
+          if (mediaResult.result.confidence >= 0.5 && mediaResult.result.confidence < 0.7) {
+            needsReview = true;
+            needsReviewReason = `メディア: ${mediaResult.result.category} (confidence: ${mediaResult.result.confidence})`;
+            console.log(`FLAGGED for review: ${needsReviewReason}`);
+          } else if (mediaResult.result.confidence >= 0.7) {
+            // 徳ポイントを減少
+            const virtueResult = await decreaseVirtue(
+              userId,
+              `不適切なメディア検出: ${mediaResult.result.category} `,
+              VIRTUE_CONFIG.lossPerNegative
+            );
 
-          // 記録
-          await db.collection("moderatedContent").add({
-            userId: userId,
-            content: `[メディア] ${mediaResult.failedItem?.fileName || "media"} `,
-            type: "media",
-            category: mediaResult.result.category,
-            confidence: mediaResult.result.confidence,
-            reason: mediaResult.result.reason,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
+            // 記録
+            await db.collection("moderatedContent").add({
+              userId: userId,
+              content: `[メディア] ${mediaResult.failedItem?.fileName || "media"} `,
+              type: "media",
+              category: mediaResult.result.category,
+              confidence: mediaResult.result.confidence,
+              reason: mediaResult.result.reason,
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
 
-          // 不適切なメディアの場合はエラーを返す
-          const categoryLabels: Record<string, string> = {
-            adult: "成人向けコンテンツ",
-            violence: "暴力的なコンテンツ",
-            hate: "差別的なコンテンツ",
-            dangerous: "危険なコンテンツ",
-          };
+            // 不適切なメディアの場合はエラーを返す
+            const categoryLabels: Record<string, string> = {
+              adult: "成人向けコンテンツ",
+              violence: "暴力的なコンテンツ",
+              hate: "差別的なコンテンツ",
+              dangerous: "危険なコンテンツ",
+            };
 
-          const categoryLabel = categoryLabels[mediaResult.result.category] || "不適切なコンテンツ";
+            const categoryLabel = categoryLabels[mediaResult.result.category] || "不適切なコンテンツ";
 
-          throw new HttpsError(
-            "invalid-argument",
-            `添付された${mediaResult.failedItem?.type === "video" ? "動画" : "画像"}に${categoryLabel} が含まれている可能性があります。\n\n別のメディアを選択してください。\n\n(徳ポイント: ${virtueResult.newVirtue})`
-          );
+            throw new HttpsError(
+              "invalid-argument",
+              `添付された${mediaResult.failedItem?.type === "video" ? "動画" : "画像"}に${categoryLabel} が含まれている可能性があります。\n\n別のメディアを選択してください。\n\n(徳ポイント: ${virtueResult.newVirtue})`
+            );
+          }
         }
 
         console.log("Media moderation passed");
@@ -2137,7 +2155,46 @@ ${content}
       reactions: { love: 0, praise: 0, cheer: 0, empathy: 0 },
       commentCount: 0,
       isVisible: true,
+      needsReview: needsReview,
+      needsReviewReason: needsReviewReason,
     });
+
+    // 管理者に通知（フラグ付き投稿の場合）
+    const ADMIN_UID = "hYr5LUH4mhR60oQfVOggrjGYJjG2";
+    if (needsReview) {
+      console.log(`Notifying admin about flagged post: ${postRef.id}`);
+      try {
+        // pendingReviewsコレクションに記録
+        await db.collection("pendingReviews").doc(postRef.id).set({
+          postId: postRef.id,
+          userId: userId,
+          reason: needsReviewReason,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          reviewed: false,
+        });
+
+        // 管理者にFCM通知を送信
+        const adminUserDoc = await db.collection("users").doc(ADMIN_UID).get();
+        const fcmToken = adminUserDoc.data()?.fcmToken;
+        if (fcmToken) {
+          await admin.messaging().send({
+            token: fcmToken,
+            notification: {
+              title: "要審査投稿",
+              body: `フラグ付き投稿があります: ${needsReviewReason}`,
+            },
+            data: {
+              type: "review_needed",
+              postId: postRef.id,
+            },
+          });
+          console.log("Admin notification sent successfully");
+        }
+      } catch (notifyError) {
+        console.error("Failed to notify admin:", notifyError);
+        // 通知失敗しても投稿は提出
+      }
+    }
 
     // ユーザーの投稿数を更新
     await db.collection("users").doc(userId).update({

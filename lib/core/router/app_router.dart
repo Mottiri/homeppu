@@ -24,6 +24,7 @@ import '../../features/goals/presentation/screens/create_goal_screen.dart';
 import '../../features/goals/presentation/screens/goal_detail_screen.dart';
 import '../../features/goals/presentation/screens/completed_goals_screen.dart';
 import '../../features/notifications/presentation/screens/notifications_screen.dart';
+import '../../features/admin/presentation/screens/admin_review_screen.dart';
 import '../../shared/providers/auth_provider.dart';
 
 /// アプリのルーター設定
@@ -249,6 +250,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final userId = state.pathParameters['userId']!;
           return ProfileScreen(userId: userId);
         },
+      ),
+
+      // 管理者用レビュー画面
+      GoRoute(
+        path: '/admin-review',
+        name: 'adminReview',
+        builder: (context, state) => const AdminReviewScreen(),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

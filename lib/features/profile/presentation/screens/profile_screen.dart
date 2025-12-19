@@ -190,6 +190,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         style: Theme.of(context).textTheme.headlineMedium,
                       ),
                       const Spacer(),
+                      // 管理者専用：レビュー画面リンク
+                      if (_isOwnProfile && widget.userId == null)
+                        StreamBuilder<String?>(
+                          stream: Stream.value(
+                            ref.read(currentUserProvider).valueOrNull?.uid,
+                          ),
+                          builder: (context, snapshot) {
+                            const adminUid = 'hYr5LUH4mhR60oQfVOggrjGYJjG2';
+                            if (snapshot.data == adminUid) {
+                              return IconButton(
+                                onPressed: () => context.push('/admin-review'),
+                                icon: const Icon(Icons.flag_outlined),
+                                tooltip: '要審査投稿',
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
+                        ),
                       if (_isOwnProfile)
                         IconButton(
                           onPressed: () => context.push('/settings'),
