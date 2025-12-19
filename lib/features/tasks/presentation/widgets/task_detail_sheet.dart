@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:homeppu/shared/models/category_model.dart';
 import 'package:homeppu/core/constants/app_colors.dart';
 import 'package:homeppu/shared/models/task_model.dart';
 import 'package:homeppu/features/tasks/presentation/widgets/recurrence_settings_sheet.dart';
@@ -14,12 +15,14 @@ class TaskDetailSheet extends ConsumerStatefulWidget {
   final TaskModel task;
   final Function(TaskModel, String) onUpdate;
   final Function({bool deleteAll}) onDelete;
+  final List<CategoryModel> categories;
 
   const TaskDetailSheet({
     super.key,
     required this.task,
     required this.onUpdate,
     required this.onDelete,
+    this.categories = const [],
   });
 
   @override
@@ -34,6 +37,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
   late List<TaskItem> _subtasks;
   late List<String> _attachmentUrls;
   String? _selectedGoalId;
+  String? _selectedCategoryId;
 
   final MediaService _mediaService = MediaService();
   bool _isUploading = false;
@@ -67,6 +71,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
     _recurrenceEndDate = widget.task.recurrenceEndDate;
     _attachmentUrls = List.from(widget.task.attachmentUrls);
     _selectedGoalId = widget.task.goalId;
+    _selectedCategoryId = widget.task.categoryId;
     _reminders = List.from(widget.task.reminders);
   }
 
@@ -98,6 +103,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
           : _memoController.text.trim(),
       attachmentUrls: _attachmentUrls,
       goalId: _selectedGoalId,
+      categoryId: _selectedCategoryId,
       reminders: _reminders,
       clearRecurrence: clearRecurrence,
     );
@@ -742,6 +748,102 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                         ),
                         const Divider(height: 1),
 
+                        // Category Selection Section
+                        if (widget.categories.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.label_outline,
+                                      color: _selectedCategoryId != null
+                                          ? AppColors.primary
+                                          : Colors.grey,
+                                    ),
+                                    const SizedBox(width: 16),
+                                    const Text(
+                                      'カテゴリ',
+                                      style: TextStyle(fontSize: 16),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  padding: const EdgeInsets.only(left: 40),
+                                  child: Row(
+                                    children: [
+                                      // タスク (Default / null)
+                                      ChoiceChip(
+                                        label: const Text('タスク'),
+                                        selected: _selectedCategoryId == null,
+                                        onSelected: (val) {
+                                          if (val) {
+                                            setState(
+                                              () => _selectedCategoryId = null,
+                                            );
+                                          }
+                                        },
+                                        selectedColor: Colors.blue,
+                                        backgroundColor: Colors.blue
+                                            .withOpacity(0.1),
+                                        labelStyle: TextStyle(
+                                          color: _selectedCategoryId == null
+                                              ? Colors.white
+                                              : Colors.black87,
+                                          fontWeight:
+                                              _selectedCategoryId == null
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                        ),
+                                        showCheckmark: false,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      // Custom Categories
+                                      ...widget.categories.map((cat) {
+                                        final isSelected =
+                                            _selectedCategoryId == cat.id;
+                                        return Padding(
+                                          padding: const EdgeInsets.only(
+                                            right: 8,
+                                          ),
+                                          child: ChoiceChip(
+                                            label: Text(cat.name),
+                                            selected: isSelected,
+                                            onSelected: (val) {
+                                              setState(() {
+                                                _selectedCategoryId = val
+                                                    ? cat.id
+                                                    : null;
+                                              });
+                                            },
+                                            selectedColor: Colors.orange,
+                                            backgroundColor: Colors.orange
+                                                .withOpacity(0.1),
+                                            labelStyle: TextStyle(
+                                              color: isSelected
+                                                  ? Colors.white
+                                                  : Colors.black87,
+                                              fontWeight: isSelected
+                                                  ? FontWeight.bold
+                                                  : FontWeight.normal,
+                                            ),
+                                            showCheckmark: false,
+                                          ),
+                                        );
+                                      }),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                        const Divider(height: 1),
+
                         // Goal Linking Section
                         if (FirebaseAuth.instance.currentUser != null)
                           Padding(
@@ -1007,6 +1109,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
         (_memoController.text.trim() != (widget.task.memo ?? '')) ||
         !listEquals(_attachmentUrls, widget.task.attachmentUrls) ||
         _selectedGoalId != widget.task.goalId ||
+        _selectedCategoryId != widget.task.categoryId ||
         !_remindersEqual(_reminders, widget.task.reminders) ||
         _hasRecurrenceRuleChanges();
   }

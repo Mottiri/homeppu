@@ -437,6 +437,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
         onUpdate: _handleUpdateTask,
         onDelete: ({bool deleteAll = false}) =>
             _deleteTask(task, deleteAll: deleteAll),
+        categories: _categories,
       ),
     );
   }
