@@ -35,13 +35,26 @@ class _ReactionButtonState extends ConsumerState<ReactionButton>
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 200),
+      duration: const Duration(milliseconds: 500), // 500msでしっかり見せる
       vsync: this,
     );
-    _scaleAnimation = Tween<double>(
-      begin: 1.0,
-      end: 1.3,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.elasticOut));
+    // 大きく登場して戻るアニメーション
+    _scaleAnimation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(
+          begin: 1.0,
+          end: 2.5,
+        ).chain(CurveTween(curve: Curves.easeOut)),
+        weight: 40, // 最初の40%で大きくなる
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(
+          begin: 2.5,
+          end: 1.0,
+        ).chain(CurveTween(curve: Curves.elasticOut)),
+        weight: 60, // 残り60%で戻る
+      ),
+    ]).animate(_controller);
   }
 
   @override
@@ -54,8 +67,11 @@ class _ReactionButtonState extends ConsumerState<ReactionButton>
     final user = ref.read(currentUserProvider).valueOrNull;
     if (user == null) return;
 
-    // アニメーション
-    _controller.forward().then((_) => _controller.reverse());
+    // リアクション追加時のみアニメーション
+    if (!_isReacted) {
+      _controller.reset();
+      _controller.forward(); // 1.0→2.5→1.0のアニメーション
+    }
 
     setState(() => _isReacted = !_isReacted);
 
