@@ -1,4 +1,19 @@
-# アバターアセット生成ガイド
+# アバターアセット生成ガイド（確定版）
+
+## 作成方式
+
+**髪型と輪郭はセットで生成**（位置ズレ防止のため）
+
+```
+パーツ構成:
+・髪型+輪郭（セット） ← 1枚の画像
+・目
+・眉毛
+・鼻
+・口
+```
+
+---
 
 ## 共通仕様
 
@@ -6,221 +21,268 @@
 |------|---|
 | キャンバスサイズ | **512x512px** |
 | ファイル形式 | PNG（透過背景） |
-| アンカーポイント | 中央揃え |
 | 顔の中心位置 | X: 256px, Y: 280px |
-| 画風 | アニメ調、かわいい、パステルカラー |
 
 ---
 
-## レイヤー順序（下から上へ）
+## STEP 1: 髪型+輪郭（セット）を作成
+
+**髪型と顔の輪郭を一緒に生成します。これがベースになります。**
+
+### プロンプト
 
 ```
-7. accessory.png  ← 最前面
-6. hair_front.png
-5. eyebrow.png
-4. eyes.png
-3. nose.png
-2. mouth.png
-1. face.png       ← 輪郭・肌
-0. hair_back.png  ← 最背面
-```
+chibi anime style character head,
+[STYLE] hairstyle, [COLOR] hair color,
+round cute face shape, small cute ears,
+[SKIN] skin tone,
 
----
+completely blank face,
+no eyes, no eyebrows, no nose, no mouth,
+face area left empty for layering,
 
-## 共通プロンプト（ベース）
-
-```
-chibi anime style avatar part, cute, soft colors, 
-simple design, white background, 
-centered composition, 512x512 canvas,
-facing front, no shading, flat colors
-```
-
----
-
-## パーツ別プロンプト
-
-### 1. 髪型（hair）
-
-**前髪パーツ（hair_front）**
-```
-chibi anime style hair bangs only, 
-cute fluffy bangs covering forehead,
-[COLOR] hair color,
-transparent background, top of head visible,
-centered at top, 512x512 canvas,
-front view, no face, hair part only,
-soft anime style, simple flat colors
-```
-
-**後ろ髪パーツ（hair_back）**
-```
-chibi anime style back hair only,
-[STYLE: long/short/ponytail/twin tails/bun],
-[COLOR] hair color,
+512x512 canvas,
 transparent background,
-centered, 512x512 canvas,
-back hair layer, no face visible,
-soft anime style, simple flat colors
+front view facing camera,
+soft flat colors, no shading,
+simple clean anime style
 ```
 
-**カラーバリエーション例**:
-- brown, dark brown, blonde, pink, blue, purple, green, orange, rainbow gradient, silver
+### ネガティブプロンプト
+```
+eyes, eyebrows, nose, mouth, expression,
+realistic, 3D, detailed shading, complex
+```
 
-**スタイルバリエーション例**:
-- long straight, short bob, ponytail, twin tails, messy, wavy, bun
+### バリエーション例
+
+#### ロングストレート（黒髪）
+```
+chibi anime style character head,
+long straight hairstyle, black hair color,
+round cute face shape, small cute ears,
+fair skin tone,
+blank face, no eyes no nose no mouth,
+512x512, transparent background, soft flat colors
+```
+
+#### ショートボブ（茶髪）
+```
+chibi anime style character head,
+short bob hairstyle, brown hair color,
+round cute face shape, small cute ears,
+fair skin tone,
+blank face, no eyes no nose no mouth,
+512x512, transparent background, soft flat colors
+```
+
+#### ツインテール（ピンク）
+```
+chibi anime style character head,
+twin tails hairstyle, pink hair color,
+round cute face shape, small cute ears,
+fair skin tone,
+blank face, no eyes no nose no mouth,
+512x512, transparent background, soft flat colors
+```
+
+#### レインボー（課金限定）
+```
+chibi anime style character head,
+long wavy hairstyle, rainbow gradient hair color,
+round cute face shape, small cute ears,
+fair skin tone,
+blank face, no eyes no nose no mouth,
+512x512, transparent background, soft flat colors
+```
+
+### 髪型リスト
+- short bob（ショートボブ）
+- long straight（ロングストレート）
+- twin tails（ツインテール）
+- ponytail（ポニーテール）
+- messy short（くせ毛ショート）
+- wavy long（ウェーブロング）
+- bun（お団子）
+- side ponytail（サイドポニー）
+
+### 髪色リスト
+- 無料: black, brown, dark brown, blonde
+- 課金: pink, blue, purple, green, silver, rainbow gradient
+
+### 肌色リスト
+- fair skin（明るい肌）
+- light skin（普通肌）
+- tan skin（日焼け肌）
+- dark skin（褐色肌）
 
 ---
 
-### 2. 輪郭・肌（face）
+## STEP 2: 目を作成
 
-```
-chibi anime style face outline only,
-[SKIN TONE] skin color,
-round cute face shape, small ears visible,
-no hair, no eyes, no mouth, blank face,
-transparent background,
-face centered at 256x280 position,
-512x512 canvas, front view,
-soft anime style, simple flat colors
-```
+**髪型+輪郭の画像を参照して、同じ位置に目を配置**
 
-**肌色バリエーション例**:
-- fair skin, light skin, medium skin, tan skin, dark skin, pale white, warm beige
-
----
-
-### 3. 目（eyes）
+### プロンプト
 
 ```
 chibi anime style eyes only,
-[STYLE] eye shape,
-[COLOR] eye color,
-both eyes, symmetrical, cute expression,
+cute big round eyes, [COLOR] eye color,
+sparkling anime eyes with small highlights,
+both eyes symmetrical,
+
+match this face position: [髪型+輪郭画像を参照]
+eyes positioned on the face area,
+
 transparent background,
-eyes positioned at upper face area,
-512x512 canvas, centered,
-sparkly anime eyes, simple flat colors
+512x512 canvas,
+no face, no skin, eyes part only,
+soft flat colors, no shading
 ```
 
-**スタイルバリエーション例**:
-- round big eyes, almond shaped, droopy cute, cat eyes, sparkling eyes
+### カラーバリエーション
+- 無料: brown, black, dark blue
+- 課金: pink, purple, red, golden, heterochromia（オッドアイ）
 
-**カラーバリエーション例**:
-- brown, blue, green, purple, pink, red, golden, heterochromia
+### スタイルバリエーション
+- round big（丸くて大きい）
+- almond shaped（アーモンド型）
+- droopy cute（たれ目）
+- cat eyes（つり目）
 
 ---
 
-### 4. 眉毛（eyebrow）
+## STEP 3: 眉毛を作成
+
+### プロンプト
 
 ```
 chibi anime style eyebrows only,
 [STYLE] eyebrow shape,
 [COLOR] eyebrow color,
-both eyebrows, symmetrical,
+both eyebrows symmetrical,
+
+match this face: [髪型+輪郭画像を参照]
+
 transparent background,
-positioned above eyes area,
-512x512 canvas, centered,
-simple line art style
+512x512 canvas,
+simple thin line style
 ```
 
-**スタイルバリエーション例**:
-- thin curved, thick straight, arched, gentle, sharp, worried
+### スタイルバリエーション
+- thin curved（細いアーチ）
+- straight（まっすぐ）
+- gentle（やさしい）
+- surprised（驚き）
 
 ---
 
-### 5. 鼻（nose）
+## STEP 4: 鼻を作成
+
+### プロンプト
 
 ```
 chibi anime style nose only,
 simple small [STYLE] nose,
 centered on face,
+
+match this face: [髪型+輪郭画像を参照]
+
 transparent background,
 512x512 canvas,
-minimal cute anime nose,
-simple line or dot style
+minimal cute anime nose
 ```
 
-**スタイルバリエーション例**:
-- small dot, tiny triangle, simple line, button nose
+### スタイルバリエーション
+- small dot（小さな点）
+- tiny triangle（小さな三角）
+- simple line（シンプルな線）
 
 ---
 
-### 6. 口（mouth）
+## STEP 5: 口を作成
+
+### プロンプト
 
 ```
 chibi anime style mouth only,
 [EXPRESSION] expression,
-[STYLE] mouth shape,
+cute small mouth,
+
+match this face: [髪型+輪郭画像を参照]
+
 transparent background,
-positioned at lower face area,
-512x512 canvas, centered,
-simple cute anime mouth
+512x512 canvas,
+simple anime style mouth
 ```
 
-**表情バリエーション例**:
-- smiling, open smile, small smile, neutral, surprised, happy grin
+### 表情バリエーション
+- small smile（小さな笑顔）
+- big smile（大きな笑顔）
+- open happy（口を開けて笑う）
+- neutral（無表情）
+- surprised（驚き）
+- cat mouth :3（猫口）
 
 ---
 
-## 位置ガイド（512x512キャンバス）
+## レイヤー順序（Flutterでの重ね順）
 
-```
-┌────────────────────────────┐
-│          髪（前）           │ Y: 0-150
-│                            │
-│    ┌──────────────────┐    │
-│    │      眉毛        │    │ Y: 180-210
-│    │      目          │    │ Y: 220-280
-│    │      鼻          │    │ Y: 290-320
-│    │      口          │    │ Y: 340-380
-│    │                  │    │
-│    │    輪郭（肌）     │    │ Y: 150-450
-│    └──────────────────┘    │
-│                            │
-│          髪（後ろ）         │ Y: 100-512
-└────────────────────────────┘
-        X: 中央 256px
-```
-
----
-
-## 生成時のTips
-
-1. **同じシード値を使う**: 一貫性のため同じseedで生成
-2. **バッチ生成**: 同じプロンプトで複数生成し、良いものを選ぶ
-3. **色指定は具体的に**: `pink`より`soft pastel pink`が良い
-4. **ネガティブプロンプト**: `realistic, 3D, detailed shading, complex`
-
----
-
-## ネガティブプロンプト（共通）
-
-```
-realistic, 3D, photorealistic, 
-complex shading, detailed shadows,
-multiple characters, full body,
-text, watermark, signature,
-blurry, low quality
+```dart
+Stack(
+  children: [
+    Image.asset('hair_face_01.png'),  // 髪型+輪郭（最背面）
+    Image.asset('eyebrow_01.png'),    // 眉毛
+    Image.asset('eyes_01.png'),       // 目
+    Image.asset('nose_01.png'),       // 鼻
+    Image.asset('mouth_01.png'),      // 口（最前面）
+  ],
+)
 ```
 
 ---
 
-## 推奨生成ツール
+## ファイル命名規則
 
-| ツール | 特徴 |
-|--------|------|
-| Midjourney | 高品質、有料 |
-| DALL-E 3 | 指示に忠実 |
-| Stable Diffusion | 無料、カスタマイズ可 |
-| Leonardo.ai | 無料枠あり |
+```
+髪型+輪郭: hair_face_{スタイル}_{カラー}_{肌色}.png
+  例: hair_face_long_black_fair.png
+      hair_face_twintails_pink_fair.png
+
+目:      eyes_{スタイル}_{カラー}.png
+  例: eyes_round_brown.png
+
+眉毛:    eyebrow_{スタイル}.png
+  例: eyebrow_gentle.png
+
+鼻:      nose_{スタイル}.png
+  例: nose_dot.png
+
+口:      mouth_{表情}.png
+  例: mouth_smile.png
+```
 
 ---
 
-## 生成後の加工
+## チェックリスト
 
-1. **透過処理**: 背景を透明に（remove.bg等）
-2. **位置調整**: 全パーツを同じ位置に揃える
-3. **リサイズ**: 512x512に統一
-4. **ファイル名規則**: `{パーツ}_{バリエーション番号}.png`
-   - 例: `hair_front_01.png`, `eyes_03.png`
+### 髪型+輪郭
+- [ ] ロングストレート × 4色 × 4肌色
+- [ ] ショートボブ × 4色 × 4肌色
+- [ ] ツインテール × 4色 × 4肌色
+- [ ] ポニーテール × 4色 × 4肌色
+- [ ] 課金限定（レインボー等）× 4肌色
+
+### 顔パーツ
+- [ ] 目 × 4スタイル × 6色
+- [ ] 眉毛 × 4スタイル
+- [ ] 鼻 × 3スタイル
+- [ ] 口 × 6表情
+
+---
+
+## 生成のコツ
+
+1. **同じseed値を使う**: 一貫性のため
+2. **参照画像を活用**: 目などは髪型+輪郭を参照させる
+3. **背景を透過に変換**: remove.bg等を使用
+4. **512x512に統一**: リサイズが必要な場合は中央配置
