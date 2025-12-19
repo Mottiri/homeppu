@@ -2112,6 +2112,23 @@ ${content}
 
             const categoryLabel = categoryLabels[mediaResult.result.category] || "不適切なコンテンツ";
 
+            // アップロード済みメディアをStorageから削除
+            console.log(`Deleting ${mediaItems.length} uploaded media files due to moderation failure...`);
+            for (const item of mediaItems as MediaItem[]) {
+              try {
+                // URLからStorageパスを抽出して削除
+                const url = new URL(item.url);
+                const pathMatch = url.pathname.match(/\/o\/(.+?)(\?|$)/);
+                if (pathMatch) {
+                  const storagePath = decodeURIComponent(pathMatch[1]);
+                  await admin.storage().bucket().file(storagePath).delete();
+                  console.log(`Deleted: ${storagePath}`);
+                }
+              } catch (deleteError) {
+                console.error(`Failed to delete media: ${item.url}`, deleteError);
+              }
+            }
+
             throw new HttpsError(
               "invalid-argument",
               `添付された${mediaResult.failedItem?.type === "video" ? "動画" : "画像"}に${categoryLabel} が含まれている可能性があります。\n\n別のメディアを選択してください。\n\n(徳ポイント: ${virtueResult.newVirtue})`
