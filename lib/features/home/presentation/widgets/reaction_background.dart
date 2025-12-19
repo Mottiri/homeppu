@@ -59,11 +59,16 @@ class _ReactionBackgroundState extends State<ReactionBackground>
   }
 
   void _startAnimation(String key) {
+    // 同時アニメーション数を制限（パフォーマンス対策）
+    if (_animatingIcons.length >= 5) {
+      return; // 5個以上は追加しない
+    }
+
     // 既存のアニメーションがあれば破棄
     _animatingIcons[key]?.dispose();
 
     final controller = AnimationController(
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 500), // 500msでキビキビ
       vsync: this,
     );
 
