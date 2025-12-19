@@ -2206,6 +2206,7 @@ ${content}
           body: `フラグ付き投稿があります: ${needsReviewReason}`,
           postId: postRef.id,
           fromUserId: userId,
+          fromUserName: userDisplayName,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           read: false,
         });
