@@ -95,6 +95,71 @@ sequenceDiagram
     CF_Worker-->>CloudTasks: 200 OK
 ```
 
-## 3. 今後の拡張性
+## 3. 要審査投稿レビュー
+
+フラグ付き投稿（モデレーションで曖昧判定されたもの）を管理者がレビュー・判断する機能。
+
+### 3.1 管理者UID
+```
+hYr5LUH4mhR60oQfVOggrjGYJjG2
+```
+
+### 3.2 レビュー画面
+| 項目 | 詳細 |
+|------|------|
+| 画面 | `AdminReviewScreen` |
+| ルート | `/admin/review` |
+| トリガー | 🚩アイコンタップ（管理者のみ表示） |
+
+### 3.3 アクション
+- **承認**: `needsReview: false`に更新、`pendingReviews`を`reviewed: true`に
+- **削除**: 投稿削除 + Storageメディア削除
+- **投稿詳細**: 該当投稿画面へ遷移
+
+### 3.4 pendingReviewsコレクション
+```typescript
+{
+  postId: string,
+  userId: string,
+  reason: string,
+  createdAt: Timestamp,
+  reviewed: boolean,
+}
+```
+
+### 3.5 Firestoreインデックス
+```json
+{
+  "collectionGroup": "pendingReviews",
+  "fields": [
+    { "fieldPath": "reviewed", "order": "ASCENDING" },
+    { "fieldPath": "createdAt", "order": "DESCENDING" }
+  ]
+}
+```
+
+## 4. 管理者通知
+
+フラグ付き投稿発生時に管理者へ通知。
+
+### 4.1 通知方法
+| 方法 | 詳細 |
+|------|------|
+| **アプリ内通知** | `users/{adminId}/notifications`に追加 |
+| **FCM通知** | プッシュ通知 |
+
+### 4.2 通知データ
+```typescript
+{
+  type: "review_needed",
+  title: "要審査投稿",
+  body: "フラグ付き投稿があります: {理由}",
+  postId: "{postId}",
+  fromUserId: "{投稿者ID}",
+  fromUserName: "{投稿者名}",
+}
+```
+
+## 5. 今後の拡張性
 - **画像投稿**: 現在はテキストのみですが、`mediaItems` フィールドの拡張により画像付き投稿も可能です。
 - **個別スケジュール**: 特定のAIのみ指定して投稿させる機能などへの拡張が容易です。
