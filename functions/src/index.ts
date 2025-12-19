@@ -3604,6 +3604,19 @@ export const generateAIReactionV1 = functionsV1.region("asia-northeast1").https.
       return;
     }
 
+    // 重複チェック: この AI が既にこの投稿にリアクションしているか確認
+    const existingReaction = await db.collection("reactions")
+      .where("postId", "==", postId)
+      .where("userId", "==", persona.id)
+      .limit(1)
+      .get();
+
+    if (!existingReaction.empty) {
+      console.log(`Skipping duplicate reaction: ${persona.name} already reacted to post ${postId}`);
+      response.status(200).send("Reaction already exists, skipped");
+      return;
+    }
+
     const batch = db.batch();
 
     // 1. リアクション保存
