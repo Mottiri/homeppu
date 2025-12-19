@@ -59,30 +59,9 @@ class _ReactionBackgroundState extends State<ReactionBackground>
   }
 
   void _startAnimation(String key) {
-    // 同時アニメーション数を制限（パフォーマンス対策）
-    if (_animatingIcons.length >= 5) {
-      return; // 5個以上は追加しない
-    }
-
-    // 既存のアニメーションがあれば破棄
-    _animatingIcons[key]?.dispose();
-
-    final controller = AnimationController(
-      duration: const Duration(milliseconds: 500), // 500msでキビキビ
-      vsync: this,
-    );
-
-    _animatingIcons[key] = controller;
-
-    controller.forward().then((_) {
-      if (mounted) {
-        controller.dispose();
-        _animatingIcons.remove(key);
-        setState(() {}); // アニメーション完了後に再描画
-      }
-    });
-
-    setState(() {});
+    // ちらつき防止のため、アニメーションは一時的に無効化
+    // TODO: 将来的にOverlayやAnimatedListを使った非破壊的なアニメーションに改善
+    return;
   }
 
   @override
