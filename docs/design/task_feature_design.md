@@ -212,8 +212,12 @@
 | **カテゴリ編集** | タブ長押しで名前変更・削除 | ✅ 実装済み |
 | **カテゴリフィルタリング** | タブ切り替えでカテゴリごとにタスクを表示 | ✅ 実装済み |
 | **デフォルトカテゴリ設定** | カテゴリ選択中にタスク作成→そのカテゴリを初期選択 | ✅ 実装済み (2025-12-18) |
+| **タスク編集でカテゴリ変更** | タスク詳細画面でカテゴリを変更可能 | ✅ 実装済み (2025-12-19) |
 
 ### 12.3 技術実装
 *   **データ管理**: `selectedCategoryIdProvider` で選択中のカテゴリIDを管理
 *   **Provider連携**: TasksScreenでタブ変更時にProvider更新、MainShellで読み取り
 *   **UI**: TabBar + TabBarView でカテゴリごとにタスクリストを表示
+*   **カテゴリ変更**: TaskDetailSheet内にChoiceChipでカテゴリ選択UI
+*   **copyWith対応**: `TaskModel.copyWith`に`clearCategoryId`フラグを追加し、nullへの変更に対応
+
