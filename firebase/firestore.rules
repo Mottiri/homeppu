@@ -82,7 +82,7 @@ service cloud.firestore {
       // 作成: クライアントからの直接作成を禁止（Cloud Functions経由のみ）
       allow create: if false;
       
-      // 更新: 投稿者のみ（リアクションは誰でも更新可能、サークルオーナーはピン留めも可能）
+      // 更新: 投稿者のみ（リアクションは誰でも更新可能、サークルオーナーはピン留めも可能、管理者はneedsReview）
       allow update: if isAuthenticated() && (
         isOwner(resource.data.userId) ||
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions', 'commentCount']) ||
@@ -90,7 +90,10 @@ service cloud.firestore {
         (resource.data.circleId != null && 
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isPinned', 'isPinnedTop']) &&
          exists(/databases/$(database)/documents/circles/$(resource.data.circleId)) &&
-         get(/databases/$(database)/documents/circles/$(resource.data.circleId)).data.ownerId == request.auth.uid)
+         get(/databases/$(database)/documents/circles/$(resource.data.circleId)).data.ownerId == request.auth.uid) ||
+        // 管理者はneedsReviewを更新可能
+        (request.auth.uid == 'hYr5LUH4mhR60oQfVOggrjGYJjG2' &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['needsReview']))
       );
       
       // 削除: 投稿者 または サークル投稿の場合はサークルオーナーも可
@@ -203,6 +206,19 @@ service cloud.firestore {
       // すべてCloud Functionsで管理
       allow read, write: if false;
     }
+
+    // 要審査投稿コレクション（管理者専用）
+    match /pendingReviews/{reviewId} {
+      // 管理者のみ読み取り可能
+      allow read: if isAuthenticated() && request.auth.uid == 'hYr5LUH4mhR60oQfVOggrjGYJjG2';
+      // 管理者のみ更新可能（承認/削除後の状態更新）
+      allow update: if isAuthenticated() && request.auth.uid == 'hYr5LUH4mhR60oQfVOggrjGYJjG2';
+      // 作成・削除はCloud Functionsのみ
+      allow create, delete: if false;
+    }
+
+    // 投稿の管理者更新許可（needsReviewフラグ）
+    // ※postsコレクションの既存ルールを活用
   }
 }
 

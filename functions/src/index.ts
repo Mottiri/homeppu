@@ -1910,6 +1910,16 @@ export const createPostWithModeration = onCall(
     let needsReviewReason = "";
 
     // ===============================================
+    // テスト用: 管理者の添付付き投稿は常にフラグを付ける
+    // ===============================================
+    const ADMIN_UID = "hYr5LUH4mhR60oQfVOggrjGYJjG2";
+    if (userId === ADMIN_UID && mediaItems && Array.isArray(mediaItems) && mediaItems.length > 0) {
+      needsReview = true;
+      needsReviewReason = "【テスト】管理者の添付付き投稿";
+      console.log(`TEST FLAG: Admin post with media flagged for review`);
+    }
+
+    // ===============================================
     // 0. 静的NGワードチェック (Internal Logic)
     // ===============================================
     if (content) {
@@ -2160,7 +2170,7 @@ ${content}
     });
 
     // 管理者に通知（フラグ付き投稿の場合）
-    const ADMIN_UID = "hYr5LUH4mhR60oQfVOggrjGYJjG2";
+    // ADMIN_UIDは上部で定義済み
     if (needsReview) {
       console.log(`Notifying admin about flagged post: ${postRef.id}`);
       try {
