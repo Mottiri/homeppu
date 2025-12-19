@@ -99,7 +99,8 @@ class MediaService {
         contentType: _getMimeType(extension),
         customMetadata: {
           'originalFileName': fileName ?? path.basename(filePath),
-          'uploadedAt': DateTime.now().toIso8601String(),
+          'uploadedAt': DateTime.now().millisecondsSinceEpoch.toString(),
+          'postId': 'PENDING', // 投稿前は PENDING、投稿後に実際のpostIdに更新
         },
       ),
     );

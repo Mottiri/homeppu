@@ -2235,6 +2235,37 @@ ${content}
       }
     }
 
+    // ===============================================
+    // 5. Storageメディアのメタデータを更新（postId: PENDING → 実際のpostId）
+    // ===============================================
+    if (mediaItems && Array.isArray(mediaItems) && mediaItems.length > 0) {
+      console.log(`Updating metadata for ${mediaItems.length} media files...`);
+      const bucket = admin.storage().bucket();
+
+      for (const item of mediaItems as MediaItem[]) {
+        try {
+          // URLからStorageパスを抽出
+          const url = new URL(item.url);
+          const pathMatch = url.pathname.match(/\/o\/(.+?)(\?|$)/);
+          if (pathMatch) {
+            const storagePath = decodeURIComponent(pathMatch[1]);
+            const file = bucket.file(storagePath);
+
+            // メタデータを更新
+            await file.setMetadata({
+              metadata: {
+                postId: postRef.id,
+              },
+            });
+            console.log(`Updated metadata: ${storagePath} → postId=${postRef.id}`);
+          }
+        } catch (metadataError) {
+          console.error(`Failed to update metadata for ${item.url}:`, metadataError);
+          // メタデータ更新失敗しても投稿自体は成功扱い
+        }
+      }
+    }
+
     // ユーザーの投稿数を更新
     await db.collection("users").doc(userId).update({
       totalPosts: admin.firestore.FieldValue.increment(1),
@@ -5589,5 +5620,140 @@ export const moderateImageCallable = onCall(
         reason: "モデレーションエラー",
       };
     }
+  }
+);
+
+/**
+ * 孤立メディアクリーンアップ
+ * Cloud Schedulerで毎日実行
+ * 24時間以上経過した孤立メディアを削除
+ */
+export const cleanupOrphanedMedia = onSchedule(
+  {
+    schedule: "0 3 * * *", // 毎日午前3時 JST
+    timeZone: "Asia/Tokyo",
+    region: "asia-northeast1",
+  },
+  async () => {
+    console.log("=== cleanupOrphanedMedia START ===");
+    const bucket = admin.storage().bucket();
+    const now = Date.now();
+    const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+
+    let deletedCount = 0;
+    let checkedCount = 0;
+
+    // ===============================================
+    // 1. 投稿メディアのクリーンアップ
+    // ===============================================
+    console.log("Checking posts media...");
+    const [postFiles] = await bucket.getFiles({ prefix: "posts/" });
+
+    for (const file of postFiles) {
+      checkedCount++;
+      try {
+        const [metadata] = await file.getMetadata();
+        const customMetadata = metadata.metadata || {};
+        const uploadedAtStr = customMetadata.uploadedAt;
+        const uploadedAt = uploadedAtStr ? parseInt(String(uploadedAtStr)) : 0;
+        const postId = customMetadata.postId ? String(customMetadata.postId) : null;
+
+        // 24時間以上経過していないならスキップ
+        if (now - uploadedAt < TWENTY_FOUR_HOURS) continue;
+
+        // postId未設定（古いファイル）はスキップ
+        if (!postId) continue;
+
+        let shouldDelete = false;
+
+        if (postId === "PENDING") {
+          // 投稿前に離脱したケース
+          shouldDelete = true;
+          console.log(`Orphan (PENDING): ${file.name}`);
+        } else {
+          // 投稿が存在するか確認
+          const postDoc = await db.collection("posts").doc(postId).get();
+          if (!postDoc.exists) {
+            shouldDelete = true;
+            console.log(`Orphan (post deleted): ${file.name}`);
+          }
+        }
+
+        if (shouldDelete) {
+          await file.delete();
+          deletedCount++;
+        }
+      } catch (error) {
+        console.error(`Error checking ${file.name}:`, error);
+      }
+    }
+
+    // ===============================================
+    // 2. サークル画像のクリーンアップ
+    // ===============================================
+    console.log("Checking circles media...");
+    const [circleFiles] = await bucket.getFiles({ prefix: "circles/" });
+
+    for (const file of circleFiles) {
+      checkedCount++;
+      try {
+        const [metadata] = await file.getMetadata();
+        const timeCreated = metadata.timeCreated;
+        const createdAt = timeCreated ? new Date(timeCreated).getTime() : 0;
+
+        // 24時間以上経過していないならスキップ
+        if (now - createdAt < TWENTY_FOUR_HOURS) continue;
+
+        // パスからcircleIdを抽出: circles/{circleId}/icon/{fileName}
+        const pathParts = file.name.split("/");
+        if (pathParts.length >= 2) {
+          const circleId = pathParts[1];
+          const circleDoc = await db.collection("circles").doc(circleId).get();
+
+          if (!circleDoc.exists) {
+            console.log(`Orphan (circle deleted): ${file.name}`);
+            await file.delete();
+            deletedCount++;
+          }
+        }
+      } catch (error) {
+        console.error(`Error checking ${file.name}:`, error);
+      }
+    }
+
+    // ===============================================
+    // 3. タスク添付のクリーンアップ
+    // ===============================================
+    console.log("Checking task attachments...");
+    const [taskFiles] = await bucket.getFiles({ prefix: "task_attachments/" });
+
+    for (const file of taskFiles) {
+      checkedCount++;
+      try {
+        const [metadata] = await file.getMetadata();
+        const taskTimeCreated = metadata.timeCreated;
+        const taskCreatedAt = taskTimeCreated ? new Date(taskTimeCreated).getTime() : 0;
+
+        // 24時間以上経過していないならスキップ
+        if (now - taskCreatedAt < TWENTY_FOUR_HOURS) continue;
+
+        // パスからtaskIdを抽出: task_attachments/{userId}/{taskId}/{fileName}
+        const pathParts = file.name.split("/");
+        if (pathParts.length >= 3) {
+          const taskId = pathParts[2];
+          const taskDoc = await db.collection("tasks").doc(taskId).get();
+
+          if (!taskDoc.exists) {
+            console.log(`Orphan (task deleted): ${file.name}`);
+            await file.delete();
+            deletedCount++;
+          }
+        }
+      } catch (error) {
+        console.error(`Error checking ${file.name}:`, error);
+      }
+    }
+
+    console.log(`=== cleanupOrphanedMedia COMPLETE: checked=${checkedCount}, deleted=${deletedCount} ===`);
   }
 );
