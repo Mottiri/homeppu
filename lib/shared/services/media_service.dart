@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
@@ -240,13 +241,25 @@ class MediaService {
   /// メディアを削除
   Future<void> deleteMedia(String url) async {
     try {
-      debugPrint('MediaService.deleteMedia: Attempting to delete $url');
+      debugPrint('MediaService.deleteMedia: Attempting to delete');
+      debugPrint('  URL: $url');
+
       final ref = _storage.refFromURL(url);
+      final fullPath = ref.fullPath;
+      debugPrint('  Extracted path: $fullPath');
+
       await ref.delete();
-      debugPrint('MediaService.deleteMedia: Successfully deleted $url');
-    } catch (e) {
-      // 削除に失敗しても続行
-      debugPrint('MediaService.deleteMedia: Failed to delete $url - $e');
+      debugPrint('MediaService.deleteMedia: ✓ Successfully deleted $fullPath');
+    } on FirebaseException catch (e) {
+      debugPrint('MediaService.deleteMedia: ✗ FirebaseException');
+      debugPrint('  Code: ${e.code}');
+      debugPrint('  Message: ${e.message}');
+      debugPrint('  URL: $url');
+    } catch (e, stackTrace) {
+      debugPrint('MediaService.deleteMedia: ✗ Error: $e');
+      debugPrint('  Type: ${e.runtimeType}');
+      debugPrint('  URL: $url');
+      debugPrint('  Stack: $stackTrace');
     }
   }
 
