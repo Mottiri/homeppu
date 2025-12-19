@@ -111,6 +111,95 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     }
   }
 
+  /// メディアセクションを構築
+  Widget _buildMediaSection(BuildContext context, PostModel post) {
+    final mediaItems = post.allMedia;
+    if (mediaItems.isEmpty) return const SizedBox.shrink();
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Column(
+        children: mediaItems.map((media) {
+          if (media.type == MediaType.image) {
+            return GestureDetector(
+              onTap: () => _showFullScreenImage(context, media.url),
+              child: Container(
+                constraints: const BoxConstraints(maxHeight: 300),
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 8),
+                child: Image.network(
+                  media.url,
+                  fit: BoxFit.cover,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Container(
+                      height: 200,
+                      color: Colors.grey[200],
+                      child: const Center(
+                        child: CircularProgressIndicator(
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    );
+                  },
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      height: 200,
+                      color: Colors.grey[200],
+                      child: const Center(
+                        child: Icon(Icons.broken_image, size: 48),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            );
+          } else if (media.type == MediaType.video) {
+            // 動画の場合はサムネイル表示（将来的には再生可能に）
+            return Container(
+              height: 200,
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 8),
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.videocam, size: 48, color: Colors.white70),
+                    SizedBox(height: 8),
+                    Text('動画', style: TextStyle(color: Colors.white70)),
+                  ],
+                ),
+              ),
+            );
+          }
+          return const SizedBox.shrink();
+        }).toList(),
+      ),
+    );
+  }
+
+  /// フルスクリーン画像表示
+  void _showFullScreenImage(BuildContext context, String imageUrl) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            iconTheme: const IconThemeData(color: Colors.white),
+          ),
+          body: Center(
+            child: InteractiveViewer(child: Image.network(imageUrl)),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     timeago.setLocaleMessages('ja', timeago.JaMessages());
@@ -244,6 +333,12 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                           .bodyLarge
                                           ?.copyWith(height: 1.8, fontSize: 16),
                                     ),
+
+                                    // メディア表示
+                                    if (post.allMedia.isNotEmpty) ...[
+                                      const SizedBox(height: 16),
+                                      _buildMediaSection(context, post),
+                                    ],
 
                                     const SizedBox(height: 20),
 
