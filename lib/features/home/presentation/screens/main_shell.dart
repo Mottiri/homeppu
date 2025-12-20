@@ -8,6 +8,7 @@ import '../../../../shared/services/category_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../shared/providers/task_screen_provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'home_screen.dart'; // timelineRefreshProvider
 
 /// メイン画面のシェル（ボトムナビゲーション）
 class MainShell extends ConsumerStatefulWidget {
@@ -62,7 +63,12 @@ class _MainShellState extends ConsumerState<MainShell>
       context.push('/create-circle');
     } else {
       // その他（ホーム等）：投稿作成画面へ遷移
-      context.push('/create-post');
+      final result = await context.push<bool>('/create-post');
+
+      // 投稿作成成功後、タイムラインをリロード
+      if (result == true && mounted) {
+        ref.read(timelineRefreshProvider.notifier).state++;
+      }
     }
   }
 

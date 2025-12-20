@@ -11,7 +11,9 @@ import '../../../../shared/repositories/notification_repository.dart';
 import '../widgets/post_card.dart';
 import 'package:go_router/go_router.dart';
 
-/// ホーム画面（タイムライン）
+/// タイムラインリフレッシュ用のProvider（投稿作成後にインクリメント）
+final timelineRefreshProvider = StateProvider<int>((ref) => 0);
+
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -22,6 +24,10 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+
+  // 新着投稿フラグ
+  bool _hasNewRecommendedPosts = false;
+  bool _hasNewFollowingPosts = false;
 
   @override
   void initState() {
@@ -38,6 +44,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   @override
   Widget build(BuildContext context) {
     final currentUser = ref.watch(currentUserProvider);
+    final refreshKey = ref.watch(timelineRefreshProvider); // リフレッシュキーを取得
 
     return Scaffold(
       body: Container(
@@ -154,9 +161,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         fontWeight: FontWeight.normal,
                         fontSize: 15,
                       ),
-                      tabs: const [
-                        Tab(text: 'おすすめ'),
-                        Tab(text: 'フォロー中'),
+                      tabs: [
+                        _buildTabWithDot('おすすめ', _hasNewRecommendedPosts),
+                        _buildTabWithDot('フォロー中', _hasNewFollowingPosts),
                       ],
                     ),
                   ),
@@ -170,16 +177,50 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 _TimelineTab(
                   isFollowingOnly: false,
                   currentUser: currentUser.valueOrNull,
+                  refreshKey: refreshKey,
+                  onNewPostsChanged: (hasNew) {
+                    if (mounted && _hasNewRecommendedPosts != hasNew) {
+                      setState(() => _hasNewRecommendedPosts = hasNew);
+                    }
+                  },
                 ),
                 // フォロー中タブ
                 _TimelineTab(
                   isFollowingOnly: true,
                   currentUser: currentUser.valueOrNull,
+                  refreshKey: refreshKey,
+                  onNewPostsChanged: (hasNew) {
+                    if (mounted && _hasNewFollowingPosts != hasNew) {
+                      setState(() => _hasNewFollowingPosts = hasNew);
+                    }
+                  },
                 ),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  /// タブに新着ドットを表示
+  Widget _buildTabWithDot(String text, bool hasNew) {
+    return Tab(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(text),
+          if (hasNew)
+            Container(
+              margin: const EdgeInsets.only(left: 4),
+              width: 6,
+              height: 6,
+              decoration: const BoxDecoration(
+                color: AppColors.primary,
+                shape: BoxShape.circle,
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -208,7 +249,8 @@ class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   bool shouldRebuild(_SliverTabBarDelegate oldDelegate) {
-    return false;
+    // タブバーが変わった場合は再構築（新着ドット表示のため）
+    return tabBar != oldDelegate.tabBar;
   }
 }
 
@@ -216,10 +258,14 @@ class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
 class _TimelineTab extends StatelessWidget {
   final bool isFollowingOnly;
   final UserModel? currentUser;
+  final ValueChanged<bool>? onNewPostsChanged;
+  final int refreshKey;
 
   const _TimelineTab({
     required this.isFollowingOnly,
     required this.currentUser,
+    this.onNewPostsChanged,
+    this.refreshKey = 0,
   });
 
   String? get currentUserId => currentUser?.uid;
@@ -256,6 +302,8 @@ class _TimelineTab extends StatelessWidget {
                 .limit(AppConstants.postsPerPage),
             isAIViewer: currentUser!.isAI,
             currentUserId: currentUserId,
+            onNewPostsChanged: onNewPostsChanged,
+            refreshKey: refreshKey,
           );
         },
       );
@@ -270,107 +318,274 @@ class _TimelineTab extends StatelessWidget {
           .limit(AppConstants.postsPerPage),
       isAIViewer: currentUser?.isAI ?? false,
       currentUserId: currentUserId,
+      onNewPostsChanged: onNewPostsChanged,
+      refreshKey: refreshKey,
     );
   }
 }
 
-/// 投稿リスト
-class _PostsList extends StatelessWidget {
+/// 投稿リスト（プル更新方式 + 無限スクロール）
+class _PostsList extends StatefulWidget {
   final Query query;
   final bool isAIViewer;
   final String? currentUserId;
+  final ValueChanged<bool>? onNewPostsChanged;
+  final int refreshKey; // リフレッシュ用のキー
 
   const _PostsList({
     required this.query,
     this.isAIViewer = false,
     this.currentUserId,
+    this.onNewPostsChanged,
+    this.refreshKey = 0,
   });
 
   @override
+  State<_PostsList> createState() => _PostsListState();
+}
+
+class _PostsListState extends State<_PostsList> {
+  List<PostModel> _posts = [];
+  DocumentSnapshot? _lastDocument;
+  bool _hasMore = true;
+  bool _isLoading = true;
+  bool _isLoadingMore = false;
+  bool _hasError = false;
+  String? _latestPostId;
+  Stream<QuerySnapshot>? _newPostsStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPosts();
+    _listenForNewPosts();
+  }
+
+  @override
+  void didUpdateWidget(_PostsList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // クエリが変わった場合、またはrefreshKeyが変わった場合は再読み込み
+    if (widget.query != oldWidget.query ||
+        widget.refreshKey != oldWidget.refreshKey) {
+      _loadPosts();
+      _listenForNewPosts();
+    }
+  }
+
+  /// 初回読み込み & プルダウン時の読み込み
+  Future<void> _loadPosts() async {
+    setState(() {
+      _isLoading = true;
+      _hasError = false;
+    });
+
+    try {
+      final snapshot = await widget.query
+          .limit(AppConstants.postsPerPage)
+          .get();
+      var posts = snapshot.docs
+          .map((doc) => PostModel.fromFirestore(doc))
+          .where((post) => post.circleId == null || post.circleId!.isEmpty)
+          .toList();
+
+      // AIモードのフィルタリング
+      if (!widget.isAIViewer) {
+        posts = posts
+            .where(
+              (post) =>
+                  post.postMode != 'ai' || post.userId == widget.currentUserId,
+            )
+            .toList();
+      }
+
+      setState(() {
+        _posts = posts;
+        _lastDocument = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
+        _hasMore = snapshot.docs.length == AppConstants.postsPerPage;
+        _isLoading = false;
+        _latestPostId = posts.isNotEmpty ? posts.first.id : null;
+      });
+
+      // 新着フラグをリセット
+      widget.onNewPostsChanged?.call(false);
+    } catch (e) {
+      debugPrint('Error loading posts: $e');
+      setState(() {
+        _isLoading = false;
+        _hasError = true;
+      });
+    }
+  }
+
+  /// 追加読み込み（無限スクロール）
+  Future<void> _loadMorePosts() async {
+    if (!_hasMore || _isLoadingMore || _lastDocument == null) return;
+
+    setState(() => _isLoadingMore = true);
+
+    try {
+      final snapshot = await widget.query
+          .limit(AppConstants.postsPerPage)
+          .startAfterDocument(_lastDocument!)
+          .get();
+
+      var newPosts = snapshot.docs
+          .map((doc) => PostModel.fromFirestore(doc))
+          .where((post) => post.circleId == null || post.circleId!.isEmpty)
+          .toList();
+
+      // AIモードのフィルタリング
+      if (!widget.isAIViewer) {
+        newPosts = newPosts
+            .where(
+              (post) =>
+                  post.postMode != 'ai' || post.userId == widget.currentUserId,
+            )
+            .toList();
+      }
+
+      setState(() {
+        _posts.addAll(newPosts);
+        _lastDocument = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
+        _hasMore = snapshot.docs.length == AppConstants.postsPerPage;
+        _isLoadingMore = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading more posts: $e');
+      setState(() => _isLoadingMore = false);
+    }
+  }
+
+  /// 新着検知（NEWラベル表示用）- 新しい投稿のみ検知
+  void _listenForNewPosts() {
+    _newPostsStream = widget.query.limit(1).snapshots();
+    _newPostsStream!.listen((snapshot) {
+      if (!mounted) return;
+      if (snapshot.docs.isEmpty) return;
+
+      final latestDoc = snapshot.docs.first;
+      final latestId = latestDoc.id;
+
+      debugPrint('🔔 新着検知: latestId=$latestId, _latestPostId=$_latestPostId');
+
+      // 新着のみドット表示（IDが変わり、かつ最新の投稿IDでない場合）
+      // 削除時はリストから消えるだけなので、latestIdが_posts内にあればドット表示しない
+      if (_latestPostId != null && latestId != _latestPostId) {
+        // _postsリストにlatestIdがなければ新着
+        final isNewPost = !_posts.any((p) => p.id == latestId);
+        if (isNewPost) {
+          debugPrint('🔔 新着あり！ドット表示');
+          widget.onNewPostsChanged?.call(true);
+        } else {
+          debugPrint('🔔 削除による変更（ドット表示しない）');
+        }
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: query.snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircularProgressIndicator(color: AppColors.primary),
-                SizedBox(height: 16),
-                Text('みんなの投稿を読み込み中...'),
-              ],
+    if (_isLoading) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(color: AppColors.primary),
+            SizedBox(height: 16),
+            Text('みんなの投稿を読み込み中...'),
+          ],
+        ),
+      );
+    }
+
+    if (_hasError) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text('😢', style: TextStyle(fontSize: 48)),
+            const SizedBox(height: 16),
+            Text(
+              AppConstants.friendlyMessages['error_general']!,
+              textAlign: TextAlign.center,
             ),
-          );
-        }
+            const SizedBox(height: 16),
+            ElevatedButton(onPressed: _loadPosts, child: const Text('再読み込み')),
+          ],
+        ),
+      );
+    }
 
-        if (snapshot.hasError) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text('😢', style: TextStyle(fontSize: 48)),
-                const SizedBox(height: 16),
-                Text(
-                  AppConstants.friendlyMessages['error_general']!,
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          );
-        }
-
-        // 投稿をフィルタリング
-        // AIアカウント: 全モードの投稿を見れる
-        // 人間アカウント: 'mix'と'human'の投稿のみ見れる（'ai'モードは見えない）
-        // ただし、自分の投稿は常に見える
-        // サークル投稿は除外（circleIdがnullまたは空でない場合）
-        var posts =
-            snapshot.data?.docs
-                .map((doc) => PostModel.fromFirestore(doc))
-                .where(
-                  (post) => post.circleId == null || post.circleId!.isEmpty,
-                ) // サークル投稿を除外
-                .toList() ??
-            [];
-
-        if (!isAIViewer) {
-          // 人間アカウントの場合、'ai'モードの投稿を除外（自分の投稿は除外しない）
-          posts = posts
-              .where(
-                (post) => post.postMode != 'ai' || post.userId == currentUserId,
-              )
-              .toList();
-        }
-
-        if (posts.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text('✨', style: TextStyle(fontSize: 64)),
-                const SizedBox(height: 16),
-                Text('まだ投稿がないよ', style: Theme.of(context).textTheme.titleLarge),
-                const SizedBox(height: 8),
-                Text(
-                  '最初の投稿をしてみよう！',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textSecondary,
+    if (_posts.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _loadPosts,
+        color: AppColors.primary,
+        child: ListView(
+          children: [
+            SizedBox(height: MediaQuery.of(context).size.height * 0.3),
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text('✨', style: TextStyle(fontSize: 64)),
+                  const SizedBox(height: 16),
+                  Text(
+                    'まだ投稿がないよ',
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  Text(
+                    '最初の投稿をしてみよう！',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          );
-        }
+          ],
+        ),
+      );
+    }
 
-        return ListView.builder(
-          padding: const EdgeInsets.only(bottom: 120),
-          itemCount: posts.length,
-          itemBuilder: (context, index) {
-            return PostCard(post: posts[index]);
-          },
-        );
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        // スクロール末尾に近づいたら追加読み込み
+        if (notification is ScrollEndNotification &&
+            notification.metrics.extentAfter < 300) {
+          _loadMorePosts();
+        }
+        return false;
       },
+      child: RefreshIndicator(
+        onRefresh: _loadPosts,
+        color: AppColors.primary,
+        child: ListView.builder(
+          padding: const EdgeInsets.only(bottom: 120),
+          itemCount: _posts.length + (_isLoadingMore ? 1 : 0),
+          itemBuilder: (context, index) {
+            if (index == _posts.length) {
+              // ローディングインジケーター
+              return const Padding(
+                padding: EdgeInsets.all(16),
+                child: Center(
+                  child: CircularProgressIndicator(color: AppColors.primary),
+                ),
+              );
+            }
+            return PostCard(
+              key: ValueKey(_posts[index].id),
+              post: _posts[index],
+              onDeleted: () {
+                // 自分の投稿を削除した場合、ローカルリストから即座に削除
+                setState(() {
+                  _posts.removeAt(index);
+                });
+              },
+            );
+          },
+        ),
+      ),
     );
   }
 }

@@ -6,13 +6,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/constants/app_constants.dart';
 import '../../../../shared/models/post_model.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
 import '../../../../shared/widgets/report_dialog.dart';
 import '../../../../shared/widgets/video_player_screen.dart';
 import '../../../../shared/services/media_service.dart';
-import 'reaction_button.dart';
 import 'reaction_background.dart';
 
 import 'reaction_selection_sheet.dart';
@@ -362,39 +360,20 @@ class _PostCardState extends State<PostCard> {
                         },
                       ),
                       const SizedBox(width: 8),
-                      // コメント数（表示可能なもののみカウント）
-                      StreamBuilder<QuerySnapshot>(
-                        stream: FirebaseFirestore.instance
-                            .collection('comments')
-                            .where('postId', isEqualTo: post.id)
-                            .snapshots(),
-                        builder: (context, snapshot) {
-                          int visibleCount = 0;
-                          if (snapshot.hasData) {
-                            final now = DateTime.now();
-                            visibleCount = snapshot.data!.docs.where((doc) {
-                              final data = doc.data() as Map<String, dynamic>;
-                              final scheduledAt =
-                                  data['scheduledAt'] as Timestamp?;
-                              if (scheduledAt == null) return true;
-                              return now.isAfter(scheduledAt.toDate());
-                            }).length;
-                          }
-                          return Row(
-                            children: [
-                              const Icon(
-                                Icons.chat_bubble_outline,
-                                size: 18,
-                                color: AppColors.textHint,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '$visibleCount',
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ],
-                          );
-                        },
+                      // コメント数（PostModelから取得）
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.chat_bubble_outline,
+                            size: 18,
+                            color: AppColors.textHint,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${post.commentCount}',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
                       ),
                       const SizedBox(width: 4),
                     ],

@@ -272,7 +272,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
             backgroundColor: AppColors.success,
           ),
         );
-        context.pop();
+        context.pop(true); // 成功を返す（ホーム画面でリロードするため）
       }
     } on ModerationException catch (e) {
       if (mounted) {

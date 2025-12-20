@@ -1066,7 +1066,6 @@ export const onPostCreated = onDocumentCreated(
       console.log(`Using ${selectedPersonas.length} general AIs for comments`);
     }
 
-    const batch = db.batch();
     let totalComments = 0;
 
     // 投稿者の名前を取得
@@ -1136,15 +1135,8 @@ export const onPostCreated = onDocumentCreated(
       }
     }
 
-    // コメント数（予定）を更新
-    // ※実際にコメントされる前にカウントを増やすかどうかは議論の余地ありだが、
-    // 「賑わってる感」を出すために先行して増やしておく（失敗したらズレるが許容）
-    if (totalComments > 0) {
-      batch.update(snap.ref, {
-        commentCount: admin.firestore.FieldValue.increment(totalComments),
-      });
-      await batch.commit();
-    }
+    // コメント数はAIコメント生成時（generateAICommentV1）でインクリメントする
+    // 先行インクリメントは削除（実際のコメント数のみ表示するため）
 
     // ===========================================
     // 2. AIリアクションの大量投下 (5〜15件、平均10件)
@@ -3154,10 +3146,11 @@ ${mediaDescriptions && mediaDescriptions.length > 0
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    // 3. 投稿のリアクションカウント更新
+    // 3. 投稿のリアクションカウント・コメント数を更新
     const postRef = db.collection("posts").doc(postId);
     batch.update(postRef, {
       [`reactions.${reactionType}`]: admin.firestore.FieldValue.increment(1),
+      commentCount: admin.firestore.FieldValue.increment(1),
     });
 
     await batch.commit();

@@ -416,8 +416,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 }
 
-/// ユーザーの投稿一覧
-class _UserPostsList extends StatelessWidget {
+/// ユーザーの投稿一覧（プル更新方式）
+class _UserPostsList extends StatefulWidget {
   final String userId;
   final bool isMyProfile;
   final bool viewerIsAI;
@@ -429,85 +429,161 @@ class _UserPostsList extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
+  State<_UserPostsList> createState() => _UserPostsListState();
+}
+
+class _UserPostsListState extends State<_UserPostsList> {
+  List<PostModel> _posts = [];
+  DocumentSnapshot? _lastDocument;
+  bool _hasMore = true;
+  bool _isLoading = true;
+  bool _isLoadingMore = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPosts();
+  }
+
+  Future<void> _loadPosts() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final snapshot = await FirebaseFirestore.instance
           .collection('posts')
-          .where('userId', isEqualTo: userId)
+          .where('userId', isEqualTo: widget.userId)
           .orderBy('createdAt', descending: true)
           .limit(20)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SliverToBoxAdapter(
-            child: Center(
-              child: Padding(
-                padding: EdgeInsets.all(32),
+          .get();
+
+      var posts = snapshot.docs
+          .map((doc) => PostModel.fromFirestore(doc))
+          .toList();
+
+      // AIモードのフィルタリング
+      if (!widget.isMyProfile && !widget.viewerIsAI) {
+        posts = posts.where((post) => post.postMode != 'ai').toList();
+      }
+
+      if (mounted) {
+        setState(() {
+          _posts = posts;
+          _lastDocument = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
+          _hasMore = snapshot.docs.length == 20;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading user posts: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _loadMorePosts() async {
+    if (!_hasMore || _isLoadingMore || _lastDocument == null) return;
+
+    setState(() => _isLoadingMore = true);
+
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('posts')
+          .where('userId', isEqualTo: widget.userId)
+          .orderBy('createdAt', descending: true)
+          .limit(20)
+          .startAfterDocument(_lastDocument!)
+          .get();
+
+      var newPosts = snapshot.docs
+          .map((doc) => PostModel.fromFirestore(doc))
+          .toList();
+
+      // AIモードのフィルタリング
+      if (!widget.isMyProfile && !widget.viewerIsAI) {
+        newPosts = newPosts.where((post) => post.postMode != 'ai').toList();
+      }
+
+      if (mounted) {
+        setState(() {
+          _posts.addAll(newPosts);
+          _lastDocument = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
+          _hasMore = snapshot.docs.length == 20;
+          _isLoadingMore = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading more user posts: $e');
+      if (mounted) {
+        setState(() => _isLoadingMore = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const SliverToBoxAdapter(
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.all(32),
+            child: CircularProgressIndicator(color: AppColors.primary),
+          ),
+        ),
+      );
+    }
+
+    if (_posts.isEmpty) {
+      return const SliverToBoxAdapter(
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.all(32),
+            child: Column(
+              children: [
+                Text('📝', style: TextStyle(fontSize: 48)),
+                SizedBox(height: 8),
+                Text(
+                  'まだ投稿がないよ',
+                  style: TextStyle(color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return SliverList(
+      delegate: SliverChildBuilderDelegate((context, index) {
+        if (index == _posts.length) {
+          if (_isLoadingMore) {
+            return const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(
                 child: CircularProgressIndicator(color: AppColors.primary),
               ),
-            ),
-          );
+            );
+          }
+          if (_hasMore) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _loadMorePosts();
+            });
+          }
+          return const SizedBox.shrink();
         }
 
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const SliverToBoxAdapter(
-            child: Center(
-              child: Padding(
-                padding: EdgeInsets.all(32),
-                child: Column(
-                  children: [
-                    Text('📝', style: TextStyle(fontSize: 48)),
-                    SizedBox(height: 8),
-                    Text(
-                      'まだ投稿がないよ',
-                      style: TextStyle(color: AppColors.textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }
-
-        // 投稿をフィルタリング
-        // 自分のプロフィール: 全投稿を表示
-        // 他人のプロフィール + AIアカウント: 全投稿を表示
-        // 他人のプロフィール + 人間アカウント: 'ai'モードの投稿を除外
-        var posts = snapshot.data!.docs
-            .map((doc) => PostModel.fromFirestore(doc))
-            .toList();
-
-        if (!isMyProfile && !viewerIsAI) {
-          posts = posts.where((post) => post.postMode != 'ai').toList();
-        }
-
-        if (posts.isEmpty) {
-          return const SliverToBoxAdapter(
-            child: Center(
-              child: Padding(
-                padding: EdgeInsets.all(32),
-                child: Column(
-                  children: [
-                    Text('📝', style: TextStyle(fontSize: 48)),
-                    SizedBox(height: 8),
-                    Text(
-                      'まだ投稿がないよ',
-                      style: TextStyle(color: AppColors.textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }
-
-        return SliverList(
-          delegate: SliverChildBuilderDelegate((context, index) {
-            final post = posts[index];
-            return _ProfilePostCard(post: post, isMyProfile: isMyProfile);
-          }, childCount: posts.length),
+        final post = _posts[index];
+        return _ProfilePostCard(
+          post: post,
+          isMyProfile: widget.isMyProfile,
+          onDeleted: () {
+            // 自分の投稿を削除した場合、ローカルリストから即座に削除
+            setState(() {
+              _posts.removeAt(index);
+            });
+          },
         );
-      },
+      }, childCount: _posts.length + (_hasMore ? 1 : 0)),
     );
   }
 }
@@ -516,8 +592,13 @@ class _UserPostsList extends StatelessWidget {
 class _ProfilePostCard extends StatefulWidget {
   final PostModel post;
   final bool isMyProfile;
+  final VoidCallback? onDeleted;
 
-  const _ProfilePostCard({required this.post, this.isMyProfile = false});
+  const _ProfilePostCard({
+    required this.post,
+    this.isMyProfile = false,
+    this.onDeleted,
+  });
 
   @override
   State<_ProfilePostCard> createState() => _ProfilePostCardState();
@@ -595,6 +676,8 @@ class _ProfilePostCardState extends State<_ProfilePostCard> {
             backgroundColor: Colors.green,
           ),
         );
+        // 親のリストから削除
+        widget.onDeleted?.call();
       }
     } catch (e) {
       if (mounted) {
@@ -697,40 +780,21 @@ class _ProfilePostCardState extends State<_ProfilePostCard> {
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                       const SizedBox(width: 12),
-                      // コメント数（表示可能なもののみカウント）
-                      StreamBuilder<QuerySnapshot>(
-                        stream: FirebaseFirestore.instance
-                            .collection('comments')
-                            .where('postId', isEqualTo: widget.post.id)
-                            .snapshots(),
-                        builder: (context, snapshot) {
-                          int visibleCount = 0;
-                          if (snapshot.hasData) {
-                            final now = DateTime.now();
-                            visibleCount = snapshot.data!.docs.where((doc) {
-                              final data = doc.data() as Map<String, dynamic>;
-                              final scheduledAt =
-                                  data['scheduledAt'] as Timestamp?;
-                              if (scheduledAt == null) return true;
-                              return now.isAfter(scheduledAt.toDate());
-                            }).length;
-                          }
-                          return Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.chat_bubble_outline,
-                                size: 16,
-                                color: AppColors.textHint,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '$visibleCount',
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ],
-                          );
-                        },
+                      // コメント数（PostModelから取得）
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.chat_bubble_outline,
+                            size: 16,
+                            color: AppColors.textHint,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${widget.post.commentCount}',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
                       ),
                     ],
                   ),

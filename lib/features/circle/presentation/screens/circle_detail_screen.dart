@@ -27,6 +27,117 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
   bool _hasCheckedPending = false;
   String? _lastCheckedUserId;
 
+  // 投稿リスト用の状態変数（プル更新方式）
+  List<PostModel> _posts = [];
+  DocumentSnapshot? _lastDocument;
+  bool _hasMorePosts = true;
+  bool _isLoadingPosts = true;
+  bool _isLoadingMorePosts = false;
+  bool _hasNewPosts = false;
+  String? _latestPostId;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPosts();
+    _listenForNewPosts();
+  }
+
+  /// 投稿リストを読み込み
+  Future<void> _loadPosts() async {
+    setState(() => _isLoadingPosts = true);
+
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('posts')
+          .where('circleId', isEqualTo: widget.circleId)
+          .where('isVisible', isEqualTo: true)
+          .orderBy('createdAt', descending: true)
+          .limit(AppConstants.postsPerPage)
+          .get();
+
+      final posts = snapshot.docs
+          .map((doc) => PostModel.fromFirestore(doc))
+          .toList();
+
+      if (mounted) {
+        setState(() {
+          _posts = posts;
+          _lastDocument = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
+          _hasMorePosts = snapshot.docs.length == AppConstants.postsPerPage;
+          _isLoadingPosts = false;
+          _hasNewPosts = false;
+          _latestPostId = posts.isNotEmpty ? posts.first.id : null;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading circle posts: $e');
+      if (mounted) {
+        setState(() => _isLoadingPosts = false);
+      }
+    }
+  }
+
+  /// 追加読み込み（無限スクロール）
+  Future<void> _loadMorePosts() async {
+    if (!_hasMorePosts || _isLoadingMorePosts || _lastDocument == null) return;
+
+    setState(() => _isLoadingMorePosts = true);
+
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('posts')
+          .where('circleId', isEqualTo: widget.circleId)
+          .where('isVisible', isEqualTo: true)
+          .orderBy('createdAt', descending: true)
+          .limit(AppConstants.postsPerPage)
+          .startAfterDocument(_lastDocument!)
+          .get();
+
+      final newPosts = snapshot.docs
+          .map((doc) => PostModel.fromFirestore(doc))
+          .toList();
+
+      if (mounted) {
+        setState(() {
+          _posts.addAll(newPosts);
+          _lastDocument = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
+          _hasMorePosts = snapshot.docs.length == AppConstants.postsPerPage;
+          _isLoadingMorePosts = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading more circle posts: $e');
+      if (mounted) {
+        setState(() => _isLoadingMorePosts = false);
+      }
+    }
+  }
+
+  /// 新着検知（NEWラベル表示用）- 新しい投稿のみ検知
+  void _listenForNewPosts() {
+    FirebaseFirestore.instance
+        .collection('posts')
+        .where('circleId', isEqualTo: widget.circleId)
+        .where('isVisible', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(1)
+        .snapshots()
+        .listen((snapshot) {
+          if (!mounted) return;
+          if (snapshot.docs.isEmpty) return;
+
+          final latestId = snapshot.docs.first.id;
+          // 新着のみNEWラベル表示（IDが変わり、かつ_postsリストに含まれていない場合）
+          if (_latestPostId != null && latestId != _latestPostId) {
+            final isNewPost = !_posts.any((p) => p.id == latestId);
+            if (isNewPost) {
+              setState(() => _hasNewPosts = true);
+            }
+          }
+        });
+  }
+
   Future<void> _checkPendingRequest(String userId) async {
     if (_hasCheckedPending && _lastCheckedUserId == userId) return;
 
@@ -527,575 +638,632 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
           backgroundColor: Colors.grey[50],
           floatingActionButton: isMember
               ? FloatingActionButton(
-                  onPressed: () => context.push(
-                    '/create-post',
-                    extra: {'circleId': widget.circleId},
-                  ),
+                  onPressed: () async {
+                    final result = await context.push<bool>(
+                      '/create-post',
+                      extra: {'circleId': widget.circleId},
+                    );
+                    // 投稿作成成功後、リストをリロード
+                    if (result == true) {
+                      _loadPosts();
+                    }
+                  },
                   backgroundColor: const Color(0xFF00ACC1), // シアン
                   child: const Icon(Icons.edit, color: Colors.white),
                 )
               : null,
-          body: CustomScrollView(
-            slivers: [
-              // ヘッダー
-              SliverAppBar(
-                expandedHeight: 220,
-                pinned: true,
-                backgroundColor: Colors.white,
-                leading: IconButton(
-                  onPressed: () => context.pop(),
-                  icon: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.9),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 8,
-                        ),
-                      ],
-                    ),
-                    child: const Icon(Icons.arrow_back_rounded, size: 20),
-                  ),
-                ),
-                // オーナー用メニュー
-                actions: isOwner
-                    ? [
-                        Container(
-                          margin: const EdgeInsets.only(right: 8),
-                          child: PopupMenuButton<String>(
-                            icon: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.9),
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.1),
-                                    blurRadius: 8,
-                                  ),
-                                ],
-                              ),
-                              child: const Icon(Icons.more_vert, size: 20),
-                            ),
-                            onSelected: (value) {
-                              if (value == 'delete') {
-                                _showDeleteDialog(circle);
-                              } else if (value == 'requests') {
-                                context.push(
-                                  '/circle/${circle.id}/requests',
-                                  extra: {'circleName': circle.name},
-                                );
-                              } else if (value == 'edit') {
-                                context.push(
-                                  '/circle/${circle.id}/edit',
-                                  extra: circle,
-                                );
-                              }
-                            },
-                            itemBuilder: (context) => [
-                              const PopupMenuItem(
-                                value: 'edit',
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.edit_outlined,
-                                      color: Color(0xFF00ACC1),
-                                      size: 20,
-                                    ),
-                                    SizedBox(width: 8),
-                                    Text('編集'),
-                                  ],
-                                ),
-                              ),
-                              const PopupMenuItem(
-                                value: 'requests',
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.person_add_outlined,
-                                      color: Color(0xFF00ACC1),
-                                      size: 20,
-                                    ),
-                                    SizedBox(width: 8),
-                                    Text('参加申請'),
-                                  ],
-                                ),
-                              ),
-                              const PopupMenuItem(
-                                value: 'delete',
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.delete_outline,
-                                      color: Colors.red,
-                                      size: 20,
-                                    ),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      'サークルを削除',
-                                      style: TextStyle(color: Colors.red),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ]
-                    : null,
-                flexibleSpace: FlexibleSpaceBar(
-                  background: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      // カバー画像またはグラデーション
-                      circle.coverImageUrl != null
-                          ? Image.network(
-                              circle.coverImageUrl!,
-                              fit: BoxFit.cover,
-                            )
-                          : Container(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    AppColors.primary.withOpacity(0.7),
-                                    AppColors.primaryLight,
-                                  ],
-                                ),
-                              ),
-                            ),
-                      // オーバーレイ
-                      Container(
+          body: NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              // スクロール末尾に近づいたら追加読み込み
+              if (notification is ScrollEndNotification &&
+                  notification.metrics.extentAfter < 300) {
+                _loadMorePosts();
+              }
+              return false;
+            },
+            child: RefreshIndicator(
+              onRefresh: _loadPosts,
+              color: AppColors.primary,
+              child: CustomScrollView(
+                slivers: [
+                  // ヘッダー
+                  SliverAppBar(
+                    expandedHeight: 220,
+                    pinned: true,
+                    backgroundColor: Colors.white,
+                    leading: IconButton(
+                      onPressed: () => context.pop(),
+                      icon: Container(
+                        padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.transparent,
-                              Colors.black.withOpacity(0.3),
-                            ],
-                          ),
-                        ),
-                      ),
-                      // サークル情報
-                      Positioned(
-                        bottom: 20,
-                        left: 20,
-                        right: 20,
-                        child: Row(
-                          children: [
-                            // アイコン
-                            Container(
-                              width: 72,
-                              height: 72,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(20),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.15),
-                                    blurRadius: 12,
-                                  ),
-                                ],
-                              ),
-                              child: circle.iconImageUrl != null
-                                  ? ClipRRect(
-                                      borderRadius: BorderRadius.circular(20),
-                                      child: Image.network(
-                                        circle.iconImageUrl!,
-                                        fit: BoxFit.cover,
-                                      ),
-                                    )
-                                  : Center(
-                                      child: Text(
-                                        icon,
-                                        style: const TextStyle(fontSize: 36),
-                                      ),
-                                    ),
+                          color: Colors.white.withOpacity(0.9),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 8,
                             ),
-                            const SizedBox(width: 16),
-                            // 名前と情報
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    circle.name,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.bold,
-                                      shadows: [
-                                        Shadow(
-                                          color: Colors.black26,
-                                          blurRadius: 4,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Row(
-                                    children: [
-                                      GestureDetector(
-                                        onTap: () {
-                                          context.push(
-                                            '/circle/${circle.id}/members',
-                                            extra: {
-                                              'circleName': circle.name,
-                                              'ownerId': circle.ownerId,
-                                              'memberIds': circle.memberIds,
-                                            },
-                                          );
-                                        },
-                                        child: _buildTag(
-                                          Icons.people_outline,
-                                          '${circle.memberIds.length}人',
-                                          showArrow: true,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      _buildTag(
-                                        Icons.category_outlined,
-                                        circle.category,
+                          ],
+                        ),
+                        child: const Icon(Icons.arrow_back_rounded, size: 20),
+                      ),
+                    ),
+                    // オーナー用メニュー
+                    actions: isOwner
+                        ? [
+                            Container(
+                              margin: const EdgeInsets.only(right: 8),
+                              child: PopupMenuButton<String>(
+                                icon: Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.9),
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.1),
+                                        blurRadius: 8,
                                       ),
                                     ],
                                   ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // 参加ボタンと説明
-              SliverToBoxAdapter(
-                child: Container(
-                  margin: const EdgeInsets.all(16),
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // 説明
-                      Text(
-                        circle.description,
-                        style: TextStyle(
-                          fontSize: 15,
-                          height: 1.6,
-                          color: Colors.grey[700],
-                        ),
-                      ),
-                      if (circle.goal.isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryLight.withOpacity(0.3),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            children: [
-                              const Text('🎯', style: TextStyle(fontSize: 20)),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  circle.goal,
-                                  style: TextStyle(
-                                    color: Colors.grey[800],
-                                    fontWeight: FontWeight.w500,
-                                  ),
+                                  child: const Icon(Icons.more_vert, size: 20),
                                 ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 16),
-                      // ルール確認ボタン（メンバーでルールがある場合のみ）
-                      if (isMember &&
-                          circle.rules != null &&
-                          circle.rules!.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: OutlinedButton.icon(
-                            onPressed: () => _showRulesDialog(circle.rules!),
-                            icon: Icon(
-                              Icons.description_outlined,
-                              color: Colors.grey[700],
-                              size: 18,
-                            ),
-                            label: Text(
-                              'サークルルール',
-                              style: TextStyle(color: Colors.grey[700]),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              minimumSize: const Size(double.infinity, 44),
-                              side: BorderSide(color: Colors.grey[300]!),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                          ),
-                        ),
-                      // 参加ボタン
-                      SizedBox(
-                        width: double.infinity,
-                        height: 52, // 高さを増やしてテキストの切れを防止
-                        child: currentUser == null
-                            ? ElevatedButton(
-                                onPressed: () => context.push('/login'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                child: const Text('ログインして参加'),
-                              )
-                            : isMember
-                            ? OutlinedButton(
-                                onPressed: isOwner
-                                    ? null
-                                    : () => _handleLeave(currentUser.uid),
-                                style: OutlinedButton.styleFrom(
-                                  side: BorderSide(color: Colors.grey[300]!),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      isOwner ? Icons.star : Icons.check,
-                                      color: isOwner
-                                          ? Colors.amber
-                                          : Colors.grey[600],
-                                      size: 20,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      isOwner ? 'オーナー' : '参加中',
-                                      style: TextStyle(
-                                        color: isOwner
-                                            ? Colors.amber[700]
-                                            : Colors.grey[600],
-                                        fontWeight: isOwner
-                                            ? FontWeight.bold
-                                            : FontWeight.normal,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              )
-                            // 申請中の場合
-                            : _hasPendingRequest && !circle.isPublic
-                            ? OutlinedButton(
-                                onPressed: null, // 非活性
-                                style: OutlinedButton.styleFrom(
-                                  side: BorderSide(color: Colors.grey[300]!),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.hourglass_empty,
-                                      color: Colors.grey[500],
-                                      size: 20,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      '申請中',
-                                      style: TextStyle(color: Colors.grey[600]),
-                                    ),
-                                  ],
-                                ),
-                              )
-                            : ElevatedButton(
-                                onPressed: _isJoining
-                                    ? null
-                                    : () =>
-                                          _handleJoin(circle, currentUser.uid),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                child: _isJoining
-                                    ? const SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Colors.white,
-                                        ),
-                                      )
-                                    : Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          const Icon(
-                                            Icons.person_add,
-                                            size: 20,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            circle.isPublic ? '参加する' : '参加申請',
-                                          ),
-                                        ],
-                                      ),
-                              ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              // ピン留め投稿セクション（オーナーのみ管理可能）
-              if (isMember)
-                StreamBuilder<List<PostModel>>(
-                  stream: circleService.streamPinnedPosts(circle.id),
-                  builder: (context, pinnedSnapshot) {
-                    final pinnedPosts = pinnedSnapshot.data ?? [];
-                    if (pinnedPosts.isEmpty)
-                      return const SliverToBoxAdapter(child: SizedBox.shrink());
-
-                    // トップピン投稿を取得
-                    final topPinned = pinnedPosts.firstWhere(
-                      (p) => p.isPinnedTop,
-                      orElse: () => pinnedPosts.first,
-                    );
-
-                    return SliverToBoxAdapter(
-                      child: Container(
-                        margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.amber.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.amber.withOpacity(0.3),
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.push_pin,
-                                  size: 16,
-                                  color: Colors.amber[700],
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'ピン留め',
-                                  style: TextStyle(
-                                    color: Colors.amber[700],
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                const Spacer(),
-                                if (pinnedPosts.length > 1)
-                                  GestureDetector(
-                                    onTap: () => _showPinnedPostsList(
-                                      pinnedPosts,
-                                      isOwner,
-                                    ),
+                                onSelected: (value) {
+                                  if (value == 'delete') {
+                                    _showDeleteDialog(circle);
+                                  } else if (value == 'requests') {
+                                    context.push(
+                                      '/circle/${circle.id}/requests',
+                                      extra: {'circleName': circle.name},
+                                    );
+                                  } else if (value == 'edit') {
+                                    context.push(
+                                      '/circle/${circle.id}/edit',
+                                      extra: circle,
+                                    );
+                                  }
+                                },
+                                itemBuilder: (context) => [
+                                  const PopupMenuItem(
+                                    value: 'edit',
                                     child: Row(
                                       children: [
-                                        Text(
-                                          '${pinnedPosts.length}件',
-                                          style: TextStyle(
-                                            color: Colors.grey[600],
-                                            fontSize: 12,
-                                          ),
-                                        ),
                                         Icon(
-                                          Icons.chevron_right,
-                                          size: 16,
-                                          color: Colors.grey[600],
+                                          Icons.edit_outlined,
+                                          color: Color(0xFF00ACC1),
+                                          size: 20,
+                                        ),
+                                        SizedBox(width: 8),
+                                        Text('編集'),
+                                      ],
+                                    ),
+                                  ),
+                                  const PopupMenuItem(
+                                    value: 'requests',
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.person_add_outlined,
+                                          color: Color(0xFF00ACC1),
+                                          size: 20,
+                                        ),
+                                        SizedBox(width: 8),
+                                        Text('参加申請'),
+                                      ],
+                                    ),
+                                  ),
+                                  const PopupMenuItem(
+                                    value: 'delete',
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.delete_outline,
+                                          color: Colors.red,
+                                          size: 20,
+                                        ),
+                                        SizedBox(width: 8),
+                                        Text(
+                                          'サークルを削除',
+                                          style: TextStyle(color: Colors.red),
                                         ),
                                       ],
                                     ),
                                   ),
+                                ],
+                              ),
+                            ),
+                          ]
+                        : null,
+                    flexibleSpace: FlexibleSpaceBar(
+                      background: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          // カバー画像またはグラデーション
+                          circle.coverImageUrl != null
+                              ? Image.network(
+                                  circle.coverImageUrl!,
+                                  fit: BoxFit.cover,
+                                )
+                              : Container(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [
+                                        AppColors.primary.withOpacity(0.7),
+                                        AppColors.primaryLight,
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                          // オーバーレイ
+                          Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.transparent,
+                                  Colors.black.withOpacity(0.3),
+                                ],
+                              ),
+                            ),
+                          ),
+                          // サークル情報
+                          Positioned(
+                            bottom: 20,
+                            left: 20,
+                            right: 20,
+                            child: Row(
+                              children: [
+                                // アイコン
+                                Container(
+                                  width: 72,
+                                  height: 72,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(20),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.15),
+                                        blurRadius: 12,
+                                      ),
+                                    ],
+                                  ),
+                                  child: circle.iconImageUrl != null
+                                      ? ClipRRect(
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
+                                          child: Image.network(
+                                            circle.iconImageUrl!,
+                                            fit: BoxFit.cover,
+                                          ),
+                                        )
+                                      : Center(
+                                          child: Text(
+                                            icon,
+                                            style: const TextStyle(
+                                              fontSize: 36,
+                                            ),
+                                          ),
+                                        ),
+                                ),
+                                const SizedBox(width: 16),
+                                // 名前と情報
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        circle.name,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.bold,
+                                          shadows: [
+                                            Shadow(
+                                              color: Colors.black26,
+                                              blurRadius: 4,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          GestureDetector(
+                                            onTap: () {
+                                              context.push(
+                                                '/circle/${circle.id}/members',
+                                                extra: {
+                                                  'circleName': circle.name,
+                                                  'ownerId': circle.ownerId,
+                                                  'memberIds': circle.memberIds,
+                                                },
+                                              );
+                                            },
+                                            child: _buildTag(
+                                              Icons.people_outline,
+                                              '${circle.memberIds.length}人',
+                                              showArrow: true,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          _buildTag(
+                                            Icons.category_outlined,
+                                            circle.category,
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ],
                             ),
-                            const SizedBox(height: 8),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // 参加ボタンと説明
+                  SliverToBoxAdapter(
+                    child: Container(
+                      margin: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.04),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // 説明
+                          Text(
+                            circle.description,
+                            style: TextStyle(
+                              fontSize: 15,
+                              height: 1.6,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                          if (circle.goal.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: AppColors.primaryLight.withOpacity(0.3),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Text(
+                                    '🎯',
+                                    style: TextStyle(fontSize: 20),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      circle.goal,
+                                      style: TextStyle(
+                                        color: Colors.grey[800],
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 16),
+                          // ルール確認ボタン（メンバーでルールがある場合のみ）
+                          if (isMember &&
+                              circle.rules != null &&
+                              circle.rules!.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: OutlinedButton.icon(
+                                onPressed: () =>
+                                    _showRulesDialog(circle.rules!),
+                                icon: Icon(
+                                  Icons.description_outlined,
+                                  color: Colors.grey[700],
+                                  size: 18,
+                                ),
+                                label: Text(
+                                  'サークルルール',
+                                  style: TextStyle(color: Colors.grey[700]),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size(double.infinity, 44),
+                                  side: BorderSide(color: Colors.grey[300]!),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          // 参加ボタン
+                          SizedBox(
+                            width: double.infinity,
+                            height: 52, // 高さを増やしてテキストの切れを防止
+                            child: currentUser == null
+                                ? ElevatedButton(
+                                    onPressed: () => context.push('/login'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.primary,
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    child: const Text('ログインして参加'),
+                                  )
+                                : isMember
+                                ? OutlinedButton(
+                                    onPressed: isOwner
+                                        ? null
+                                        : () => _handleLeave(currentUser.uid),
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(
+                                        color: Colors.grey[300]!,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          isOwner ? Icons.star : Icons.check,
+                                          color: isOwner
+                                              ? Colors.amber
+                                              : Colors.grey[600],
+                                          size: 20,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          isOwner ? 'オーナー' : '参加中',
+                                          style: TextStyle(
+                                            color: isOwner
+                                                ? Colors.amber[700]
+                                                : Colors.grey[600],
+                                            fontWeight: isOwner
+                                                ? FontWeight.bold
+                                                : FontWeight.normal,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                // 申請中の場合
+                                : _hasPendingRequest && !circle.isPublic
+                                ? OutlinedButton(
+                                    onPressed: null, // 非活性
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(
+                                        color: Colors.grey[300]!,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.hourglass_empty,
+                                          color: Colors.grey[500],
+                                          size: 20,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          '申請中',
+                                          style: TextStyle(
+                                            color: Colors.grey[600],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                : ElevatedButton(
+                                    onPressed: _isJoining
+                                        ? null
+                                        : () => _handleJoin(
+                                            circle,
+                                            currentUser.uid,
+                                          ),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.primary,
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    child: _isJoining
+                                        ? const SizedBox(
+                                            width: 20,
+                                            height: 20,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                        : Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              const Icon(
+                                                Icons.person_add,
+                                                size: 20,
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                circle.isPublic
+                                                    ? '参加する'
+                                                    : '参加申請',
+                                              ),
+                                            ],
+                                          ),
+                                  ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // ピン留め投稿セクション（オーナーのみ管理可能）
+                  if (isMember)
+                    StreamBuilder<List<PostModel>>(
+                      stream: circleService.streamPinnedPosts(circle.id),
+                      builder: (context, pinnedSnapshot) {
+                        final pinnedPosts = pinnedSnapshot.data ?? [];
+                        if (pinnedPosts.isEmpty)
+                          return const SliverToBoxAdapter(
+                            child: SizedBox.shrink(),
+                          );
+
+                        // トップピン投稿を取得
+                        final topPinned = pinnedPosts.firstWhere(
+                          (p) => p.isPinnedTop,
+                          orElse: () => pinnedPosts.first,
+                        );
+
+                        return SliverToBoxAdapter(
+                          child: Container(
+                            margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.amber.withOpacity(0.3),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.push_pin,
+                                      size: 16,
+                                      color: Colors.amber[700],
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'ピン留め',
+                                      style: TextStyle(
+                                        color: Colors.amber[700],
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    if (pinnedPosts.length > 1)
+                                      GestureDetector(
+                                        onTap: () => _showPinnedPostsList(
+                                          pinnedPosts,
+                                          isOwner,
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Text(
+                                              '${pinnedPosts.length}件',
+                                              style: TextStyle(
+                                                color: Colors.grey[600],
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                            Icon(
+                                              Icons.chevron_right,
+                                              size: 16,
+                                              color: Colors.grey[600],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                GestureDetector(
+                                  onTap: () =>
+                                      context.push('/post/${topPinned.id}'),
+                                  child: Text(
+                                    topPinned.content,
+                                    maxLines: 3,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: Colors.grey[800],
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+
+                  // 投稿ヘッダー
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                      child: Row(
+                        children: [
+                          const Text('📝', style: TextStyle(fontSize: 20)),
+                          const SizedBox(width: 8),
+                          Text(
+                            'みんなの投稿',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          // 新着ラベル
+                          if (_hasNewPosts) ...[
+                            const SizedBox(width: 8),
                             GestureDetector(
-                              onTap: () =>
-                                  context.push('/post/${topPinned.id}'),
-                              child: Text(
-                                topPinned.content,
-                                maxLines: 3,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Colors.grey[800],
-                                  fontSize: 14,
+                              onTap: _loadPosts,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Text(
+                                  'NEW',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
                             ),
                           ],
-                        ),
+                        ],
                       ),
-                    );
-                  },
-                ),
-
-              // 投稿ヘッダー
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-                  child: Row(
-                    children: [
-                      const Text('📝', style: TextStyle(fontSize: 20)),
-                      const SizedBox(width: 8),
-                      Text(
-                        'みんなの投稿',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
 
-              // サークル内の投稿
-              StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('posts')
-                    .where('circleId', isEqualTo: widget.circleId)
-                    .where('isVisible', isEqualTo: true)
-                    .orderBy('createdAt', descending: true)
-                    .limit(AppConstants.postsPerPage)
-                    .snapshots(),
-                builder: (context, postSnapshot) {
-                  if (!postSnapshot.hasData) {
-                    return const SliverToBoxAdapter(
+                  // サークル内の投稿（プル更新方式）
+                  if (_isLoadingPosts)
+                    const SliverToBoxAdapter(
                       child: Center(
                         child: Padding(
                           padding: EdgeInsets.all(40),
@@ -1104,15 +1272,9 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                           ),
                         ),
                       ),
-                    );
-                  }
-
-                  final posts = postSnapshot.data!.docs
-                      .map((doc) => PostModel.fromFirestore(doc))
-                      .toList();
-
-                  if (posts.isEmpty) {
-                    return SliverToBoxAdapter(
+                    )
+                  else if (_posts.isEmpty)
+                    SliverToBoxAdapter(
                       child: Container(
                         margin: const EdgeInsets.symmetric(horizontal: 16),
                         padding: const EdgeInsets.all(40),
@@ -1147,32 +1309,58 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                           ],
                         ),
                       ),
-                    );
-                  }
+                    )
+                  else
+                    SliverList(
+                      delegate: SliverChildBuilderDelegate((context, index) {
+                        // 末尾でローディング表示 or 追加読み込み
+                        if (index == _posts.length) {
+                          if (_isLoadingMorePosts) {
+                            return const Padding(
+                              padding: EdgeInsets.all(16),
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            );
+                          }
+                          // 追加読み込みトリガー
+                          if (_hasMorePosts) {
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              _loadMorePosts();
+                            });
+                          }
+                          return const SizedBox.shrink();
+                        }
 
-                  return SliverList(
-                    delegate: SliverChildBuilderDelegate((context, index) {
-                      final post = posts[index];
-                      return PostCard(
-                        key: ValueKey(post.id),
-                        post: post,
-                        isCircleOwner: isOwner,
-                        onPinToggle: isOwner
-                            ? (isPinned) async {
-                                await circleService.togglePinPost(
-                                  post.id,
-                                  isPinned,
-                                );
-                              }
-                            : null,
-                      );
-                    }, childCount: posts.length),
-                  );
-                },
+                        final post = _posts[index];
+                        return PostCard(
+                          key: ValueKey(post.id),
+                          post: post,
+                          isCircleOwner: isOwner,
+                          onPinToggle: isOwner
+                              ? (isPinned) async {
+                                  await circleService.togglePinPost(
+                                    post.id,
+                                    isPinned,
+                                  );
+                                }
+                              : null,
+                          onDeleted: () {
+                            // 自分の投稿を削除した場合、ローカルリストから即座に削除
+                            setState(() {
+                              _posts.removeAt(index);
+                            });
+                          },
+                        );
+                      }, childCount: _posts.length + (_hasMorePosts ? 1 : 0)),
+                    ),
+
+                  const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                ],
               ),
-
-              const SliverToBoxAdapter(child: SizedBox(height: 100)),
-            ],
+            ),
           ),
         );
       },
