@@ -397,6 +397,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                     // 投稿入力
                     TextField(
                       controller: _contentController,
+                      autofocus: true, // 画面表示時に自動フォーカス
                       maxLines: null,
                       minLines: 6,
                       maxLength: AppConstants.maxPostLength,
