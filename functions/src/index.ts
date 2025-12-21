@@ -214,24 +214,15 @@ async function moderateVideo(
 
 【ブロック対象（isInappropriate: true）】
 - adult: 成人向けコンテンツ、露出の多い映像、性的な内容
-  - violence: 暴力的な映像、血液、怪我、残虐な内容
-    - hate: ヘイトシンボル、差別的な内容
-      - dangerous: 危険な行為、違法行為、武器
+- violence: 暴力的な映像、血液、怪我、残虐な内容
+- hate: ヘイトシンボル、差別的な内容
+- dangerous: 危険な行為、違法行為、武器
 
-【許可する内容（isInappropriate: false）】
-- 通常の人物動画
-  - 日常の風景、食事、ペット
-    - 趣味の動画
-    - ダンス、運動（健全なもの）
+上記に該当しない場合は isInappropriate: false としてください。
 
 【回答形式】
 必ず以下のJSON形式のみで回答してください：
-{
-  "isInappropriate": true または false,
-    "category": "adult" | "violence" | "hate" | "dangerous" | "none",
-      "confidence": 0から1の数値,
-        "reason": "判定理由"
-}
+{"isInappropriate": true/false, "category": "adult"|"violence"|"hate"|"dangerous"|"none", "confidence": 0-1, "reason": "判定理由"}
 `;
 
     const videoPart: Part = {
@@ -1701,11 +1692,7 @@ export const createPostWithModeration = onCall(
 - self_harm: 自傷行為の助長
 - spam: スパム、宣伝
 
-【許可する内容（isNegative: false）】
-- 個人の感情表現：「悲しい」「辛い」「落ち込んだ」
-- 自分自身への軽い愚痴：「失敗した」「うまくいかない」
-- 日常の不満：「雨だ〜」「電車遅れた」
-- 頑張りや努力の共有
+上記に該当しない場合は isNegative: false としてください。
 
 【重要な判定基準】
 ⚠️ 暴力的な言葉（殺す、死ね、殴るなど）は、対象が特定されていなくても「profanity」または「violence」としてブロックしてください。
@@ -1716,13 +1703,7 @@ ${content}
 
 【回答形式】
 必ず以下のJSON形式で回答してください。他の文字は含めないでください。
-{
-  "isNegative": true または false,
-    "category": "harassment" | "hate_speech" | "profanity" | "violence" | "self_harm" | "spam" | "none",
-      "confidence": 0から1の数値,
-        "reason": "判定理由（ユーザーに見せる優しい説明）",
-          "suggestion": "より良い表現の提案"
-}
+{"isNegative": true/false, "category": "harassment"|"hate_speech"|"profanity"|"violence"|"self_harm"|"spam"|"none", "confidence": 0-1, "reason": "判定理由", "suggestion": "より良い表現の提案"}
 `;
 
       let rawResponseText = "";
