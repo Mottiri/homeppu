@@ -36,6 +36,7 @@ class PostCard extends StatefulWidget {
 
 class _PostCardState extends State<PostCard> {
   bool _isDeleting = false;
+  bool _isNavigating = false; // ナビゲーション中フラグ（ダブルタップ防止）
   late Map<String, int> _localReactions; // ローカルでリアクション数を管理
 
   @override
@@ -218,7 +219,12 @@ class _PostCardState extends State<PostCard> {
                   Row(
                     children: [
                       GestureDetector(
-                        onTap: () => context.push('/user/${post.userId}'),
+                        onTap: () async {
+                          if (_isNavigating) return; // ダブルタップ防止
+                          _isNavigating = true;
+                          await context.push('/profile/${post.userId}');
+                          if (mounted) _isNavigating = false;
+                        },
                         child: AvatarWidget(
                           avatarIndex: post.userAvatarIndex,
                           size: 44,
@@ -230,7 +236,12 @@ class _PostCardState extends State<PostCard> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             GestureDetector(
-                              onTap: () => context.push('/user/${post.userId}'),
+                              onTap: () async {
+                                if (_isNavigating) return; // ダブルタップ防止
+                                _isNavigating = true;
+                                await context.push('/profile/${post.userId}');
+                                if (mounted) _isNavigating = false;
+                              },
                               child: Text(
                                 post.userDisplayName,
                                 style: Theme.of(context).textTheme.titleMedium

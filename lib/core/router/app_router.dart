@@ -114,7 +114,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             name: 'userProfile',
             builder: (context, state) {
               final userId = state.pathParameters['userId']!;
-              return ProfileScreen(userId: userId);
+              // ユニークなキーを使用してNavigatorキー重複を防止
+              return ProfileScreen(
+                key: ValueKey('profile_$userId'),
+                userId: userId,
+              );
             },
           ),
         ],
@@ -248,7 +252,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'profileDetail',
         builder: (context, state) {
           final userId = state.pathParameters['userId']!;
-          return ProfileScreen(userId: userId);
+          // ユニークなキーを使用してNavigatorキー重複を防止
+          return ProfileScreen(
+            key: ValueKey('profileDetail_$userId'),
+            userId: userId,
+          );
         },
       ),
 
