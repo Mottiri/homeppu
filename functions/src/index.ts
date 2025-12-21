@@ -2941,8 +2941,8 @@ export const onCommentCreatedNotify = onDocumentCreated(
     // 通知を送信
     await sendPushNotification(
       postOwnerId,
-      "コメントが来たよ！",
-      `${commenterName} さんからコメントが来たよ！`,
+      "コメント",
+      `${commenterName}さんがコメントしました`,
       { postId },
       {
         type: "comment",
@@ -2987,8 +2987,8 @@ export const onReactionAddedNotify = onDocumentCreated(
     // 通知を送信
     await sendPushNotification(
       postOwnerId,
-      "いいね！されたよ！",
-      `${reactorName} さんからいいね！されたよ！`,
+      "リアクション",
+      `${reactorName}さんがリアクションしました`,
       { postId },
       {
         type: "reaction",

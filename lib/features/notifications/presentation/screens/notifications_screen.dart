@@ -108,42 +108,14 @@ class _NotificationTile extends ConsumerWidget {
           size: 40,
         ),
       ),
-      title: RichText(
-        text: TextSpan(
-          style: DefaultTextStyle.of(context).style,
-          children: [
-            WidgetSpan(
-              child: GestureDetector(
-                onTap: () {
-                  if (notification.senderId.isNotEmpty) {
-                    context.push('/profile/${notification.senderId}');
-                  }
-                },
-                child: Text(
-                  notification.senderName,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-            TextSpan(text: 'さんが${notification.title}'),
-          ],
-        ),
+      title: Text(
+        notification.body.isNotEmpty ? notification.body : notification.title,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
       ),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (notification.body.isNotEmpty)
-            Text(
-              notification.body,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: AppColors.textSecondary),
-            ),
-          Text(
-            _formatDate(notification.createdAt),
-            style: const TextStyle(fontSize: 12, color: AppColors.textTertiary),
-          ),
-        ],
+      subtitle: Text(
+        _formatDate(notification.createdAt),
+        style: const TextStyle(fontSize: 12, color: AppColors.textTertiary),
       ),
       trailing: !notification.isRead
           ? Container(
