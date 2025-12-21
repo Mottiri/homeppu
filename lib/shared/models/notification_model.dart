@@ -9,6 +9,36 @@ enum NotificationType {
   joinRequestApproved,
   joinRequestRejected,
   circleDeleted,
+  // タスク関連
+  taskReminder,
+  taskScheduled,
+}
+
+/// 通知のカテゴリ（タブ分類用）
+enum NotificationCategory {
+  all, // すべて
+  timeline, // TL通知（コメント、リアクション）
+  circle, // サークル通知
+  task, // タスク通知
+}
+
+/// NotificationTypeからカテゴリを取得
+NotificationCategory getCategoryFromType(NotificationType type) {
+  switch (type) {
+    case NotificationType.comment:
+    case NotificationType.reaction:
+      return NotificationCategory.timeline;
+    case NotificationType.joinRequestReceived:
+    case NotificationType.joinRequestApproved:
+    case NotificationType.joinRequestRejected:
+    case NotificationType.circleDeleted:
+      return NotificationCategory.circle;
+    case NotificationType.taskReminder:
+    case NotificationType.taskScheduled:
+      return NotificationCategory.task;
+    case NotificationType.system:
+      return NotificationCategory.timeline; // システム通知はTLに分類
+  }
 }
 
 class NotificationModel {
@@ -90,6 +120,10 @@ class NotificationModel {
         return NotificationType.joinRequestRejected;
       case 'circle_deleted':
         return NotificationType.circleDeleted;
+      case 'task_reminder':
+        return NotificationType.taskReminder;
+      case 'task_scheduled':
+        return NotificationType.taskScheduled;
       default:
         return NotificationType.system;
     }

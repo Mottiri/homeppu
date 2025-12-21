@@ -139,6 +139,29 @@ sequenceDiagram
 
 ---
 
+## カテゴリ分け機能
+
+### タブ構成
+
+| タブ | カテゴリ | 含まれる通知タイプ |
+|------|---------|-------------------|
+| すべて | `all` | 全通知 |
+| TL | `timeline` | comment, reaction, system |
+| サークル | `circle` | joinRequestReceived, joinRequestApproved, joinRequestRejected, circleDeleted |
+| タスク | `task` | taskReminder, taskScheduled |
+
+### 未読バッジ
+
+- 各タブに未読件数を赤丸バッジで表示
+- 99件を超える場合は「99」と表示
+
+### レスポンシブ対応
+
+- `isScrollable: true` で狭い画面でも横スクロール可能
+- `tabAlignment: TabAlignment.center` で中央寄せ
+
+---
+
 ## Firestore インデックス
 
 タスクリマインダー機能に必要なインデックス：
