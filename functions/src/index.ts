@@ -4882,8 +4882,17 @@ function getCircleAIPostPrompt(
   aiName: string,
   circleName: string,
   circleDescription: string,
-  category: string
+  category: string,
+  recentPosts: string[] = [] // 過去の投稿内容（重複回避用）
 ): string {
+  const recentPostsSection = recentPosts.length > 0
+    ? `
+【避けるべき内容】
+以下は最近の投稿です。これらと似た内容や同じ表現は絶対に使わないでください：
+${recentPosts.map((p, i) => `- ${p}`).join("\n")}
+`
+    : "";
+
   return `
 あなたは「ほめっぷ」というSNSのユーザー「${aiName}」です。
 サークル「${circleName}」のメンバーとして投稿します。
@@ -4899,7 +4908,14 @@ function getCircleAIPostPrompt(
 3. 自然な日本語で、SNSらしいカジュアルな投稿にしてください
 4. 絵文字を1〜2個使ってください
 5. 30〜80文字程度の短い投稿にしてください
+6. ハッシュタグ（#○○）は絶対に使用しないでください
+7. 毎回異なる内容・表現で投稿してください（同じ文章の使い回しNG）
 
+【避けるべき表現】
+- ハッシュタグ（#勉強 #資格 など）
+- 前回と同じ内容
+- 「テキスト一周終わった」など同じフレーズの繰り返し
+${recentPostsSection}
 【投稿例】
 - 「今日も${circleName}頑張った！まだまだだけど少しずつ進歩してる気がする💪」
 - 「${category}始めて1週間。最初は全然だったけど、ちょっとずつ成長してるかも✨」
@@ -5045,6 +5061,16 @@ export const executeCircleAIPost = functionsV1.region("asia-northeast1").runWith
       return;
     }
 
+    // 過去の投稿を取得（重複回避用）
+    const recentPostsSnapshot = await db.collection("posts")
+      .where("circleId", "==", circleId)
+      .orderBy("createdAt", "desc")
+      .limit(5)
+      .get();
+
+    const recentPostContents = recentPostsSnapshot.docs.map(doc => doc.data().content as string).filter(Boolean);
+    console.log(`Found ${recentPostContents.length} recent posts for deduplication`);
+
     const apiKey = geminiApiKey.value();
     if (!apiKey) {
       throw new Error("GEMINI_API_KEY is not set");
@@ -5053,10 +5079,15 @@ export const executeCircleAIPost = functionsV1.region("asia-northeast1").runWith
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-    // Geminiで投稿内容を生成
-    const prompt = getCircleAIPostPrompt(aiName, circleName, circleDescription, circleCategory);
+    // Geminiで投稿内容を生成（過去投稿を渡して重複回避）
+    const prompt = getCircleAIPostPrompt(aiName, circleName, circleDescription, circleCategory, recentPostContents);
     const result = await model.generateContent(prompt);
-    const postContent = result.response.text()?.trim();
+    let postContent = result.response.text()?.trim();
+
+    // ハッシュタグが含まれていたら削除
+    if (postContent) {
+      postContent = postContent.replace(/#[^\s#]+/g, "").trim();
+    }
 
     if (!postContent) {
       console.log(`Empty post generated for circle ${circleId}`);
