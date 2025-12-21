@@ -13,12 +13,14 @@ class ReactionButton extends ConsumerStatefulWidget {
   final ReactionType type;
   final int count;
   final String postId;
+  final void Function(String reactionType)? onReactionAdded; // リアクション追加時のコールバック
 
   const ReactionButton({
     super.key,
     required this.type,
     required this.count,
     required this.postId,
+    this.onReactionAdded,
   });
 
   @override
@@ -67,55 +69,58 @@ class _ReactionButtonState extends ConsumerState<ReactionButton>
     final user = ref.read(currentUserProvider).valueOrNull;
     if (user == null) return;
 
-    // リアクション追加時のみアニメーション
-    if (!_isReacted) {
-      _controller.reset();
-      _controller.forward(); // 1.0→2.5→1.0のアニメーション
-    }
-
-    setState(() => _isReacted = !_isReacted);
-
-    try {
-      if (_isReacted) {
-        // リアクション追加: Cloud Functions経由（回数制限あり）
-        final functions = FirebaseFunctions.instanceFor(
-          region: 'asia-northeast1',
-        );
-        final callable = functions.httpsCallable('addUserReaction');
-
-        await callable.call({
-          'postId': widget.postId,
-          'reactionType': widget.type.value,
-        });
-
-        // 直近使用リストに追加
-        await RecentReactionsService.addReaction(widget.type.value);
-      } else {
-        // リアクション削除: 直接Firestoreを更新（カウントのみ）
+    // 既にリアクション済みの場合は削除処理（アニメーションなし）
+    if (_isReacted) {
+      setState(() => _isReacted = false);
+      try {
         final postRef = FirebaseFirestore.instance
             .collection('posts')
             .doc(widget.postId);
-
         await postRef.update({
           'reactions.${widget.type.value}': FieldValue.increment(-1),
         });
+      } catch (e) {
+        setState(() => _isReacted = true);
       }
-    } on FirebaseFunctionsException catch (e) {
-      // エラー時は状態を戻す
-      setState(() => _isReacted = !_isReacted);
+      return;
+    }
 
-      // 回数制限エラーの場合はSnackBarで通知
-      if (e.code == 'resource-exhausted' && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.message ?? 'リアクション回数の上限に達しました'),
-            backgroundColor: Colors.orange,
-          ),
-        );
+    // リアクション追加：アニメーション付き
+    setState(() => _isReacted = true);
+
+    // アニメーション開始
+    _controller.reset();
+    _controller.forward();
+
+    // アニメーション完了を待つ（500ms）
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    // 親にリアクション追加を通知（シートは閉じない）
+    widget.onReactionAdded?.call(widget.type.value);
+
+    // Cloud Functionsはバックグラウンドで実行
+    _sendReactionToServer();
+  }
+
+  /// リアクションをサーバーに送信（バックグラウンド実行）
+  Future<void> _sendReactionToServer() async {
+    try {
+      final functions = FirebaseFunctions.instanceFor(
+        region: 'asia-northeast1',
+      );
+      final callable = functions.httpsCallable('addUserReaction');
+      await callable.call({
+        'postId': widget.postId,
+        'reactionType': widget.type.value,
+      });
+      await RecentReactionsService.addReaction(widget.type.value);
+    } on FirebaseFunctionsException catch (e) {
+      if (e.code == 'resource-exhausted') {
+        // 回数制限エラー（既にシートは閉じているのでログのみ）
+        debugPrint('Reaction limit reached: ${e.message}');
       }
     } catch (e) {
-      // その他のエラー時
-      setState(() => _isReacted = !_isReacted);
+      debugPrint('Reaction error: $e');
     }
   }
 

@@ -8,11 +8,13 @@ import 'reaction_button.dart';
 class ReactionSelectionSheet extends StatefulWidget {
   final String postId;
   final Map<String, int> reactions;
+  final void Function(String reactionType)? onReactionAdded; // リアクション追加時のコールバック
 
   const ReactionSelectionSheet({
     super.key,
     required this.postId,
     required this.reactions,
+    this.onReactionAdded,
   });
 
   @override
@@ -24,6 +26,8 @@ class _ReactionSelectionSheetState extends State<ReactionSelectionSheet>
   late TabController _tabController;
   List<String> _recentReactions = [];
   bool _isLoading = true;
+  int _reactionCount = 0; // リアクション回数カウント
+  static const int _maxReactions = 5; // 最大リアクション回数
 
   @override
   void initState() {
@@ -43,6 +47,26 @@ class _ReactionSelectionSheetState extends State<ReactionSelectionSheet>
             ReactionCategory.values.length;
         _tabController = TabController(length: tabCount, vsync: this);
       });
+    }
+  }
+
+  /// リアクション追加時のコールバック（シート内で呼び出される）
+  void _handleReactionAdded(String reactionType) {
+    // 親コールバックを呼び出してローカル状態を更新
+    widget.onReactionAdded?.call(reactionType);
+
+    // リアクション回数をカウント
+    _reactionCount++;
+
+    // 5回でシートを閉じてトースト表示
+    if (_reactionCount >= _maxReactions) {
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('リアクションは5回までです'),
+          duration: Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -177,6 +201,7 @@ class _ReactionSelectionSheetState extends State<ReactionSelectionSheet>
                             type: type,
                             count: widget.reactions[type.value] ?? 0,
                             postId: widget.postId,
+                            onReactionAdded: _handleReactionAdded,
                           );
                         }).toList(),
                       ),
@@ -198,6 +223,7 @@ class _ReactionSelectionSheetState extends State<ReactionSelectionSheet>
                             type: type,
                             count: widget.reactions[type.value] ?? 0,
                             postId: widget.postId,
+                            onReactionAdded: _handleReactionAdded,
                           );
                         }).toList(),
                       ),

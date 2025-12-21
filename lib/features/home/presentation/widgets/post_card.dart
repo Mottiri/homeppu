@@ -36,8 +36,31 @@ class PostCard extends StatefulWidget {
 
 class _PostCardState extends State<PostCard> {
   bool _isDeleting = false;
+  late Map<String, int> _localReactions; // ローカルでリアクション数を管理
+
+  @override
+  void initState() {
+    super.initState();
+    _localReactions = Map<String, int>.from(widget.post.reactions);
+  }
+
+  @override
+  void didUpdateWidget(PostCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 親からのpostが更新されたらローカル状態も更新
+    if (oldWidget.post.id != widget.post.id) {
+      _localReactions = Map<String, int>.from(widget.post.reactions);
+    }
+  }
 
   PostModel get post => widget.post;
+
+  /// リアクションをローカルで追加
+  void _addReaction(String reactionType) {
+    setState(() {
+      _localReactions[reactionType] = (_localReactions[reactionType] ?? 0) + 1;
+    });
+  }
 
   /// 自分の投稿かどうか
   bool get isMyPost {
@@ -172,12 +195,13 @@ class _PostCardState extends State<PostCard> {
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      clipBehavior: Clip.hardEdge, // スタンプが枠外に表示されないようにクリップ
       child: Stack(
         children: [
           // 背景リアクション（落書き風）
           Positioned.fill(
             child: ReactionBackground(
-              reactions: post.reactions,
+              reactions: _localReactions, // ローカル状態を使用
               postId: post.id,
             ),
           ),
@@ -336,7 +360,7 @@ class _PostCardState extends State<PostCard> {
                           Icons.add_reaction_outlined,
                           color: AppColors.textSecondary,
                         ),
-                        onPressed: () {
+                        onPressed: () async {
                           // 自分の投稿にはリアクションできない
                           if (isMyPost) {
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -348,13 +372,42 @@ class _PostCardState extends State<PostCard> {
                             return;
                           }
 
+                          // 既存のリアクション数を確認
+                          final currentUser = FirebaseAuth.instance.currentUser;
+                          if (currentUser != null) {
+                            final existingReactions = await FirebaseFirestore
+                                .instance
+                                .collection('reactions')
+                                .where('postId', isEqualTo: post.id)
+                                .where('userId', isEqualTo: currentUser.uid)
+                                .get();
+
+                            if (existingReactions.docs.length >= 5) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('この投稿へのリアクションは5回までです'),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              }
+                              return;
+                            }
+                          }
+
+                          if (!context.mounted) return;
+
                           showModalBottomSheet(
                             context: context,
                             backgroundColor: Colors.transparent,
                             isScrollControlled: true, // コンテンツサイズに合わせる
                             builder: (context) => ReactionSelectionSheet(
                               postId: post.id,
-                              reactions: post.reactions,
+                              reactions: _localReactions,
+                              onReactionAdded: (reactionType) {
+                                // ローカルでリアクション数を更新（即時反映）
+                                _addReaction(reactionType);
+                              },
                             ),
                           );
                         },
