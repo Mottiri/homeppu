@@ -120,10 +120,10 @@ export class OpenAIProvider implements AIProvider {
                 "Authorization": `Bearer ${this.apiKey}`,
             },
             body: JSON.stringify({
-                model: "gpt-5-nano",
+                model: "gpt-4o-mini",
                 messages: messages,
-                // Note: gpt-5-nano only supports temperature=1 (default), so we omit it
-                max_completion_tokens: options?.maxTokens ?? 1024,
+                temperature: options?.temperature ?? 0.7,
+                max_tokens: options?.maxTokens ?? 1024,
             }),
         });
 
@@ -132,7 +132,16 @@ export class OpenAIProvider implements AIProvider {
             throw new Error(`OpenAI API error: ${response.status} - ${error}`);
         }
 
-        const data = await response.json() as { choices: Array<{ message: { content: string } }> };
+        const data = await response.json() as { choices: Array<{ message: { content: string }, finish_reason?: string }>, usage?: { prompt_tokens: number, completion_tokens: number } };
+
+        // Debug: Log the full response to analyze empty comments
+        console.log("OpenAI response:", JSON.stringify({
+            hasChoices: !!data.choices?.length,
+            finishReason: data.choices?.[0]?.finish_reason,
+            contentLength: data.choices?.[0]?.message?.content?.length || 0,
+            usage: data.usage,
+        }));
+
         return data.choices[0]?.message?.content || "";
     }
 
@@ -163,10 +172,10 @@ export class OpenAIProvider implements AIProvider {
                 "Authorization": `Bearer ${this.apiKey}`,
             },
             body: JSON.stringify({
-                model: "gpt-5-nano",
+                model: "gpt-4o-mini",
                 messages: messages,
-                // Note: gpt-5-nano only supports temperature=1 (default), so we omit it
-                max_completion_tokens: options?.maxTokens ?? 1024,
+                temperature: options?.temperature ?? 0.7,
+                max_tokens: options?.maxTokens ?? 1024,
             }),
         });
 
