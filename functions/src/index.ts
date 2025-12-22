@@ -3111,6 +3111,15 @@ ${mediaDescriptions && mediaDescriptions.length > 0
     const POSITIVE_REACTIONS = ["love", "praise", "cheer", "sparkles", "clap", "thumbsup", "smile"];
     const reactionType = POSITIVE_REACTIONS[Math.floor(Math.random() * POSITIVE_REACTIONS.length)];
 
+    // 投稿が存在するか確認（Cloud Tasksの遅延実行中に削除された可能性）
+    const postRef = db.collection("posts").doc(postId);
+    const postDoc = await postRef.get();
+    if (!postDoc.exists) {
+      console.warn(`Post ${postId} not found, skipping AI comment`);
+      response.status(200).send("Post not found, skipping");
+      return;
+    }
+
     // バッチ書き込みで一括処理
     const batch = db.batch();
 
@@ -3137,7 +3146,6 @@ ${mediaDescriptions && mediaDescriptions.length > 0
     });
 
     // 3. 投稿のリアクションカウント・コメント数を更新
-    const postRef = db.collection("posts").doc(postId);
     batch.update(postRef, {
       [`reactions.${reactionType}`]: admin.firestore.FieldValue.increment(1),
       commentCount: admin.firestore.FieldValue.increment(1),
