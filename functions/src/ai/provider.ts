@@ -123,7 +123,7 @@ export class OpenAIProvider implements AIProvider {
                 model: "gpt-5-nano",
                 messages: messages,
                 temperature: options?.temperature ?? 0.7,
-                max_tokens: options?.maxTokens ?? 1024,
+                max_completion_tokens: options?.maxTokens ?? 1024,
             }),
         });
 
@@ -166,7 +166,7 @@ export class OpenAIProvider implements AIProvider {
                 model: "gpt-5-nano",
                 messages: messages,
                 temperature: options?.temperature ?? 0.7,
-                max_tokens: options?.maxTokens ?? 1024,
+                max_completion_tokens: options?.maxTokens ?? 1024,
             }),
         });
 
