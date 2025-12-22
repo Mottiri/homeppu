@@ -432,17 +432,32 @@ class _UserPostsList extends StatefulWidget {
   State<_UserPostsList> createState() => _UserPostsListState();
 }
 
-class _UserPostsListState extends State<_UserPostsList> {
+class _UserPostsListState extends State<_UserPostsList>
+    with SingleTickerProviderStateMixin {
   List<PostModel> _posts = [];
   DocumentSnapshot? _lastDocument;
   bool _hasMore = true;
   bool _isLoading = true;
   bool _isLoadingMore = false;
+  late TabController _tabController;
+
+  // TL投稿とサークル投稿を分離
+  List<PostModel> get _tlPosts =>
+      _posts.where((p) => p.circleId == null).toList();
+  List<PostModel> get _circlePosts =>
+      _posts.where((p) => p.circleId != null).toList();
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _loadPosts();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadPosts() async {
@@ -553,37 +568,107 @@ class _UserPostsListState extends State<_UserPostsList> {
       );
     }
 
-    return SliverList(
-      delegate: SliverChildBuilderDelegate((context, index) {
-        if (index == _posts.length) {
-          if (_isLoadingMore) {
-            return const Padding(
-              padding: EdgeInsets.all(16),
-              child: Center(
-                child: CircularProgressIndicator(color: AppColors.primary),
+    // タブ表示
+    return SliverToBoxAdapter(
+      child: Column(
+        children: [
+          // タブバー
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              onTap: (_) => setState(() {}),
+              indicator: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(10),
               ),
-            );
-          }
-          if (_hasMore) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              _loadMorePosts();
-            });
-          }
-          return const SizedBox.shrink();
-        }
+              indicatorSize: TabBarIndicatorSize.tab,
+              labelColor: Colors.white,
+              unselectedLabelColor: AppColors.textSecondary,
+              labelStyle: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+              dividerColor: Colors.transparent,
+              tabs: [
+                Tab(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text('TL投稿'),
+                      if (_tlPosts.isNotEmpty) _buildBadge(_tlPosts.length, 0),
+                    ],
+                  ),
+                ),
+                Tab(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text('サークル'),
+                      if (_circlePosts.isNotEmpty)
+                        _buildBadge(_circlePosts.length, 1),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          // 投稿リスト
+          _buildPostList(_tabController.index == 0 ? _tlPosts : _circlePosts),
+        ],
+      ),
+    );
+  }
 
-        final post = _posts[index];
+  Widget _buildBadge(int count, int tabIndex) {
+    return Container(
+      margin: const EdgeInsets.only(left: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: _tabController.index == tabIndex
+            ? Colors.white.withOpacity(0.3)
+            : AppColors.primary.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text('$count', style: const TextStyle(fontSize: 11)),
+    );
+  }
+
+  Widget _buildPostList(List<PostModel> posts) {
+    if (posts.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(32),
+        child: Column(
+          children: [
+            Text('📝', style: TextStyle(fontSize: 48)),
+            SizedBox(height: 8),
+            Text('まだ投稿がないよ', style: TextStyle(color: AppColors.textSecondary)),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: posts.length,
+      itemBuilder: (context, index) {
+        final post = posts[index];
         return _ProfilePostCard(
           post: post,
           isMyProfile: widget.isMyProfile,
           onDeleted: () {
-            // 自分の投稿を削除した場合、ローカルリストから即座に削除
             setState(() {
-              _posts.removeAt(index);
+              _posts.removeWhere((p) => p.id == post.id);
             });
           },
         );
-      }, childCount: _posts.length + (_hasMore ? 1 : 0)),
+      },
     );
   }
 }
@@ -748,6 +833,93 @@ class _ProfilePostCardState extends State<_ProfilePostCard> {
                         ],
                       ),
                   ],
+                ),
+
+              // サークル名バッジ（サークル投稿の場合）
+              if (widget.post.circleId != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: FutureBuilder<DocumentSnapshot>(
+                    future: FirebaseFirestore.instance
+                        .collection('circles')
+                        .doc(widget.post.circleId)
+                        .get(),
+                    builder: (context, snapshot) {
+                      // ロード中は何も表示しない
+                      if (!snapshot.hasData) {
+                        return const SizedBox.shrink();
+                      }
+                      // サークルが削除されている場合
+                      if (!snapshot.data!.exists) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade200,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.group_off_outlined,
+                                size: 14,
+                                color: Colors.grey,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '削除済みサークル',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+                      final circleName =
+                          snapshot.data!.get('name') as String? ?? 'サークル';
+                      return GestureDetector(
+                        onTap: () =>
+                            context.push('/circle/${widget.post.circleId}'),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: AppColors.primary.withOpacity(0.3),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.group_outlined,
+                                size: 14,
+                                color: AppColors.primary,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                circleName,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
 
               // 投稿内容

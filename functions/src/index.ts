@@ -5588,6 +5588,155 @@ export const cleanupOrphanedMedia = onSchedule(
       }
     }
 
-    console.log(`=== cleanupOrphanedMedia COMPLETE: checked=${checkedCount}, deleted=${deletedCount} ===`);
+    // ===============================================
+    // 4. 孤立サークル投稿のクリーンアップ（Firestore）
+    // サークルが存在しない投稿を削除
+    // ===============================================
+    console.log("Checking orphaned circle posts...");
+    let orphanedPostsDeleted = 0;
+
+    // circleIdがnullでない投稿を取得（サークル投稿のみ）
+    const circlePostsSnapshot = await db.collection("posts")
+      .where("circleId", "!=", null)
+      .limit(500) // バッチサイズ制限
+      .get();
+
+    // サークルの存在を確認するためのキャッシュ
+    const circleExistsCache: Map<string, boolean> = new Map();
+
+    for (const postDoc of circlePostsSnapshot.docs) {
+      try {
+        const postData = postDoc.data();
+        const circleId = postData.circleId;
+
+        if (!circleId) continue;
+
+        // キャッシュを確認
+        let circleExists = circleExistsCache.get(circleId);
+        if (circleExists === undefined) {
+          const circleDoc = await db.collection("circles").doc(circleId).get();
+          circleExists = circleDoc.exists;
+          circleExistsCache.set(circleId, circleExists);
+        }
+
+        if (!circleExists) {
+          console.log(`Orphaned circle post found: ${postDoc.id} (circleId: ${circleId})`);
+
+          // 関連データを削除
+          const deleteRefs: FirebaseFirestore.DocumentReference[] = [];
+
+          // コメント削除
+          const comments = await db.collection("comments").where("postId", "==", postDoc.id).get();
+          comments.docs.forEach((c) => deleteRefs.push(c.ref));
+
+          // リアクション削除
+          const reactions = await db.collection("reactions").where("postId", "==", postDoc.id).get();
+          reactions.docs.forEach((r) => deleteRefs.push(r.ref));
+
+          // 投稿自体を削除
+          deleteRefs.push(postDoc.ref);
+
+          // バッチ削除
+          const batch = db.batch();
+          deleteRefs.forEach((ref) => batch.delete(ref));
+          await batch.commit();
+
+          // メディアも削除
+          const mediaItems = postData.mediaItems || [];
+          for (const media of mediaItems) {
+            if (media.url && media.url.includes("firebasestorage.googleapis.com")) {
+              try {
+                const urlParts = media.url.split("/o/")[1];
+                if (urlParts) {
+                  const filePath = decodeURIComponent(urlParts.split("?")[0]);
+                  await bucket.file(filePath).delete().catch(() => { });
+                }
+              } catch (e) {
+                console.error(`Media delete failed:`, e);
+              }
+            }
+          }
+
+          orphanedPostsDeleted++;
+        }
+      } catch (error) {
+        console.error(`Error checking post ${postDoc.id}:`, error);
+      }
+    }
+
+    // ===============================================
+    // 5. 孤立コメントのクリーンアップ（Firestore）
+    // 存在しない投稿に紐づくコメントを削除
+    // ===============================================
+    console.log("Checking orphaned comments...");
+    let orphanedCommentsDeleted = 0;
+
+    const commentsSnapshot = await db.collection("comments")
+      .limit(1000)
+      .get();
+
+    // 投稿の存在を確認するためのキャッシュ
+    const postExistsCache: Map<string, boolean> = new Map();
+
+    for (const commentDoc of commentsSnapshot.docs) {
+      try {
+        const commentData = commentDoc.data();
+        const postId = commentData.postId;
+
+        if (!postId) continue;
+
+        let postExists = postExistsCache.get(postId);
+        if (postExists === undefined) {
+          const postDoc = await db.collection("posts").doc(postId).get();
+          postExists = postDoc.exists;
+          postExistsCache.set(postId, postExists);
+        }
+
+        if (!postExists) {
+          console.log(`Orphaned comment found: ${commentDoc.id} (postId: ${postId})`);
+          await commentDoc.ref.delete();
+          orphanedCommentsDeleted++;
+        }
+      } catch (error) {
+        console.error(`Error checking comment ${commentDoc.id}:`, error);
+      }
+    }
+
+    // ===============================================
+    // 6. 孤立リアクションのクリーンアップ（Firestore）
+    // 存在しない投稿に紐づくリアクションを削除
+    // ===============================================
+    console.log("Checking orphaned reactions...");
+    let orphanedReactionsDeleted = 0;
+
+    const reactionsSnapshot = await db.collection("reactions")
+      .limit(1000)
+      .get();
+
+    for (const reactionDoc of reactionsSnapshot.docs) {
+      try {
+        const reactionData = reactionDoc.data();
+        const postId = reactionData.postId;
+
+        if (!postId) continue;
+
+        let postExists = postExistsCache.get(postId);
+        if (postExists === undefined) {
+          const postDoc = await db.collection("posts").doc(postId).get();
+          postExists = postDoc.exists;
+          postExistsCache.set(postId, postExists);
+        }
+
+        if (!postExists) {
+          console.log(`Orphaned reaction found: ${reactionDoc.id} (postId: ${postId})`);
+          await reactionDoc.ref.delete();
+          orphanedReactionsDeleted++;
+        }
+      } catch (error) {
+        console.error(`Error checking reaction ${reactionDoc.id}:`, error);
+      }
+    }
+
+    console.log(`=== cleanupOrphanedMedia COMPLETE: checked=${checkedCount}, deleted=${deletedCount}, orphanedPosts=${orphanedPostsDeleted}, orphanedComments=${orphanedCommentsDeleted}, orphanedReactions=${orphanedReactionsDeleted} ===`);
   }
 );
