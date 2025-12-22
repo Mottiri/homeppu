@@ -52,7 +52,7 @@ export class GeminiProvider implements AIProvider {
     async generateText(prompt: string, options?: AIOptions): Promise<string> {
         const genAI = new GoogleGenerativeAI(this.apiKey);
         const model = genAI.getGenerativeModel({
-            model: "gemini-1.5-flash",
+            model: "gemini-2.5-flash-lite",
             generationConfig: {
                 temperature: options?.temperature ?? 0.7,
                 maxOutputTokens: options?.maxTokens ?? 1024,
@@ -70,7 +70,7 @@ export class GeminiProvider implements AIProvider {
     async generateWithImage(prompt: string, imageBase64: string, mimeType: string, options?: AIOptions): Promise<string> {
         const genAI = new GoogleGenerativeAI(this.apiKey);
         const model = genAI.getGenerativeModel({
-            model: "gemini-1.5-flash",
+            model: "gemini-2.5-flash-lite",
             generationConfig: {
                 temperature: options?.temperature ?? 0.7,
                 maxOutputTokens: options?.maxTokens ?? 1024,
@@ -120,7 +120,7 @@ export class OpenAIProvider implements AIProvider {
                 "Authorization": `Bearer ${this.apiKey}`,
             },
             body: JSON.stringify({
-                model: "gpt-4o-mini",
+                model: "gpt-5-nano",
                 messages: messages,
                 temperature: options?.temperature ?? 0.7,
                 max_tokens: options?.maxTokens ?? 1024,
@@ -163,7 +163,7 @@ export class OpenAIProvider implements AIProvider {
                 "Authorization": `Bearer ${this.apiKey}`,
             },
             body: JSON.stringify({
-                model: "gpt-4o-mini",
+                model: "gpt-5-nano",
                 messages: messages,
                 temperature: options?.temperature ?? 0.7,
                 max_tokens: options?.maxTokens ?? 1024,
