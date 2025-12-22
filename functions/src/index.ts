@@ -17,12 +17,26 @@ const QUEUE_NAME = "generateAIComment";
 
 // Gemini API Key
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
+// OpenAI API Key
+const openaiApiKey = defineSecret("OPENAI_API_KEY");
+
+import { AIProviderFactory } from "./ai/provider";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 
 admin.initializeApp();
 const db = admin.firestore();
+
+/**
+ * AIProviderFactoryを作成するヘルパー関数
+ * 関数内でSecretにアクセスし、ファクトリーを返す
+ */
+function createAIProviderFactory(): AIProviderFactory {
+  const geminiKey = geminiApiKey.value() || "";
+  const openaiKey = openaiApiKey.value() || "";
+  return new AIProviderFactory(geminiKey, openaiKey);
+}
 
 // ===============================================
 // 徳システム設定
