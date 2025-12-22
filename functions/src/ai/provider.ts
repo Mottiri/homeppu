@@ -122,7 +122,7 @@ export class OpenAIProvider implements AIProvider {
             body: JSON.stringify({
                 model: "gpt-5-nano",
                 messages: messages,
-                temperature: options?.temperature ?? 0.7,
+                // Note: gpt-5-nano only supports temperature=1 (default), so we omit it
                 max_completion_tokens: options?.maxTokens ?? 1024,
             }),
         });
@@ -165,7 +165,7 @@ export class OpenAIProvider implements AIProvider {
             body: JSON.stringify({
                 model: "gpt-5-nano",
                 messages: messages,
-                temperature: options?.temperature ?? 0.7,
+                // Note: gpt-5-nano only supports temperature=1 (default), so we omit it
                 max_completion_tokens: options?.maxTokens ?? 1024,
             }),
         });
