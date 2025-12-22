@@ -656,8 +656,26 @@ class _UserPostsListState extends State<_UserPostsList>
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: posts.length,
+      itemCount: posts.length + (_hasMore ? 1 : 0),
       itemBuilder: (context, index) {
+        // 追加読み込み
+        if (index == posts.length) {
+          if (_isLoadingMore) {
+            return const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(
+                child: CircularProgressIndicator(color: AppColors.primary),
+              ),
+            );
+          }
+          if (_hasMore) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _loadMorePosts();
+            });
+          }
+          return const SizedBox.shrink();
+        }
+
         final post = posts[index];
         return _ProfilePostCard(
           post: post,
