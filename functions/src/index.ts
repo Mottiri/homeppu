@@ -950,14 +950,127 @@ ${persona.personality.reactionGuide}
 1. ネガティブなことは一切言わないでください
 2. 自然な日本語で、人間らしく返信してください
 3. 「AI」「ボット」という言葉は使わないでください
-4. 専門用語（資格名、技術用語など）はそのまま繰り返さないでください
-5. 「すごい！」「応援してる！」などのテンプレ的な褒め方は禁止です
-6. 投稿内容の文脈を分析して、相手の気持ちを理解して返信してください
+4. 「すごい！」「応援してる！」などのテンプレ的な褒め方は禁止です
+5. 投稿内容の文脈を分析して、相手の気持ちを理解して返信してください
+
+【専門用語の扱い方】
+- そのワードを聞いたことがあるが、ハッキリとは理解していない曖昧なコメントにしてください
+- 例：「〇〇(専門用語)って●●って意味だっけ？私まだ全然理解できなくて、すごいなぁ」
 
 【文字数の目安】
 - ${persona.praiseStyle.minLength}〜${persona.praiseStyle.maxLength} 文字程度
 - 短すぎず、長すぎず、自然な返信を心がけてください
       `;
+}
+
+/**
+ * サークル投稿専用のシステムプロンプトを生成
+ */
+function getCircleSystemPrompt(
+  persona: AIPersona,
+  posterName: string,
+  circleName: string,
+  circleDescription: string,
+  postContent: string,
+  circleGoal?: string,
+  circleRules?: string
+): string {
+  const rulesSection = circleRules
+    ? `\n【サークルルール（必ず遵守してください）】\n${circleRules}\n`
+    : "";
+
+  // 目標がある場合のプロンプト
+  if (circleGoal) {
+    return `
+あなたは「ほめっぷ」というポジティブなSNSのユーザーです。
+
+【サークル機能とは】
+同じ目標や趣味を持つ人が集まるコミュニティ機能です。
+メンバー同士で投稿を共有します。
+
+あなたはサークル「${circleName}」のメンバー「${persona.name}」です。
+
+【サークルの目標】
+${circleGoal}
+
+あなたは投稿者と同じ目標に向かって頑張っている仲間です。
+- 同じことに取り組んでいる立場でコメントしてください
+- 「私も〜やってる」「一緒に頑張ろう」のような仲間感を出してください
+
+【あなたの設定】
+- 性格: ${persona.personality.name}（${persona.personality.trait}）
+- 話し方: ${persona.personality.style}
+
+【あなたの反応スタイル: ${persona.personality.reactionType}】
+${persona.personality.reactionGuide}
+
+【専門用語の扱い方】
+投稿に専門用語が含まれる場合：
+- 知っているが、ハッキリとは理解していない曖昧なコメントにしてください
+- 例: 「〇〇って●●って意味だっけ？私まだ全然理解できなくて、すごいなぁ」
+- 例: 「〇〇、名前は聞いたことあるけど難しそう！どうだった？」
+${rulesSection}
+【重要ルール】
+・投稿内容の文脈を分析して、相手の気持ちを理解して返信してください
+
+【禁止】
+- 「すごい！」「応援してる！」などのテンプレ的な返信コメント
+- 「奥が深い」「すごい技術」などの曖昧な逃げ表現
+- 専門用語をそのまま繰り返す
+- ネガティブな発言
+- 「AI」「ボット」という言葉
+
+【文字数】${persona.praiseStyle.minLength}〜${persona.praiseStyle.maxLength}文字程度
+
+【${posterName}さんの投稿】
+${postContent}
+
+【あなた（${persona.name}）の返信】
+`;
+  }
+
+  // 目標がない場合のプロンプト
+  return `
+あなたは「ほめっぷ」というポジティブなSNSのユーザーです。
+
+【サークル機能とは】
+同じ目標や趣味を持つ人が集まるコミュニティ機能です。
+メンバー同士で投稿を共有します。
+
+あなたはサークル「${circleName}」のメンバー「${persona.name}」です。
+
+【サークル情報】
+サークル名: ${circleName}
+説明: ${circleDescription}
+
+上記の情報から、あなたの役割を判断してください：
+- 目標があるサークル → 同じ目標を持つ仲間として
+- 目標がないサークル（雑談、趣味など） → 日常を楽しむ友達として
+
+【あなたの設定】
+- 性格: ${persona.personality.name}（${persona.personality.trait}）
+- 話し方: ${persona.personality.style}
+
+【あなたの反応スタイル: ${persona.personality.reactionType}】
+${persona.personality.reactionGuide}
+${rulesSection}
+【重要ルール】
+・投稿内容の文脈を分析して、相手の気持ちを理解して返信してください
+
+【禁止】
+- 「すごい！」「応援してる！」などのテンプレ的な返信コメント
+- 「奥が深い」「すごい技術」などの曖昧な逃げ表現
+- 専門用語をそのまま繰り返す
+- ネガティブな発言
+- 「AI」「ボット」という言葉
+
+【文字数】${persona.praiseStyle.minLength}〜${persona.praiseStyle.maxLength}文字程度
+
+【${posterName}さんの投稿】
+${postContent}
+
+【あなた（${persona.name}）の返信】
+`;
 }
 
 /**
@@ -1021,7 +1134,10 @@ export const onPostCreated = onDocumentCreated(
 
     // サークル投稿の場合はサークルAIを使用、それ以外は一般AIを使用
     let selectedPersonas: AIPersona[];
-    let circleContext = "";
+    let circleName = "";
+    let circleDescription = "";
+    let circleGoal = "";
+    let circleRules = "";
 
     if (isCirclePost) {
       // サークル情報を取得
@@ -1048,8 +1164,11 @@ export const onPostCreated = onDocumentCreated(
         return;
       }
 
-      // サークルコンテキストを設定
-      circleContext = `\n\n【サークル情報】\nあなたはサークル「${circleData.name}」のメンバーです。\nサークル説明: ${circleData.description}\n同じ目標に向かって頑張っている仲間として、投稿者を応援してください。\n専門用語があればそれを理解して、詳しく褒めてください。`;
+      // サークルのgoal, rules, descriptionを取得
+      circleName = circleData.name || "";
+      circleDescription = circleData.description || "";
+      circleGoal = circleData.goal || "";
+      circleRules = circleData.rules || "";
 
       // サークルAIをAIPersona形式に変換
       selectedPersonas = generatedAIs.map((ai) => ({
@@ -1113,8 +1232,18 @@ export const onPostCreated = onDocumentCreated(
           userDisplayName: posterName,
           personaId: persona.id,
           personaName: persona.name,
+          personaGender: persona.gender,
+          personaAgeGroup: persona.ageGroup,
+          personaOccupation: persona.occupation,
+          personaPersonality: persona.personality,
+          personaPraiseStyle: persona.praiseStyle,
+          personaAvatarIndex: persona.avatarIndex,
           mediaDescriptions: mediaDescriptions, // 分析済みデータを渡す
-          circleContext: circleContext, // サークルコンテキスト（空文字列 or サークル情報）
+          isCirclePost: isCirclePost,
+          circleName: isCirclePost ? circleName : "",
+          circleDescription: isCirclePost ? circleDescription : "",
+          circleGoal: isCirclePost ? circleGoal : "",
+          circleRules: isCirclePost ? circleRules : "",
         };
 
         // v1関数のURL形式 (asia-northeast1-PROJECT_ID.cloudfunctions.net/FUNCTION_NAME)
@@ -3049,8 +3178,18 @@ export const generateAICommentV1 = functionsV1.region("asia-northeast1").runWith
       userDisplayName,
       personaId,
       personaName,
+      personaGender,
+      personaAgeGroup,
+      personaOccupation,
+      personaPersonality,
+      personaPraiseStyle,
+      personaAvatarIndex,
       mediaDescriptions,
-      circleContext, // サークルコンテキスト（サークル投稿の場合のみ）
+      isCirclePost,
+      circleName,
+      circleDescription,
+      circleGoal,
+      circleRules,
     } = request.body;
 
     console.log(`Processing AI comment task for ${personaName} on post ${postId}`);
@@ -3059,21 +3198,21 @@ export const generateAICommentV1 = functionsV1.region("asia-northeast1").runWith
     const aiFactory = createAIProviderFactory();
 
     // ペルソナを再構築
-    // まずAI_PERSONASから検索、見つからなければサークルAIとして処理
+    // まずAI_PERSONASから検索、見つからなければペイロードから構築
     let persona = AI_PERSONAS.find(p => p.id === personaId);
 
     if (!persona) {
-      // サークルAIの場合、ペイロードから簡易ペルソナを構築
-      console.log(`Persona ${personaId} not in AI_PERSONAS, assuming circle AI`);
+      // サークルAIの場合、ペイロードからペルソナを構築
+      console.log(`Persona ${personaId} not in AI_PERSONAS, using payload data`);
       persona = {
         id: personaId,
         name: personaName,
         namePrefixId: "",
         nameSuffixId: "",
-        gender: "female" as Gender,
-        ageGroup: "twenties" as AgeGroup,
-        occupation: { id: "student", name: "頑張り中", bio: "" },
-        personality: {
+        gender: personaGender || "female" as Gender,
+        ageGroup: personaAgeGroup || "twenties" as AgeGroup,
+        occupation: personaOccupation || { id: "student", name: "頑張り中", bio: "" },
+        personality: personaPersonality || {
           id: "bright",
           name: "明るい",
           trait: "ポジティブで元気",
@@ -3082,8 +3221,8 @@ export const generateAICommentV1 = functionsV1.region("asia-northeast1").runWith
           reactionType: "褒める",
           reactionGuide: "相手の行動や結果を素直に褒めてください。",
         },
-        praiseStyle: PRAISE_STYLES[0],
-        avatarIndex: 0,
+        praiseStyle: personaPraiseStyle || PRAISE_STYLES[0],
+        avatarIndex: personaAvatarIndex || 0,
         bio: "",
       };
     }
@@ -3093,22 +3232,42 @@ export const generateAICommentV1 = functionsV1.region("asia-northeast1").runWith
       ? `\n\n【添付メディアの内容】\n${mediaDescriptions.join("\n")}`
       : "";
 
-    // サークルコンテキストがあればシステムプロンプトに追加
-    const circlePromptAddition = circleContext || "";
-
-    const prompt = `
-${getSystemPrompt(persona, userDisplayName)}${circlePromptAddition}
+    // サークル投稿かどうかでプロンプトを分岐
+    let prompt: string;
+    if (isCirclePost) {
+      // サークル投稿: 専用プロンプトを使用
+      prompt = getCircleSystemPrompt(
+        persona,
+        userDisplayName,
+        circleName,
+        circleDescription,
+        postContent || "(テキストなし)",
+        circleGoal,
+        circleRules
+      );
+      // メディアコンテキストを追加
+      if (mediaContext) {
+        prompt = prompt.replace(
+          "【あなた（" + persona.name + "）の返信】",
+          mediaContext + "\n\n【あなた（" + persona.name + "）の返信】"
+        );
+      }
+    } else {
+      // 一般投稿: 従来のプロンプトを使用
+      prompt = `
+${getSystemPrompt(persona, userDisplayName)}
 
 【${userDisplayName}さんの投稿】
 ${postContent || "(テキストなし)"}${mediaContext}
 
 【重要】
 ${mediaDescriptions && mediaDescriptions.length > 0
-        ? "添付されたメディア（画像・動画）の内容も考慮して、具体的に褒めてください。"
-        : ""}
+          ? "添付されたメディア（画像・動画）の内容も考慮して、具体的に褒めてください。"
+          : ""}
 
 【あなた（${persona.name}）の返信】
 `;
+    }
 
     const aiResult = await aiFactory.generateText(prompt);
     const commentText = aiResult.text?.trim();
@@ -3681,6 +3840,105 @@ export const deleteAllAIUsers = functionsV1.region("asia-northeast1").runWith({
     console.error("Error deleting AI users:", error);
     throw new functionsV1.https.HttpsError("internal", "削除処理中にエラーが発生しました");
   }
+});
+
+/**
+ * 孤児サークルAI（サブコレクションのみ残っている状態）を一括削除
+ */
+export const cleanupOrphanedCircleAIs = onCall(
+  { region: "asia-northeast1", timeoutSeconds: 300 },
+  async () => {
+    console.log("=== cleanupOrphanedCircleAIs START ===");
+
+    // circle_ai_で始まるユーザーを全て取得
+    const circleAIsSnapshot = await db.collection("users")
+      .where("__name__", ">=", "circle_ai_")
+      .where("__name__", "<", "circle_ai_\uf8ff")
+      .get();
+
+    let deletedCount = 0;
+    let notificationCount = 0;
+
+    for (const doc of circleAIsSnapshot.docs) {
+      const userId = doc.id;
+      const userRef = db.collection("users").doc(userId);
+
+      // サブコレクション（notifications）を削除
+      const notificationsSnapshot = await userRef.collection("notifications").get();
+      if (!notificationsSnapshot.empty) {
+        const batch = db.batch();
+        notificationsSnapshot.docs.forEach(notifDoc => batch.delete(notifDoc.ref));
+        await batch.commit();
+        notificationCount += notificationsSnapshot.size;
+      }
+
+      // ユーザードキュメント本体を削除
+      await userRef.delete();
+      deletedCount++;
+      console.log(`Deleted circle AI: ${userId}`);
+    }
+
+    console.log(`=== cleanupOrphanedCircleAIs COMPLETE: ${deletedCount} users, ${notificationCount} notifications ===`);
+    return {
+      success: true,
+      message: `孤児サークルAIを${deletedCount}件削除しました（通知${notificationCount}件）`,
+      deletedUsers: deletedCount,
+      deletedNotifications: notificationCount,
+    };
+  }
+);
+
+/**
+ * 孤児サークルAI削除（HTTPリクエスト版・管理者用）
+ */
+export const cleanupOrphanedCircleAIsHttp = functionsV1.region("asia-northeast1").runWith({
+  timeoutSeconds: 300,
+  memory: "256MB",
+}).https.onRequest(async (request, response) => {
+  // シンプルな認証チェック
+  const authHeader = request.headers["x-admin-secret"];
+  if (authHeader !== "homeppu-admin-2024") {
+    response.status(403).send({ error: "Unauthorized" });
+    return;
+  }
+
+  console.log("=== cleanupOrphanedCircleAIsHttp START ===");
+
+  // circle_ai_で始まるユーザーを全て取得
+  const circleAIsSnapshot = await db.collection("users")
+    .where("__name__", ">=", "circle_ai_")
+    .where("__name__", "<", "circle_ai_\uf8ff")
+    .get();
+
+  let deletedCount = 0;
+  let notificationCount = 0;
+
+  for (const doc of circleAIsSnapshot.docs) {
+    const userId = doc.id;
+    const userRef = db.collection("users").doc(userId);
+
+    // サブコレクション（notifications）を削除
+    const notificationsSnapshot = await userRef.collection("notifications").get();
+    if (!notificationsSnapshot.empty) {
+      const batch = db.batch();
+      notificationsSnapshot.docs.forEach(notifDoc => batch.delete(notifDoc.ref));
+      await batch.commit();
+      notificationCount += notificationsSnapshot.size;
+    }
+
+    // ユーザードキュメント本体を削除
+    await userRef.delete();
+    deletedCount++;
+    console.log(`Deleted circle AI: ${userId}`);
+  }
+
+  console.log(`=== cleanupOrphanedCircleAIsHttp COMPLETE: ${deletedCount} users, ${notificationCount} notifications ===`);
+  response.status(200).send({
+    success: true,
+    message: `孤児サークルAIを${deletedCount}件削除しました（通知${notificationCount}件）`,
+    deletedUsers: deletedCount,
+    deletedNotifications: notificationCount,
+  });
 });
 
 /**
@@ -4285,16 +4543,28 @@ export const cleanupDeletedCircle = functionsV1.region("asia-northeast1").runWit
       // Storage削除失敗しても処理は継続
     }
 
-    // 4. サークルAIアカウント削除
+    // 4. サークルAIアカウント削除（サブコレクション含む）
     const circleDoc = await db.collection("circles").doc(circleId).get();
     if (circleDoc.exists) {
       const generatedAIs = circleDoc.data()?.generatedAIs || [];
       for (const ai of generatedAIs) {
         if (ai.id && ai.id.startsWith("circle_ai_")) {
-          await db.collection("users").doc(ai.id).delete().catch(() => { });
+          const aiUserRef = db.collection("users").doc(ai.id);
+
+          // サブコレクション（notifications）を削除
+          const notificationsSnapshot = await aiUserRef.collection("notifications").get();
+          if (!notificationsSnapshot.empty) {
+            const subBatch = db.batch();
+            notificationsSnapshot.docs.forEach(doc => subBatch.delete(doc.ref));
+            await subBatch.commit();
+            console.log(`Deleted ${notificationsSnapshot.size} notifications for AI ${ai.id}`);
+          }
+
+          // AIユーザードキュメント本体を削除
+          await aiUserRef.delete().catch(() => { });
         }
       }
-      console.log(`Deleted ${generatedAIs.length} AI accounts`);
+      console.log(`Deleted ${generatedAIs.length} AI accounts with subcollections`);
 
       // 5. サークル本体を完全削除
       await circleDoc.ref.delete();
@@ -4960,6 +5230,13 @@ export const generateCircleAIPosts = functionsV1.region("asia-northeast1").runWi
     for (const circleDoc of circlesSnapshot.docs) {
       const circleData = circleDoc.data();
       const circleId = circleDoc.id;
+
+      // 削除されたサークルはスキップ
+      if (circleData.isDeleted) {
+        console.log(`Circle ${circleId} is deleted, skipping`);
+        continue;
+      }
+
       const generatedAIs = circleData.generatedAIs as Array<{
         id: string;
         name: string;
@@ -5160,6 +5437,13 @@ export const triggerCircleAIPosts = onCall(
       for (const circleDoc of circlesSnapshot.docs) {
         const circleData = circleDoc.data();
         const circleId = circleDoc.id;
+
+        // 削除されたサークルはスキップ
+        if (circleData.isDeleted) {
+          console.log(`Circle ${circleId} is deleted, skipping`);
+          continue;
+        }
+
         const generatedAIs = circleData.generatedAIs as Array<{
           id: string;
           name: string;
@@ -5170,16 +5454,30 @@ export const triggerCircleAIPosts = onCall(
 
         const randomAI = generatedAIs[Math.floor(Math.random() * generatedAIs.length)];
 
+        // 過去の投稿を取得（重複回避用）
+        const recentPostsSnapshot = await db.collection("posts")
+          .where("circleId", "==", circleId)
+          .orderBy("createdAt", "desc")
+          .limit(5)
+          .get();
+        const recentPostContents = recentPostsSnapshot.docs.map(doc => doc.data().content as string).filter(Boolean);
+
         const prompt = getCircleAIPostPrompt(
           randomAI.name,
           circleData.name,
           circleData.description || "",
-          circleData.category || "その他"
+          circleData.category || "その他",
+          recentPostContents
         );
 
         try {
           const result = await model.generateContent(prompt);
-          const postContent = result.response.text()?.trim();
+          let postContent = result.response.text()?.trim();
+
+          // ハッシュタグが含まれていたら削除
+          if (postContent) {
+            postContent = postContent.replace(/#[^\s#]+/g, "").trim();
+          }
 
           if (!postContent) continue;
 
@@ -5222,6 +5520,127 @@ export const triggerCircleAIPosts = onCall(
     }
   }
 );
+
+/**
+ * サークルAI投稿を手動トリガー（HTTPリクエスト版・テスト用）
+ * Cloud Shellやcurlから簡単に呼び出し可能
+ */
+export const triggerCircleAIPostsHttp = functionsV1.region("asia-northeast1").runWith({
+  secrets: ["GEMINI_API_KEY"],
+  timeoutSeconds: 300,
+  memory: "512MB",
+}).https.onRequest(async (request, response) => {
+  // シンプルな認証チェック（ヘッダーにsecretを要求）
+  const authHeader = request.headers["x-admin-secret"];
+  if (authHeader !== "homeppu-admin-2024") {
+    response.status(403).send({ error: "Unauthorized" });
+    return;
+  }
+
+  console.log("=== triggerCircleAIPostsHttp START ===");
+
+  const apiKey = geminiApiKey.value();
+  if (!apiKey) {
+    response.status(500).send({ error: "GEMINI_API_KEY is not set" });
+    return;
+  }
+
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+  let totalPosts = 0;
+  const bucket = admin.storage().bucket();
+
+  try {
+    const circlesSnapshot = await db.collection("circles").get();
+
+    for (const circleDoc of circlesSnapshot.docs) {
+      const circleData = circleDoc.data();
+      const circleId = circleDoc.id;
+
+      // 削除されたサークルはスキップ
+      if (circleData.isDeleted) {
+        console.log(`Circle ${circleId} is deleted, skipping`);
+        continue;
+      }
+
+      const generatedAIs = circleData.generatedAIs as Array<{
+        id: string;
+        name: string;
+        avatarIndex: number;
+      }> || [];
+
+      if (generatedAIs.length === 0) continue;
+
+      const randomAI = generatedAIs[Math.floor(Math.random() * generatedAIs.length)];
+
+      // 過去の投稿を取得（重複回避用）
+      const recentPostsSnapshot = await db.collection("posts")
+        .where("circleId", "==", circleId)
+        .orderBy("createdAt", "desc")
+        .limit(5)
+        .get();
+      const recentPostContents = recentPostsSnapshot.docs.map(doc => doc.data().content as string).filter(Boolean);
+
+      const prompt = getCircleAIPostPrompt(
+        randomAI.name,
+        circleData.name,
+        circleData.description || "",
+        circleData.category || "その他",
+        recentPostContents
+      );
+
+      try {
+        const result = await model.generateContent(prompt);
+        let postContent = result.response.text()?.trim();
+
+        // ハッシュタグが含まれていたら削除
+        if (postContent) {
+          postContent = postContent.replace(/#[^\s#]+/g, "").trim();
+        }
+
+        if (!postContent) continue;
+
+        const postRef = db.collection("posts").doc();
+        await postRef.set({
+          userId: randomAI.id,
+          userDisplayName: randomAI.name,
+          userAvatarIndex: randomAI.avatarIndex,
+          content: postContent,
+          postMode: "mix",
+          circleId: circleId,
+          isVisible: true,
+          reactions: {},
+          commentCount: 0,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        await db.collection("circles").doc(circleId).update({
+          postCount: admin.firestore.FieldValue.increment(1),
+          recentActivity: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        totalPosts++;
+        console.log(`Created post for ${circleData.name}: ${postContent.substring(0, 30)}...`);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+      } catch (error) {
+        console.error(`Error generating post for circle ${circleId}:`, error);
+      }
+    }
+
+    console.log(`=== triggerCircleAIPostsHttp COMPLETE: ${totalPosts} posts ===`);
+    response.status(200).send({
+      success: true,
+      message: `サークルAI投稿を${totalPosts}件作成しました`,
+      totalPosts,
+    });
+
+  } catch (error) {
+    console.error("triggerCircleAIPostsHttp ERROR:", error);
+    response.status(500).send({ error: `エラー: ${error}` });
+  }
+});
 
 // ===============================================
 // サークルAI成長システム (v1.2)
