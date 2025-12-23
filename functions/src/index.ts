@@ -526,7 +526,7 @@ const PERSONALITIES = {
       id: "passionate",
       name: "熱血",
       trait: "応援が熱い",
-      style: "「頑張れ！」「最高！」連発",
+      style: "熱い応援、感嘆符多め",
       examples: ["頑張れ！！", "最高だ！", "応援してる！！"],
       reactionType: "応援する",
       reactionGuide: "相手を全力で応援し、エールを送ってください。",
@@ -544,7 +544,7 @@ const PERSONALITIES = {
       id: "cheerful",
       name: "ノリ良い",
       trait: "テンション高め",
-      style: "「ww」「草」使う、タメ口",
+      style: "くだけた口調、ネットスラング少々",
       examples: ["まじすごいw", "やばいww", "神かよ"],
       reactionType: "感心する",
       reactionGuide: "素直に感心・感嘆を表現してください。",
@@ -553,7 +553,7 @@ const PERSONALITIES = {
       id: "easygoing",
       name: "マイペース",
       trait: "ゆるい感じ",
-      style: "「〜だね」「いいんじゃない？」",
+      style: "ゆるいトーン、のんびり",
       examples: ["いいんじゃない？", "すごいね〜", "いい感じだね"],
       reactionType: "関心を持つ",
       reactionGuide: "相手に興味を持った姿勢で、軽く質問や感想を言ってください。",
@@ -564,7 +564,7 @@ const PERSONALITIES = {
       id: "kind",
       name: "優しい",
       trait: "包容力がある",
-      style: "「わかるよ〜」共感系",
+      style: "共感ベース、柔らかいトーン",
       examples: ["わかる〜！", "うんうん、すごいね", "頑張ってるね〜"],
       reactionType: "寄り添う",
       reactionGuide: "相手の気持ち（達成感、疲れ、嬉しさなど）に寄り添ってください。内容そのものではなく感情に共感してください。",
@@ -573,7 +573,7 @@ const PERSONALITIES = {
       id: "energetic",
       name: "元気",
       trait: "明るくハキハキ",
-      style: "「すごーい！」絵文字多め",
+      style: "明るいテンション、絵文字多め",
       examples: ["すごーい！✨", "えらい！！", "頑張ってる！！"],
       reactionType: "褒める",
       reactionGuide: "相手の行動や結果を元気よく褒めてください。",
@@ -582,7 +582,7 @@ const PERSONALITIES = {
       id: "healing",
       name: "癒し系",
       trait: "ほんわかしている",
-      style: "ひらがな多め「えらいね〜」",
+      style: "ほんわか、ひらがな多め",
       examples: ["えらいね〜", "すごいなぁ", "がんばってるね"],
       reactionType: "いたわる",
       reactionGuide: "相手を優しく気遣い、無理しないでねという姿勢で。",
@@ -591,7 +591,7 @@ const PERSONALITIES = {
       id: "stylish",
       name: "おしゃれ",
       trait: "トレンドに敏感",
-      style: "「素敵✨」「かわいい」",
+      style: "トレンド感、おしゃれな言い回し",
       examples: ["素敵✨", "いいじゃん！", "センスいい！"],
       reactionType: "尊敬する",
       reactionGuide: "相手を尊敬し、かっこいい・素敵だという気持ちを伝えてください。",
@@ -994,8 +994,7 @@ function getCircleSystemPrompt(
 ${circleGoal}
 
 あなたは投稿者と同じ目標に向かって頑張っている仲間です。
-- 同じことに取り組んでいる立場でコメントしてください
-- 「私も〜やってる」「一緒に頑張ろう」のような仲間感を出してください
+同じ目標に取り組んでいる仲間の立場で、あなたの反応スタイルに沿って返信してください。
 
 【あなたの設定】
 - 性格: ${persona.personality.name}（${persona.personality.trait}）
@@ -1005,10 +1004,7 @@ ${circleGoal}
 ${persona.personality.reactionGuide}
 
 【専門用語の扱い方】
-投稿に専門用語が含まれる場合：
-- 知っているが、ハッキリとは理解していない曖昧なコメントにしてください
-- 例: 「〇〇って●●って意味だっけ？私まだ全然理解できなくて、すごいなぁ」
-- 例: 「〇〇、名前は聞いたことあるけど難しそう！どうだった？」
+投稿に含まれる専門用語と思われるワードは、コメントに含めても良いし、含めなくても良いです。
 ${rulesSection}
 【重要ルール】
 ・投稿内容の文脈を分析して、相手の気持ちを理解して返信してください
@@ -1209,8 +1205,8 @@ export const onPostCreated = onDocumentCreated(
 
 
     // ランダムな遅延時間を生成し、昇順にソート（順番にコメントが来るようにする）
-    // 1〜10分の間で分散（テスト用）
-    const delays = Array.from({ length: selectedPersonas.length }, () => Math.floor(Math.random() * 9) + 1)
+    // 最低2分間隔で実行（前のコメントが確実に保存されてからクエリするため）
+    const delays = Array.from({ length: selectedPersonas.length }, (_, i) => (i + 1) * 2 + Math.floor(Math.random() * 2))
       .sort((a, b) => a - b);
 
     // Cloud Tasks クライアント
@@ -3232,6 +3228,33 @@ export const generateAICommentV1 = functionsV1.region("asia-northeast1").runWith
       ? `\n\n【添付メディアの内容】\n${mediaDescriptions.join("\n")}`
       : "";
 
+    // 既存のAIコメントを取得（重複回避のため）
+    const postRef = db.collection("posts").doc(postId);
+    let existingCommentsContext = "";
+    try {
+      const existingCommentsSnapshot = await postRef.collection("comments")
+        .where("isAI", "==", true)
+        .orderBy("createdAt", "asc")
+        .limit(10) // 最大10件まで
+        .get();
+
+      if (!existingCommentsSnapshot.empty) {
+        const existingComments = existingCommentsSnapshot.docs.map(doc => {
+          const data = doc.data();
+          return `- ${data.userName || "AI"}: 「${data.content}」`;
+        });
+        existingCommentsContext = `
+【既に投稿されているコメント】
+以下のコメントで使われている単語・フレーズは絶対に使わないでください。
+まったく異なる言い回しで、別の角度から返信してください：
+${existingComments.join("\n")}
+`;
+        console.log(`Found ${existingComments.length} existing AI comments for diversity`);
+      }
+    } catch (error) {
+      console.log("Could not fetch existing comments, proceeding without diversity check");
+    }
+
     // サークル投稿かどうかでプロンプトを分岐
     let prompt: string;
     if (isCirclePost) {
@@ -3245,11 +3268,12 @@ export const generateAICommentV1 = functionsV1.region("asia-northeast1").runWith
         circleGoal,
         circleRules
       );
-      // メディアコンテキストを追加
-      if (mediaContext) {
+      // メディアコンテキストと既存コメントコンテキストを追加
+      const additionalContext = existingCommentsContext + mediaContext;
+      if (additionalContext) {
         prompt = prompt.replace(
           "【あなた（" + persona.name + "）の返信】",
-          mediaContext + "\n\n【あなた（" + persona.name + "）の返信】"
+          additionalContext + "\n\n【あなた（" + persona.name + "）の返信】"
         );
       }
     } else {
@@ -3259,7 +3283,7 @@ ${getSystemPrompt(persona, userDisplayName)}
 
 【${userDisplayName}さんの投稿】
 ${postContent || "(テキストなし)"}${mediaContext}
-
+${existingCommentsContext}
 【重要】
 ${mediaDescriptions && mediaDescriptions.length > 0
           ? "添付されたメディア（画像・動画）の内容も考慮して、具体的に褒めてください。"
@@ -3284,7 +3308,7 @@ ${mediaDescriptions && mediaDescriptions.length > 0
     const reactionType = POSITIVE_REACTIONS[Math.floor(Math.random() * POSITIVE_REACTIONS.length)];
 
     // 投稿が存在するか確認（Cloud Tasksの遅延実行中に削除された可能性）
-    const postRef = db.collection("posts").doc(postId);
+    // postRefは既に上で宣言済み
     const postDoc = await postRef.get();
     if (!postDoc.exists) {
       console.warn(`Post ${postId} not found, skipping AI comment`);
