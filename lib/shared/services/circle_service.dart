@@ -75,6 +75,32 @@ class CircleService {
     });
   }
 
+  // サークル一覧を取得（Future版 - プル更新用）
+  Future<List<CircleModel>> getPublicCircles({
+    String? category,
+    String? userId,
+  }) async {
+    final snapshot = await _firestore.collection('circles').get();
+    var circles = snapshot.docs
+        .map((doc) => CircleModel.fromFirestore(doc))
+        .where((c) => !c.isDeleted) // ソフトデリート済みは除外
+        .where(
+          (c) =>
+              c.aiMode != CircleAIMode.aiOnly || // AIモードでない
+              c.ownerId == userId,
+        ) // または自分が作成者
+        .toList();
+
+    // カテゴリフィルター
+    if (category != null && category != '全て') {
+      circles = circles.where((c) => c.category == category).toList();
+    }
+
+    // 作成日でソート（降順）
+    circles.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return circles;
+  }
+
   // サークル検索
   Future<List<CircleModel>> searchCircles(String query) async {
     // Firestoreは部分一致検索をサポートしないため、
@@ -292,15 +318,12 @@ class CircleService {
 
   // 投稿をピン留め/解除
   Future<void> togglePinPost(String postId, bool isPinned) async {
-    print('togglePinPost called: postId=$postId, isPinned=$isPinned');
     try {
       await _firestore.collection('posts').doc(postId).update({
         'isPinned': isPinned,
         'isPinnedTop': isPinned ? false : false, // ピン解除時はトップも解除
       });
-      print('togglePinPost success');
     } catch (e) {
-      print('togglePinPost error: $e');
       rethrow;
     }
   }
@@ -337,9 +360,6 @@ class CircleService {
         .where('isPinned', isEqualTo: true)
         .snapshots()
         .map((snapshot) {
-          print(
-            'streamPinnedPosts: found ${snapshot.docs.length} pinned posts',
-          );
           final posts = snapshot.docs
               .map((doc) => PostModel.fromFirestore(doc))
               .toList();
