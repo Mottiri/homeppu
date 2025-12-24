@@ -5,7 +5,7 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
 
 import * as admin from "firebase-admin";
-import { GoogleGenerativeAI, Part } from "@google/generative-ai";
+import { GoogleGenerativeAI, Part, GenerativeModel } from "@google/generative-ai";
 import { GoogleAIFileManager } from "@google/generative-ai/server";
 import * as https from "https";
 import { CloudTasksClient } from "@google-cloud/tasks";
@@ -948,14 +948,22 @@ ${persona.personality.reactionGuide}
 
 【重要なルール】
 1. ネガティブなことは一切言わないでください
-2. 自然な日本語で、人間らしく返信してください
-3. 「AI」「ボット」という言葉は使わないでください
-4. 「すごい！」「応援してる！」などのテンプレ的な褒め方は禁止です
-5. 投稿内容の文脈を分析して、相手の気持ちを理解して返信してください
+2. 自然な日本語で返信してください
+3. 投稿内容の文脈を分析して、相手の気持ちを理解して返信してください
 
-【専門用語の扱い方】
-- そのワードを聞いたことがあるが、ハッキリとは理解していない曖昧なコメントにしてください
-- 例：「〇〇(専門用語)って●●って意味だっけ？私まだ全然理解できなくて、すごいなぁ」
+
+
+【禁止ワード・表現】
+- 疑問形で文章を完結させるのは禁止です。
+- 投稿内容をそのまま要約して繰り返すこと（例：「〇〇されたんですね」「〇〇だったんですね」）
+- 「その通りですね」「わかります」などの相槌だけで文を始めない（個別の感想から入る）
+- 外国語の直訳や、日本語として不自然な単語（例：中国語由来の愛称など）は使用せず、一般的な日本のSNSユーザーが使う自然な単語を選んでください
+- 「すごい！」「応援してる！」などのテンプレ的な褒め方
+- ネガティブな発言
+
+【投稿内容が意味不明な場合】
+- 投稿内容がランダムな文字列、極端な誤字脱字で意味が通じない、または日本語として成立していない場合は、無理に返信せず、単に「SKIP_COMMENT」とだけ出力してください。
+- 文脈から推測できる程度の誤字なら、好意的に解釈して返信してください。
 
 【文字数の目安】
 - ${persona.praiseStyle.minLength}〜${persona.praiseStyle.maxLength} 文字程度
@@ -1007,14 +1015,17 @@ ${persona.personality.reactionGuide}
 投稿に含まれる専門用語と思われるワードは、コメントに含めても良いし、含めなくても良いです。
 ${rulesSection}
 【重要ルール】
-・投稿内容の文脈を分析して、相手の気持ちを理解して返信してください
+- 投稿内容の文脈を分析して、相手の気持ちを理解して返信してください
+- 自然な日本語で返信してください
 
 【禁止】
+- 疑問形で文章を完結させるのは禁止です。
+- 投稿内容をそのまま要約して繰り返すこと（例：「〇〇されたんですね」）
 - 「すごい！」「応援してる！」などのテンプレ的な返信コメント
 - 「奥が深い」「すごい技術」などの曖昧な逃げ表現
 - 専門用語をそのまま繰り返す
 - ネガティブな発言
-- 「AI」「ボット」という言葉
+- 日本語として不自然な表現や、一般的でない外国語由来の単語
 
 【文字数】${persona.praiseStyle.minLength}〜${persona.praiseStyle.maxLength}文字程度
 
@@ -1070,6 +1081,55 @@ ${postContent}
 }
 
 /**
+ * 投稿内容がAIにとって安全かつ適切か（意味が通じるか）を判定する
+ */
+async function evaluatePostSafety(
+  apiKey: string,
+  model: GenerativeModel,
+  content: string
+): Promise<boolean> {
+  // 短すぎる、または明らかに意味のない文字列はAPIを呼ばずに弾く（簡易フィルタ）
+  if (content.length < 2 && !/^[\u4e00-\u9faf]+$/.test(content)) return false; // 1文字のひらがな/カタカナ等は弾く（漢字1文字はOK）
+
+  const prompt = `
+あなたはコンテンツフィルターです。
+以下のテキストが「会話として成立する日本語」かどうかを判定してください。
+
+【判定基準】
+- YES (許可):
+  - 日常会話、報告、感想など、意味が汲み取れるもの。
+  - **主語や目的語が省略されていても、状況が想像できるならYES**としてください。（例：「飾り付けした」（何を？がなくてもXmasならOK）、「お腹すいた」「やったー」）
+  - 方言や多少の崩れた表現も、意味が通じるならOK。
+
+- NO (拒否):
+  - **ランダムな文字の羅列**。（例：「あかま」「てておか」「あいうえお」）
+  - 文脈が全くなく、単語単体で意味をなさないもの。（例：「山田」（呼びかけか名前か不明）、「テスト」）
+  - 完全に意味不明な文字列。
+
+迷った場合は、会話の糸口が見つかるなら「YES」に倒してください。
+
+テキスト:
+${content}
+
+フォーマット: [YES/NO] [理由]
+`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const response = result.response.text().trim();
+    console.log(`Safety evaluation raw response: ${response}`);
+
+    // YESで始まっているか判定（大文字小文字無視、先頭一致）
+    const isSafe = response.toUpperCase().startsWith("YES");
+    console.log(`Safety evaluation result: ${isSafe ? "YES" : "NO"}`);
+    return isSafe;
+  } catch (error) {
+    console.error("Safety evaluation failed:", error);
+    return true; // エラー時はフェイルオープン（念のため通す）かクローズか...ここでは通す
+  }
+}
+
+/**
  * 新規投稿時にAIコメントを生成するトリガー
  * メディア（画像・動画）がある場合は内容を分析してコメントに反映
  */
@@ -1113,6 +1173,29 @@ export const onPostCreated = onDocumentCreated(
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
+    // 投稿内容の安全性・意味チェック (Binary Filter)
+    /*
+     * 判定ロジックを一時的に無効化 (2025-12-24)
+     * 理由: 現在のGemini Flashモデルでは、短いテキストに対する「文脈の有無」や「意味の通じる/通じない」の線引きが難しく、
+     * 「あかま」のような無意味な文字列を通してしまうか、逆に「飾り付けした」のような会話的な省略を弾いてしまうため。
+     * UXを優先し、フィルターなしで運用する。
+     */
+    /*
+    const postContent = postData.content || "";
+    console.log(`[DEBUG] content check: "${postContent}", length=${postContent.length}`);
+    
+    if (postContent && !postContent.match(/^http/)) { // URLのみの場合はスキップしない（画像判定に任せる）
+      console.log(`[DEBUG] Entering safety evaluation block`);
+      console.log(`Evaluating post safety for content: ${postContent}`);
+      const isSafe = await evaluatePostSafety(apiKey, model, postContent);
+      if (!isSafe) {
+        console.log("Post evaluated as UNSAFE or MEANINGLESS. Skipping AI comments.");
+        return;
+      }
+      console.log("Post evaluated as SAFE. Proceeding with AI comments.");
+    }
+    */
+
     // メディアがある場合は内容を分析
     let mediaDescriptions: string[] = [];
     const mediaItems = postData.mediaItems as MediaItem[] | undefined;
@@ -1144,6 +1227,13 @@ export const onPostCreated = onDocumentCreated(
       }
 
       const circleData = circleDoc.data()!;
+
+      // humanOnlyモードの場合はAIコメントをスキップ
+      if (circleData.aiMode === "humanOnly") {
+        console.log(`Circle ${postData.circleId} is humanOnly mode, skipping AI comments`);
+        return;
+      }
+
       const generatedAIs = circleData.generatedAIs as Array<{
         id: string;
         name: string;
@@ -3297,9 +3387,9 @@ ${mediaDescriptions && mediaDescriptions.length > 0
     const commentText = aiResult.text?.trim();
     console.log(`AI comment generated by ${aiResult.provider}${aiResult.usedFallback ? " (fallback)" : ""}`);
 
-    if (!commentText) {
-      console.warn("Empty comment generated");
-      response.status(200).send("No comment generated");
+    if (!commentText || commentText === "SKIP_COMMENT") {
+      console.log(`Skipping comment: ${commentText || "Empty"}`);
+      response.status(200).send("Comment skipped");
       return;
     }
 
@@ -4984,6 +5074,12 @@ export const onCircleCreated = onDocumentCreated(
 
     console.log(`=== onCircleCreated: ${circleId} ===`);
     console.log(`Circle name: ${circleData.name}, AI mode: ${circleData.aiMode}`);
+
+    // humanOnlyモードの場合はAIを生成しない
+    if (circleData.aiMode === "humanOnly") {
+      console.log(`Circle ${circleId} is humanOnly mode, skipping AI generation`);
+      return;
+    }
 
     try {
       // サークル情報を取得
