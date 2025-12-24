@@ -10,22 +10,15 @@ class VirtueIndicator extends ConsumerWidget {
   final bool showLabel;
   final double size;
 
-  const VirtueIndicator({
-    super.key,
-    this.showLabel = true,
-    this.size = 40,
-  });
+  const VirtueIndicator({super.key, this.showLabel = true, this.size = 40});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final virtueAsync = ref.watch(virtueStatusProvider);
 
     return virtueAsync.when(
-      data: (status) => _VirtueDisplay(
-        status: status,
-        showLabel: showLabel,
-        size: size,
-      ),
+      data: (status) =>
+          _VirtueDisplay(status: status, showLabel: showLabel, size: size),
       loading: () => SizedBox(
         width: size,
         height: size,
@@ -76,7 +69,7 @@ class _VirtueDisplay extends StatelessWidget {
                   strokeWidth: 3,
                   backgroundColor: AppColors.surfaceVariant,
                   valueColor: AlwaysStoppedAnimation(
-                    _color.withOpacity(0.3),
+                    _color.withValues(alpha: 0.3),
                   ),
                 ),
               ),
@@ -119,10 +112,7 @@ class _VirtueDisplay extends StatelessWidget {
                 if (status.needsWarning)
                   Text(
                     '⚠️ 注意',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: AppColors.warning,
-                    ),
+                    style: TextStyle(fontSize: 10, color: AppColors.warning),
                   ),
               ],
             ),
@@ -156,7 +146,7 @@ class VirtueDetailDialog extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppColors.virtue.withOpacity(0.1),
+              color: AppColors.virtue.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Text('✨', style: TextStyle(fontSize: 24)),
@@ -177,8 +167,8 @@ class VirtueDetailDialog extends ConsumerWidget {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    AppColors.virtue.withOpacity(0.1),
-                    AppColors.virtue.withOpacity(0.05),
+                    AppColors.virtue.withValues(alpha: 0.1),
+                    AppColors.virtue.withValues(alpha: 0.05),
                   ],
                 ),
                 borderRadius: BorderRadius.circular(16),
@@ -214,9 +204,9 @@ class VirtueDetailDialog extends ConsumerWidget {
             const SizedBox(height: 8),
             Text(
               '• ポジティブな投稿で徳が上がるよ\n• ネガティブな発言をすると下がるよ\n• 0になると投稿できなくなるよ',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppColors.textSecondary,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
             ),
 
             if (status.needsWarning) ...[
@@ -224,9 +214,11 @@ class VirtueDetailDialog extends ConsumerWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppColors.warning.withOpacity(0.1),
+                  color: AppColors.warning.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.warning.withOpacity(0.3)),
+                  border: Border.all(
+                    color: AppColors.warning.withValues(alpha: 0.3),
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -251,10 +243,7 @@ class VirtueDetailDialog extends ConsumerWidget {
             const SizedBox(height: 8),
 
             // 履歴
-            Text(
-              '履歴',
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
+            Text('履歴', style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 8),
 
             historyAsync.when(
@@ -290,12 +279,14 @@ class VirtueDetailDialog extends ConsumerWidget {
                               ),
                               decoration: BoxDecoration(
                                 color: isPositive
-                                    ? AppColors.success.withOpacity(0.1)
-                                    : AppColors.error.withOpacity(0.1),
+                                    ? AppColors.success.withValues(alpha: 0.1)
+                                    : AppColors.error.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
-                                isPositive ? '+${item.change}' : '${item.change}',
+                                isPositive
+                                    ? '+${item.change}'
+                                    : '${item.change}',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   color: isPositive
@@ -349,16 +340,19 @@ class VirtueBadge extends ConsumerWidget {
     return virtueAsync.when(
       data: (status) {
         Color color = AppColors.virtue;
-        if (status.virtue <= 0) color = AppColors.error;
-        else if (status.needsWarning) color = AppColors.warning;
-        else if (status.virtue >= 80) color = AppColors.success;
+        if (status.virtue <= 0)
+          color = AppColors.error;
+        else if (status.needsWarning)
+          color = AppColors.warning;
+        else if (status.virtue >= 80)
+          color = AppColors.success;
 
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
+            color: color.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withOpacity(0.3)),
+            border: Border.all(color: color.withValues(alpha: 0.3)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,

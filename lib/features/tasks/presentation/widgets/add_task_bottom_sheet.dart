@@ -347,7 +347,7 @@ class _AddTaskBottomSheetState extends ConsumerState<AddTaskBottomSheet> {
                           ),
                           onPressed: _pickDate,
                           backgroundColor: _scheduledDate != null
-                              ? AppColors.primary.withOpacity(0.1)
+                              ? AppColors.primary.withValues(alpha: 0.1)
                               : Colors.white,
                           shape: StadiumBorder(
                             side: BorderSide(
@@ -380,7 +380,7 @@ class _AddTaskBottomSheetState extends ConsumerState<AddTaskBottomSheet> {
                           ),
                           onPressed: _openRecurrenceSettings,
                           backgroundColor: _recurrenceUnit != null
-                              ? AppColors.primary.withOpacity(0.1)
+                              ? AppColors.primary.withValues(alpha: 0.1)
                               : Colors.white,
                           side: BorderSide(
                             color: _recurrenceUnit != null

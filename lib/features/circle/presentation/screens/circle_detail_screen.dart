@@ -676,11 +676,11 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                       icon: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.9),
+                          color: Colors.white.withValues(alpha: 0.9),
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
+                              color: Colors.black.withValues(alpha: 0.1),
                               blurRadius: 8,
                             ),
                           ],
@@ -697,11 +697,13 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                                 icon: Container(
                                   padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.9),
+                                    color: Colors.white.withValues(alpha: 0.9),
                                     shape: BoxShape.circle,
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black.withOpacity(0.1),
+                                        color: Colors.black.withValues(
+                                          alpha: 0.1,
+                                        ),
                                         blurRadius: 8,
                                       ),
                                     ],
@@ -790,7 +792,9 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                                       begin: Alignment.topLeft,
                                       end: Alignment.bottomRight,
                                       colors: [
-                                        AppColors.primary.withOpacity(0.7),
+                                        AppColors.primary.withValues(
+                                          alpha: 0.7,
+                                        ),
                                         AppColors.primaryLight,
                                       ],
                                     ),
@@ -804,7 +808,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                                 end: Alignment.bottomCenter,
                                 colors: [
                                   Colors.transparent,
-                                  Colors.black.withOpacity(0.3),
+                                  Colors.black.withValues(alpha: 0.3),
                                 ],
                               ),
                             ),
@@ -825,7 +829,9 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                                     borderRadius: BorderRadius.circular(20),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black.withOpacity(0.15),
+                                        color: Colors.black.withValues(
+                                          alpha: 0.15,
+                                        ),
                                         blurRadius: 12,
                                       ),
                                     ],
@@ -919,7 +925,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.04),
+                            color: Colors.black.withValues(alpha: 0.04),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),
@@ -942,7 +948,9 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: AppColors.primaryLight.withOpacity(0.3),
+                                color: AppColors.primaryLight.withValues(
+                                  alpha: 0.3,
+                                ),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Row(
@@ -1146,10 +1154,10 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                             margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: Colors.amber.withOpacity(0.08),
+                              color: Colors.amber.withValues(alpha: 0.08),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: Colors.amber.withOpacity(0.3),
+                                color: Colors.amber.withValues(alpha: 0.3),
                               ),
                             ),
                             child: Column(
@@ -1287,7 +1295,9 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                             Container(
                               padding: const EdgeInsets.all(20),
                               decoration: BoxDecoration(
-                                color: AppColors.primaryLight.withOpacity(0.3),
+                                color: AppColors.primaryLight.withValues(
+                                  alpha: 0.3,
+                                ),
                                 shape: BoxShape.circle,
                               ),
                               child: const Text(
@@ -1371,7 +1381,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.9),
+        color: Colors.white.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(

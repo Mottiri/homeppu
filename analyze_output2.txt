@@ -1,0 +1,97 @@
+﻿Analyzing lib...                                                
+
+  error - Target of URI doesn't exist: '../../features/auth/presentation/screens/login_screen.dart' - lib\core\router\app_router.dart:5:8 - uri_does_not_exist
+  error - Target of URI doesn't exist: '../../features/auth/presentation/screens/register_screen.dart' - lib\core\router\app_router.dart:6:8 - uri_does_not_exist
+  error - Target of URI doesn't exist: '../../features/auth/presentation/screens/onboarding_screen.dart' - lib\core\router\app_router.dart:7:8 - uri_does_not_exist
+  error - Target of URI doesn't exist: '../../features/home/presentation/screens/main_shell.dart' - lib\core\router\app_router.dart:9:8 - uri_does_not_exist
+  error - Target of URI doesn't exist: '../../features/post/presentation/screens/create_post_screen.dart' - lib\core\router\app_router.dart:10:8 - uri_does_not_exist
+  error - Target of URI doesn't exist: '../../features/post/presentation/screens/post_detail_screen.dart' - lib\core\router\app_router.dart:11:8 - uri_does_not_exist
+  error - Target of URI doesn't exist: '../../features/profile/presentation/screens/profile_screen.dart' - lib\core\router\app_router.dart:12:8 - uri_does_not_exist
+  error - Target of URI doesn't exist: '../../features/profile/presentation/screens/settings_screen.dart' - lib\core\router\app_router.dart:13:8 - uri_does_not_exist
+  error - Target of URI doesn't exist: '../../features/circle/presentation/screens/circle_detail_screen.dart' - lib\core\router\app_router.dart:15:8 - uri_does_not_exist
+  error - Target of URI doesn't exist: '../../features/circle/presentation/screens/edit_circle_screen.dart' - lib\core\router\app_router.dart:16:8 - uri_does_not_exist
+  error - Target of URI doesn't exist: '../../features/circle/presentation/screens/create_circle_screen.dart' - lib\core\router\app_router.dart:17:8 - uri_does_not_exist
+  error - Target of URI doesn't exist: '../../features/circle/presentation/screens/join_requests_screen.dart' - lib\core\router\app_router.dart:19:8 - uri_does_not_exist
+  error - Target of URI doesn't exist: '../../features/circle/presentation/screens/members_list_screen.dart' - lib\core\router\app_router.dart:20:8 - uri_does_not_exist
+  error - Target of URI doesn't exist: '../../features/goals/presentation/screens/goal_list_screen.dart' - lib\core\router\app_router.dart:22:8 - uri_does_not_exist
+  error - Target of URI doesn't exist: '../../features/goals/presentation/screens/create_goal_screen.dart' - lib\core\router\app_router.dart:23:8 - uri_does_not_exist
+  error - Target of URI doesn't exist: '../../features/goals/presentation/screens/goal_detail_screen.dart' - lib\core\router\app_router.dart:24:8 - uri_does_not_exist
+  error - Target of URI doesn't exist: '../../features/notifications/presentation/screens/notifications_screen.dart' - lib\core\router\app_router.dart:26:8 - uri_does_not_exist
+  error - Target of URI doesn't exist: '../../features/admin/presentation/screens/admin_review_screen.dart' - lib\core\router\app_router.dart:27:8 - uri_does_not_exist
+  error - Target of URI doesn't exist: '../../shared/providers/auth_provider.dart' - lib\core\router\app_router.dart:28:8 - uri_does_not_exist
+  error - Undefined name 'authStateProvider' - lib\core\router\app_router.dart:32:31 - undefined_identifier
+  error - The name 'OnboardingScreen' isn't a class - lib\core\router\app_router.dart:61:44 - creation_with_non_type
+  error - The name 'LoginScreen' isn't a class - lib\core\router\app_router.dart:66:44 - creation_with_non_type
+  error - The name 'RegisterScreen' isn't a class - lib\core\router\app_router.dart:71:44 - creation_with_non_type
+  error - The function 'MainShell' isn't defined - lib\core\router\app_router.dart:76:45 - undefined_function
+  error - The name 'ProfileScreen' isn't a class - lib\core\router\app_router.dart:109:48 - creation_with_non_type
+  error - The function 'ProfileScreen' isn't defined - lib\core\router\app_router.dart:118:22 - undefined_function
+  error - The function 'CreatePostScreen' isn't defined - lib\core\router\app_router.dart:134:18 - undefined_function
+  error - The function 'PostDetailScreen' isn't defined - lib\core\router\app_router.dart:144:18 - undefined_function
+  error - The function 'CircleDetailScreen' isn't defined - lib\core\router\app_router.dart:154:18 - undefined_function
+  error - The name 'CreateCircleScreen' isn't a class - lib\core\router\app_router.dart:162:44 - creation_with_non_type
+  error - The function 'EditCircleScreen' isn't defined - lib\core\router\app_router.dart:172:18 - undefined_function
+  error - The function 'JoinRequestsScreen' isn't defined - lib\core\router\app_router.dart:184:18 - undefined_function
+  error - The function 'MembersListScreen' isn't defined - lib\core\router\app_router.dart:195:18 - undefined_function
+  error - The name 'SettingsScreen' isn't a class - lib\core\router\app_router.dart:208:44 - creation_with_non_type
+  error - The name 'NotificationsScreen' isn't a class - lib\core\router\app_router.dart:215:44 - creation_with_non_type
+  error - The name 'CreateGoalScreen' isn't a class - lib\core\router\app_router.dart:222:44 - creation_with_non_type
+  error - The name 'GoalListScreen' isn't a class - lib\core\router\app_router.dart:229:44 - creation_with_non_type
+  error - The function 'GoalDetailScreen' isn't defined - lib\core\router\app_router.dart:245:18 - undefined_function
+  error - The function 'ProfileScreen' isn't defined - lib\core\router\app_router.dart:256:18 - undefined_function
+  error - The name 'AdminReviewScreen' isn't a class - lib\core\router\app_router.dart:267:44 - creation_with_non_type
+  error - Target of URI doesn't exist: '../../../../shared/providers/auth_provider.dart' - lib\features\circle\presentation\screens\circles_screen.dart:9:8 - uri_does_not_exist
+  error - Undefined name 'currentUserProvider' - lib\features\circle\presentation\screens\circles_screen.dart:74:36 - undefined_identifier
+  error - Undefined name 'currentUserProvider' - lib\features\circle\presentation\screens\circles_screen.dart:101:36 - undefined_identifier
+  error - Undefined name 'currentUserProvider' - lib\features\circle\presentation\screens\circles_screen.dart:139:35 - undefined_identifier
+  error - Target of URI doesn't exist: '../widgets/goal_card.dart' - lib\features\goals\presentation\screens\completed_goals_screen.dart:9:8 - uri_does_not_exist
+  error - The method 'GoalCard' isn't defined for the type 'CompletedGoalsScreen' - lib\features\goals\presentation\screens\completed_goals_screen.dart:109:22 - undefined_method
+  error - Target of URI doesn't exist: '../../../../shared/providers/auth_provider.dart' - lib\features\home\presentation\screens\home_screen.dart:9:8 - uri_does_not_exist
+  error - Target of URI doesn't exist: '../widgets/post_card.dart' - lib\features\home\presentation\screens\home_screen.dart:11:8 - uri_does_not_exist
+  error - Undefined name 'currentUserProvider' - lib\features\home\presentation\screens\home_screen.dart:46:35 - undefined_identifier
+   info - Unnecessary use of multiple underscores - lib\features\home\presentation\screens\home_screen.dart:82:44 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\features\home\presentation\screens\home_screen.dart:138:38 - unnecessary_underscores
+  error - The method 'PostCard' isn't defined for the type '_PostsListState' - lib\features\home\presentation\screens\home_screen.dart:576:20 - undefined_method
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\home\presentation\widgets\reaction_background.dart:184:41 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\home\presentation\widgets\reaction_background.dart:207:33 - deprecated_member_use
+  error - Target of URI doesn't exist: 'reaction_button.dart' - lib\features\home\presentation\widgets\reaction_selection_sheet.dart:5:8 - uri_does_not_exist
+  error - The method 'ReactionButton' isn't defined for the type '_ReactionSelectionSheetState' - lib\features\home\presentation\widgets\reaction_selection_sheet.dart:200:34 - undefined_method
+  error - The method 'ReactionButton' isn't defined for the type '_ReactionSelectionSheetState' - lib\features\home\presentation\widgets\reaction_selection_sheet.dart:222:34 - undefined_method
+  error - Target of URI doesn't exist: '../../../../shared/services/category_service.dart' - lib\features\tasks\presentation\screens\tasks_screen.dart:10:8 - uri_does_not_exist
+  error - Target of URI doesn't exist: '../widgets/task_detail_sheet.dart' - lib\features\tasks\presentation\screens\tasks_screen.dart:12:8 - uri_does_not_exist
+  error - Target of URI doesn't exist: '../widgets/task_card.dart' - lib\features\tasks\presentation\screens\tasks_screen.dart:13:8 - uri_does_not_exist
+  error - Target of URI doesn't exist: 'monthly_calendar_screen.dart' - lib\features\tasks\presentation\screens\tasks_screen.dart:15:8 - uri_does_not_exist
+  error - Undefined class 'CategoryService' - lib\features\tasks\presentation\screens\tasks_screen.dart:30:9 - undefined_class
+  error - The method 'CategoryService' isn't defined for the type '_TasksScreenState' - lib\features\tasks\presentation\screens\tasks_screen.dart:30:44 - undefined_method
+   info - The private field _selectedTaskIds could be 'final' - lib\features\tasks\presentation\screens\tasks_screen.dart:38:15 - prefer_final_fields
+  error - The method 'TaskDetailSheet' isn't defined for the type '_TasksScreenState' - lib\features\tasks\presentation\screens\tasks_screen.dart:435:29 - undefined_method
+  error - The method 'MonthlyCalendarScreen' isn't defined for the type '_TasksScreenState' - lib\features\tasks\presentation\screens\tasks_screen.dart:781:47 - undefined_method
+  error - The method 'TaskCard' isn't defined for the type '_TasksScreenState' - lib\features\tasks\presentation\screens\tasks_screen.dart:1115:24 - undefined_method
+   info - 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre - lib\features\tasks\presentation\widgets\recurrence_settings_sheet.dart:293:21 - deprecated_member_use
+   info - 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre - lib\features\tasks\presentation\widgets\recurrence_settings_sheet.dart:294:21 - deprecated_member_use
+   info - 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre - lib\features\tasks\presentation\widgets\recurrence_settings_sheet.dart:306:21 - deprecated_member_use
+   info - 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre - lib\features\tasks\presentation\widgets\recurrence_settings_sheet.dart:307:21 - deprecated_member_use
+  error - Target of URI doesn't exist: 'shared/services/notification_service.dart' - lib\main.dart:12:8 - uri_does_not_exist
+  error - Undefined name 'firebaseMessagingBackgroundHandler' - lib\main.dart:21:41 - undefined_identifier
+  error - The function 'NotificationService' isn't defined - lib\main.dart:24:9 - undefined_function
+   info - The parameter name 'sum' matches a visible type name - lib\shared\models\post_model.dart:133:38 - avoid_types_as_parameter_names
+   info - The parameter name 'count' matches a visible type name - lib\shared\models\post_model.dart:133:43 - avoid_types_as_parameter_names
+  error - Target of URI doesn't exist: '../services/ai_service.dart' - lib\shared\providers\ai_provider.dart:3:8 - uri_does_not_exist
+  error - The name 'AIService' isn't a type, so it can't be used as a type argument - lib\shared\providers\ai_provider.dart:6:36 - non_type_as_type_argument
+  error - The function 'AIService' isn't defined - lib\shared\providers\ai_provider.dart:7:10 - undefined_function
+  error - Target of URI doesn't exist: '../services/goal_service.dart' - lib\shared\providers\goal_provider.dart:2:8 - uri_does_not_exist
+  error - The name 'GoalService' isn't a type, so it can't be used as a type argument - lib\shared\providers\goal_provider.dart:4:38 - non_type_as_type_argument
+  error - The function 'GoalService' isn't defined - lib\shared\providers\goal_provider.dart:5:10 - undefined_function
+   info - The import of 'package:firebase_core/firebase_core.dart' is unnecessary because all of the used elements are also provided by the import of 'package:firebase_storage/firebase_storage.dart' - lib\shared\services\media_service.dart:2:8 - unnecessary_import
+   info - The imported package 'path' isn't a dependency of the importing package - lib\shared\services\media_service.dart:6:8 - depend_on_referenced_packages
+   info - The imported package 'path_provider' isn't a dependency of the importing package - lib\shared\services\nsfw_detector_service.dart:5:8 - depend_on_referenced_packages
+
+flutter : 85 issues found. (ran in 2.0s)
+発生場所 行:1 文字:1
++ flutter analyze lib/ 2>&1 | Out-File -FilePath C:\Dev\ho
+meppu\analyze ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (85 issues fo 
+   und. (ran in 2.0s):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 

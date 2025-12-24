@@ -72,9 +72,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.warmGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.warmGradient),
         child: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
@@ -84,13 +82,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const SizedBox(height: 40),
-                  
+
                   // ロゴ・タイトル
                   const Center(
-                    child: Text(
-                      '🌸',
-                      style: TextStyle(fontSize: 64),
-                    ),
+                    child: Text('🌸', style: TextStyle(fontSize: 64)),
                   ),
                   const SizedBox(height: 16),
                   Text(
@@ -106,15 +101,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  
+
                   const SizedBox(height: 48),
-                  
+
                   // エラーメッセージ
                   if (_errorMessage != null) ...[
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: AppColors.error.withOpacity(0.1),
+                        color: AppColors.error.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Row(
@@ -135,7 +130,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     const SizedBox(height: 24),
                   ],
-                  
+
                   // 入力フォーム
                   AuthTextField(
                     controller: _emailController,
@@ -154,7 +149,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     },
                   ),
                   const SizedBox(height: 16),
-                  
+
                   AuthTextField(
                     controller: _passwordController,
                     label: 'パスワード',
@@ -168,7 +163,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       return null;
                     },
                   ),
-                  
+
                   // パスワード忘れ
                   Align(
                     alignment: Alignment.centerRight,
@@ -179,9 +174,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       child: const Text('パスワードを忘れた？'),
                     ),
                   ),
-                  
+
                   const SizedBox(height: 24),
-                  
+
                   // ログインボタン
                   SizedBox(
                     height: 56,
@@ -199,9 +194,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           : const Text('ログイン'),
                     ),
                   ),
-                  
+
                   const SizedBox(height: 24),
-                  
+
                   // 新規登録リンク
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -225,5 +220,3 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 }
-
-

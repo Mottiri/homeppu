@@ -260,8 +260,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                   borderRadius: BorderRadius.circular(24),
                                   side: _isFollowing
                                       ? BorderSide(
-                                          color: AppColors.primary.withOpacity(
-                                            0.3,
+                                          color: AppColors.primary.withValues(
+                                            alpha: 0.3,
                                           ),
                                         )
                                       : BorderSide.none,
@@ -327,10 +327,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: AppColors.error.withOpacity(0.1),
+                              color: AppColors.error.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: AppColors.error.withOpacity(0.3),
+                                color: AppColors.error.withValues(alpha: 0.3),
                               ),
                             ),
                             child: Row(
@@ -632,8 +632,8 @@ class _UserPostsListState extends State<_UserPostsList>
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: _tabController.index == tabIndex
-            ? Colors.white.withOpacity(0.3)
-            : AppColors.primary.withOpacity(0.2),
+            ? Colors.white.withValues(alpha: 0.3)
+            : AppColors.primary.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text('$count', style: const TextStyle(fontSize: 11)),
@@ -841,10 +841,10 @@ class _ProfilePostCardState extends State<_ProfilePostCard> {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.1),
+                            color: AppColors.primary.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: AppColors.primary.withOpacity(0.3),
+                              color: AppColors.primary.withValues(alpha: 0.3),
                             ),
                           ),
                           child: Row(

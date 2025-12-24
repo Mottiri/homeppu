@@ -4,9 +4,30 @@ import '../../core/constants/app_colors.dart';
 
 /// プリセットアバターのリスト
 const List<String> presetAvatars = [
-  '😊', '🌸', '🐱', '🐶', '🦊', '🐰', '🐻', '🐼',
-  '🦁', '🐯', '🐨', '🐷', '🐸', '🐵', '🦄', '🐙',
-  '🌻', '🌺', '🌷', '🌹', '🍀', '🌈', '⭐', '🌙',
+  '😊',
+  '🌸',
+  '🐱',
+  '🐶',
+  '🦊',
+  '🐰',
+  '🐻',
+  '🐼',
+  '🦁',
+  '🐯',
+  '🐨',
+  '🐷',
+  '🐸',
+  '🐵',
+  '🦄',
+  '🐙',
+  '🌻',
+  '🌺',
+  '🌷',
+  '🌹',
+  '🍀',
+  '🌈',
+  '⭐',
+  '🌙',
 ];
 
 /// アバター選択ウィジェット
@@ -35,7 +56,7 @@ class AvatarSelector extends StatelessWidget {
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: AppColors.primary.withOpacity(0.3),
+                color: AppColors.primary.withValues(alpha: 0.3),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
@@ -49,12 +70,9 @@ class AvatarSelector extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        Text(
-          'アバターを選んでね',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
+        Text('アバターを選んでね', style: Theme.of(context).textTheme.bodySmall),
         const SizedBox(height: 12),
-        
+
         // アバターグリッド
         SizedBox(
           height: 160,
@@ -113,12 +131,12 @@ class AvatarWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final safeIndex = avatarIndex.clamp(0, presetAvatars.length - 1);
-    
+
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: backgroundColor ?? AppColors.primaryLight.withOpacity(0.5),
+        color: backgroundColor ?? AppColors.primaryLight.withValues(alpha: 0.5),
         shape: BoxShape.circle,
       ),
       child: Center(
@@ -130,5 +148,3 @@ class AvatarWidget extends StatelessWidget {
     );
   }
 }
-
-

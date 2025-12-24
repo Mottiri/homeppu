@@ -123,7 +123,7 @@ class _GoalListScreenState extends ConsumerState<GoalListScreen>
                           Container(
                             padding: const EdgeInsets.all(6),
                             decoration: BoxDecoration(
-                              color: AppColors.primary.withOpacity(0.1),
+                              color: AppColors.primary.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: const Icon(
@@ -202,7 +202,7 @@ class _GoalListScreenState extends ConsumerState<GoalListScreen>
                             return Material(
                               elevation: elevation,
                               color: Colors.transparent,
-                              shadowColor: Colors.black.withOpacity(0.3),
+                              shadowColor: Colors.black.withValues(alpha: 0.3),
                               borderRadius: BorderRadius.circular(20),
                               child: child,
                             );
@@ -310,12 +310,12 @@ class _GoalListScreenState extends ConsumerState<GoalListScreen>
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            AppColors.primary.withOpacity(0.08),
-            AppColors.secondary.withOpacity(0.08),
+            AppColors.primary.withValues(alpha: 0.08),
+            AppColors.secondary.withValues(alpha: 0.08),
           ],
         ),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.primary.withOpacity(0.1)),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
       ),
       child: Row(
         children: [
@@ -350,7 +350,7 @@ class _GoalListScreenState extends ConsumerState<GoalListScreen>
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primary.withOpacity(0.3),
+                  color: AppColors.primary.withValues(alpha: 0.3),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
@@ -381,7 +381,9 @@ class _GoalListScreenState extends ConsumerState<GoalListScreen>
             colors: [const Color(0xFFFFFBE6), const Color(0xFFFFF8E1)],
           ),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.3)),
+          border: Border.all(
+            color: const Color(0xFFFFD700).withValues(alpha: 0.3),
+          ),
         ),
         child: Row(
           children: [
@@ -414,7 +416,7 @@ class _GoalListScreenState extends ConsumerState<GoalListScreen>
               '達成した目標を見る',
               style: TextStyle(
                 fontSize: 12,
-                color: const Color(0xFFB8860B).withOpacity(0.7),
+                color: const Color(0xFFB8860B).withValues(alpha: 0.7),
               ),
             ),
             const SizedBox(width: 8),
@@ -445,7 +447,7 @@ class _GoalListScreenState extends ConsumerState<GoalListScreen>
             borderRadius: BorderRadius.circular(30),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primary.withOpacity(0.4),
+                color: AppColors.primary.withValues(alpha: 0.4),
                 blurRadius: 16,
                 offset: const Offset(0, 6),
               ),

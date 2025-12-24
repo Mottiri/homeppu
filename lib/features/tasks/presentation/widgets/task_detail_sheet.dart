@@ -790,8 +790,9 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                                           }
                                         },
                                         selectedColor: Colors.blue,
-                                        backgroundColor: Colors.blue
-                                            .withOpacity(0.1),
+                                        backgroundColor: Colors.blue.withValues(
+                                          alpha: 0.1,
+                                        ),
                                         labelStyle: TextStyle(
                                           color: _selectedCategoryId == null
                                               ? Colors.white
@@ -824,7 +825,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                                             },
                                             selectedColor: Colors.orange,
                                             backgroundColor: Colors.orange
-                                                .withOpacity(0.1),
+                                                .withValues(alpha: 0.1),
                                             labelStyle: TextStyle(
                                               color: isSelected
                                                   ? Colors.white
@@ -957,7 +958,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                                                     },
                                                     selectedColor: goalColor,
                                                     backgroundColor: goalColor
-                                                        .withOpacity(0.1),
+                                                        .withValues(alpha: 0.1),
                                                     labelStyle: TextStyle(
                                                       color: isSelected
                                                           ? Colors.white

@@ -70,8 +70,8 @@ class _EmptyGoalsViewState extends State<EmptyGoalsView>
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      AppColors.primary.withOpacity(0.2),
-                      AppColors.secondary.withOpacity(0.2),
+                      AppColors.primary.withValues(alpha: 0.2),
+                      AppColors.secondary.withValues(alpha: 0.2),
                     ],
                   ),
                   shape: BoxShape.circle,
@@ -117,7 +117,7 @@ class _EmptyGoalsViewState extends State<EmptyGoalsView>
                   borderRadius: BorderRadius.circular(30),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.primary.withOpacity(0.3),
+                      color: AppColors.primary.withValues(alpha: 0.3),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),

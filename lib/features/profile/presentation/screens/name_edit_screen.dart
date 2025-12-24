@@ -14,16 +14,16 @@ class NameEditScreen extends ConsumerStatefulWidget {
 
 class _NameEditScreenState extends ConsumerState<NameEditScreen> {
   final _namePartsService = NamePartsService();
-  
+
   bool _isLoading = true;
   String? _error;
-  
+
   List<NamePartModel> _prefixes = [];
   List<NamePartModel> _suffixes = [];
-  
+
   String? _selectedPrefixId;
   String? _selectedSuffixId;
-  
+
   bool _isSaving = false;
 
   @override
@@ -40,7 +40,7 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
       });
 
       final result = await _namePartsService.getNameParts();
-      
+
       setState(() {
         _prefixes = result.prefixes;
         _suffixes = result.suffixes;
@@ -59,20 +59,34 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
   String get _previewName {
     final prefix = _prefixes.firstWhere(
       (p) => p.id == _selectedPrefixId,
-      orElse: () => NamePartModel(id: '', text: '???', category: '', rarity: 'normal', type: 'prefix', order: 0),
+      orElse: () => NamePartModel(
+        id: '',
+        text: '???',
+        category: '',
+        rarity: 'normal',
+        type: 'prefix',
+        order: 0,
+      ),
     );
     final suffix = _suffixes.firstWhere(
       (s) => s.id == _selectedSuffixId,
-      orElse: () => NamePartModel(id: '', text: '???', category: '', rarity: 'normal', type: 'suffix', order: 0),
+      orElse: () => NamePartModel(
+        id: '',
+        text: '???',
+        category: '',
+        rarity: 'normal',
+        type: 'suffix',
+        order: 0,
+      ),
     );
     return '${prefix.text}${suffix.text}';
   }
 
   Future<void> _saveName() async {
     if (_selectedPrefixId == null || _selectedSuffixId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('パーツを選択してください')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('パーツを選択してください')));
       return;
     }
 
@@ -87,11 +101,11 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
       if (result.success) {
         // ユーザー情報を更新
         ref.invalidate(currentUserProvider);
-        
+
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(result.message)),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(result.message)));
           Navigator.of(context).pop(true);
         }
       }
@@ -101,9 +115,9 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
         if (e.toString().contains('月1回まで')) {
           errorMessage = '名前の変更は月1回までです。来月まで待ってね！';
         }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(errorMessage)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(errorMessage)));
       }
     } finally {
       if (mounted) {
@@ -118,7 +132,9 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
       appBar: AppBar(
         title: const Text('名前を変更'),
         actions: [
-          if (!_isLoading && _selectedPrefixId != null && _selectedSuffixId != null)
+          if (!_isLoading &&
+              _selectedPrefixId != null &&
+              _selectedSuffixId != null)
             TextButton(
               onPressed: _isSaving ? null : _saveName,
               child: _isSaving
@@ -134,89 +150,89 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(_error!, style: const TextStyle(color: Colors.red)),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: _loadNameParts,
+                    child: const Text('再読み込み'),
+                  ),
+                ],
+              ),
+            )
+          : Column(
+              children: [
+                // プレビュー
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(24),
+                  color: Theme.of(context).colorScheme.primaryContainer,
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(_error!, style: const TextStyle(color: Colors.red)),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _loadNameParts,
-                        child: const Text('再読み込み'),
+                      const Text(
+                        'プレビュー',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _previewName,
+                        style: const TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ],
                   ),
-                )
-              : Column(
-                  children: [
-                    // プレビュー
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(24),
-                      color: Theme.of(context).colorScheme.primaryContainer,
-                      child: Column(
-                        children: [
-                          const Text(
-                            'プレビュー',
-                            style: TextStyle(fontSize: 12, color: Colors.grey),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            _previewName,
-                            style: const TextStyle(
-                              fontSize: 28,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    
-                    // 注意事項
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      color: Colors.amber.withOpacity(0.2),
-                      child: const Row(
-                        children: [
-                          Icon(Icons.info_outline, size: 18, color: Colors.amber),
-                          SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              '名前の変更は月1回までです',
-                              style: TextStyle(fontSize: 13),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    
-                    // パーツ選択
-                    Expanded(
-                      child: DefaultTabController(
-                        length: 2,
-                        child: Column(
-                          children: [
-                            const TabBar(
-                              tabs: [
-                                Tab(text: '前半（形容詞）'),
-                                Tab(text: '後半（名詞）'),
-                              ],
-                            ),
-                            Expanded(
-                              child: TabBarView(
-                                children: [
-                                  _buildPartsList(_prefixes, true),
-                                  _buildPartsList(_suffixes, false),
-                                ],
-                              ),
-                            ),
-                          ],
+                ),
+
+                // 注意事項
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  color: Colors.amber.withValues(alpha: 0.2),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.info_outline, size: 18, color: Colors.amber),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '名前の変更は月1回までです',
+                          style: TextStyle(fontSize: 13),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
+
+                // パーツ選択
+                Expanded(
+                  child: DefaultTabController(
+                    length: 2,
+                    child: Column(
+                      children: [
+                        const TabBar(
+                          tabs: [
+                            Tab(text: '前半（形容詞）'),
+                            Tab(text: '後半（名詞）'),
+                          ],
+                        ),
+                        Expanded(
+                          child: TabBarView(
+                            children: [
+                              _buildPartsList(_prefixes, true),
+                              _buildPartsList(_suffixes, false),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
     );
   }
 
@@ -268,13 +284,20 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
     );
   }
 
-  Widget _buildPartChip(NamePartModel part, bool isSelected, bool isLocked, bool isPrefix) {
+  Widget _buildPartChip(
+    NamePartModel part,
+    bool isSelected,
+    bool isLocked,
+    bool isPrefix,
+  ) {
     return GestureDetector(
       onTap: isLocked
           ? () {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('「${part.text}」は${part.rarityDisplayName}パーツです。徳ポイントショップでアンロックできます。'),
+                  content: Text(
+                    '「${part.text}」は${part.rarityDisplayName}パーツです。徳ポイントショップでアンロックできます。',
+                  ),
                 ),
               );
             }
@@ -293,21 +316,23 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
           color: isSelected
               ? Theme.of(context).colorScheme.primary
               : isLocked
-                  ? Colors.grey[200]
-                  : Colors.white,
+              ? Colors.grey[200]
+              : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isSelected
                 ? Theme.of(context).colorScheme.primary
                 : part.rarity != 'normal'
-                    ? Color(part.rarityColor)
-                    : Colors.grey[300]!,
+                ? Color(part.rarityColor)
+                : Colors.grey[300]!,
             width: part.rarity != 'normal' ? 2 : 1,
           ),
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.3),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -327,8 +352,8 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
                 color: isSelected
                     ? Colors.white
                     : isLocked
-                        ? Colors.grey[500]
-                        : Colors.black87,
+                    ? Colors.grey[500]
+                    : Colors.black87,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               ),
             ),
@@ -337,7 +362,7 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: Color(part.rarityColor).withOpacity(0.2),
+                  color: Color(part.rarityColor).withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -356,4 +381,3 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
     );
   }
 }
-

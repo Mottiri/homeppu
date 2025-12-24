@@ -181,8 +181,9 @@ class _ReactionBackgroundState extends State<ReactionBackground>
                   iconData.emoji,
                   style: TextStyle(
                     fontSize: baseSize,
-                    color: Colors.black.withOpacity(
-                      animatedOpacity * (0.5 + random.nextDouble() * 0.5),
+                    color: Colors.black.withValues(
+                      alpha:
+                          animatedOpacity * (0.5 + random.nextDouble() * 0.5),
                     ),
                     decoration: TextDecoration.none,
                   ),
@@ -204,8 +205,8 @@ class _ReactionBackgroundState extends State<ReactionBackground>
           iconData.emoji,
           style: TextStyle(
             fontSize: baseSize,
-            color: Colors.black.withOpacity(
-              widget.opacity * (0.5 + random.nextDouble() * 0.5),
+            color: Colors.black.withValues(
+              alpha: widget.opacity * (0.5 + random.nextDouble() * 0.5),
             ),
             decoration: TextDecoration.none,
           ),

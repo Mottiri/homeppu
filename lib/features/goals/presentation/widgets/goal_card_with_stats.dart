@@ -196,19 +196,19 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
                   : LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: [Colors.white, goalColor.withOpacity(0.08)],
+                      colors: [Colors.white, goalColor.withValues(alpha: 0.08)],
                     ),
               border: Border.all(
                 color: widget.isArchived
-                    ? const Color(0xFFFFD700).withOpacity(0.5)
-                    : goalColor.withOpacity(0.3),
+                    ? const Color(0xFFFFD700).withValues(alpha: 0.5)
+                    : goalColor.withValues(alpha: 0.3),
                 width: widget.isArchived ? 2 : 1.5,
               ),
               boxShadow: [
                 BoxShadow(
                   color: widget.isArchived
-                      ? const Color(0xFFFFD700).withOpacity(0.15)
-                      : goalColor.withOpacity(0.12),
+                      ? const Color(0xFFFFD700).withValues(alpha: 0.15)
+                      : goalColor.withValues(alpha: 0.12),
                   blurRadius: 16,
                   offset: const Offset(0, 6),
                 ),
@@ -228,7 +228,7 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Divider(
-                      color: goalColor.withOpacity(0.2),
+                      color: goalColor.withValues(alpha: 0.2),
                       height: 1,
                     ),
                   ),
@@ -345,7 +345,7 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
                             vertical: 3,
                           ),
                           decoration: BoxDecoration(
-                            color: goalColor.withOpacity(0.1),
+                            color: goalColor.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Icon(
@@ -370,7 +370,7 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
                   child: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: goalColor.withOpacity(0.1),
+                      color: goalColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
@@ -389,7 +389,7 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
                   size: 20,
                   color: widget.isArchived
                       ? AppColors.textHint
-                      : goalColor.withOpacity(0.5),
+                      : goalColor.withValues(alpha: 0.5),
                 ),
               ],
             ),
@@ -412,7 +412,7 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
                 colors: [const Color(0xFFFFD700), const Color(0xFFFFC107)],
               )
             : null,
-        color: widget.isArchived ? null : color.withOpacity(0.1),
+        color: widget.isArchived ? null : color.withValues(alpha: 0.1),
       ),
       child: Stack(
         alignment: Alignment.center,
@@ -424,7 +424,7 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
               child: CircularProgressIndicator(
                 value: progress,
                 strokeWidth: 4,
-                backgroundColor: color.withOpacity(0.2),
+                backgroundColor: color.withValues(alpha: 0.2),
                 valueColor: AlwaysStoppedAnimation(color),
               ),
             ),
@@ -460,7 +460,7 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
         border: Border.all(
           color: task.isCompleted
               ? Colors.grey.shade300
-              : goalColor.withOpacity(0.2),
+              : goalColor.withValues(alpha: 0.2),
         ),
       ),
       child: Column(
@@ -487,7 +487,7 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
                         border: Border.all(
                           color: task.isCompleted
                               ? AppColors.success
-                              : goalColor.withOpacity(0.5),
+                              : goalColor.withValues(alpha: 0.5),
                           width: 2,
                         ),
                       ),
@@ -530,7 +530,7 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
                             child: Icon(
                               Icons.repeat,
                               size: 14,
-                              color: goalColor.withOpacity(0.7),
+                              color: goalColor.withValues(alpha: 0.7),
                             ),
                           ),
                       ],
@@ -567,7 +567,7 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: goalColor.withOpacity(0.1),
+                          color: goalColor.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Row(
@@ -623,12 +623,12 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: subtask.isCompleted
-                          ? goalColor.withOpacity(0.7)
+                          ? goalColor.withValues(alpha: 0.7)
                           : Colors.transparent,
                       border: Border.all(
                         color: subtask.isCompleted
-                            ? goalColor.withOpacity(0.7)
-                            : goalColor.withOpacity(0.4),
+                            ? goalColor.withValues(alpha: 0.7)
+                            : goalColor.withValues(alpha: 0.4),
                         width: 1.5,
                       ),
                     ),
@@ -667,22 +667,22 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
     IconData icon;
 
     if (daysRemaining < 0) {
-      chipColor = AppColors.error.withOpacity(0.1);
+      chipColor = AppColors.error.withValues(alpha: 0.1);
       textColor = AppColors.error;
       text = '${-daysRemaining}日超過';
       icon = Icons.warning_amber_rounded;
     } else if (daysRemaining == 0) {
-      chipColor = AppColors.warning.withOpacity(0.2);
+      chipColor = AppColors.warning.withValues(alpha: 0.2);
       textColor = AppColors.warning;
       text = '今日まで';
       icon = Icons.schedule_rounded;
     } else if (daysRemaining <= 7) {
-      chipColor = AppColors.warning.withOpacity(0.1);
+      chipColor = AppColors.warning.withValues(alpha: 0.1);
       textColor = const Color(0xFFE65100);
       text = 'あと$daysRemaining日';
       icon = Icons.timer_outlined;
     } else {
-      chipColor = goalColor.withOpacity(0.1);
+      chipColor = goalColor.withValues(alpha: 0.1);
       textColor = goalColor;
       text = 'あと$daysRemaining日';
       icon = Icons.event_available_rounded;
@@ -716,7 +716,7 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: goalColor.withOpacity(0.1),
+        color: goalColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(

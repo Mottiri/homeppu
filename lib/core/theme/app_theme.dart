@@ -11,7 +11,7 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
-      
+
       // カラースキーム
       colorScheme: const ColorScheme.light(
         primary: AppColors.primary,
@@ -27,13 +27,13 @@ class AppTheme {
         error: AppColors.error,
         outline: AppColors.textHint,
       ),
-      
+
       // 背景色
       scaffoldBackgroundColor: AppColors.background,
-      
+
       // テキストテーマ
       textTheme: _textTheme,
-      
+
       // AppBar
       appBarTheme: AppBarTheme(
         backgroundColor: AppColors.background,
@@ -46,25 +46,23 @@ class AppTheme {
           color: AppColors.textPrimary,
         ),
       ),
-      
+
       // カード
       cardTheme: CardThemeData(
         color: AppColors.surface,
         elevation: 2,
-        shadowColor: AppColors.primary.withOpacity(0.1),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shadowColor: AppColors.primary.withValues(alpha: 0.1),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       ),
-      
+
       // ボタン
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
           foregroundColor: AppColors.textOnPrimary,
           elevation: 3,
-          shadowColor: AppColors.primary.withOpacity(0.3),
+          shadowColor: AppColors.primary.withValues(alpha: 0.3),
           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(30),
@@ -75,7 +73,7 @@ class AppTheme {
           ),
         ),
       ),
-      
+
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.primary,
@@ -90,7 +88,7 @@ class AppTheme {
           ),
         ),
       ),
-      
+
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: AppColors.primary,
@@ -101,7 +99,7 @@ class AppTheme {
           ),
         ),
       ),
-      
+
       // FloatingActionButton
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: AppColors.primary,
@@ -109,12 +107,15 @@ class AppTheme {
         elevation: 4,
         shape: CircleBorder(),
       ),
-      
+
       // Input
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.surfaceVariant,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 20,
+          vertical: 16,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(25),
           borderSide: BorderSide.none,
@@ -136,7 +137,7 @@ class AppTheme {
           fontSize: 14,
         ),
       ),
-      
+
       // BottomNavigationBar
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: AppColors.surface,
@@ -148,11 +149,9 @@ class AppTheme {
           fontSize: 12,
           fontWeight: FontWeight.w600,
         ),
-        unselectedLabelStyle: GoogleFonts.notoSansJp(
-          fontSize: 12,
-        ),
+        unselectedLabelStyle: GoogleFonts.notoSansJp(fontSize: 12),
       ),
-      
+
       // SnackBar
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.textPrimary,
@@ -160,18 +159,14 @@ class AppTheme {
           color: AppColors.textOnPrimary,
           fontSize: 14,
         ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         behavior: SnackBarBehavior.floating,
       ),
-      
+
       // Dialog
       dialogTheme: DialogThemeData(
         backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(28),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
         titleTextStyle: GoogleFonts.notoSansJp(
           fontSize: 20,
           fontWeight: FontWeight.w600,
@@ -182,7 +177,7 @@ class AppTheme {
           color: AppColors.textSecondary,
         ),
       ),
-      
+
       // Chip
       chipTheme: ChipThemeData(
         backgroundColor: AppColors.surfaceVariant,
@@ -191,29 +186,25 @@ class AppTheme {
           fontSize: 12,
           color: AppColors.textPrimary,
         ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       ),
-      
+
       // Divider
       dividerTheme: const DividerThemeData(
         color: AppColors.backgroundSecondary,
         thickness: 1,
         space: 1,
       ),
-      
+
       // ListTile
       listTileTheme: ListTileThemeData(
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
     );
   }
-  
+
   static TextTheme get _textTheme {
     return TextTheme(
       displayLarge: GoogleFonts.notoSansJp(
@@ -294,4 +285,3 @@ class AppTheme {
     );
   }
 }
-

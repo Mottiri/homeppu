@@ -19,29 +19,189 @@ class RegisterScreen extends ConsumerStatefulWidget {
 
 // 登録時に選択可能な名前パーツ（ノーマルのみ）
 final _defaultPrefixes = [
-  NamePartModel(id: 'prefix_pre_01', text: 'がんばる', category: 'positive', rarity: 'normal', type: 'prefix', order: 1, unlocked: true),
-  NamePartModel(id: 'prefix_pre_02', text: 'キラキラ', category: 'positive', rarity: 'normal', type: 'prefix', order: 2, unlocked: true),
-  NamePartModel(id: 'prefix_pre_03', text: '全力', category: 'positive', rarity: 'normal', type: 'prefix', order: 3, unlocked: true),
-  NamePartModel(id: 'prefix_pre_04', text: '輝く', category: 'positive', rarity: 'normal', type: 'prefix', order: 4, unlocked: true),
-  NamePartModel(id: 'prefix_pre_05', text: '前向き', category: 'positive', rarity: 'normal', type: 'prefix', order: 5, unlocked: true),
-  NamePartModel(id: 'prefix_pre_06', text: 'のんびり', category: 'relaxed', rarity: 'normal', type: 'prefix', order: 6, unlocked: true),
-  NamePartModel(id: 'prefix_pre_07', text: 'まったり', category: 'relaxed', rarity: 'normal', type: 'prefix', order: 7, unlocked: true),
-  NamePartModel(id: 'prefix_pre_08', text: 'ゆるふわ', category: 'relaxed', rarity: 'normal', type: 'prefix', order: 8, unlocked: true),
-  NamePartModel(id: 'prefix_pre_11', text: 'コツコツ', category: 'effort', rarity: 'normal', type: 'prefix', order: 11, unlocked: true),
-  NamePartModel(id: 'prefix_pre_12', text: 'もくもく', category: 'effort', rarity: 'normal', type: 'prefix', order: 12, unlocked: true),
+  NamePartModel(
+    id: 'prefix_pre_01',
+    text: 'がんばる',
+    category: 'positive',
+    rarity: 'normal',
+    type: 'prefix',
+    order: 1,
+    unlocked: true,
+  ),
+  NamePartModel(
+    id: 'prefix_pre_02',
+    text: 'キラキラ',
+    category: 'positive',
+    rarity: 'normal',
+    type: 'prefix',
+    order: 2,
+    unlocked: true,
+  ),
+  NamePartModel(
+    id: 'prefix_pre_03',
+    text: '全力',
+    category: 'positive',
+    rarity: 'normal',
+    type: 'prefix',
+    order: 3,
+    unlocked: true,
+  ),
+  NamePartModel(
+    id: 'prefix_pre_04',
+    text: '輝く',
+    category: 'positive',
+    rarity: 'normal',
+    type: 'prefix',
+    order: 4,
+    unlocked: true,
+  ),
+  NamePartModel(
+    id: 'prefix_pre_05',
+    text: '前向き',
+    category: 'positive',
+    rarity: 'normal',
+    type: 'prefix',
+    order: 5,
+    unlocked: true,
+  ),
+  NamePartModel(
+    id: 'prefix_pre_06',
+    text: 'のんびり',
+    category: 'relaxed',
+    rarity: 'normal',
+    type: 'prefix',
+    order: 6,
+    unlocked: true,
+  ),
+  NamePartModel(
+    id: 'prefix_pre_07',
+    text: 'まったり',
+    category: 'relaxed',
+    rarity: 'normal',
+    type: 'prefix',
+    order: 7,
+    unlocked: true,
+  ),
+  NamePartModel(
+    id: 'prefix_pre_08',
+    text: 'ゆるふわ',
+    category: 'relaxed',
+    rarity: 'normal',
+    type: 'prefix',
+    order: 8,
+    unlocked: true,
+  ),
+  NamePartModel(
+    id: 'prefix_pre_11',
+    text: 'コツコツ',
+    category: 'effort',
+    rarity: 'normal',
+    type: 'prefix',
+    order: 11,
+    unlocked: true,
+  ),
+  NamePartModel(
+    id: 'prefix_pre_12',
+    text: 'もくもく',
+    category: 'effort',
+    rarity: 'normal',
+    type: 'prefix',
+    order: 12,
+    unlocked: true,
+  ),
 ];
 
 final _defaultSuffixes = [
-  NamePartModel(id: 'suffix_suf_01', text: '🐰うさぎ', category: 'animal', rarity: 'normal', type: 'suffix', order: 1, unlocked: true),
-  NamePartModel(id: 'suffix_suf_02', text: '🐱ねこ', category: 'animal', rarity: 'normal', type: 'suffix', order: 2, unlocked: true),
-  NamePartModel(id: 'suffix_suf_03', text: '🐶いぬ', category: 'animal', rarity: 'normal', type: 'suffix', order: 3, unlocked: true),
-  NamePartModel(id: 'suffix_suf_04', text: '🐼パンダ', category: 'animal', rarity: 'normal', type: 'suffix', order: 4, unlocked: true),
-  NamePartModel(id: 'suffix_suf_05', text: '🐻くま', category: 'animal', rarity: 'normal', type: 'suffix', order: 5, unlocked: true),
-  NamePartModel(id: 'suffix_suf_07', text: '🌸さくら', category: 'nature', rarity: 'normal', type: 'suffix', order: 7, unlocked: true),
-  NamePartModel(id: 'suffix_suf_08', text: '🌻ひまわり', category: 'nature', rarity: 'normal', type: 'suffix', order: 8, unlocked: true),
-  NamePartModel(id: 'suffix_suf_09', text: '⭐ほし', category: 'nature', rarity: 'normal', type: 'suffix', order: 9, unlocked: true),
-  NamePartModel(id: 'suffix_suf_12', text: '🍙おにぎり', category: 'food', rarity: 'normal', type: 'suffix', order: 12, unlocked: true),
-  NamePartModel(id: 'suffix_suf_14', text: '🍮プリン', category: 'food', rarity: 'normal', type: 'suffix', order: 14, unlocked: true),
+  NamePartModel(
+    id: 'suffix_suf_01',
+    text: '🐰うさぎ',
+    category: 'animal',
+    rarity: 'normal',
+    type: 'suffix',
+    order: 1,
+    unlocked: true,
+  ),
+  NamePartModel(
+    id: 'suffix_suf_02',
+    text: '🐱ねこ',
+    category: 'animal',
+    rarity: 'normal',
+    type: 'suffix',
+    order: 2,
+    unlocked: true,
+  ),
+  NamePartModel(
+    id: 'suffix_suf_03',
+    text: '🐶いぬ',
+    category: 'animal',
+    rarity: 'normal',
+    type: 'suffix',
+    order: 3,
+    unlocked: true,
+  ),
+  NamePartModel(
+    id: 'suffix_suf_04',
+    text: '🐼パンダ',
+    category: 'animal',
+    rarity: 'normal',
+    type: 'suffix',
+    order: 4,
+    unlocked: true,
+  ),
+  NamePartModel(
+    id: 'suffix_suf_05',
+    text: '🐻くま',
+    category: 'animal',
+    rarity: 'normal',
+    type: 'suffix',
+    order: 5,
+    unlocked: true,
+  ),
+  NamePartModel(
+    id: 'suffix_suf_07',
+    text: '🌸さくら',
+    category: 'nature',
+    rarity: 'normal',
+    type: 'suffix',
+    order: 7,
+    unlocked: true,
+  ),
+  NamePartModel(
+    id: 'suffix_suf_08',
+    text: '🌻ひまわり',
+    category: 'nature',
+    rarity: 'normal',
+    type: 'suffix',
+    order: 8,
+    unlocked: true,
+  ),
+  NamePartModel(
+    id: 'suffix_suf_09',
+    text: '⭐ほし',
+    category: 'nature',
+    rarity: 'normal',
+    type: 'suffix',
+    order: 9,
+    unlocked: true,
+  ),
+  NamePartModel(
+    id: 'suffix_suf_12',
+    text: '🍙おにぎり',
+    category: 'food',
+    rarity: 'normal',
+    type: 'suffix',
+    order: 12,
+    unlocked: true,
+  ),
+  NamePartModel(
+    id: 'suffix_suf_14',
+    text: '🍮プリン',
+    category: 'food',
+    rarity: 'normal',
+    type: 'suffix',
+    order: 14,
+    unlocked: true,
+  ),
 ];
 
 class _RegisterScreenState extends ConsumerState<RegisterScreen> {
@@ -52,7 +212,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   int _selectedAvatarIndex = 0;
   bool _isLoading = false;
   String? _errorMessage;
-  
+
   // 名前パーツ
   late NamePartModel _selectedPrefix;
   late NamePartModel _selectedSuffix;
@@ -61,8 +221,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   void initState() {
     super.initState();
     // ランダムに初期選択
-    _selectedPrefix = _defaultPrefixes[DateTime.now().millisecond % _defaultPrefixes.length];
-    _selectedSuffix = _defaultSuffixes[DateTime.now().second % _defaultSuffixes.length];
+    _selectedPrefix =
+        _defaultPrefixes[DateTime.now().millisecond % _defaultPrefixes.length];
+    _selectedSuffix =
+        _defaultSuffixes[DateTime.now().second % _defaultSuffixes.length];
   }
 
   @override
@@ -95,7 +257,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       );
       // 登録成功 → ルーターがリダイレクト
     } catch (e) {
-      print('RegisterScreen: Error during registration: $e');
+      debugPrint('RegisterScreen: Error during registration: $e');
       setState(() {
         _errorMessage = _getErrorMessage(e.toString());
       });
@@ -121,9 +283,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.warmGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.warmGradient),
         child: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
@@ -140,9 +300,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       icon: const Icon(Icons.arrow_back_rounded),
                     ),
                   ),
-                  
+
                   const SizedBox(height: 16),
-                  
+
                   // タイトル
                   Text(
                     'アカウント作成',
@@ -157,9 +317,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  
+
                   const SizedBox(height: 32),
-                  
+
                   // アバター選択
                   Center(
                     child: AvatarSelector(
@@ -169,15 +329,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       },
                     ),
                   ),
-                  
+
                   const SizedBox(height: 32),
-                  
+
                   // エラーメッセージ
                   if (_errorMessage != null) ...[
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: AppColors.error.withOpacity(0.1),
+                        color: AppColors.error.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Row(
@@ -198,11 +358,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     ),
                     const SizedBox(height: 24),
                   ],
-                  
+
                   // 名前パーツ選択
                   _buildNamePartsSelector(),
                   const SizedBox(height: 16),
-                  
+
                   // メールアドレス
                   AuthTextField(
                     controller: _emailController,
@@ -221,7 +381,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     },
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // パスワード
                   AuthTextField(
                     controller: _passwordController,
@@ -240,7 +400,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     },
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // パスワード確認
                   AuthTextField(
                     controller: _confirmPasswordController,
@@ -255,9 +415,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       return null;
                     },
                   ),
-                  
+
                   const SizedBox(height: 32),
-                  
+
                   // 登録ボタン
                   SizedBox(
                     height: 56,
@@ -275,9 +435,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           : const Text('アカウント作成'),
                     ),
                   ),
-                  
+
                   const SizedBox(height: 24),
-                  
+
                   // ログインリンク
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -292,7 +452,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       ),
                     ],
                   ),
-                  
+
                   const SizedBox(height: 24),
                 ],
               ),
@@ -311,7 +471,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -322,40 +482,31 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         children: [
           Text(
             'なまえを選ぼう',
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
-          
+
           // プレビュー
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 12),
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.1),
+              color: AppColors.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
               _displayName,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
           ),
-          
+
           const SizedBox(height: 16),
-          
+
           // 前半パーツ選択
-          Text(
-            '前半',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[600],
-            ),
-          ),
+          Text('前半', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -365,7 +516,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               return GestureDetector(
                 onTap: () => setState(() => _selectedPrefix = part),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: isSelected ? AppColors.primary : Colors.grey[100],
                     borderRadius: BorderRadius.circular(20),
@@ -377,24 +531,20 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     part.text,
                     style: TextStyle(
                       color: isSelected ? Colors.white : Colors.black87,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.normal,
                     ),
                   ),
                 ),
               );
             }).toList(),
           ),
-          
+
           const SizedBox(height: 16),
-          
+
           // 後半パーツ選択
-          Text(
-            '後半',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[600],
-            ),
-          ),
+          Text('後半', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -404,7 +554,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               return GestureDetector(
                 onTap: () => setState(() => _selectedSuffix = part),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: isSelected ? AppColors.primary : Colors.grey[100],
                     borderRadius: BorderRadius.circular(20),
@@ -416,21 +569,20 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     part.text,
                     style: TextStyle(
                       color: isSelected ? Colors.white : Colors.black87,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.normal,
                     ),
                   ),
                 ),
               );
             }).toList(),
           ),
-          
+
           const SizedBox(height: 8),
           Text(
             '※登録後も設定から変更できます',
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.grey[500],
-            ),
+            style: TextStyle(fontSize: 11, color: Colors.grey[500]),
           ),
         ],
       ),

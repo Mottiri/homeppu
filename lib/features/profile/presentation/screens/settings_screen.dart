@@ -216,7 +216,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               border: Border.all(
                                 color: Theme.of(
                                   context,
-                                ).colorScheme.outline.withOpacity(0.3),
+                                ).colorScheme.outline.withValues(alpha: 0.3),
                               ),
                             ),
                             child: Row(
@@ -372,7 +372,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: AppColors.primaryLight.withOpacity(0.3),
+                        color: AppColors.primaryLight.withValues(alpha: 0.3),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Row(
@@ -788,7 +788,7 @@ class _PrivacyOption extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppColors.primaryLight.withOpacity(0.5)
+              ? AppColors.primaryLight.withValues(alpha: 0.5)
               : AppColors.surfaceVariant,
           borderRadius: BorderRadius.circular(12),
           border: isSelected
@@ -803,8 +803,8 @@ class _PrivacyOption extends StatelessWidget {
               height: 40,
               decoration: BoxDecoration(
                 color: isSelected
-                    ? AppColors.primary.withOpacity(0.2)
-                    : Colors.grey.withOpacity(0.1),
+                    ? AppColors.primary.withValues(alpha: 0.2)
+                    : Colors.grey.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(

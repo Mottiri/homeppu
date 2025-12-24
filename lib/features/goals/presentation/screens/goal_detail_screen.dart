@@ -126,12 +126,12 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
             pinned: true,
             backgroundColor: isCompleted
                 ? const Color(0xFFFFF8E1)
-                : color.withOpacity(0.1),
+                : color.withValues(alpha: 0.1),
             leading: IconButton(
               icon: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.9),
+                  color: Colors.white.withValues(alpha: 0.9),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.arrow_back_rounded, size: 20),
@@ -143,7 +143,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
                 icon: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.9),
+                    color: Colors.white.withValues(alpha: 0.9),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
@@ -201,7 +201,10 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
             : LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [color.withOpacity(0.15), color.withOpacity(0.05)],
+                colors: [
+                  color.withValues(alpha: 0.15),
+                  color.withValues(alpha: 0.05),
+                ],
               ),
       ),
       child: SafeArea(
@@ -219,12 +222,14 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
                       ? const LinearGradient(
                           colors: [Color(0xFFFFD700), Color(0xFFFFC107)],
                         )
-                      : LinearGradient(colors: [color, color.withOpacity(0.7)]),
+                      : LinearGradient(
+                          colors: [color, color.withValues(alpha: 0.7)],
+                        ),
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
                       color: (isCompleted ? const Color(0xFFFFD700) : color)
-                          .withOpacity(0.3),
+                          .withValues(alpha: 0.3),
                       blurRadius: 20,
                       offset: const Offset(0, 8),
                     ),
@@ -331,7 +336,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8),
         ],
       ),
       child: Row(
@@ -422,7 +427,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: color.withOpacity(0.4),
+              color: color.withValues(alpha: 0.4),
               blurRadius: 16,
               offset: const Offset(0, 6),
             ),
@@ -476,7 +481,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
+                  color: AppColors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(
@@ -600,7 +605,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
@@ -625,7 +630,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isCompleted
-              ? AppColors.success.withOpacity(0.2)
+              ? AppColors.success.withValues(alpha: 0.2)
               : AppColors.surfaceVariant,
         ),
       ),
@@ -636,7 +641,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
           height: 32,
           decoration: BoxDecoration(
             color: isCompleted
-                ? AppColors.success.withOpacity(0.1)
+                ? AppColors.success.withValues(alpha: 0.1)
                 : AppColors.surfaceVariant,
             shape: BoxShape.circle,
           ),
@@ -664,7 +669,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
             ? Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: AppColors.info.withOpacity(0.1),
+                  color: AppColors.info.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(

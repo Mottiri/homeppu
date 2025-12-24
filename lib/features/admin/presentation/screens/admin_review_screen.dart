@@ -98,7 +98,7 @@ class _AdminReviewScreenState extends ConsumerState<AdminReviewScreen> {
                             width: double.infinity,
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: AppColors.warning.withOpacity(0.2),
+                              color: AppColors.warning.withValues(alpha: 0.2),
                               borderRadius: const BorderRadius.vertical(
                                 top: Radius.circular(12),
                               ),

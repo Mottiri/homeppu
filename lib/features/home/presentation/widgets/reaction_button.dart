@@ -139,12 +139,12 @@ class _ReactionButtonState extends ConsumerState<ReactionButton>
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: _isReacted
-                    ? color.withOpacity(0.2)
+                    ? color.withValues(alpha: 0.2)
                     : AppColors.surfaceVariant,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
                   color: _isReacted
-                      ? color.withOpacity(0.5)
+                      ? color.withValues(alpha: 0.5)
                       : Colors.transparent,
                 ),
               ),

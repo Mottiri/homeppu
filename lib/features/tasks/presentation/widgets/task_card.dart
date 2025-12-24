@@ -165,7 +165,7 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
               alignment: Alignment.topRight,
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.5),
+                  color: Colors.black.withValues(alpha: 0.5),
                   shape: BoxShape.circle,
                 ),
                 child: IconButton(
@@ -267,7 +267,7 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
               right: 16,
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.5),
+                  color: Colors.black.withValues(alpha: 0.5),
                   shape: BoxShape.circle,
                 ),
                 child: IconButton(
@@ -341,7 +341,7 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
     // 編集モード中の背景色
     Color getBackgroundColor(double glowValue) {
       if (widget.isHighlighted) {
-        return AppColors.primary.withOpacity(0.1 + glowValue * 0.1);
+        return AppColors.primary.withValues(alpha: 0.1 + glowValue * 0.1);
       }
       if (widget.isEditMode && widget.isSelected) {
         return Colors.red.shade50;
@@ -667,8 +667,8 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.primary.withOpacity(
-                          _glowAnimation.value,
+                        color: AppColors.primary.withValues(
+                          alpha: _glowAnimation.value,
                         ),
                         blurRadius: 12 + (_glowAnimation.value * 8),
                         spreadRadius: 1 + (_glowAnimation.value * 2),
@@ -676,8 +676,8 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
                       ),
                     ],
                     border: Border.all(
-                      color: AppColors.primary.withOpacity(
-                        0.6 + _glowAnimation.value * 0.4,
+                      color: AppColors.primary.withValues(
+                        alpha: 0.6 + _glowAnimation.value * 0.4,
                       ),
                       width: 2.5,
                     ),
@@ -1051,7 +1051,7 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
         child: const Icon(Icons.delete, color: Colors.white),
       ),
       confirmDismiss: (direction) async {
-        print(
+        debugPrint(
           'Deleting task: ${widget.task.content} (ID: ${widget.task.id})',
         ); // Debug
         if (widget.onConfirmDismiss != null) {

@@ -191,7 +191,7 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
                 child: Container(
                   decoration: BoxDecoration(
                     color: isToday
-                        ? AppColors.primary.withOpacity(0.1)
+                        ? AppColors.primary.withValues(alpha: 0.1)
                         : Colors.white,
                     borderRadius: BorderRadius.circular(4), // 角丸を少し小さく
                     border: isToday

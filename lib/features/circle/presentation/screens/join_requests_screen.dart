@@ -46,7 +46,7 @@ class JoinRequestsScreen extends ConsumerWidget {
                   Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF00ACC1).withOpacity(0.1),
+                      color: const Color(0xFF00ACC1).withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
@@ -293,7 +293,7 @@ class _JoinRequestCardState extends State<_JoinRequestCard> {
                     icon: const Icon(Icons.close, color: Colors.red),
                     tooltip: '拒否',
                     style: IconButton.styleFrom(
-                      backgroundColor: Colors.red.withOpacity(0.1),
+                      backgroundColor: Colors.red.withValues(alpha: 0.1),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -303,7 +303,7 @@ class _JoinRequestCardState extends State<_JoinRequestCard> {
                     icon: const Icon(Icons.check, color: Colors.green),
                     tooltip: '承認',
                     style: IconButton.styleFrom(
-                      backgroundColor: Colors.green.withOpacity(0.1),
+                      backgroundColor: Colors.green.withValues(alpha: 0.1),
                     ),
                   ),
                 ],

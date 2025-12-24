@@ -93,9 +93,9 @@ enum ReactionType {
 
   // 記号 (LINE風)
   star('star', '⭐', 'スター', 0xFFFFD700, ReactionCategory.symbol),
-  heart_red('heart_red', '❤️', '赤ハート', 0xFFFF0000, ReactionCategory.symbol),
-  heart_pink('heart_pink', '💗', 'ピンクハート', 0xFFFF69B4, ReactionCategory.symbol),
-  heart_blue('heart_blue', '💙', '水色ハート', 0xFF87CEEB, ReactionCategory.symbol),
+  heartRed('heart_red', '❤️', '赤ハート', 0xFFFF0000, ReactionCategory.symbol),
+  heartPink('heart_pink', '💗', 'ピンクハート', 0xFFFF69B4, ReactionCategory.symbol),
+  heartBlue('heart_blue', '💙', '水色ハート', 0xFF87CEEB, ReactionCategory.symbol),
   sparkles('sparkles', '✨', 'キラキラ', 0xFFFFE4B5, ReactionCategory.symbol),
   fire('fire', '🔥', '情熱', 0xFFFF4500, ReactionCategory.symbol),
   thumbsup('thumbsup', '👍', 'グッド', 0xFFFFA500, ReactionCategory.symbol),
@@ -106,10 +106,10 @@ enum ReactionType {
   // 表情
   smile('smile', '😊', 'ニコニコ', 0xFFFFE4B5, ReactionCategory.emotion),
   laugh('laugh', '😆', '大笑い', 0xFFFFE4B5, ReactionCategory.emotion),
-  cry_happy('cry_happy', '😂', '嬉し泣き', 0xFFFFE4B5, ReactionCategory.emotion),
+  cryHappy('cry_happy', '😂', '嬉し泣き', 0xFFFFE4B5, ReactionCategory.emotion),
   wink('wink', '😉', 'ウィンク', 0xFFFFE4B5, ReactionCategory.emotion),
   kiss('kiss', '😘', 'キス', 0xFFFFE4B5, ReactionCategory.emotion),
-  love_eyes('love_eyes', '😍', 'メロメロ', 0xFFFFE4B5, ReactionCategory.emotion),
+  loveEyes('love_eyes', '😍', 'メロメロ', 0xFFFFE4B5, ReactionCategory.emotion),
   relief('relief', '😌', '安心', 0xFFFFE4B5, ReactionCategory.emotion),
   party('party', '🥳', 'パーティー', 0xFFFFE4B5, ReactionCategory.emotion),
   sunglasses('sunglasses', '😎', 'クール', 0xFFFFE4B5, ReactionCategory.emotion),

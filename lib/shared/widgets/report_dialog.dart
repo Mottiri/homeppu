@@ -68,9 +68,9 @@ class _ReportDialogState extends ConsumerState<ReportDialog> {
 
     try {
       final service = ref.read(moderationServiceProvider);
-      
+
       String reason = _selectedReason!.label;
-      if (_selectedReason == ReportReason.other && 
+      if (_selectedReason == ReportReason.other &&
           _otherReasonController.text.isNotEmpty) {
         reason = _otherReasonController.text.trim();
       }
@@ -110,15 +110,13 @@ class _ReportDialogState extends ConsumerState<ReportDialog> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppColors.warning.withOpacity(0.1),
+              color: AppColors.warning.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Text('🚨', style: TextStyle(fontSize: 24)),
           ),
           const SizedBox(width: 12),
-          Text(
-            widget.contentType == 'post' ? '投稿を通報' : 'コメントを通報',
-          ),
+          Text(widget.contentType == 'post' ? '投稿を通報' : 'コメントを通報'),
         ],
       ),
       content: SingleChildScrollView(
@@ -170,9 +168,7 @@ class _ReportDialogState extends ConsumerState<ReportDialog> {
                 controller: _otherReasonController,
                 maxLines: 2,
                 maxLength: 100,
-                decoration: const InputDecoration(
-                  hintText: '具体的な理由を入力してください',
-                ),
+                decoration: const InputDecoration(hintText: '具体的な理由を入力してください'),
               ),
             ],
 
@@ -182,13 +178,14 @@ class _ReportDialogState extends ConsumerState<ReportDialog> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppColors.error.withOpacity(0.1),
+                  color: AppColors.error.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.error_outline, 
-                      color: AppColors.error, 
+                    const Icon(
+                      Icons.error_outline,
+                      color: AppColors.error,
                       size: 20,
                     ),
                     const SizedBox(width: 8),
@@ -209,9 +206,9 @@ class _ReportDialogState extends ConsumerState<ReportDialog> {
             const SizedBox(height: 16),
             Text(
               '※ 虚偽の通報を繰り返すと、あなたの徳ポイントが下がることがあります',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: AppColors.textHint,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.labelSmall?.copyWith(color: AppColors.textHint),
             ),
           ],
         ),
@@ -223,9 +220,7 @@ class _ReportDialogState extends ConsumerState<ReportDialog> {
         ),
         ElevatedButton(
           onPressed: _isLoading ? null : _submit,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.warning,
-          ),
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.warning),
           child: _isLoading
               ? const SizedBox(
                   width: 20,
@@ -262,11 +257,7 @@ class ReportButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      icon: Icon(
-        Icons.flag_outlined,
-        size: size,
-        color: AppColors.textHint,
-      ),
+      icon: Icon(Icons.flag_outlined, size: size, color: AppColors.textHint),
       onPressed: () => ReportDialog.show(
         context: context,
         contentId: contentId,
@@ -285,11 +276,7 @@ class NegativeContentDialog extends StatelessWidget {
   final String message;
   final VoidCallback? onRetry;
 
-  const NegativeContentDialog({
-    super.key,
-    required this.message,
-    this.onRetry,
-  });
+  const NegativeContentDialog({super.key, required this.message, this.onRetry});
 
   static Future<void> show({
     required BuildContext context,
@@ -298,10 +285,8 @@ class NegativeContentDialog extends StatelessWidget {
   }) {
     return showDialog(
       context: context,
-      builder: (context) => NegativeContentDialog(
-        message: message,
-        onRetry: onRetry,
-      ),
+      builder: (context) =>
+          NegativeContentDialog(message: message, onRetry: onRetry),
     );
   }
 
@@ -319,17 +304,14 @@ class NegativeContentDialog extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppColors.warning.withOpacity(0.1),
+              color: AppColors.warning.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Text('😢', style: TextStyle(fontSize: 28)),
           ),
           const SizedBox(width: 12),
           const Expanded(
-            child: Text(
-              'ちょっと待って',
-              style: TextStyle(fontSize: 18),
-            ),
+            child: Text('ちょっと待って', style: TextStyle(fontSize: 18)),
           ),
         ],
       ),
@@ -337,16 +319,13 @@ class NegativeContentDialog extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            reason,
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
+          Text(reason, style: Theme.of(context).textTheme.bodyMedium),
           if (suggestion != null) ...[
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.info.withOpacity(0.1),
+                color: AppColors.info.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
@@ -356,10 +335,12 @@ class NegativeContentDialog extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      suggestion.replaceFirst('💡 提案: ', '').replaceFirst('💡 ', ''),
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.info,
-                      ),
+                      suggestion
+                          .replaceFirst('💡 提案: ', '')
+                          .replaceFirst('💡 ', ''),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: AppColors.info),
                     ),
                   ),
                 ],
@@ -370,17 +351,17 @@ class NegativeContentDialog extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               virtueInfo,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: AppColors.textHint,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.labelSmall?.copyWith(color: AppColors.textHint),
             ),
           ],
           const SizedBox(height: 16),
           Text(
             'ほめっぷは「世界一優しいSNS」を目指しているよ。\nポジティブな言葉で投稿し直してみてね！',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: AppColors.textSecondary,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
           ),
         ],
       ),

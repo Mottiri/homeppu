@@ -221,7 +221,9 @@ class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen> {
                           boxShadow: isSelected
                               ? [
                                   BoxShadow(
-                                    color: Color(colorValue).withOpacity(0.4),
+                                    color: Color(
+                                      colorValue,
+                                    ).withValues(alpha: 0.4),
                                     blurRadius: 12,
                                     offset: const Offset(0, 4),
                                   ),
@@ -394,10 +396,13 @@ class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen> {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [color.withOpacity(0.15), color.withOpacity(0.05)],
+          colors: [
+            color.withValues(alpha: 0.15),
+            color.withValues(alpha: 0.05),
+          ],
         ),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Column(
         children: [
@@ -406,7 +411,7 @@ class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen> {
             width: 64,
             height: 64,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.2),
+              color: color.withValues(alpha: 0.2),
               shape: BoxShape.circle,
             ),
             child: Icon(Icons.flag_rounded, size: 32, color: color),
@@ -474,7 +479,7 @@ class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -519,7 +524,7 @@ class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: color.withOpacity(0.4),
+              color: color.withValues(alpha: 0.4),
               blurRadius: 16,
               offset: const Offset(0, 6),
             ),

@@ -451,7 +451,7 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen> {
                         setState(() => _selectedCategory = category);
                       }
                     },
-                    selectedColor: AppColors.primary.withOpacity(0.2),
+                    selectedColor: AppColors.primary.withValues(alpha: 0.2),
                     labelStyle: TextStyle(
                       color: isSelected ? AppColors.primary : Colors.grey[700],
                       fontWeight: isSelected
@@ -542,7 +542,7 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),

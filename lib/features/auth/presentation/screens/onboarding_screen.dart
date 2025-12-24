@@ -47,9 +47,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.warmGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.warmGradient),
         child: SafeArea(
           child: Column(
             children: [
@@ -64,7 +62,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                 ),
               ),
-              
+
               // ページビュー
               Expanded(
                 child: PageView.builder(
@@ -78,7 +76,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   },
                 ),
               ),
-              
+
               // インジケーター
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 24),
@@ -94,14 +92,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       decoration: BoxDecoration(
                         color: _currentPage == index
                             ? AppColors.primary
-                            : AppColors.primary.withOpacity(0.3),
+                            : AppColors.primary.withValues(alpha: 0.3),
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ),
                   ),
                 ),
               ),
-              
+
               // ボタン
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 0, 24, 48),
@@ -121,9 +119,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           }
                         },
                         child: Text(
-                          _currentPage < _pages.length - 1
-                              ? '次へ'
-                              : 'はじめる',
+                          _currentPage < _pages.length - 1 ? '次へ' : 'はじめる',
                         ),
                       ),
                     ),
@@ -174,47 +170,39 @@ class _OnboardingPage extends StatelessWidget {
             width: 150,
             height: 150,
             decoration: BoxDecoration(
-              color: data.color.withOpacity(0.3),
+              color: data.color.withValues(alpha: 0.3),
               shape: BoxShape.circle,
             ),
             child: Center(
-              child: Text(
-                data.emoji,
-                style: const TextStyle(fontSize: 72),
-              ),
+              child: Text(data.emoji, style: const TextStyle(fontSize: 72)),
             ),
-          )
-              .animate()
-              .scale(
-                duration: 600.ms,
-                curve: Curves.elasticOut,
-              ),
-          
+          ).animate().scale(duration: 600.ms, curve: Curves.elasticOut),
+
           const SizedBox(height: 48),
-          
+
           // タイトル
           Text(
-            data.title,
-            style: Theme.of(context).textTheme.displaySmall?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-            textAlign: TextAlign.center,
-          )
+                data.title,
+                style: Theme.of(
+                  context,
+                ).textTheme.displaySmall?.copyWith(fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              )
               .animate()
               .fadeIn(delay: 200.ms, duration: 400.ms)
               .slideY(begin: 0.2, end: 0),
-          
+
           const SizedBox(height: 16),
-          
+
           // 説明
           Text(
-            data.description,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: AppColors.textSecondary,
-              height: 1.6,
-            ),
-            textAlign: TextAlign.center,
-          )
+                data.description,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: AppColors.textSecondary,
+                  height: 1.6,
+                ),
+                textAlign: TextAlign.center,
+              )
               .animate()
               .fadeIn(delay: 400.ms, duration: 400.ms)
               .slideY(begin: 0.2, end: 0),
@@ -223,4 +211,3 @@ class _OnboardingPage extends StatelessWidget {
     );
   }
 }
-

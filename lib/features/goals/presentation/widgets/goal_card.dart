@@ -50,19 +50,19 @@ class GoalCard extends StatelessWidget {
                   : LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: [Colors.white, goalColor.withOpacity(0.05)],
+                      colors: [Colors.white, goalColor.withValues(alpha: 0.05)],
                     ),
               border: Border.all(
                 color: isArchived
-                    ? const Color(0xFFFFD700).withOpacity(0.5)
-                    : goalColor.withOpacity(0.2),
+                    ? const Color(0xFFFFD700).withValues(alpha: 0.5)
+                    : goalColor.withValues(alpha: 0.2),
                 width: isArchived ? 2 : 1,
               ),
               boxShadow: [
                 BoxShadow(
                   color: isArchived
-                      ? const Color(0xFFFFD700).withOpacity(0.15)
-                      : goalColor.withOpacity(0.1),
+                      ? const Color(0xFFFFD700).withValues(alpha: 0.15)
+                      : goalColor.withValues(alpha: 0.1),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
@@ -169,7 +169,7 @@ class GoalCard extends StatelessWidget {
                     Icons.chevron_right_rounded,
                     color: isArchived
                         ? AppColors.textHint
-                        : goalColor.withOpacity(0.5),
+                        : goalColor.withValues(alpha: 0.5),
                   ),
                 ],
               ),
@@ -198,7 +198,7 @@ class GoalCard extends StatelessWidget {
                 colors: [const Color(0xFFFFD700), const Color(0xFFFFC107)],
               )
             : null,
-        color: isArchived ? null : color.withOpacity(0.1),
+        color: isArchived ? null : color.withValues(alpha: 0.1),
       ),
       child: Stack(
         alignment: Alignment.center,
@@ -210,7 +210,7 @@ class GoalCard extends StatelessWidget {
               child: CircularProgressIndicator(
                 value: progress,
                 strokeWidth: 4,
-                backgroundColor: color.withOpacity(0.2),
+                backgroundColor: color.withValues(alpha: 0.2),
                 valueColor: AlwaysStoppedAnimation(color),
               ),
             ),
@@ -228,7 +228,7 @@ class GoalCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: goalColor.withOpacity(0.1),
+        color: goalColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -257,25 +257,25 @@ class GoalCard extends StatelessWidget {
 
     if (daysRemaining < 0) {
       // 期限切れ
-      chipColor = AppColors.error.withOpacity(0.1);
+      chipColor = AppColors.error.withValues(alpha: 0.1);
       textColor = AppColors.error;
       text = '${-daysRemaining}日超過';
       icon = Icons.warning_amber_rounded;
     } else if (daysRemaining == 0) {
       // 今日
-      chipColor = AppColors.warning.withOpacity(0.2);
+      chipColor = AppColors.warning.withValues(alpha: 0.2);
       textColor = AppColors.warning;
       text = '今日まで';
       icon = Icons.schedule_rounded;
     } else if (daysRemaining <= 7) {
       // 1週間以内
-      chipColor = AppColors.warning.withOpacity(0.1);
+      chipColor = AppColors.warning.withValues(alpha: 0.1);
       textColor = const Color(0xFFE65100);
       text = 'あと$daysRemaining日';
       icon = Icons.timer_outlined;
     } else {
       // 余裕あり
-      chipColor = goalColor.withOpacity(0.1);
+      chipColor = goalColor.withValues(alpha: 0.1);
       textColor = goalColor;
       text = 'あと$daysRemaining日';
       icon = Icons.event_available_rounded;
