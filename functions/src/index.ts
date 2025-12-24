@@ -3319,19 +3319,28 @@ export const generateAICommentV1 = functionsV1.region("asia-northeast1").runWith
       : "";
 
     // 既存のAIコメントを取得（重複回避のため）
+    // 重要: コメントはトップレベルの comments コレクションに保存されている
     const postRef = db.collection("posts").doc(postId);
     let existingCommentsContext = "";
     try {
-      const existingCommentsSnapshot = await postRef.collection("comments")
+      console.log(`[DUPLICATE CHECK] Fetching existing AI comments for post: ${postId}`);
+
+      // トップレベルのcommentsコレクションからpostIdでフィルタ
+      const existingCommentsSnapshot = await db.collection("comments")
+        .where("postId", "==", postId)
         .where("isAI", "==", true)
         .orderBy("createdAt", "asc")
-        .limit(10) // 最大10件まで
+        .limit(10)
         .get();
+
+      console.log(`[DUPLICATE CHECK] Query returned ${existingCommentsSnapshot.size} documents`);
 
       if (!existingCommentsSnapshot.empty) {
         const existingComments = existingCommentsSnapshot.docs.map(doc => {
           const data = doc.data();
-          return `- ${data.userName || "AI"}: 「${data.content}」`;
+          const commentText = `- ${data.userDisplayName || "AI"}: 「${data.content}」`;
+          console.log(`[DUPLICATE CHECK] Found: ${commentText.substring(0, 80)}...`);
+          return commentText;
         });
         existingCommentsContext = `
 【既に投稿されているコメント】
@@ -3339,10 +3348,13 @@ export const generateAICommentV1 = functionsV1.region("asia-northeast1").runWith
 まったく異なる言い回しで、別の角度から返信してください：
 ${existingComments.join("\n")}
 `;
-        console.log(`Found ${existingComments.length} existing AI comments for diversity`);
+        console.log(`[DUPLICATE CHECK] Added ${existingComments.length} comments to context for diversity`);
+      } else {
+        console.log(`[DUPLICATE CHECK] No existing AI comments found for post ${postId}`);
       }
     } catch (error) {
-      console.log("Could not fetch existing comments, proceeding without diversity check");
+      console.error("[DUPLICATE CHECK] Error fetching existing comments:", error);
+      console.log("Proceeding without diversity check");
     }
 
     // サークル投稿かどうかでプロンプトを分岐
