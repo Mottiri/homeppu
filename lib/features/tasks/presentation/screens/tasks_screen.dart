@@ -17,8 +17,14 @@ import 'monthly_calendar_screen.dart';
 class TasksScreen extends ConsumerStatefulWidget {
   final String? highlightTaskId;
   final DateTime? targetDate;
+  final String? targetCategoryId;
 
-  const TasksScreen({super.key, this.highlightTaskId, this.targetDate});
+  const TasksScreen({
+    super.key,
+    this.highlightTaskId,
+    this.targetDate,
+    this.targetCategoryId,
+  });
 
   @override
   ConsumerState<TasksScreen> createState() => _TasksScreenState();
@@ -55,6 +61,9 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
 
   // ハイライト対象タスクID
   String? _highlightTaskId;
+
+  // 目標カテゴリID（外部から指定された場合）
+  String? _targetCategoryId;
 
   // タスクリストのScrollController
   final ScrollController _taskListScrollController = ScrollController();
@@ -105,6 +114,9 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
 
     // ハイライト対象の設定
     _highlightTaskId = widget.highlightTaskId;
+
+    // 目標カテゴリIDの設定
+    _targetCategoryId = widget.targetCategoryId;
 
     _loadData().then((_) {
       // ハイライトは3秒後に解除
@@ -256,7 +268,19 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
         // TabControllerの再構築をsetState内で行う
         if (_tabController.length != tabCount) {
           int initialIndex = 0;
-          if (_tabController.length > 0) {
+
+          // targetCategoryIdが指定されている場合、そのカテゴリのタブに移動
+          if (_targetCategoryId != null) {
+            final catIndex = categories.indexWhere(
+              (c) => c.id == _targetCategoryId,
+            );
+            if (catIndex >= 0) {
+              // index 0 = タスク(デフォルト), 1+ = カスタムカテゴリ
+              initialIndex = catIndex + 1;
+            }
+            // 一度使用したらクリア
+            _targetCategoryId = null;
+          } else if (_tabController.length > 0) {
             initialIndex = _tabController.index;
             // 新しいタブ数に合わせてインデックスを調整
             if (initialIndex >= tabCount) initialIndex = 0;

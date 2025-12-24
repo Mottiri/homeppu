@@ -76,13 +76,14 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
     }
   }
 
-  // タスク画面へ遷移（該当日付＋タスクハイライト）
+  // タスク画面へ遷移（該当日付＋タスクハイライト＋カテゴリ切り替え）
   void _navigateToTask(TaskModel task) {
     context.go(
       '/tasks',
       extra: {
         'highlightTaskId': task.id,
         'targetDate': task.scheduledAt ?? DateTime.now(),
+        'targetCategoryId': task.categoryId,
       },
     );
   }

@@ -92,6 +92,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               final extra = state.extra as Map<String, dynamic>?;
               final highlightTaskId = extra?['highlightTaskId'] as String?;
               final targetDate = extra?['targetDate'] as DateTime?;
+              final targetCategoryId = extra?['targetCategoryId'] as String?;
               final forceRefresh = extra?['forceRefresh'] as bool? ?? false;
               // forceRefresh または highlightTaskId がある場合は強制的に再作成
               return TasksScreen(
@@ -100,6 +101,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     : null,
                 highlightTaskId: highlightTaskId,
                 targetDate: targetDate,
+                targetCategoryId: targetCategoryId,
               );
             },
           ),
