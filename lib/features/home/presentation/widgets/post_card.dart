@@ -10,7 +10,7 @@ import '../../../../shared/models/post_model.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
 import '../../../../shared/widgets/report_dialog.dart';
 import '../../../../shared/widgets/video_player_screen.dart';
-import '../../../../shared/services/media_service.dart';
+import '../../../../shared/services/post_service.dart';
 import 'reaction_background.dart';
 
 import 'reaction_selection_sheet.dart';
@@ -21,6 +21,7 @@ class PostCard extends StatefulWidget {
   final VoidCallback? onDeleted;
   final bool isCircleOwner; // サークルオーナーかどうか
   final Function(bool)? onPinToggle; // ピン留めトグルコールバック
+  final bool isDetailView; // 詳細画面表示モード（タップで遷移しない）
 
   const PostCard({
     super.key,
@@ -28,6 +29,7 @@ class PostCard extends StatefulWidget {
     this.onDeleted,
     this.isCircleOwner = false,
     this.onPinToggle,
+    this.isDetailView = false,
   });
 
   @override
@@ -71,121 +73,14 @@ class _PostCardState extends State<PostCard> {
 
   /// 投稿を削除
   Future<void> _deletePost() async {
-    // 確認ダイアログを表示
-    final confirmed = await showDialog<bool>(
+    final deleted = await PostService().deletePost(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('投稿を削除'),
-        content: const Text('この投稿を削除しますか？\nこの操作は取り消せません。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('キャンセル'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('削除'),
-          ),
-        ],
-      ),
+      post: post,
+      onDeleted: widget.onDeleted,
     );
 
-    if (confirmed != true || !mounted) return;
-
-    setState(() => _isDeleting = true);
-
-    try {
-      // バッチ処理で一括削除（整合性担保とルール回避のため）
-      final batch = FirebaseFirestore.instance.batch();
-
-      // 1. 関連するコメントを削除対象に追加
-      // Note: 投稿を先に消すと、コメント削除のセキュリティルール(get(post))が失敗するため
-      // バッチにするか、コメント→投稿の順で消す必要がある。バッチが確実。
-      final comments = await FirebaseFirestore.instance
-          .collection('comments')
-          .where('postId', isEqualTo: post.id)
-          .get();
-
-      for (final doc in comments.docs) {
-        batch.delete(doc.reference);
-      }
-
-      // 2. 関連するリアクションも削除対象に追加
-      final reactions = await FirebaseFirestore.instance
-          .collection('reactions')
-          .where('postId', isEqualTo: post.id)
-          .get();
-
-      for (final doc in reactions.docs) {
-        batch.delete(doc.reference);
-      }
-
-      // 3. 投稿自体を削除対象に追加
-      batch.delete(FirebaseFirestore.instance.collection('posts').doc(post.id));
-
-      // 4. ユーザーの投稿数を減少
-      batch.update(
-        FirebaseFirestore.instance.collection('users').doc(post.userId),
-        {'totalPosts': FieldValue.increment(-1)},
-      );
-
-      // 5. サークル投稿の場合、postCountをデクリメント
-      if (post.circleId != null && post.circleId!.isNotEmpty) {
-        batch.update(
-          FirebaseFirestore.instance.collection('circles').doc(post.circleId),
-          {'postCount': FieldValue.increment(-1)},
-        );
-      }
-
-      // コミット
-      debugPrint('Deleting post: ${post.id}');
-      await batch.commit();
-      debugPrint('Post deleted successfully');
-
-      // 6. Storageからメディアを削除（バッチ外で実行）
-      debugPrint(
-        '=== Media deletion: post.allMedia.length = ${post.allMedia.length} ===',
-      );
-      for (int i = 0; i < post.allMedia.length; i++) {
-        final media = post.allMedia[i];
-        debugPrint('Media[$i]: URL=${media.url}, type=${media.type}');
-      }
-      if (post.allMedia.isNotEmpty) {
-        final mediaService = MediaService();
-        for (final media in post.allMedia) {
-          debugPrint('Deleting media from Storage: ${media.url}');
-          await mediaService.deleteMedia(media.url);
-        }
-        debugPrint('Deleted ${post.allMedia.length} media files from Storage');
-      } else {
-        debugPrint('No media to delete (post.allMedia is empty)');
-        debugPrint('post.mediaItems.length = ${post.mediaItems.length}');
-        debugPrint('post.imageUrl = ${post.imageUrl}');
-      }
-
-      if (mounted) {
-        setState(() => _isDeleting = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('投稿を削除しました'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        widget.onDeleted?.call();
-      }
-    } catch (e, stackTrace) {
-      debugPrint('Delete failed: $e');
-      debugPrint('Stack trace: $stackTrace');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('削除に失敗しました: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-        setState(() => _isDeleting = false);
-      }
+    if (deleted && mounted) {
+      setState(() => _isDeleting = false);
     }
   }
 
@@ -195,7 +90,9 @@ class _PostCardState extends State<PostCard> {
     timeago.setLocaleMessages('ja', timeago.JaMessages());
 
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: widget.isDetailView
+          ? const EdgeInsets.all(16)
+          : const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       clipBehavior: Clip.hardEdge, // スタンプが枠外に表示されないようにクリップ
       child: Stack(
         children: [
@@ -208,7 +105,9 @@ class _PostCardState extends State<PostCard> {
           ),
           // カードコンテンツ
           InkWell(
-            onTap: () => context.push('/post/${post.id}'),
+            onTap: widget.isDetailView
+                ? null
+                : () => context.push('/post/${post.id}'),
             borderRadius: BorderRadius.circular(20),
             child: Padding(
               padding: const EdgeInsets.all(16),

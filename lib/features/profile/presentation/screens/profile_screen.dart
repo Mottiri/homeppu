@@ -10,6 +10,7 @@ import '../../../../shared/models/user_model.dart';
 import '../../../../shared/models/post_model.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/services/follow_service.dart';
+import '../../../../shared/services/post_service.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
 import '../../../../shared/widgets/virtue_indicator.dart';
 
@@ -678,6 +679,7 @@ class _UserPostsListState extends State<_UserPostsList>
 
         final post = posts[index];
         return _ProfilePostCard(
+          key: ValueKey(post.id),
           post: post,
           isMyProfile: widget.isMyProfile,
           onDeleted: () {
@@ -698,6 +700,7 @@ class _ProfilePostCard extends StatefulWidget {
   final VoidCallback? onDeleted;
 
   const _ProfilePostCard({
+    super.key,
     required this.post,
     this.isMyProfile = false,
     this.onDeleted,
@@ -711,87 +714,16 @@ class _ProfilePostCardState extends State<_ProfilePostCard> {
   bool _isDeleting = false;
 
   Future<void> _deletePost() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('投稿を削除'),
-        content: const Text('この投稿を削除しますか？\nこの操作は取り消せません。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('キャンセル'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('削除'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !mounted) return;
-
     setState(() => _isDeleting = true);
 
-    try {
-      // バッチ処理で一括削除（整合性担保とルール回避のため）
-      final batch = FirebaseFirestore.instance.batch();
+    final deleted = await PostService().deletePost(
+      context: context,
+      post: widget.post,
+      onDeleted: widget.onDeleted,
+    );
 
-      // 1. 関連するコメントを削除対象に追加
-      final comments = await FirebaseFirestore.instance
-          .collection('comments')
-          .where('postId', isEqualTo: widget.post.id)
-          .get();
-
-      for (final doc in comments.docs) {
-        batch.delete(doc.reference);
-      }
-
-      // 2. 関連するリアクションも削除対象に追加
-      final reactions = await FirebaseFirestore.instance
-          .collection('reactions')
-          .where('postId', isEqualTo: widget.post.id)
-          .get();
-
-      for (final doc in reactions.docs) {
-        batch.delete(doc.reference);
-      }
-
-      // 3. 投稿自体を削除対象に追加
-      batch.delete(
-        FirebaseFirestore.instance.collection('posts').doc(widget.post.id),
-      );
-
-      // 4. ユーザーの投稿数を減少
-      batch.update(
-        FirebaseFirestore.instance.collection('users').doc(widget.post.userId),
-        {'totalPosts': FieldValue.increment(-1)},
-      );
-
-      // コミット
-      await batch.commit();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('投稿を削除しました'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        // 親のリストから削除
-        widget.onDeleted?.call();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('削除に失敗しました: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-        setState(() => _isDeleting = false);
-      }
+    if (!deleted && mounted) {
+      setState(() => _isDeleting = false);
     }
   }
 
