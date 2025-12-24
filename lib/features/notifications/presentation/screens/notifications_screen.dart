@@ -291,7 +291,7 @@ class _NotificationTile extends ConsumerWidget {
         }
       },
       tileColor: !notification.isRead
-          ? AppColors.primary.withOpacity(0.05)
+          ? AppColors.primary.withValues(alpha: 0.05)
           : null,
     );
   }

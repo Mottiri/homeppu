@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/user_model.dart';
@@ -55,14 +56,16 @@ class AuthService {
     String? nameSuffix,
   }) async {
     try {
-      print('AuthService: Starting signUp for email: $email');
+      debugPrint('AuthService: Starting signUp for email: $email');
 
       final credential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
 
-      print('AuthService: Firebase Auth user created: ${credential.user?.uid}');
+      debugPrint(
+        'AuthService: Firebase Auth user created: ${credential.user?.uid}',
+      );
 
       if (credential.user != null) {
         final user = UserModel(
@@ -77,22 +80,22 @@ class AuthService {
           updatedAt: DateTime.now(),
         );
 
-        print('AuthService: UserModel created, saving to Firestore...');
-        print('AuthService: UserModel data: ${user.toFirestore()}');
+        debugPrint('AuthService: UserModel created, saving to Firestore...');
+        debugPrint('AuthService: UserModel data: ${user.toFirestore()}');
 
         await _firestore
             .collection('users')
             .doc(credential.user!.uid)
             .set(user.toFirestore());
 
-        print('AuthService: User saved to Firestore successfully');
+        debugPrint('AuthService: User saved to Firestore successfully');
 
         return user;
       }
       return null;
     } catch (e, stackTrace) {
-      print('AuthService: Error during signUp: $e');
-      print('AuthService: Stack trace: $stackTrace');
+      debugPrint('AuthService: Error during signUp: $e');
+      debugPrint('AuthService: Stack trace: $stackTrace');
       rethrow;
     }
   }

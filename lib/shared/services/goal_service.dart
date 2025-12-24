@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import '../models/goal_model.dart';
 import '../models/task_model.dart';
 
@@ -42,7 +43,7 @@ class GoalService {
       }
     } catch (e) {
       // タスク削除に失敗してもgoal削除は続行
-      print('Warning: Could not delete linked tasks: $e');
+      debugPrint('Warning: Could not delete linked tasks: $e');
     }
 
     await batch.commit();
@@ -72,7 +73,7 @@ class GoalService {
             .where('scheduledAt', isGreaterThan: now)
             .get();
 
-        print(
+        debugPrint(
           'DEBUG: Found ${futureTasksSnapshot.docs.length} future tasks to delete',
         );
 
@@ -82,13 +83,13 @@ class GoalService {
             batch.delete(doc.reference);
           }
           await batch.commit();
-          print(
+          debugPrint(
             'DEBUG: Deleted ${futureTasksSnapshot.docs.length} future tasks',
           );
         }
       } catch (e) {
         // エラーの場合はログ出力（目標完了は成功済み）
-        print('Error: Could not delete future tasks: $e');
+        debugPrint('Error: Could not delete future tasks: $e');
       }
     }
   }

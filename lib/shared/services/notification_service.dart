@@ -1,4 +1,5 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -27,12 +28,12 @@ class NotificationService {
     );
 
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      print('通知許可: 許可されました');
+      debugPrint('通知許可: 許可されました');
     } else if (settings.authorizationStatus ==
         AuthorizationStatus.provisional) {
-      print('通知許可: 仮許可されました');
+      debugPrint('通知許可: 仮許可されました');
     } else {
-      print('通知許可: 拒否されました');
+      debugPrint('通知許可: 拒否されました');
       return;
     }
 
@@ -78,7 +79,7 @@ class NotificationService {
         await _saveFcmToken(token);
       }
     } catch (e) {
-      print('FCMトークン取得エラー: $e');
+      debugPrint('FCMトークン取得エラー: $e');
     }
   }
 
@@ -91,12 +92,12 @@ class NotificationService {
       'fcmToken': token,
       'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
     });
-    print('FCMトークンを保存しました');
+    debugPrint('FCMトークンを保存しました');
   }
 
   /// フォアグラウンドメッセージ処理
   Future<void> _handleForegroundMessage(RemoteMessage message) async {
-    print('フォアグラウンド通知受信: ${message.notification?.title}');
+    debugPrint('フォアグラウンド通知受信: ${message.notification?.title}');
 
     final notification = message.notification;
     if (notification == null) return;
@@ -149,7 +150,7 @@ class NotificationService {
     final payload = response.payload;
     if (payload != null && payload.isNotEmpty) {
       // TODO: 投稿詳細画面に遷移
-      print('通知タップ: postId=$payload');
+      debugPrint('通知タップ: postId=$payload');
     }
   }
 
@@ -158,7 +159,7 @@ class NotificationService {
     final postId = message.data['postId'];
     if (postId != null) {
       // TODO: 投稿詳細画面に遷移
-      print('通知から起動: postId=$postId');
+      debugPrint('通知から起動: postId=$postId');
     }
   }
 
@@ -176,5 +177,5 @@ class NotificationService {
 /// バックグラウンドメッセージハンドラー（トップレベル関数）
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  print('バックグラウンド通知受信: ${message.notification?.title}');
+  debugPrint('バックグラウンド通知受信: ${message.notification?.title}');
 }

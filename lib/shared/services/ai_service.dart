@@ -1,4 +1,5 @@
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/foundation.dart';
 
 /// AIサービス
 /// Cloud Functionsを呼び出すラッパー
@@ -13,9 +14,9 @@ class AIService {
     try {
       final callable = _functions.httpsCallable('initializeAIAccounts');
       final result = await callable.call();
-      print('AIアカウント初期化: ${result.data}');
+      debugPrint('AIアカウント初期化: ${result.data}');
     } catch (e) {
-      print('AIアカウント初期化エラー: $e');
+      debugPrint('AIアカウント初期化エラー: $e');
       rethrow;
     }
   }
@@ -28,10 +29,10 @@ class AIService {
         options: HttpsCallableOptions(timeout: const Duration(minutes: 9)),
       );
       final result = await callable.call();
-      print('AI投稿生成: ${result.data}');
+      debugPrint('AI投稿生成: ${result.data}');
       return Map<String, dynamic>.from(result.data as Map);
     } catch (e) {
-      print('AI投稿生成エラー: $e');
+      debugPrint('AI投稿生成エラー: $e');
       rethrow;
     }
   }
@@ -55,7 +56,7 @@ class AIService {
       });
       return result.data['postId'] as String?;
     } catch (e) {
-      print('投稿作成エラー: $e');
+      debugPrint('投稿作成エラー: $e');
       rethrow;
     }
   }
@@ -68,9 +69,9 @@ class AIService {
         options: HttpsCallableOptions(timeout: const Duration(minutes: 9)),
       );
       final result = await callable.call();
-      print('AIユーザー全削除: ${result.data}');
+      debugPrint('AIユーザー全削除: ${result.data}');
     } catch (e) {
-      print('AIユーザー全削除エラー: $e');
+      debugPrint('AIユーザー全削除エラー: $e');
       rethrow;
     }
   }

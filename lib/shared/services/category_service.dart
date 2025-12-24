@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import '../models/category_model.dart';
 
 class CategoryService {
@@ -24,7 +25,7 @@ class CategoryService {
           .map((doc) => CategoryModel.fromFirestore(doc))
           .toList();
     } catch (e) {
-      print('Error fetching categories: $e');
+      debugPrint('Error fetching categories: $e');
       return [];
     }
   }
@@ -65,7 +66,7 @@ class CategoryService {
       await newCategoryRef.set(category.toMap());
       return category;
     } catch (e) {
-      print('Error adding category: $e');
+      debugPrint('Error adding category: $e');
       return null;
     }
   }
@@ -82,7 +83,7 @@ class CategoryService {
           .doc(categoryId)
           .update({'name': name});
     } catch (e) {
-      print('Error updating category: $e');
+      debugPrint('Error updating category: $e');
       throw e;
     }
   }
@@ -102,7 +103,7 @@ class CategoryService {
       // Note: このカテゴリに属するタスクの処理はどうするか？
       // 現状はタスクの表示側で categoryId が見つからない場合は「タスク」タブに表示するなどのフォールバックが必要
     } catch (e) {
-      print('Error deleting category: $e');
+      debugPrint('Error deleting category: $e');
       throw e;
     }
   }

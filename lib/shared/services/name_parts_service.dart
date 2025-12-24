@@ -1,20 +1,22 @@
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/foundation.dart';
 import '../models/name_part_model.dart';
 
 /// 名前パーツサービス
 class NamePartsService {
   final FirebaseFunctions _functions;
 
-  NamePartsService() : _functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+  NamePartsService()
+    : _functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
 
   /// 名前パーツマスタを初期化（管理者用）
   Future<void> initializeNameParts() async {
     try {
       final callable = _functions.httpsCallable('initializeNameParts');
       final result = await callable.call();
-      print('名前パーツ初期化: ${result.data}');
+      debugPrint('名前パーツ初期化: ${result.data}');
     } catch (e) {
-      print('名前パーツ初期化エラー: $e');
+      debugPrint('名前パーツ初期化エラー: $e');
       rethrow;
     }
   }
@@ -29,7 +31,7 @@ class NamePartsService {
       final prefixes = (data['prefixes'] as List)
           .map((p) => NamePartModel.fromMap(Map<String, dynamic>.from(p)))
           .toList();
-      
+
       final suffixes = (data['suffixes'] as List)
           .map((s) => NamePartModel.fromMap(Map<String, dynamic>.from(s)))
           .toList();
@@ -41,7 +43,7 @@ class NamePartsService {
         currentSuffixId: data['currentSuffix'],
       );
     } catch (e) {
-      print('名前パーツ取得エラー: $e');
+      debugPrint('名前パーツ取得エラー: $e');
       rethrow;
     }
   }
@@ -65,7 +67,7 @@ class NamePartsService {
         message: data['message'] ?? '',
       );
     } catch (e) {
-      print('名前更新エラー: $e');
+      debugPrint('名前更新エラー: $e');
       rethrow;
     }
   }
@@ -98,4 +100,3 @@ class UpdateNameResult {
     required this.message,
   });
 }
-

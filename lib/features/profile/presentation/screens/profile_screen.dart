@@ -41,8 +41,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Future<void> _loadUser() async {
     final currentUser = ref.read(currentUserProvider).valueOrNull;
 
-    print('ProfileScreen: Loading user with userId: ${widget.userId}');
-    print('ProfileScreen: Current user uid: ${currentUser?.uid}');
+    debugPrint('ProfileScreen: Loading user with userId: ${widget.userId}');
+    debugPrint('ProfileScreen: Current user uid: ${currentUser?.uid}');
 
     if (widget.userId == null || widget.userId == currentUser?.uid) {
       // 自分のプロフィール
@@ -54,13 +54,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     } else {
       // 他ユーザーのプロフィール
       try {
-        print('ProfileScreen: Fetching user from Firestore: ${widget.userId}');
+        debugPrint(
+          'ProfileScreen: Fetching user from Firestore: ${widget.userId}',
+        );
         final doc = await FirebaseFirestore.instance
             .collection('users')
             .doc(widget.userId)
             .get();
 
-        print('ProfileScreen: Document exists: ${doc.exists}');
+        debugPrint('ProfileScreen: Document exists: ${doc.exists}');
 
         if (doc.exists) {
           // フォロー状態を取得
@@ -75,13 +77,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             _isLoading = false;
           });
         } else {
-          print('ProfileScreen: User not found in Firestore');
+          debugPrint('ProfileScreen: User not found in Firestore');
           setState(() {
             _isLoading = false;
           });
         }
       } catch (e) {
-        print('ProfileScreen: Error loading user: $e');
+        debugPrint('ProfileScreen: Error loading user: $e');
         setState(() {
           _isLoading = false;
         });

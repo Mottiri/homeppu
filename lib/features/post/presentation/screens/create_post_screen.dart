@@ -419,7 +419,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.1),
+                          color: AppColors.primary.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Column(
@@ -487,7 +487,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                 color: AppColors.surface,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 10,
                     offset: const Offset(0, -2),
                   ),
@@ -562,7 +562,7 @@ class _MediaPickerOption extends StatelessWidget {
         width: 48,
         height: 48,
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Icon(icon, color: color),
@@ -606,7 +606,7 @@ class _MediaPreview extends StatelessWidget {
                 width: 24,
                 height: 24,
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.6),
+                  color: Colors.black.withValues(alpha: 0.6),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.close, size: 16, color: Colors.white),
@@ -622,7 +622,7 @@ class _MediaPreview extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.6),
+                  color: Colors.black.withValues(alpha: 0.6),
                   borderRadius: const BorderRadius.vertical(
                     bottom: Radius.circular(11),
                   ),
