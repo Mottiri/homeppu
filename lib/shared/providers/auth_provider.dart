@@ -35,7 +35,7 @@ final currentUserProvider = StreamProvider<UserModel?>((ref) {
       });
     },
     loading: () => Stream.value(null),
-    error: (_, __) => Stream.value(null),
+    error: (e, _) => Stream.value(null),
   );
 });
 
@@ -141,8 +141,9 @@ class AuthService {
     if (bio != null) updates['bio'] = bio;
     if (avatarIndex != null) updates['avatarIndex'] = avatarIndex;
     if (postMode != null) updates['postMode'] = postMode;
-    if (notificationSettings != null)
+    if (notificationSettings != null) {
       updates['notificationSettings'] = notificationSettings;
+    }
 
     await _firestore.collection('users').doc(uid).update(updates);
   }

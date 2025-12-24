@@ -35,7 +35,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
 
   // Edit Mode Interaction
   bool _isEditMode = false;
-  Set<String> _selectedTaskIds = {};
+  final Set<String> _selectedTaskIds = {};
   late AnimationController _shakeController;
 
   List<CategoryModel> _categories = [];

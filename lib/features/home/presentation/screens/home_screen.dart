@@ -79,7 +79,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                   style: Theme.of(context).textTheme.bodySmall,
                                 ),
                                 loading: () => const SizedBox.shrink(),
-                                error: (_, __) => const SizedBox.shrink(),
+                                error: (e, _) => const SizedBox.shrink(),
                               ),
                             ],
                           ),
@@ -135,7 +135,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                             );
                           },
                           loading: () => const SizedBox.shrink(),
-                          error: (_, __) => const SizedBox.shrink(),
+                          error: (e, _) => const SizedBox.shrink(),
                         ),
                       ],
                     ),

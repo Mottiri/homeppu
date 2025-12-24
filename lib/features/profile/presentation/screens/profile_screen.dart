@@ -127,7 +127,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       return currentUser.when(
         data: (user) => _buildProfile(user),
         loading: () => _buildLoading(),
-        error: (_, __) => _buildError(),
+        error: (e, _) => _buildError(),
       );
     }
 

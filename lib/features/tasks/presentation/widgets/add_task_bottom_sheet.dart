@@ -184,9 +184,9 @@ class _AddTaskBottomSheetState extends ConsumerState<AddTaskBottomSheet> {
     if (_recurrenceInterval != null && _recurrenceInterval! > 1) {
       if (_recurrenceUnit == 'weekly' &&
           (_recurrenceDaysOfWeek?.isNotEmpty ?? false)) {
-        return '${_recurrenceInterval}$unitLabelごと (曜日指定)';
+        return '$_recurrenceInterval$unitLabelごと (曜日指定)';
       }
-      return '${_recurrenceInterval}$unitLabelごと';
+      return '$_recurrenceInterval$unitLabelごと';
     }
 
     if (_recurrenceUnit == 'weekly' &&
@@ -194,7 +194,7 @@ class _AddTaskBottomSheetState extends ConsumerState<AddTaskBottomSheet> {
       return '毎週 (曜日指定)';
     }
 
-    return '毎${unitLabel}';
+    return '毎$unitLabel';
   }
 
   @override
@@ -230,10 +230,11 @@ class _AddTaskBottomSheetState extends ConsumerState<AddTaskBottomSheet> {
                           icon: Icons.check_circle_outline,
                           isSelected: _selectedCategoryId == null,
                           onSelected: (val) {
-                            if (val)
+                            if (val) {
                               setState(() {
                                 _selectedCategoryId = null;
                               });
+                            }
                           },
                           color: Colors.blue,
                         ),
@@ -249,10 +250,11 @@ class _AddTaskBottomSheetState extends ConsumerState<AddTaskBottomSheet> {
                               icon: Icons.label_outline,
                               isSelected: isSelected,
                               onSelected: (val) {
-                                if (val)
+                                if (val) {
                                   setState(() {
                                     _selectedCategoryId = cat.id;
                                   });
+                                }
                               },
                               color: Colors
                                   .orange, // Fixed color for now, or use cat specific
@@ -445,8 +447,9 @@ class _AddTaskBottomSheetState extends ConsumerState<AddTaskBottomSheet> {
                             FirebaseAuth.instance.currentUser!.uid,
                           ),
                           builder: (context, snapshot) {
-                            if (!snapshot.hasData || snapshot.data!.isEmpty)
+                            if (!snapshot.hasData || snapshot.data!.isEmpty) {
                               return const SizedBox.shrink();
+                            }
                             final goals = snapshot.data!;
                             return SingleChildScrollView(
                               scrollDirection: Axis.horizontal,

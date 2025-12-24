@@ -552,8 +552,9 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
                                     fit: BoxFit.cover,
                                     loadingBuilder:
                                         (context, child, loadingProgress) {
-                                          if (loadingProgress == null)
+                                          if (loadingProgress == null) {
                                             return child;
+                                          }
                                           return Container(
                                             width: 36,
                                             height: 36,
@@ -926,8 +927,9 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
                                         fit: BoxFit.cover,
                                         loadingBuilder:
                                             (context, child, loadingProgress) {
-                                              if (loadingProgress == null)
+                                              if (loadingProgress == null) {
                                                 return child;
+                                              }
                                               return Container(
                                                 width: 36,
                                                 height: 36,

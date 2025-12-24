@@ -84,7 +84,7 @@ class CategoryService {
           .update({'name': name});
     } catch (e) {
       debugPrint('Error updating category: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -104,7 +104,7 @@ class CategoryService {
       // 現状はタスクの表示側で categoryId が見つからない場合は「タスク」タブに表示するなどのフォールバックが必要
     } catch (e) {
       debugPrint('Error deleting category: $e');
-      throw e;
+      rethrow;
     }
   }
 }

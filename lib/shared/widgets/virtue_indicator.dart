@@ -27,7 +27,7 @@ class VirtueIndicator extends ConsumerWidget {
           color: AppColors.virtue,
         ),
       ),
-      error: (_, __) => const SizedBox.shrink(),
+      error: (e, _) => const SizedBox.shrink(),
     );
   }
 }
@@ -314,7 +314,7 @@ class VirtueDetailDialog extends ConsumerWidget {
               loading: () => const Center(
                 child: CircularProgressIndicator(color: AppColors.virtue),
               ),
-              error: (_, __) => const Text('履歴を読み込めませんでした'),
+              error: (e, _) => const Text('履歴を読み込めませんでした'),
             ),
           ],
         ),
@@ -340,12 +340,13 @@ class VirtueBadge extends ConsumerWidget {
     return virtueAsync.when(
       data: (status) {
         Color color = AppColors.virtue;
-        if (status.virtue <= 0)
+        if (status.virtue <= 0) {
           color = AppColors.error;
-        else if (status.needsWarning)
+        } else if (status.needsWarning) {
           color = AppColors.warning;
-        else if (status.virtue >= 80)
+        } else if (status.virtue >= 80) {
           color = AppColors.success;
+        }
 
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -379,7 +380,7 @@ class VirtueBadge extends ConsumerWidget {
         );
       },
       loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
+      error: (e, _) => const SizedBox.shrink(),
     );
   }
 }

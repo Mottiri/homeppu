@@ -1138,10 +1138,11 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                       stream: circleService.streamPinnedPosts(circle.id),
                       builder: (context, pinnedSnapshot) {
                         final pinnedPosts = pinnedSnapshot.data ?? [];
-                        if (pinnedPosts.isEmpty)
+                        if (pinnedPosts.isEmpty) {
                           return const SliverToBoxAdapter(
                             child: SizedBox.shrink(),
                           );
+                        }
 
                         // トップピン投稿を取得
                         final topPinned = pinnedPosts.firstWhere(

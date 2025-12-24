@@ -49,8 +49,9 @@ class _MainShellState extends ConsumerState<MainShell>
     if (location.startsWith('/home')) return 0;
     if (location.startsWith('/circles')) return 1;
     if (location.startsWith('/tasks')) return 2;
-    if (location.startsWith('/profile') || location.startsWith('/user'))
+    if (location.startsWith('/profile') || location.startsWith('/user')) {
       return 3;
+    }
     return 0;
   }
 
