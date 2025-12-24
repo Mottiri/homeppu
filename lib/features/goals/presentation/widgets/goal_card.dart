@@ -23,9 +23,7 @@ class GoalCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final goalColor = Color(goal.colorValue);
-    final daysRemaining = goal.deadline != null
-        ? goal.deadline!.difference(DateTime.now()).inDays
-        : null;
+    final daysRemaining = goal.deadline?.difference(DateTime.now()).inDays;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

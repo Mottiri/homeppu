@@ -112,9 +112,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
   ) {
     final isCompleted = goal.isCompleted;
     final color = Color(goal.colorValue);
-    final daysRemaining = goal.deadline != null
-        ? goal.deadline!.difference(DateTime.now()).inDays
-        : null;
+    final daysRemaining = goal.deadline?.difference(DateTime.now()).inDays;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -422,7 +420,10 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
         padding: const EdgeInsets.symmetric(vertical: 18),
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [color, color.withBlue((color.blue + 30).clamp(0, 255))],
+            colors: [
+              color,
+              color.withBlue(((color.b * 255).round() + 30).clamp(0, 255)),
+            ],
           ),
           borderRadius: BorderRadius.circular(16),
           boxShadow: [

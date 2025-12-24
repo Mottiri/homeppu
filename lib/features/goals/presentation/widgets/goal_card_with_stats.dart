@@ -101,7 +101,7 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
     } else if (diff == -1) {
       return '昨日';
     } else if (diff > 0 && diff < 7) {
-      return '${diff}日後';
+      return '$diff日後';
     } else {
       return DateFormat('M/d').format(date);
     }
@@ -257,9 +257,9 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
   }
 
   Widget _buildHeader(Color goalColor, int completedCount, int totalCount) {
-    final daysRemaining = widget.goal.deadline != null
-        ? widget.goal.deadline!.difference(DateTime.now()).inDays
-        : null;
+    final daysRemaining = widget.goal.deadline
+        ?.difference(DateTime.now())
+        .inDays;
     final progress = totalCount > 0 ? completedCount / totalCount : 0.0;
 
     return InkWell(

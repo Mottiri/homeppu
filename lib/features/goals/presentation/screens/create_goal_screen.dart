@@ -369,7 +369,7 @@ class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen> {
                 ),
                 value: _isPublic,
                 onChanged: (val) => setState(() => _isPublic = val),
-                activeColor: AppColors.info,
+                activeTrackColor: AppColors.info,
               ),
             ),
 
@@ -519,7 +519,10 @@ class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen> {
         padding: const EdgeInsets.symmetric(vertical: 18),
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [color, color.withBlue((color.blue + 30).clamp(0, 255))],
+            colors: [
+              color,
+              color.withBlue(((color.b * 255).round() + 30).clamp(0, 255)),
+            ],
           ),
           borderRadius: BorderRadius.circular(16),
           boxShadow: [

@@ -130,7 +130,7 @@ class PostModel {
 
   /// リアクションの合計数
   int get totalReactions {
-    return reactions.values.fold(0, (sum, count) => sum + count);
+    return reactions.values.fold(0, (acc, value) => acc + value);
   }
 
   PostModel copyWith({
