@@ -1,4 +1,5 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -22,15 +23,20 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   List<CircleModel> _searchResults = [];
   bool _isSearching = false;
 
-  // プル更新用の状態
+  // プル更新・無限スクロール用の状態
   List<CircleModel> _circles = [];
   bool _isLoading = true;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
   String? _error;
+  DocumentSnapshot? _lastDocument;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
-    // リロードはdidChangeDependenciesで行う
+    // 無限スクロール用のリスナー
+    _scrollController.addListener(_onScroll);
   }
 
   @override
@@ -43,24 +49,38 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    // 下端から200px手前でロードを開始
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      _loadMoreCircles();
+    }
   }
 
   Future<void> _loadCircles() async {
     setState(() {
       _isLoading = _circles.isEmpty;
       _error = null;
+      _hasMore = true;
+      _lastDocument = null;
     });
 
     try {
       final circleService = ref.read(circleServiceProvider);
       final currentUser = ref.read(currentUserProvider).valueOrNull;
-      final circles = await circleService.getPublicCircles(
+      final result = await circleService.getPublicCirclesPaginated(
         category: _selectedCategory,
         userId: currentUser?.uid,
+        limit: 15,
       );
       setState(() {
-        _circles = circles;
+        _circles = result.circles;
+        _lastDocument = result.lastDoc;
+        _hasMore = result.hasMore;
         _isLoading = false;
       });
     } catch (e) {
@@ -68,6 +88,31 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         _error = e.toString();
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _loadMoreCircles() async {
+    if (_isLoadingMore || !_hasMore || _lastDocument == null) return;
+
+    setState(() => _isLoadingMore = true);
+
+    try {
+      final circleService = ref.read(circleServiceProvider);
+      final currentUser = ref.read(currentUserProvider).valueOrNull;
+      final result = await circleService.getPublicCirclesPaginated(
+        category: _selectedCategory,
+        userId: currentUser?.uid,
+        lastDocument: _lastDocument,
+        limit: 15,
+      );
+      setState(() {
+        _circles.addAll(result.circles);
+        _lastDocument = result.lastDoc;
+        _hasMore = result.hasMore;
+        _isLoadingMore = false;
+      });
+    } catch (e) {
+      setState(() => _isLoadingMore = false);
     }
   }
 
@@ -100,6 +145,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         child: RefreshIndicator(
           onRefresh: _loadCircles,
           child: CustomScrollView(
+            controller: _scrollController,
             slivers: [
               // ヘッダー（シアングラデーション）
               SliverToBoxAdapter(
@@ -422,13 +468,26 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     return SliverPadding(
       padding: EdgeInsets.only(bottom: bottomPadding),
       sliver: SliverList(
-        delegate: SliverChildBuilderDelegate(
-          (context, index) => _CircleCard(
+        delegate: SliverChildBuilderDelegate((context, index) {
+          // 最後の項目の場合、ローディングインジケーターを表示
+          if (index == filteredCircles.length) {
+            return _hasMore
+                ? const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  )
+                : const SizedBox.shrink();
+          }
+          return _CircleCard(
             circle: filteredCircles[index],
             currentUserId: userId,
-          ),
-          childCount: filteredCircles.length,
-        ),
+          );
+        }, childCount: filteredCircles.length + (_hasMore ? 1 : 0)),
       ),
     );
   }

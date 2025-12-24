@@ -101,6 +101,55 @@ class CircleService {
     return circles;
   }
 
+  // サークル一覧を取得（ページネーション対応）
+  Future<({List<CircleModel> circles, DocumentSnapshot? lastDoc, bool hasMore})>
+  getPublicCirclesPaginated({
+    String? category,
+    String? userId,
+    DocumentSnapshot? lastDocument,
+    int limit = 10,
+  }) async {
+    Query query = _firestore
+        .collection('circles')
+        .orderBy('createdAt', descending: true)
+        .limit(limit + 1); // 1件多く取得してhasMoreを判定
+
+    if (lastDocument != null) {
+      query = query.startAfterDocument(lastDocument);
+    }
+
+    final snapshot = await query.get();
+
+    // hasMoreの判定（limit+1件取得できたら次がある）
+    final hasMore = snapshot.docs.length > limit;
+    final docs = hasMore ? snapshot.docs.sublist(0, limit) : snapshot.docs;
+
+    var circles = docs
+        .map(
+          (doc) => CircleModel.fromFirestore(
+            doc as DocumentSnapshot<Map<String, dynamic>>,
+          ),
+        )
+        .where((c) => !c.isDeleted) // ソフトデリート済みは除外
+        .where(
+          (c) =>
+              c.aiMode != CircleAIMode.aiOnly || // AIモードでない
+              c.ownerId == userId,
+        ) // または自分が作成者
+        .toList();
+
+    // カテゴリフィルター
+    if (category != null && category != '全て') {
+      circles = circles.where((c) => c.category == category).toList();
+    }
+
+    return (
+      circles: circles,
+      lastDoc: docs.isNotEmpty ? docs.last : null,
+      hasMore: hasMore,
+    );
+  }
+
   // サークル検索
   Future<List<CircleModel>> searchCircles(String query) async {
     // Firestoreは部分一致検索をサポートしないため、
