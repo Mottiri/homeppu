@@ -351,14 +351,11 @@ class _PostsListState extends State<_PostsList> {
   bool _isLoading = true;
   bool _isLoadingMore = false;
   bool _hasError = false;
-  String? _latestPostId;
-  Stream<QuerySnapshot>? _newPostsStream;
 
   @override
   void initState() {
     super.initState();
     _loadPosts();
-    _listenForNewPosts();
   }
 
   @override
@@ -368,7 +365,6 @@ class _PostsListState extends State<_PostsList> {
     if (widget.query != oldWidget.query ||
         widget.refreshKey != oldWidget.refreshKey) {
       _loadPosts();
-      _listenForNewPosts();
     }
   }
 
@@ -403,11 +399,7 @@ class _PostsListState extends State<_PostsList> {
         _lastDocument = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
         _hasMore = snapshot.docs.length == AppConstants.postsPerPage;
         _isLoading = false;
-        _latestPostId = posts.isNotEmpty ? posts.first.id : null;
       });
-
-      // 新着フラグをリセット
-      widget.onNewPostsChanged?.call(false);
     } catch (e) {
       debugPrint('Error loading posts: $e');
       setState(() {
@@ -454,33 +446,6 @@ class _PostsListState extends State<_PostsList> {
       debugPrint('Error loading more posts: $e');
       setState(() => _isLoadingMore = false);
     }
-  }
-
-  /// 新着検知（NEWラベル表示用）- 新しい投稿のみ検知
-  void _listenForNewPosts() {
-    _newPostsStream = widget.query.limit(1).snapshots();
-    _newPostsStream!.listen((snapshot) {
-      if (!mounted) return;
-      if (snapshot.docs.isEmpty) return;
-
-      final latestDoc = snapshot.docs.first;
-      final latestId = latestDoc.id;
-
-      debugPrint('🔔 新着検知: latestId=$latestId, _latestPostId=$_latestPostId');
-
-      // 新着のみドット表示（IDが変わり、かつ最新の投稿IDでない場合）
-      // 削除時はリストから消えるだけなので、latestIdが_posts内にあればドット表示しない
-      if (_latestPostId != null && latestId != _latestPostId) {
-        // _postsリストにlatestIdがなければ新着
-        final isNewPost = !_posts.any((p) => p.id == latestId);
-        if (isNewPost) {
-          debugPrint('🔔 新着あり！ドット表示');
-          widget.onNewPostsChanged?.call(true);
-        } else {
-          debugPrint('🔔 削除による変更（ドット表示しない）');
-        }
-      }
-    });
   }
 
   @override
