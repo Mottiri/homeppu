@@ -59,8 +59,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         // ロゴ（中央）
                         Image.asset(
                           'assets/icons/logo.png',
-                          width: 100,
-                          height: 100,
+                          width: 72,
+                          height: 72,
                         ),
                         // 通知アイコン（右端）
                         Positioned(
