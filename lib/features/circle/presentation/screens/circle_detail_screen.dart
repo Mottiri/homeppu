@@ -1045,6 +1045,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                             ),
                           ],
 
+                          const SizedBox(height: 16),
                           // 参加ボタン
                           SizedBox(
                             width: double.infinity,
