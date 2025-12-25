@@ -346,7 +346,10 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
       padding: EdgeInsets.only(bottom: bottomPadding),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate(
-          (context, index) => _CircleCard(circle: _searchResults[index]),
+          (context, index) => _CircleCard(
+            circle: _searchResults[index],
+            onDeleted: _loadCircles,
+          ),
           childCount: _searchResults.length,
         ),
       ),
@@ -486,6 +489,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
           return _CircleCard(
             circle: filteredCircles[index],
             currentUserId: userId,
+            onDeleted: _loadCircles,
           );
         }, childCount: filteredCircles.length + (_hasMore ? 1 : 0)),
       ),
@@ -542,8 +546,9 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
 class _CircleCard extends ConsumerWidget {
   final CircleModel circle;
   final String? currentUserId;
+  final VoidCallback? onDeleted;
 
-  const _CircleCard({required this.circle, this.currentUserId});
+  const _CircleCard({required this.circle, this.currentUserId, this.onDeleted});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -567,7 +572,14 @@ class _CircleCard extends ConsumerWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () => context.push('/circle/${circle.id}'),
+          onTap: () async {
+            final result = await context.push<bool>('/circle/${circle.id}');
+            // サークル削除後にリロードが必要な場合
+            if (result == true && context.mounted) {
+              // 親Stateに通知するためにコールバックを呼ぶ
+              onDeleted?.call();
+            }
+          },
           borderRadius: BorderRadius.circular(16),
           child: Padding(
             padding: const EdgeInsets.all(16),

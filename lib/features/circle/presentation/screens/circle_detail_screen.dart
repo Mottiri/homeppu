@@ -302,6 +302,29 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
 
   /// サークル削除処理
   Future<void> _handleDeleteCircle(CircleModel circle, String? reason) async {
+    // 削除中のSnackBarを表示（一覧画面に戻るまで表示）
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    scaffoldMessenger.showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            ),
+            SizedBox(width: 16),
+            Text('サークルを削除中...'),
+          ],
+        ),
+        duration: Duration(minutes: 5), // 長めに設定（後で消す）
+        backgroundColor: Colors.orange,
+      ),
+    );
+
     try {
       final circleService = ref.read(circleServiceProvider);
 
@@ -310,18 +333,23 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
         reason: reason?.isEmpty == true ? null : reason,
       );
 
+      scaffoldMessenger.hideCurrentSnackBar();
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        scaffoldMessenger.showSnackBar(
           const SnackBar(
             content: Text('サークルを削除しました'),
             backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
           ),
         );
-        context.go('/circles'); // サークル一覧に戻る
+        // popで結果を返して一覧画面で再読み込みをトリガー
+        context.pop(true);
       }
     } catch (e) {
+      scaffoldMessenger.hideCurrentSnackBar();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        scaffoldMessenger.showSnackBar(
           SnackBar(content: Text('削除に失敗しました: $e'), backgroundColor: Colors.red),
         );
       }
