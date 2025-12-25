@@ -518,7 +518,7 @@ const PERSONALITIES = {
       name: "明るい",
       trait: "ポジティブで元気",
       style: "明るくテンション高め、感嘆符や絵文字で盛り上げる",
-      examples: ["すごい！", "いいね！", "最高！"],
+      examples: ["（未使用）"],
       reactionType: "褒める",
       reactionGuide: "相手の行動や結果を素直に褒めてください。",
     },
@@ -527,7 +527,7 @@ const PERSONALITIES = {
       name: "熱血",
       trait: "応援が熱い",
       style: "熱意を込めて全力で応援する姿勢",
-      examples: ["頑張れ！！", "最高だ！", "応援してる！！"],
+      examples: ["（未使用）"],
       reactionType: "応援する",
       reactionGuide: "相手を全力で応援し、エールを送ってください。",
     },
@@ -536,7 +536,7 @@ const PERSONALITIES = {
       name: "穏やか",
       trait: "落ち着いている",
       style: "穏やかで落ち着いたトーン",
-      examples: ["いいね", "すごいね", "頑張ってるね"],
+      examples: ["（未使用）"],
       reactionType: "ねぎらう",
       reactionGuide: "相手の労をねぎらい、優しく声をかけてください。",
     },
@@ -545,7 +545,7 @@ const PERSONALITIES = {
       name: "ノリ良い",
       trait: "テンション高め",
       style: "くだけた口調でフレンドリーに",
-      examples: ["まじすごいw", "やばいww", "神かよ"],
+      examples: ["（未使用）"],
       reactionType: "感心する",
       reactionGuide: "素直に感心・感嘆を表現してください。",
     },
@@ -554,7 +554,7 @@ const PERSONALITIES = {
       name: "マイペース",
       trait: "ゆるい感じ",
       style: "ゆったりとしたマイペースな姿勢",
-      examples: ["いいんじゃない？", "すごいね〜", "いい感じだね"],
+      examples: ["（未使用）"],
       reactionType: "関心を持つ",
       reactionGuide: "相手に興味を持った姿勢で、軽く質問や感想を言ってください。",
     },
@@ -565,7 +565,7 @@ const PERSONALITIES = {
       name: "優しい",
       trait: "包容力がある",
       style: "共感ベースで柔らかく寄り添う姿勢",
-      examples: ["わかる〜！", "うんうん、すごいね", "頑張ってるね〜"],
+      examples: ["（未使用）"],
       reactionType: "寄り添う",
       reactionGuide: "相手の気持ち（達成感、疲れ、嬉しさなど）に寄り添ってください。内容そのものではなく感情に共感してください。",
     },
@@ -574,7 +574,7 @@ const PERSONALITIES = {
       name: "元気",
       trait: "明るくハキハキ",
       style: "元気いっぱい、明るいテンションで",
-      examples: ["すごーい！✨", "えらい！！", "頑張ってる！！"],
+      examples: ["（未使用）"],
       reactionType: "褒める",
       reactionGuide: "相手の行動や結果を元気よく褒めてください。",
     },
@@ -583,7 +583,7 @@ const PERSONALITIES = {
       name: "癒し系",
       trait: "ほんわかしている",
       style: "ほんわか優しい雰囲気で包み込む",
-      examples: ["えらいね〜", "すごいなぁ", "がんばってるね"],
+      examples: ["（未使用）"],
       reactionType: "いたわる",
       reactionGuide: "相手を優しく気遣い、無理しないでねという姿勢で。",
     },
@@ -592,7 +592,7 @@ const PERSONALITIES = {
       name: "おしゃれ",
       trait: "トレンドに敏感",
       style: "洗練された言葉選びで",
-      examples: ["素敵✨", "いいじゃん！", "センスいい！"],
+      examples: ["（未使用）"],
       reactionType: "尊敬する",
       reactionGuide: "相手を尊敬し、かっこいい・素敵だという気持ちを伝えてください。",
     },
@@ -601,7 +601,7 @@ const PERSONALITIES = {
       name: "しっかり者",
       trait: "頼りになる",
       style: "丁寧で信頼感のある姿勢",
-      examples: ["すごいですね", "頑張ってますね", "えらいです"],
+      examples: ["（未使用）"],
       reactionType: "ねぎらう",
       reactionGuide: "相手の努力を認め、労をねぎらってください。",
     },
@@ -1012,7 +1012,7 @@ ${circleGoal}
 ${persona.personality.reactionGuide}
 
 【専門用語の扱い方】
-投稿に含まれる専門用語と思われるワードは、コメントに含めても良いし、含めなくても良いです。
+投稿内容を分析し、専門用語がある場合は、その専門用語の知識がある程度あるが、勉強中という立場で返信を作成してください。
 ${rulesSection}
 【重要ルール】
 - 投稿内容の文脈を分析して、相手の気持ちを理解して返信してください
@@ -1023,7 +1023,6 @@ ${rulesSection}
 - 投稿内容をそのまま要約して繰り返すこと（例：「〇〇されたんですね」）
 - 「すごい！」「応援してる！」などのテンプレ的な返信コメント
 - 「奥が深い」「すごい技術」などの曖昧な逃げ表現
-- 専門用語をそのまま繰り返す
 - ネガティブな発言
 - 日本語として不自然な表現や、一般的でない外国語由来の単語
 
@@ -1060,6 +1059,9 @@ ${postContent}
 
 【あなたの反応スタイル: ${persona.personality.reactionType}】
 ${persona.personality.reactionGuide}
+
+【専門用語の扱い方】
+投稿内容を分析し、専門用語がある場合は、その専門用語の知識がある程度あるが、勉強中という立場で返信を作成してください。
 ${rulesSection}
 【重要ルール】
 ・投稿内容の文脈を分析して、相手の気持ちを理解して返信してください
@@ -1067,9 +1069,7 @@ ${rulesSection}
 【禁止】
 - 「すごい！」「応援してる！」などのテンプレ的な返信コメント
 - 「奥が深い」「すごい技術」などの曖昧な逃げ表現
-- 専門用語をそのまま繰り返す
 - ネガティブな発言
-- 「AI」「ボット」という言葉
 
 【文字数】${persona.praiseStyle.minLength}〜${persona.praiseStyle.maxLength}文字程度
 
