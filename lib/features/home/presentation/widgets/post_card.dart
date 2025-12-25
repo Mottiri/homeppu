@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
 import '../../../../core/constants/app_constants.dart';
@@ -16,8 +15,6 @@ import '../../../../shared/widgets/video_player_screen.dart';
 import '../../../../shared/services/post_service.dart';
 import '../../../../shared/services/recent_reactions_service.dart';
 import 'reaction_background.dart';
-
-import 'reaction_selection_sheet.dart';
 
 /// 投稿カード
 class PostCard extends StatefulWidget {
@@ -341,65 +338,6 @@ class _PostCardState extends State<PostCard> {
                   Row(
                     children: [
                       const Spacer(),
-                      // リアクション追加ボタン
-                      IconButton(
-                        icon: const Icon(
-                          Icons.add_reaction_outlined,
-                          color: AppColors.textSecondary,
-                        ),
-                        onPressed: () async {
-                          // 自分の投稿にはリアクションできない
-                          if (isMyPost) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('自分の投稿にはリアクションできません'),
-                                duration: Duration(seconds: 2),
-                              ),
-                            );
-                            return;
-                          }
-
-                          // 既存のリアクション数を確認
-                          final currentUser = FirebaseAuth.instance.currentUser;
-                          if (currentUser != null) {
-                            final existingReactions = await FirebaseFirestore
-                                .instance
-                                .collection('reactions')
-                                .where('postId', isEqualTo: post.id)
-                                .where('userId', isEqualTo: currentUser.uid)
-                                .get();
-
-                            if (existingReactions.docs.length >= 5) {
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('この投稿へのリアクションは5回までです'),
-                                    duration: Duration(seconds: 2),
-                                  ),
-                                );
-                              }
-                              return;
-                            }
-                          }
-
-                          if (!context.mounted) return;
-
-                          showModalBottomSheet(
-                            context: context,
-                            backgroundColor: Colors.transparent,
-                            isScrollControlled: true, // コンテンツサイズに合わせる
-                            builder: (context) => ReactionSelectionSheet(
-                              postId: post.id,
-                              reactions: _localReactions,
-                              onReactionAdded: (reactionType) {
-                                // ローカルでリアクション数を更新（即時反映）
-                                _addReaction(reactionType);
-                              },
-                            ),
-                          );
-                        },
-                      ),
-                      const SizedBox(width: 8),
                       // コメント数（PostModelから取得）
                       Row(
                         children: [
