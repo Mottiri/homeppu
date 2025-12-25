@@ -25,10 +25,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
-  // 新着投稿フラグ
-  bool _hasNewRecommendedPosts = false;
-  bool _hasNewFollowingPosts = false;
-
   @override
   void initState() {
     super.initState();
@@ -161,9 +157,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         fontWeight: FontWeight.normal,
                         fontSize: 15,
                       ),
-                      tabs: [
-                        _buildTabWithDot('おすすめ', _hasNewRecommendedPosts),
-                        _buildTabWithDot('フォロー中', _hasNewFollowingPosts),
+                      tabs: const [
+                        Tab(text: 'おすすめ'),
+                        Tab(text: 'フォロー中'),
                       ],
                     ),
                   ),
@@ -178,49 +174,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   isFollowingOnly: false,
                   currentUser: currentUser.valueOrNull,
                   refreshKey: refreshKey,
-                  onNewPostsChanged: (hasNew) {
-                    if (mounted && _hasNewRecommendedPosts != hasNew) {
-                      setState(() => _hasNewRecommendedPosts = hasNew);
-                    }
-                  },
                 ),
                 // フォロー中タブ
                 _TimelineTab(
                   isFollowingOnly: true,
                   currentUser: currentUser.valueOrNull,
                   refreshKey: refreshKey,
-                  onNewPostsChanged: (hasNew) {
-                    if (mounted && _hasNewFollowingPosts != hasNew) {
-                      setState(() => _hasNewFollowingPosts = hasNew);
-                    }
-                  },
                 ),
               ],
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  /// タブに新着ドットを表示
-  Widget _buildTabWithDot(String text, bool hasNew) {
-    return Tab(
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(text),
-          if (hasNew)
-            Container(
-              margin: const EdgeInsets.only(left: 4),
-              width: 6,
-              height: 6,
-              decoration: const BoxDecoration(
-                color: AppColors.primary,
-                shape: BoxShape.circle,
-              ),
-            ),
-        ],
       ),
     );
   }
@@ -258,13 +222,11 @@ class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
 class _TimelineTab extends StatelessWidget {
   final bool isFollowingOnly;
   final UserModel? currentUser;
-  final ValueChanged<bool>? onNewPostsChanged;
   final int refreshKey;
 
   const _TimelineTab({
     required this.isFollowingOnly,
     required this.currentUser,
-    this.onNewPostsChanged,
     this.refreshKey = 0,
   });
 
@@ -302,7 +264,6 @@ class _TimelineTab extends StatelessWidget {
                 .limit(AppConstants.postsPerPage),
             isAIViewer: currentUser!.isAI,
             currentUserId: currentUserId,
-            onNewPostsChanged: onNewPostsChanged,
             refreshKey: refreshKey,
           );
         },
@@ -318,7 +279,6 @@ class _TimelineTab extends StatelessWidget {
           .limit(AppConstants.postsPerPage),
       isAIViewer: currentUser?.isAI ?? false,
       currentUserId: currentUserId,
-      onNewPostsChanged: onNewPostsChanged,
       refreshKey: refreshKey,
     );
   }
@@ -329,14 +289,12 @@ class _PostsList extends StatefulWidget {
   final Query query;
   final bool isAIViewer;
   final String? currentUserId;
-  final ValueChanged<bool>? onNewPostsChanged;
   final int refreshKey; // リフレッシュ用のキー
 
   const _PostsList({
     required this.query,
     this.isAIViewer = false,
     this.currentUserId,
-    this.onNewPostsChanged,
     this.refreshKey = 0,
   });
 
