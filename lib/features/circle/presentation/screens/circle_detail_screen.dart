@@ -27,6 +27,8 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
   bool _hasPendingRequest = false;
   bool _hasCheckedPending = false;
   String? _lastCheckedUserId;
+  bool _hasShownDeletedToast = false; // 削除済みトースト表示済みフラグ
+  bool _isDeleting = false; // 削除中フラグ（自分で削除中の場合）
 
   // 投稿リスト用の状態変数（プル更新方式）
   List<PostModel> _posts = [];
@@ -302,6 +304,9 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
 
   /// サークル削除処理
   Future<void> _handleDeleteCircle(CircleModel circle, String? reason) async {
+    // 削除中フラグをセット（isDeletedチェックをスキップするため）
+    setState(() => _isDeleting = true);
+
     // 削除中のSnackBarを表示（一覧画面に戻るまで表示）
     final scaffoldMessenger = ScaffoldMessenger.of(context);
     scaffoldMessenger.showSnackBar(
@@ -621,8 +626,9 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
 
         final circle = snapshot.data!;
 
-        // 削除済みサークルの場合、トーストを表示して一覧に戻る
-        if (circle.isDeleted) {
+        // 削除済みサークルの場合、トーストを表示して一覧に戻る（自分で削除中はスキップ）
+        if (circle.isDeleted && !_isDeleting && !_hasShownDeletedToast) {
+          _hasShownDeletedToast = true;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
