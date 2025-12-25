@@ -49,94 +49,74 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           child: NestedScrollView(
             headerSliverBuilder: (context, innerBoxIsScrolled) {
               return [
-                // ヘッダー
+                // ヘッダー（ロゴ中央 + 通知アイコン右）
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                    child: Row(
+                    child: Stack(
+                      alignment: Alignment.center,
                       children: [
-                        // ロゴアイコン
+                        // ロゴ（中央）
                         Image.asset(
                           'assets/icons/logo.png',
-                          width: 56,
-                          height: 56,
+                          width: 80,
+                          height: 80,
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                AppConstants.appName,
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.headlineMedium,
-                              ),
-                              currentUser.when(
-                                data: (user) => Text(
-                                  user != null
-                                      ? '${user.displayName}さん、おはよう！'
-                                      : 'ようこそ！',
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                                loading: () => const SizedBox.shrink(),
-                                error: (e, _) => const SizedBox.shrink(),
-                              ),
-                            ],
-                          ),
-                        ),
-                        // 通知アイコン
-                        currentUser.when(
-                          data: (user) {
-                            if (user == null) return const SizedBox.shrink();
-                            return StreamBuilder<int>(
-                              stream: ref
-                                  .watch(notificationRepositoryProvider)
-                                  .getUnreadCountStream(user.uid),
-                              builder: (context, snapshot) {
-                                final count = snapshot.data ?? 0;
-                                return Stack(
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(
-                                        Icons.notifications_outlined,
-                                        size: 28,
+                        // 通知アイコン（右端）
+                        Positioned(
+                          right: 0,
+                          child: currentUser.when(
+                            data: (user) {
+                              if (user == null) return const SizedBox.shrink();
+                              return StreamBuilder<int>(
+                                stream: ref
+                                    .watch(notificationRepositoryProvider)
+                                    .getUnreadCountStream(user.uid),
+                                builder: (context, snapshot) {
+                                  final count = snapshot.data ?? 0;
+                                  return Stack(
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.notifications_outlined,
+                                          size: 28,
+                                        ),
+                                        onPressed: () =>
+                                            context.push('/notifications'),
                                       ),
-                                      onPressed: () =>
-                                          context.push('/notifications'),
-                                    ),
-                                    if (count > 0)
-                                      Positioned(
-                                        right: 8,
-                                        top: 8,
-                                        child: Container(
-                                          padding: const EdgeInsets.all(4),
-                                          decoration: const BoxDecoration(
-                                            color: AppColors.error,
-                                            shape: BoxShape.circle,
-                                          ),
-                                          constraints: const BoxConstraints(
-                                            minWidth: 16,
-                                            minHeight: 16,
-                                          ),
-                                          child: Text(
-                                            count > 99 ? '99+' : '$count',
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.bold,
+                                      if (count > 0)
+                                        Positioned(
+                                          right: 8,
+                                          top: 8,
+                                          child: Container(
+                                            padding: const EdgeInsets.all(4),
+                                            decoration: const BoxDecoration(
+                                              color: AppColors.error,
+                                              shape: BoxShape.circle,
                                             ),
-                                            textAlign: TextAlign.center,
+                                            constraints: const BoxConstraints(
+                                              minWidth: 16,
+                                              minHeight: 16,
+                                            ),
+                                            child: Text(
+                                              count > 99 ? '99+' : '$count',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                              textAlign: TextAlign.center,
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                  ],
-                                );
-                              },
-                            );
-                          },
-                          loading: () => const SizedBox.shrink(),
-                          error: (e, _) => const SizedBox.shrink(),
+                                    ],
+                                  );
+                                },
+                              );
+                            },
+                            loading: () => const SizedBox.shrink(),
+                            error: (e, _) => const SizedBox.shrink(),
+                          ),
                         ),
                       ],
                     ),
