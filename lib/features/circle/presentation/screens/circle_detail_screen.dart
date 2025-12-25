@@ -620,6 +620,28 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
         }
 
         final circle = snapshot.data!;
+
+        // 削除済みサークルの場合、トーストを表示して一覧に戻る
+        if (circle.isDeleted) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('このサークルは削除されました'),
+                  backgroundColor: Colors.orange,
+                ),
+              );
+              context.go('/circles');
+            }
+          });
+          return Scaffold(
+            backgroundColor: Colors.grey[50],
+            body: const Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            ),
+          );
+        }
+
         // CircleServiceのカテゴリアイコンを使用
         final icon = CircleService.categoryIcons[circle.category] ?? '⭐';
         final isMember =
