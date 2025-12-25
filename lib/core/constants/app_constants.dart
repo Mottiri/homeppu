@@ -80,75 +80,22 @@ enum ReactionCategory {
   final String label;
 }
 
-/// リアクションの種類
+/// リアクションの種類（7種類のスタンプ）
 enum ReactionType {
-  // おすすめ
-  love('love', '❤️', 'いいね', 0xFFFF6B6B, ReactionCategory.basic),
-  praise('praise', '✨', 'すごい', 0xFFFFD93D, ReactionCategory.basic),
-  cheer('cheer', '💪', 'がんばれ', 0xFF6BCB77, ReactionCategory.basic),
-  empathy('empathy', '🤝', 'わかる', 0xFF4D96FF, ReactionCategory.basic),
-  balloon('balloon', '🎈', 'おいわい', 0xFFFF9800, ReactionCategory.basic),
-  warm('warm', '☺️', 'ほっこり', 0xFFFFC1E3, ReactionCategory.basic),
-  banana('banana', '🍌', 'バナナ', 0xFFFFE135, ReactionCategory.basic),
+  love('love', '❤️', 'いいね', 0xFFFF6B6B),
+  praise('praise', '✨', 'すごい', 0xFFFFD93D),
+  cheer('cheer', '💪', 'がんばれ', 0xFF6BCB77),
+  clap('clap', '👏', '拍手', 0xFFFFDAB9),
+  star('star', '⭐', 'スター', 0xFFFFD700),
+  flower('flower', '🌸', '花', 0xFFFFB7C5),
+  smile('smile', '😊', 'ニコニコ', 0xFFFFE4B5);
 
-  // 記号 (LINE風)
-  star('star', '⭐', 'スター', 0xFFFFD700, ReactionCategory.symbol),
-  heartRed('heart_red', '❤️', '赤ハート', 0xFFFF0000, ReactionCategory.symbol),
-  heartPink('heart_pink', '💗', 'ピンクハート', 0xFFFF69B4, ReactionCategory.symbol),
-  heartBlue('heart_blue', '💙', '水色ハート', 0xFF87CEEB, ReactionCategory.symbol),
-  sparkles('sparkles', '✨', 'キラキラ', 0xFFFFE4B5, ReactionCategory.symbol),
-  fire('fire', '🔥', '情熱', 0xFFFF4500, ReactionCategory.symbol),
-  thumbsup('thumbsup', '👍', 'グッド', 0xFFFFA500, ReactionCategory.symbol),
-  ok('ok', '🙆', 'OK', 0xFF32CD32, ReactionCategory.symbol),
-  clap('clap', '👏', '拍手', 0xFFFFDAB9, ReactionCategory.symbol),
-  flower('flower', '🌸', '花', 0xFFFFB7C5, ReactionCategory.nature),
-
-  // 表情
-  smile('smile', '😊', 'ニコニコ', 0xFFFFE4B5, ReactionCategory.emotion),
-  laugh('laugh', '😆', '大笑い', 0xFFFFE4B5, ReactionCategory.emotion),
-  cryHappy('cry_happy', '😂', '嬉し泣き', 0xFFFFE4B5, ReactionCategory.emotion),
-  wink('wink', '😉', 'ウィンク', 0xFFFFE4B5, ReactionCategory.emotion),
-  kiss('kiss', '😘', 'キス', 0xFFFFE4B5, ReactionCategory.emotion),
-  loveEyes('love_eyes', '😍', 'メロメロ', 0xFFFFE4B5, ReactionCategory.emotion),
-  relief('relief', '😌', '安心', 0xFFFFE4B5, ReactionCategory.emotion),
-  party('party', '🥳', 'パーティー', 0xFFFFE4B5, ReactionCategory.emotion),
-  sunglasses('sunglasses', '😎', 'クール', 0xFFFFE4B5, ReactionCategory.emotion),
-
-  // 自然・生き物
-  cat('cat', '🐱', 'ネコ', 0xFFD3D3D3, ReactionCategory.nature),
-  dog('dog', '🐶', 'イヌ', 0xFFD2B48C, ReactionCategory.nature),
-  bear('bear', '🐻', 'クマ', 0xFF8B4513, ReactionCategory.nature),
-  rabbit('rabbit', '🐰', 'ウサギ', 0xFFFFC0CB, ReactionCategory.nature),
-  panda('panda', '🐼', 'パンダ', 0xFFFFFFFF, ReactionCategory.nature),
-  sun('sun', '☀️', '太陽', 0xFFFFA500, ReactionCategory.nature),
-  moon('moon', '🌙', '月', 0xFFFFFF00, ReactionCategory.nature),
-  rainbow('rainbow', '🌈', '虹', 0xFF87CEEB, ReactionCategory.nature),
-
-  // 食べ物・アイテム
-  gift('gift', '🎁', 'プレゼント', 0xFFFF0000, ReactionCategory.item),
-  trophy('trophy', '🏆', 'トロフィー', 0xFFFFD700, ReactionCategory.item),
-  medal('medal', '🥇', 'メダル', 0xFFFFD700, ReactionCategory.item),
-  music('music', '🎵', '音楽', 0xFF000000, ReactionCategory.item),
-  coffee('coffee', '☕', 'コーヒー', 0xFF8B4513, ReactionCategory.item),
-  beer('beer', '🍺', 'ビール', 0xFFFFD700, ReactionCategory.item),
-  cake('cake', '🍰', 'ケーキ', 0xFFFFC0CB, ReactionCategory.item),
-  sushi('sushi', '🍣', '寿司', 0xFFFF4500, ReactionCategory.item),
-  rocket('rocket', '🚀', 'ロケット', 0xFF808080, ReactionCategory.item),
-  onigiri('onigiri', '🍙', 'おにぎり', 0xFFFFFFFF, ReactionCategory.item);
-
-  const ReactionType(
-    this.value,
-    this.emoji,
-    this.label,
-    this.colorValue,
-    this.category,
-  );
+  const ReactionType(this.value, this.emoji, this.label, this.colorValue);
 
   final String value;
   final String emoji;
   final String label;
   final int colorValue;
-  final ReactionCategory category;
 
   /// アセットパス（assets/reactions/{value}.png）
   String get assetPath => 'assets/reactions/$value.png';

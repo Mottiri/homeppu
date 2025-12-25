@@ -690,9 +690,20 @@ class _ReactionOverlayDialog extends StatefulWidget {
 
 class _ReactionOverlayDialogState extends State<_ReactionOverlayDialog>
     with TickerProviderStateMixin {
-  static const _stamps = [ReactionType.praise, ReactionType.clap];
+  // 全スタンプ（7種類）
+  static const _allStamps = ReactionType.values;
+  // バーに表示するスタンプ数
+  static const _visibleCount = 5;
+
   late List<AnimationController> _controllers;
   late List<Animation<double>> _scaleAnimations;
+  bool _showExtendedList = false;
+
+  // バーに表示するスタンプ（最初の5つ）
+  List<ReactionType> get _barStamps => _allStamps.take(_visibleCount).toList();
+  // 拡張リストに表示するスタンプ（残り）
+  List<ReactionType> get _extendedStamps =>
+      _allStamps.skip(_visibleCount).toList();
 
   @override
   void initState() {
@@ -700,8 +711,8 @@ class _ReactionOverlayDialogState extends State<_ReactionOverlayDialog>
     _controllers = [];
     _scaleAnimations = [];
 
-    // 各スタンプにアニメーションを設定
-    for (var i = 0; i < _stamps.length; i++) {
+    // バーのスタンプにアニメーションを設定
+    for (var i = 0; i < _barStamps.length; i++) {
       final controller = AnimationController(
         duration: const Duration(milliseconds: 400),
         vsync: this,
@@ -728,7 +739,7 @@ class _ReactionOverlayDialogState extends State<_ReactionOverlayDialog>
       _scaleAnimations.add(animation);
 
       // 遅延を付けて順番に表示
-      Future.delayed(Duration(milliseconds: i * 100), () {
+      Future.delayed(Duration(milliseconds: i * 80), () {
         if (mounted) controller.forward();
       });
     }
@@ -746,26 +757,53 @@ class _ReactionOverlayDialogState extends State<_ReactionOverlayDialog>
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // 背景タップで閉じる（barrierDismissibleで処理される）
-        const SizedBox.expand(),
+        // 背景タップで閉じる
+        GestureDetector(
+          onTap: () {
+            if (_showExtendedList) {
+              setState(() => _showExtendedList = false);
+            } else {
+              Navigator.of(context).pop();
+            }
+          },
+          child: const SizedBox.expand(),
+        ),
 
         // スタンプバー（ボトムナビの上）
         Positioned(
           left: 0,
           right: 0,
-          bottom: 100, // ボトムナビの上あたり
+          bottom: 100,
           child: Center(
             child: Row(
               mainAxisSize: MainAxisSize.min,
-              children: List.generate(_stamps.length, (index) {
-                return ScaleTransition(
-                  scale: _scaleAnimations[index],
-                  child: _buildStampButton(_stamps[index]),
-                );
-              }),
+              children: [
+                // 5つのスタンプ
+                ...List.generate(_barStamps.length, (index) {
+                  return ScaleTransition(
+                    scale: _scaleAnimations[index],
+                    child: _buildStampButton(_barStamps[index]),
+                  );
+                }),
+                // ＋アイコン
+                _buildPlusButton(),
+              ],
             ),
           ),
         ),
+
+        // 拡張リスト（＋押下で表示）
+        if (_showExtendedList)
+          Positioned(
+            right: 40,
+            bottom: 180,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: _extendedStamps.map((stamp) {
+                return _buildSmallStampButton(stamp);
+              }).toList(),
+            ),
+          ),
       ],
     );
   }
@@ -774,14 +812,54 @@ class _ReactionOverlayDialogState extends State<_ReactionOverlayDialog>
     return GestureDetector(
       onTap: () => widget.onReactionTap(type.value),
       child: Container(
-        padding: const EdgeInsets.all(8),
+        padding: const EdgeInsets.all(6),
         child: Image.asset(
           type.assetPath,
-          width: 64,
-          height: 64,
+          width: 56,
+          height: 56,
           fit: BoxFit.contain,
           errorBuilder: (context, error, stackTrace) {
-            return Text(type.emoji, style: const TextStyle(fontSize: 48));
+            return Text(type.emoji, style: const TextStyle(fontSize: 40));
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlusButton() {
+    return GestureDetector(
+      onTap: () => setState(() => _showExtendedList = !_showExtendedList),
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        child: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.3),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            _showExtendedList ? Icons.close : Icons.add,
+            size: 28,
+            color: Colors.white,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSmallStampButton(ReactionType type) {
+    return GestureDetector(
+      onTap: () => widget.onReactionTap(type.value),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        child: Image.asset(
+          type.assetPath,
+          width: 48,
+          height: 48,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) {
+            return Text(type.emoji, style: const TextStyle(fontSize: 32));
           },
         ),
       ),
