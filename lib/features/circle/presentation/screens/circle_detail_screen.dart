@@ -343,8 +343,8 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
             duration: Duration(seconds: 2),
           ),
         );
-        // popで結果を返して一覧画面で再読み込みをトリガー
-        context.pop(true);
+        // go()で一覧に戻る（popだとスタックがない場合にエラーになる）
+        context.go('/circles');
       }
     } catch (e) {
       scaffoldMessenger.hideCurrentSnackBar();
