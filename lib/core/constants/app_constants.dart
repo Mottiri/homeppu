@@ -82,13 +82,13 @@ enum ReactionCategory {
 
 /// リアクションの種類（7種類のスタンプ）
 enum ReactionType {
-  love('love', '❤️', 'いいね', 0xFFFF6B6B),
+  heart('heart', '❤️', 'ハート', 0xFFFF6B6B),
   praise('praise', '✨', 'すごい', 0xFFFFD93D),
-  cheer('cheer', '💪', 'がんばれ', 0xFF6BCB77),
+  shine('shine', '💫', 'キラキラ', 0xFF6BCB77),
   clap('clap', '👏', '拍手', 0xFFFFDAB9),
   star('star', '⭐', 'スター', 0xFFFFD700),
-  flower('flower', '🌸', '花', 0xFFFFB7C5),
-  smile('smile', '😊', 'ニコニコ', 0xFFFFE4B5);
+  hundred('hundred', '💯', '100点', 0xFFFF4500),
+  rainbow('rainbow', '🌈', 'にじ', 0xFFFFB7C5);
 
   const ReactionType(this.value, this.emoji, this.label, this.colorValue);
 

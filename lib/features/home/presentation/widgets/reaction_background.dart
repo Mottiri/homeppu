@@ -119,7 +119,7 @@ class _ReactionBackgroundState extends State<ReactionBackground>
     widget.reactions.forEach((key, count) {
       final type = ReactionType.values.firstWhere(
         (e) => e.value == key,
-        orElse: () => ReactionType.love,
+        orElse: () => ReactionType.heart,
       );
 
       for (var i = 0; i < count; i++) {
