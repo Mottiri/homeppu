@@ -122,6 +122,7 @@ class _PostCardState extends State<PostCard> {
           onReactionTap: (reactionType) {
             _addReaction(reactionType);
             _sendReactionToServer(reactionType);
+            RecentReactionsService.addReaction(reactionType); // スタンプ使用順を記録
             _reactionTapCount++;
 
             // 5回でダイアログを閉じる
