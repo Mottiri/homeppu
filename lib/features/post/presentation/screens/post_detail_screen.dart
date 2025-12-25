@@ -165,6 +165,26 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
 
                   final post = PostModel.fromFirestore(postSnapshot.data!);
 
+                  // 非表示の投稿（削除済み）の場合、トーストを表示して戻る
+                  if (!post.isVisible) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('この投稿は削除されました'),
+                            backgroundColor: Colors.orange,
+                          ),
+                        );
+                        context.pop();
+                      }
+                    });
+                    return const Center(
+                      child: CircularProgressIndicator(
+                        color: AppColors.primary,
+                      ),
+                    );
+                  }
+
                   return CustomScrollView(
                     slivers: [
                       // 投稿本体（PostCardウィジェットを再利用）
