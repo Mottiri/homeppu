@@ -958,11 +958,6 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                                               showArrow: true,
                                             ),
                                           ),
-                                          const SizedBox(width: 8),
-                                          _buildTag(
-                                            Icons.category_outlined,
-                                            circle.category,
-                                          ),
                                           // ルールタグ
                                           if (circle.rules != null &&
                                               circle.rules!.isNotEmpty) ...[
