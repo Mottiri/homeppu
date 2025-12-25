@@ -891,19 +891,85 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                                         CrossAxisAlignment.start,
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Text(
-                                        circle.name,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.bold,
-                                          shadows: [
-                                            Shadow(
-                                              color: Colors.black26,
-                                              blurRadius: 4,
+                                      Row(
+                                        children: [
+                                          Flexible(
+                                            child: Text(
+                                              circle.name,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 22,
+                                                fontWeight: FontWeight.bold,
+                                                shadows: [
+                                                  Shadow(
+                                                    color: Colors.black26,
+                                                    blurRadius: 4,
+                                                  ),
+                                                ],
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
                                             ),
-                                          ],
-                                        ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          // オーナーバッジ
+                                          if (isOwner)
+                                            Container(
+                                              padding: const EdgeInsets.all(4),
+                                              decoration: BoxDecoration(
+                                                color: Colors.amber.withValues(
+                                                  alpha: 0.9,
+                                                ),
+                                                shape: BoxShape.circle,
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: Colors.black
+                                                        .withValues(alpha: 0.2),
+                                                    blurRadius: 4,
+                                                  ),
+                                                ],
+                                              ),
+                                              child: const Icon(
+                                                Icons.workspace_premium,
+                                                size: 16,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          // ルールアイコン
+                                          if (circle.rules != null &&
+                                              circle.rules!.isNotEmpty)
+                                            GestureDetector(
+                                              onTap: () => _showRulesDialog(
+                                                circle.rules!,
+                                              ),
+                                              child: Container(
+                                                margin: EdgeInsets.only(
+                                                  left: isOwner ? 6 : 0,
+                                                ),
+                                                padding: const EdgeInsets.all(
+                                                  4,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.white
+                                                      .withValues(alpha: 0.9),
+                                                  shape: BoxShape.circle,
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: Colors.black
+                                                          .withValues(
+                                                            alpha: 0.2,
+                                                          ),
+                                                      blurRadius: 4,
+                                                    ),
+                                                  ],
+                                                ),
+                                                child: Icon(
+                                                  Icons.description_outlined,
+                                                  size: 16,
+                                                  color: Colors.grey[700],
+                                                ),
+                                              ),
+                                            ),
+                                        ],
                                       ),
                                       const SizedBox(height: 4),
                                       Row(
