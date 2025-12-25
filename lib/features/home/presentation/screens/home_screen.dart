@@ -49,13 +49,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           child: NestedScrollView(
             headerSliverBuilder: (context, innerBoxIsScrolled) {
               return [
-                // ヘッダー
+                // ヘッダー（グラデーション背景）
                 SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: AppColors.primaryGradient,
+                      borderRadius: const BorderRadius.only(
+                        bottomLeft: Radius.circular(24),
+                        bottomRight: Radius.circular(24),
+                      ),
+                    ),
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
                     child: Row(
                       children: [
-                        const Text('🌸', style: TextStyle(fontSize: 32)),
+                        // ロゴアイコン
+                        Image.asset(
+                          'assets/icons/logo.png',
+                          width: 40,
+                          height: 40,
+                        ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
@@ -63,16 +75,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                             children: [
                               Text(
                                 AppConstants.appName,
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.headlineMedium,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineMedium
+                                    ?.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                               ),
                               currentUser.when(
                                 data: (user) => Text(
                                   user != null
                                       ? '${user.displayName}さん、おはよう！'
                                       : 'ようこそ！',
-                                  style: Theme.of(context).textTheme.bodySmall,
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.9,
+                                        ),
+                                      ),
                                 ),
                                 loading: () => const SizedBox.shrink(),
                                 error: (e, _) => const SizedBox.shrink(),
@@ -96,6 +117,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                       icon: const Icon(
                                         Icons.notifications_outlined,
                                         size: 28,
+                                        color: Colors.white,
                                       ),
                                       onPressed: () =>
                                           context.push('/notifications'),
