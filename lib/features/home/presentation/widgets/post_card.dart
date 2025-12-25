@@ -690,8 +690,6 @@ class _ReactionOverlayDialog extends StatefulWidget {
 
 class _ReactionOverlayDialogState extends State<_ReactionOverlayDialog>
     with TickerProviderStateMixin {
-  // 全スタンプ（7種類）
-  static const _allStamps = ReactionType.values;
   // バーに表示するスタンプ数
   static const _visibleCount = 5;
 
@@ -699,15 +697,56 @@ class _ReactionOverlayDialogState extends State<_ReactionOverlayDialog>
   late List<Animation<double>> _scaleAnimations;
   bool _showExtendedList = false;
 
+  // 使用順にソートされたスタンプリスト
+  List<ReactionType> _orderedStamps = [];
+
   // バーに表示するスタンプ（最初の5つ）
-  List<ReactionType> get _barStamps => _allStamps.take(_visibleCount).toList();
+  List<ReactionType> get _barStamps =>
+      _orderedStamps.take(_visibleCount).toList();
   // 拡張リストに表示するスタンプ（残り）
   List<ReactionType> get _extendedStamps =>
-      _allStamps.skip(_visibleCount).toList();
+      _orderedStamps.skip(_visibleCount).toList();
 
   @override
   void initState() {
     super.initState();
+    _controllers = [];
+    _scaleAnimations = [];
+    _loadOrderedStamps();
+  }
+
+  Future<void> _loadOrderedStamps() async {
+    final recentList = await RecentReactionsService.getRecentReactions();
+    final allStamps = List<ReactionType>.from(ReactionType.values);
+
+    // 最近使用した順にソート
+    final ordered = <ReactionType>[];
+    for (final recentValue in recentList) {
+      final stamp = allStamps.firstWhere(
+        (s) => s.value == recentValue,
+        orElse: () => allStamps.first,
+      );
+      if (!ordered.contains(stamp)) {
+        ordered.add(stamp);
+        allStamps.remove(stamp);
+      }
+    }
+    // 残りを追加
+    ordered.addAll(allStamps);
+
+    if (mounted) {
+      setState(() {
+        _orderedStamps = ordered;
+      });
+      _initAnimations();
+    }
+  }
+
+  void _initAnimations() {
+    // 既存のコントローラーを破棄
+    for (final controller in _controllers) {
+      controller.dispose();
+    }
     _controllers = [];
     _scaleAnimations = [];
 
