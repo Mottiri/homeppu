@@ -1049,34 +1049,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                               ),
                             ),
                           ],
-                          const SizedBox(height: 16),
-                          // ルール確認ボタン（メンバーでルールがある場合のみ）
-                          if (isMember &&
-                              circle.rules != null &&
-                              circle.rules!.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: OutlinedButton.icon(
-                                onPressed: () =>
-                                    _showRulesDialog(circle.rules!),
-                                icon: Icon(
-                                  Icons.description_outlined,
-                                  color: Colors.grey[700],
-                                  size: 18,
-                                ),
-                                label: Text(
-                                  'サークルルール',
-                                  style: TextStyle(color: Colors.grey[700]),
-                                ),
-                                style: OutlinedButton.styleFrom(
-                                  minimumSize: const Size(double.infinity, 44),
-                                  side: BorderSide(color: Colors.grey[300]!),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                              ),
-                            ),
+
                           // 参加ボタン
                           SizedBox(
                             width: double.infinity,
@@ -1111,22 +1084,15 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                                           MainAxisAlignment.center,
                                       children: [
                                         Icon(
-                                          isOwner ? Icons.star : Icons.check,
-                                          color: isOwner
-                                              ? Colors.amber
-                                              : Colors.grey[600],
+                                          Icons.check,
+                                          color: Colors.grey[600],
                                           size: 20,
                                         ),
                                         const SizedBox(width: 8),
                                         Text(
-                                          isOwner ? 'オーナー' : '参加中',
+                                          '参加中',
                                           style: TextStyle(
-                                            color: isOwner
-                                                ? Colors.amber[700]
-                                                : Colors.grey[600],
-                                            fontWeight: isOwner
-                                                ? FontWeight.bold
-                                                : FontWeight.normal,
+                                            color: Colors.grey[600],
                                           ),
                                         ),
                                       ],
