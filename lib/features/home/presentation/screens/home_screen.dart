@@ -49,17 +49,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           child: NestedScrollView(
             headerSliverBuilder: (context, innerBoxIsScrolled) {
               return [
-                // ヘッダー（グラデーション背景）
+                // ヘッダー
                 SliverToBoxAdapter(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: AppColors.primaryGradient,
-                      borderRadius: const BorderRadius.only(
-                        bottomLeft: Radius.circular(24),
-                        bottomRight: Radius.circular(24),
-                      ),
-                    ),
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
                     child: Row(
                       children: [
                         // ロゴアイコン
@@ -75,25 +68,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                             children: [
                               Text(
                                 AppConstants.appName,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .headlineMedium
-                                    ?.copyWith(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.headlineMedium,
                               ),
                               currentUser.when(
                                 data: (user) => Text(
                                   user != null
                                       ? '${user.displayName}さん、おはよう！'
                                       : 'ようこそ！',
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(
-                                        color: Colors.white.withValues(
-                                          alpha: 0.9,
-                                        ),
-                                      ),
+                                  style: Theme.of(context).textTheme.bodySmall,
                                 ),
                                 loading: () => const SizedBox.shrink(),
                                 error: (e, _) => const SizedBox.shrink(),
@@ -117,7 +101,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                       icon: const Icon(
                                         Icons.notifications_outlined,
                                         size: 28,
-                                        color: Colors.white,
                                       ),
                                       onPressed: () =>
                                           context.push('/notifications'),
