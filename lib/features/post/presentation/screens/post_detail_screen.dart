@@ -138,27 +138,21 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                   }
 
                   if (!postSnapshot.hasData || !postSnapshot.data!.exists) {
-                    return Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(
-                            Icons.error_outline_rounded,
-                            size: 48,
-                            color: AppColors.textSecondary,
+                    // 投稿が存在しない場合、トーストを表示して戻る
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('この投稿は削除されました'),
+                            backgroundColor: Colors.orange,
                           ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'この投稿は削除されました',
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(color: AppColors.textSecondary),
-                          ),
-                          const SizedBox(height: 24),
-                          ElevatedButton(
-                            onPressed: () => context.pop(),
-                            child: const Text('戻る'),
-                          ),
-                        ],
+                        );
+                        context.pop();
+                      }
+                    });
+                    return const Center(
+                      child: CircularProgressIndicator(
+                        color: AppColors.primary,
                       ),
                     );
                   }
