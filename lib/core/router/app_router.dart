@@ -83,7 +83,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/circles',
             name: 'circles',
-            builder: (context, state) => const CirclesScreen(),
+            builder: (context, state) {
+              final extra = state.extra as Map<String, dynamic>?;
+              final forceRefresh = extra?['forceRefresh'] as bool? ?? false;
+              return CirclesScreen(
+                key: forceRefresh
+                    ? ValueKey(
+                        'circles_${DateTime.now().millisecondsSinceEpoch}',
+                      )
+                    : null,
+              );
+            },
           ),
           GoRoute(
             path: '/tasks',
