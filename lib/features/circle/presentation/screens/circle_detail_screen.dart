@@ -910,10 +910,12 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                                               overflow: TextOverflow.ellipsis,
                                             ),
                                           ),
-                                          const SizedBox(width: 8),
                                           // オーナーバッジ
                                           if (isOwner)
                                             Container(
+                                              margin: const EdgeInsets.only(
+                                                left: 8,
+                                              ),
                                               padding: const EdgeInsets.all(4),
                                               decoration: BoxDecoration(
                                                 color: Colors.amber.withValues(
@@ -932,41 +934,6 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                                                 Icons.workspace_premium,
                                                 size: 16,
                                                 color: Colors.white,
-                                              ),
-                                            ),
-                                          // ルールアイコン
-                                          if (circle.rules != null &&
-                                              circle.rules!.isNotEmpty)
-                                            GestureDetector(
-                                              onTap: () => _showRulesDialog(
-                                                circle.rules!,
-                                              ),
-                                              child: Container(
-                                                margin: EdgeInsets.only(
-                                                  left: isOwner ? 6 : 0,
-                                                ),
-                                                padding: const EdgeInsets.all(
-                                                  4,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.white
-                                                      .withValues(alpha: 0.9),
-                                                  shape: BoxShape.circle,
-                                                  boxShadow: [
-                                                    BoxShadow(
-                                                      color: Colors.black
-                                                          .withValues(
-                                                            alpha: 0.2,
-                                                          ),
-                                                      blurRadius: 4,
-                                                    ),
-                                                  ],
-                                                ),
-                                                child: Icon(
-                                                  Icons.description_outlined,
-                                                  size: 16,
-                                                  color: Colors.grey[700],
-                                                ),
                                               ),
                                             ),
                                         ],
@@ -996,6 +963,21 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                                             Icons.category_outlined,
                                             circle.category,
                                           ),
+                                          // ルールタグ
+                                          if (circle.rules != null &&
+                                              circle.rules!.isNotEmpty) ...[
+                                            const SizedBox(width: 8),
+                                            GestureDetector(
+                                              onTap: () => _showRulesDialog(
+                                                circle.rules!,
+                                              ),
+                                              child: _buildTag(
+                                                Icons.description_outlined,
+                                                'ルール',
+                                                showArrow: true,
+                                              ),
+                                            ),
+                                          ],
                                         ],
                                       ),
                                     ],
