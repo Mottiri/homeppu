@@ -58,8 +58,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         // ロゴアイコン
                         Image.asset(
                           'assets/icons/logo.png',
-                          width: 40,
-                          height: 40,
+                          width: 56,
+                          height: 56,
                         ),
                         const SizedBox(width: 12),
                         Expanded(
