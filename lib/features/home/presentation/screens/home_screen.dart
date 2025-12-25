@@ -49,74 +49,85 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           child: NestedScrollView(
             headerSliverBuilder: (context, innerBoxIsScrolled) {
               return [
-                // ヘッダー（ロゴ中央 + 通知アイコン右）
+                // ヘッダー（ロゴ左 + 挨拶文 + 通知アイコン右）
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                    child: Stack(
-                      alignment: Alignment.center,
+                    child: Row(
                       children: [
-                        // ロゴ（中央）
+                        // ロゴ（左）
                         Image.asset(
                           'assets/icons/logo.png',
-                          width: 80,
-                          height: 80,
+                          width: 100,
+                          height: 100,
                         ),
-                        // 通知アイコン（右端）
-                        Positioned(
-                          right: 0,
+                        const SizedBox(width: 16),
+                        // 挨拶文
+                        Expanded(
                           child: currentUser.when(
-                            data: (user) {
-                              if (user == null) return const SizedBox.shrink();
-                              return StreamBuilder<int>(
-                                stream: ref
-                                    .watch(notificationRepositoryProvider)
-                                    .getUnreadCountStream(user.uid),
-                                builder: (context, snapshot) {
-                                  final count = snapshot.data ?? 0;
-                                  return Stack(
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(
-                                          Icons.notifications_outlined,
-                                          size: 28,
-                                        ),
-                                        onPressed: () =>
-                                            context.push('/notifications'),
-                                      ),
-                                      if (count > 0)
-                                        Positioned(
-                                          right: 8,
-                                          top: 8,
-                                          child: Container(
-                                            padding: const EdgeInsets.all(4),
-                                            decoration: const BoxDecoration(
-                                              color: AppColors.error,
-                                              shape: BoxShape.circle,
-                                            ),
-                                            constraints: const BoxConstraints(
-                                              minWidth: 16,
-                                              minHeight: 16,
-                                            ),
-                                            child: Text(
-                                              count > 99 ? '99+' : '$count',
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                              textAlign: TextAlign.center,
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  );
-                                },
-                              );
-                            },
+                            data: (user) => Text(
+                              user != null
+                                  ? '${user.displayName}さん、おかえりなさい！'
+                                  : 'ようこそ！',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w600),
+                            ),
                             loading: () => const SizedBox.shrink(),
                             error: (e, _) => const SizedBox.shrink(),
                           ),
+                        ),
+                        // 通知アイコン（右端）
+                        currentUser.when(
+                          data: (user) {
+                            if (user == null) return const SizedBox.shrink();
+                            return StreamBuilder<int>(
+                              stream: ref
+                                  .watch(notificationRepositoryProvider)
+                                  .getUnreadCountStream(user.uid),
+                              builder: (context, snapshot) {
+                                final count = snapshot.data ?? 0;
+                                return Stack(
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.notifications_outlined,
+                                        size: 28,
+                                      ),
+                                      onPressed: () =>
+                                          context.push('/notifications'),
+                                    ),
+                                    if (count > 0)
+                                      Positioned(
+                                        right: 8,
+                                        top: 8,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: const BoxDecoration(
+                                            color: AppColors.error,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          constraints: const BoxConstraints(
+                                            minWidth: 16,
+                                            minHeight: 16,
+                                          ),
+                                          child: Text(
+                                            count > 99 ? '99+' : '$count',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                );
+                              },
+                            );
+                          },
+                          loading: () => const SizedBox.shrink(),
+                          error: (e, _) => const SizedBox.shrink(),
                         ),
                       ],
                     ),
