@@ -769,12 +769,13 @@ class _ReactionOverlayDialogState extends State<_ReactionOverlayDialog>
           child: const SizedBox.expand(),
         ),
 
-        // スタンプバー（ボトムナビの上）
+        // スタンプバー（ボトムナビの上、横スクロール可能）
         Positioned(
-          left: 0,
-          right: 0,
+          left: 16,
+          right: 16,
           bottom: 100,
-          child: Center(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
