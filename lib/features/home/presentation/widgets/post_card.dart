@@ -14,6 +14,7 @@ import '../../../../shared/widgets/report_dialog.dart';
 import '../../../../shared/widgets/video_player_screen.dart';
 import '../../../../shared/services/post_service.dart';
 import '../../../../shared/services/recent_reactions_service.dart';
+import '../../../../shared/services/reaction_limit_service.dart';
 import 'reaction_background.dart';
 
 /// 投稿カード
@@ -41,8 +42,6 @@ class _PostCardState extends State<PostCard> {
   bool _isDeleting = false;
   bool _isNavigating = false; // ナビゲーション中フラグ（ダブルタップ防止）
   late Map<String, int> _localReactions; // ローカルでリアクション数を管理
-  int _reactionTapCount = 0; // リアクションタップ回数（5回で閉じる）
-  static const int _maxReactionTaps = 5; // 最大タップ回数
 
   @override
   void initState() {
@@ -98,7 +97,7 @@ class _PostCardState extends State<PostCard> {
   }
 
   /// LINEスタイルのリアクションオーバーレイを表示
-  void _showReactionOverlay() {
+  Future<void> _showReactionOverlay() async {
     // 自分の投稿にはリアクションできない
     if (isMyPost) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -110,31 +109,70 @@ class _PostCardState extends State<PostCard> {
       return;
     }
 
-    _reactionTapCount = 0; // タップ回数リセット
+    // この投稿へのリアクション回数をチェック
+    final canReact = await ReactionLimitService.canReact(post.id);
+    if (!canReact) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('この投稿へのリアクションは5回までです'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      return;
+    }
+
+    final remaining = await ReactionLimitService.getRemainingReactions(post.id);
+
+    if (!mounted) return;
 
     showDialog(
       context: context,
       barrierColor: Colors.black.withValues(alpha: 0.6), // 暗い背景
       barrierDismissible: true, // 背景タップで閉じる
       builder: (dialogContext) {
-        return _ReactionOverlayDialog(
-          postId: post.id,
-          onReactionTap: (reactionType) {
-            _addReaction(reactionType);
-            _sendReactionToServer(reactionType);
-            RecentReactionsService.addReaction(reactionType); // スタンプ使用順を記録
-            _reactionTapCount++;
+        int sessionCount = 0; // このセッションでのタップ数
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return _ReactionOverlayDialog(
+              postId: post.id,
+              onReactionTap: (reactionType) async {
+                // 残り回数チェック
+                final currentRemaining = remaining - sessionCount;
+                if (currentRemaining <= 0) {
+                  Navigator.of(dialogContext).pop();
+                  ScaffoldMessenger.of(this.context).showSnackBar(
+                    const SnackBar(
+                      content: Text('この投稿へのリアクションは5回までです'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                  return;
+                }
 
-            // 5回でダイアログを閉じる
-            if (_reactionTapCount >= _maxReactionTaps) {
-              Navigator.of(dialogContext).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('リアクションは5回までです'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
-            }
+                // awaitの前にscaffoldMessengerとnavigatorを取得
+                final scaffoldMessenger = ScaffoldMessenger.of(this.context);
+                final navigator = Navigator.of(dialogContext);
+
+                _addReaction(reactionType);
+                _sendReactionToServer(reactionType);
+                RecentReactionsService.addReaction(reactionType);
+                await ReactionLimitService.incrementReactionCount(post.id);
+                sessionCount++;
+
+                // 残り0回でダイアログを閉じる
+                if (remaining - sessionCount <= 0) {
+                  navigator.pop();
+                  scaffoldMessenger.showSnackBar(
+                    const SnackBar(
+                      content: Text('この投稿へのリアクションは5回までです'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+              },
+            );
           },
         );
       },
