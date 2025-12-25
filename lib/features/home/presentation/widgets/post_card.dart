@@ -4,6 +4,9 @@ import 'package:timeago/timeago.dart' as timeago;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+
+import '../../../../core/constants/app_constants.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../shared/models/post_model.dart';
@@ -11,6 +14,7 @@ import '../../../../shared/widgets/avatar_selector.dart';
 import '../../../../shared/widgets/report_dialog.dart';
 import '../../../../shared/widgets/video_player_screen.dart';
 import '../../../../shared/services/post_service.dart';
+import '../../../../shared/services/recent_reactions_service.dart';
 import 'reaction_background.dart';
 
 import 'reaction_selection_sheet.dart';
@@ -40,6 +44,8 @@ class _PostCardState extends State<PostCard> {
   bool _isDeleting = false;
   bool _isNavigating = false; // ナビゲーション中フラグ（ダブルタップ防止）
   late Map<String, int> _localReactions; // ローカルでリアクション数を管理
+  int _reactionTapCount = 0; // リアクションタップ回数（5回で閉じる）
+  static const int _maxReactionTaps = 5; // 最大タップ回数
 
   @override
   void initState() {
@@ -51,8 +57,18 @@ class _PostCardState extends State<PostCard> {
   void didUpdateWidget(PostCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     // 親からのpostが更新されたらローカル状態も更新
+    // IDが変わった場合、またはサーバーからの最新データが取得された場合
     if (oldWidget.post.id != widget.post.id) {
       _localReactions = Map<String, int>.from(widget.post.reactions);
+    } else {
+      // 同じ投稿でもサーバーからの値がローカルより大きい場合は同期
+      // （サーバーで他のユーザーが追加したリアクションを反映）
+      widget.post.reactions.forEach((key, serverValue) {
+        final localValue = _localReactions[key] ?? 0;
+        if (serverValue > localValue) {
+          _localReactions[key] = serverValue;
+        }
+      });
     }
   }
 
@@ -84,6 +100,63 @@ class _PostCardState extends State<PostCard> {
     }
   }
 
+  /// LINEスタイルのリアクションオーバーレイを表示
+  void _showReactionOverlay() {
+    // 自分の投稿にはリアクションできない
+    if (isMyPost) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('自分の投稿にはリアクションできません'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    _reactionTapCount = 0; // タップ回数リセット
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.6), // 暗い背景
+      barrierDismissible: true, // 背景タップで閉じる
+      builder: (dialogContext) {
+        return _ReactionOverlayDialog(
+          postId: post.id,
+          onReactionTap: (reactionType) {
+            _addReaction(reactionType);
+            _sendReactionToServer(reactionType);
+            _reactionTapCount++;
+
+            // 5回でダイアログを閉じる
+            if (_reactionTapCount >= _maxReactionTaps) {
+              Navigator.of(dialogContext).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('リアクションは5回までです'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            }
+          },
+        );
+      },
+    );
+  }
+
+  /// リアクションをサーバーに送信
+  Future<void> _sendReactionToServer(String reactionType) async {
+    try {
+      final functions = FirebaseFunctions.instanceFor(
+        region: 'asia-northeast1',
+      );
+      final callable = functions.httpsCallable('addUserReaction');
+      await callable.call({'postId': post.id, 'reactionType': reactionType});
+      await RecentReactionsService.addReaction(reactionType);
+    } catch (e) {
+      debugPrint('Reaction error: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // timeagoの日本語設定
@@ -108,6 +181,10 @@ class _PostCardState extends State<PostCard> {
             onTap: widget.isDetailView
                 ? null
                 : () => context.push('/post/${post.id}'),
+            onLongPress: () {
+              // 長押しでリアクションオーバーレイ表示
+              _showReactionOverlay();
+            },
             borderRadius: BorderRadius.circular(20),
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -656,5 +733,120 @@ class _MediaGrid extends StatelessWidget {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+}
+
+/// LINEスタイルのリアクションオーバーレイダイアログ
+class _ReactionOverlayDialog extends StatefulWidget {
+  final String postId;
+  final void Function(String reactionType) onReactionTap;
+
+  const _ReactionOverlayDialog({
+    required this.postId,
+    required this.onReactionTap,
+  });
+
+  @override
+  State<_ReactionOverlayDialog> createState() => _ReactionOverlayDialogState();
+}
+
+class _ReactionOverlayDialogState extends State<_ReactionOverlayDialog>
+    with TickerProviderStateMixin {
+  static const _stamps = [ReactionType.praise, ReactionType.clap];
+  late List<AnimationController> _controllers;
+  late List<Animation<double>> _scaleAnimations;
+
+  @override
+  void initState() {
+    super.initState();
+    _controllers = [];
+    _scaleAnimations = [];
+
+    // 各スタンプにアニメーションを設定
+    for (var i = 0; i < _stamps.length; i++) {
+      final controller = AnimationController(
+        duration: const Duration(milliseconds: 400),
+        vsync: this,
+      );
+      _controllers.add(controller);
+
+      // ぽぽんとバウンドするアニメーション（0 → 1.2 → 1.0）
+      final animation = TweenSequence<double>([
+        TweenSequenceItem(
+          tween: Tween<double>(
+            begin: 0.0,
+            end: 1.2,
+          ).chain(CurveTween(curve: Curves.easeOut)),
+          weight: 60,
+        ),
+        TweenSequenceItem(
+          tween: Tween<double>(
+            begin: 1.2,
+            end: 1.0,
+          ).chain(CurveTween(curve: Curves.bounceOut)),
+          weight: 40,
+        ),
+      ]).animate(controller);
+      _scaleAnimations.add(animation);
+
+      // 遅延を付けて順番に表示
+      Future.delayed(Duration(milliseconds: i * 100), () {
+        if (mounted) controller.forward();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _controllers) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        // 背景タップで閉じる（barrierDismissibleで処理される）
+        const SizedBox.expand(),
+
+        // スタンプバー（ボトムナビの上）
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 100, // ボトムナビの上あたり
+          child: Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(_stamps.length, (index) {
+                return ScaleTransition(
+                  scale: _scaleAnimations[index],
+                  child: _buildStampButton(_stamps[index]),
+                );
+              }),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStampButton(ReactionType type) {
+    return GestureDetector(
+      onTap: () => widget.onReactionTap(type.value),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        child: Image.asset(
+          type.assetPath,
+          width: 64,
+          height: 64,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) {
+            return Text(type.emoji, style: const TextStyle(fontSize: 48));
+          },
+        ),
+      ),
+    );
   }
 }

@@ -151,7 +151,7 @@ class _ReactionButtonState extends ConsumerState<ReactionButton>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(widget.type.emoji, style: const TextStyle(fontSize: 18)),
+                  _ReactionIcon(type: widget.type),
                   /* カウントは表示しない（背景に表示するため）
                   if (widget.count > 0 || _isReacted) ...[
                     const SizedBox(width: 4),
@@ -171,6 +171,28 @@ class _ReactionButtonState extends ConsumerState<ReactionButton>
           );
         },
       ),
+    );
+  }
+}
+
+/// リアクションアイコン（アセットがあれば画像、なければ絵文字）
+class _ReactionIcon extends StatelessWidget {
+  final ReactionType type;
+  static const double _size = 32.0;
+
+  const _ReactionIcon({required this.type});
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      type.assetPath,
+      width: _size,
+      height: _size,
+      fit: BoxFit.contain,
+      errorBuilder: (context, error, stackTrace) {
+        // アセットがない場合は絵文字にフォールバック
+        return Text(type.emoji, style: const TextStyle(fontSize: 18));
+      },
     );
   }
 }

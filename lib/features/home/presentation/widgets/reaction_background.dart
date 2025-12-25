@@ -126,7 +126,7 @@ class _ReactionBackgroundState extends State<ReactionBackground>
         // PostID, 種類, その種類内のインデックス を組み合わせてシードにする
         final seed = Object.hash(widget.postId, key, i);
         final animationKey = '${key}_$i';
-        list.add(_IconDatum(type.emoji, seed, animationKey));
+        list.add(_IconDatum(type, seed, animationKey));
       }
     });
 
@@ -136,6 +136,28 @@ class _ReactionBackgroundState extends State<ReactionBackground>
     }
 
     return list;
+  }
+
+  /// リアクションウィジェット（アセットがあれば画像、なければ絵文字）
+  Widget _buildReactionWidget(ReactionType type, double size, double opacity) {
+    return Image.asset(
+      type.assetPath,
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
+      opacity: AlwaysStoppedAnimation(opacity),
+      errorBuilder: (context, error, stackTrace) {
+        // アセットがない場合は絵文字にフォールバック
+        return Text(
+          type.emoji,
+          style: TextStyle(
+            fontSize: size,
+            color: Colors.black.withValues(alpha: opacity),
+            decoration: TextDecoration.none,
+          ),
+        );
+      },
+    );
   }
 
   Widget _buildStableIcon(
@@ -177,16 +199,10 @@ class _ReactionBackgroundState extends State<ReactionBackground>
               angle: angle,
               child: Transform.scale(
                 scale: scale,
-                child: Text(
-                  iconData.emoji,
-                  style: TextStyle(
-                    fontSize: baseSize,
-                    color: Colors.black.withValues(
-                      alpha:
-                          animatedOpacity * (0.5 + random.nextDouble() * 0.5),
-                    ),
-                    decoration: TextDecoration.none,
-                  ),
+                child: _buildReactionWidget(
+                  iconData.type,
+                  baseSize,
+                  animatedOpacity * (0.5 + random.nextDouble() * 0.5),
                 ),
               ),
             );
@@ -201,15 +217,10 @@ class _ReactionBackgroundState extends State<ReactionBackground>
       top: top,
       child: Transform.rotate(
         angle: angle,
-        child: Text(
-          iconData.emoji,
-          style: TextStyle(
-            fontSize: baseSize,
-            color: Colors.black.withValues(
-              alpha: widget.opacity * (0.5 + random.nextDouble() * 0.5),
-            ),
-            decoration: TextDecoration.none,
-          ),
+        child: _buildReactionWidget(
+          iconData.type,
+          baseSize,
+          widget.opacity * (0.5 + random.nextDouble() * 0.5),
         ),
       ),
     );
@@ -217,9 +228,9 @@ class _ReactionBackgroundState extends State<ReactionBackground>
 }
 
 class _IconDatum {
-  final String emoji;
+  final ReactionType type;
   final int seed;
   final String animationKey;
 
-  _IconDatum(this.emoji, this.seed, this.animationKey);
+  _IconDatum(this.type, this.seed, this.animationKey);
 }

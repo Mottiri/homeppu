@@ -149,4 +149,7 @@ enum ReactionType {
   final String label;
   final int colorValue;
   final ReactionCategory category;
+
+  /// アセットパス（assets/reactions/{value}.png）
+  String get assetPath => 'assets/reactions/$value.png';
 }

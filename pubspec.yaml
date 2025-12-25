@@ -69,5 +69,6 @@ flutter:
     - assets/images/
     - assets/icons/
     - assets/avatars/
+    - assets/reactions/
   
   # フォントはGoogle Fontsパッケージで動的に読み込み
