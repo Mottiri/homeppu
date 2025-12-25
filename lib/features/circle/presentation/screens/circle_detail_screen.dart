@@ -34,14 +34,11 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
   bool _hasMorePosts = true;
   bool _isLoadingPosts = true;
   bool _isLoadingMorePosts = false;
-  bool _hasNewPosts = false;
-  String? _latestPostId;
 
   @override
   void initState() {
     super.initState();
     _loadPosts();
-    _listenForNewPosts();
   }
 
   /// 投稿リストを読み込み
@@ -67,8 +64,6 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
           _lastDocument = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
           _hasMorePosts = snapshot.docs.length == AppConstants.postsPerPage;
           _isLoadingPosts = false;
-          _hasNewPosts = false;
-          _latestPostId = posts.isNotEmpty ? posts.first.id : null;
         });
       }
     } catch (e) {
@@ -113,30 +108,6 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
         setState(() => _isLoadingMorePosts = false);
       }
     }
-  }
-
-  /// 新着検知（NEWラベル表示用）- 新しい投稿のみ検知
-  void _listenForNewPosts() {
-    FirebaseFirestore.instance
-        .collection('posts')
-        .where('circleId', isEqualTo: widget.circleId)
-        .where('isVisible', isEqualTo: true)
-        .orderBy('createdAt', descending: true)
-        .limit(1)
-        .snapshots()
-        .listen((snapshot) {
-          if (!mounted) return;
-          if (snapshot.docs.isEmpty) return;
-
-          final latestId = snapshot.docs.first.id;
-          // 新着のみNEWラベル表示（IDが変わり、かつ_postsリストに含まれていない場合）
-          if (_latestPostId != null && latestId != _latestPostId) {
-            final isNewPost = !_posts.any((p) => p.id == latestId);
-            if (isNewPost) {
-              setState(() => _hasNewPosts = true);
-            }
-          }
-        });
   }
 
   Future<void> _checkPendingRequest(String userId) async {
@@ -1241,31 +1212,6 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                             style: Theme.of(context).textTheme.titleMedium
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
-                          // 新着ラベル
-                          if (_hasNewPosts) ...[
-                            const SizedBox(width: 8),
-                            GestureDetector(
-                              onTap: _loadPosts,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primary,
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: const Text(
-                                  'NEW',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
                         ],
                       ),
                     ),
