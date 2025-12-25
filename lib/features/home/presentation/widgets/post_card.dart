@@ -793,16 +793,30 @@ class _ReactionOverlayDialogState extends State<_ReactionOverlayDialog>
           ),
         ),
 
-        // 拡張リスト（＋押下で表示）
+        // 拡張リスト（＋押下で表示、アニメーション付き）
         if (_showExtendedList)
           Positioned(
             right: 40,
             bottom: 180,
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              children: _extendedStamps.map((stamp) {
-                return _buildSmallStampButton(stamp);
-              }).toList(),
+              children: List.generate(_extendedStamps.length, (index) {
+                return TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  duration: Duration(milliseconds: 300 + (index * 80)),
+                  curve: Curves.elasticOut,
+                  builder: (context, value, child) {
+                    return Transform.scale(
+                      scale: value,
+                      child: Opacity(
+                        opacity: value.clamp(0.0, 1.0),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: _buildSmallStampButton(_extendedStamps[index]),
+                );
+              }),
             ),
           ),
       ],
