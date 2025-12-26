@@ -5301,6 +5301,8 @@ function getCircleAIPostPrompt(
   circleName: string,
   circleDescription: string,
   category: string,
+  circleRules: string,
+  circleGoal: string,
   recentPosts: string[] = [] // 過去の投稿内容（重複回避用）
 ): string {
   const recentPostsSection = recentPosts.length > 0
@@ -5315,16 +5317,22 @@ ${recentPosts.map((p, i) => `- ${p}`).join("\n")}
 あなたは「ほめっぷ」というSNSのユーザー「${aiName}」です。
 サークル「${circleName}」のメンバーとして投稿します。
 
+【サークル機能について】
+サークルは同じ趣味や興味を持つユーザーが集まるコミュニティです。
+メンバーはサークルのテーマに関する日常の出来事、感想、発見などを自由に共有します。
+
 【サークル情報】
 - サークル名: ${circleName}
 - カテゴリ: ${category}
 - 説明: ${circleDescription}
+- ルール: ${circleRules || "なし"}
+- 目標: ${circleGoal || "なし"}
 
 【投稿のルール】
-1. サークルのテーマに沿った「頑張り報告」や「進捗報告」を投稿してください
-2. 初心者〜中級者の視点で、「完璧じゃない」「成長途中」を演出してください
-3. 自然な日本語で、SNSらしいカジュアルな投稿にしてください
-4. 絵文字を1〜2個使ってください
+1. サークルのテーマに沿った投稿をしてください
+2. ルールがある場合は、そのルールを遵守してください
+3. 目標がある場合は、その目標に向かって努力している姿勢で投稿してください
+4. 自然な日本語で、SNSらしいカジュアルな投稿にしてください
 5. 30〜80文字程度の短い投稿にしてください
 6. ハッシュタグ（#○○）は絶対に使用しないでください
 7. 毎回異なる内容・表現で投稿してください（同じ文章の使い回しNG）
@@ -5332,13 +5340,8 @@ ${recentPosts.map((p, i) => `- ${p}`).join("\n")}
 【避けるべき表現】
 - ハッシュタグ（#勉強 #資格 など）
 - 前回と同じ内容
-- 「テキスト一周終わった」など同じフレーズの繰り返し
+- 同じフレーズの繰り返し
 ${recentPostsSection}
-【投稿例】
-- 「今日も${circleName}頑張った！まだまだだけど少しずつ進歩してる気がする💪」
-- 「${category}始めて1週間。最初は全然だったけど、ちょっとずつ成長してるかも✨」
-- 「今日は調子悪かったけど、とりあえずやった！継続することが大事🔥」
-
 【あなたの投稿】
 `;
 }
@@ -5419,6 +5422,8 @@ export const generateCircleAIPosts = functionsV1.region("asia-northeast1").runWi
         circleName: circleData.name,
         circleDescription: circleData.description || "",
         circleCategory: circleData.category || "その他",
+        circleRules: circleData.rules || "",
+        circleGoal: circleData.goal || "",
         aiId: randomAI.id,
         aiName: randomAI.name,
         aiAvatarIndex: randomAI.avatarIndex,
@@ -5471,6 +5476,8 @@ export const executeCircleAIPost = functionsV1.region("asia-northeast1").runWith
       circleName,
       circleDescription,
       circleCategory,
+      circleRules,
+      circleGoal,
       aiId,
       aiName,
       aiAvatarIndex,
@@ -5505,7 +5512,7 @@ export const executeCircleAIPost = functionsV1.region("asia-northeast1").runWith
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     // Geminiで投稿内容を生成（過去投稿を渡して重複回避）
-    const prompt = getCircleAIPostPrompt(aiName, circleName, circleDescription, circleCategory, recentPostContents);
+    const prompt = getCircleAIPostPrompt(aiName, circleName, circleDescription, circleCategory, circleRules, circleGoal, recentPostContents);
     const result = await model.generateContent(prompt);
     let postContent = result.response.text()?.trim();
 
@@ -5604,6 +5611,8 @@ export const triggerCircleAIPosts = onCall(
           circleData.name,
           circleData.description || "",
           circleData.category || "その他",
+          circleData.rules || "",
+          circleData.goal || "",
           recentPostContents
         );
 
@@ -5724,6 +5733,8 @@ export const triggerCircleAIPostsHttp = functionsV1.region("asia-northeast1").ru
         circleData.name,
         circleData.description || "",
         circleData.category || "その他",
+        circleData.rules || "",
+        circleData.goal || "",
         recentPostContents
       );
 
