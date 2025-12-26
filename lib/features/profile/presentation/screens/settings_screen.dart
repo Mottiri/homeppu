@@ -1,4 +1,5 @@
 // ignore_for_file: use_build_context_synchronously
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -664,6 +665,61 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               },
                               icon: const Icon(Icons.abc),
                               label: const Text('名前パーツ初期化'),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: () async {
+                                try {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'サークルAI投稿を生成中...（少し時間がかかります）',
+                                      ),
+                                      backgroundColor: AppColors.primary,
+                                      duration: Duration(seconds: 30),
+                                    ),
+                                  );
+                                  final functions =
+                                      FirebaseFunctions.instanceFor(
+                                        region: 'asia-northeast1',
+                                      );
+                                  final result = await functions
+                                      .httpsCallable('triggerCircleAIPosts')
+                                      .call();
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(
+                                      context,
+                                    ).hideCurrentSnackBar();
+                                    final data =
+                                        result.data as Map<String, dynamic>?;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          'サークルAI投稿を生成しました！🎯 ${data?['totalPosts'] ?? 0}件',
+                                        ),
+                                        backgroundColor: AppColors.success,
+                                      ),
+                                    );
+                                  }
+                                } catch (e) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(
+                                      context,
+                                    ).hideCurrentSnackBar();
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('エラー: $e'),
+                                        backgroundColor: AppColors.error,
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                              icon: const Icon(Icons.groups),
+                              label: const Text('サークルAI投稿を生成'),
                             ),
                           ),
                           const SizedBox(height: 12),
