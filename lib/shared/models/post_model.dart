@@ -10,6 +10,7 @@ class MediaItem {
   final String? fileName;
   final String? mimeType;
   final int? fileSize; // バイト
+  final String? thumbnailUrl; // 動画のサムネイル画像URL
 
   MediaItem({
     required this.url,
@@ -17,6 +18,7 @@ class MediaItem {
     this.fileName,
     this.mimeType,
     this.fileSize,
+    this.thumbnailUrl,
   });
 
   factory MediaItem.fromMap(Map<String, dynamic> data) {
@@ -29,6 +31,7 @@ class MediaItem {
       fileName: data['fileName'],
       mimeType: data['mimeType'],
       fileSize: data['fileSize'],
+      thumbnailUrl: data['thumbnailUrl'],
     );
   }
 
@@ -39,6 +42,7 @@ class MediaItem {
       'fileName': fileName,
       'mimeType': mimeType,
       'fileSize': fileSize,
+      'thumbnailUrl': thumbnailUrl,
     };
   }
 }

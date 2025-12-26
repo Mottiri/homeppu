@@ -587,14 +587,27 @@ class _MediaGrid extends StatelessWidget {
               alignment: Alignment.center,
               children: [
                 // サムネイル（動画のプレビュー）
-                if (item.url.isNotEmpty)
+                if (item.thumbnailUrl != null && item.thumbnailUrl!.isNotEmpty)
                   CachedNetworkImage(
-                    imageUrl: item.url,
+                    imageUrl: item.thumbnailUrl!,
                     height: height,
                     width: double.infinity,
                     fit: BoxFit.cover,
                     errorWidget: (context, url, error) =>
                         Container(color: Colors.black54),
+                  )
+                else
+                  Container(
+                    height: height,
+                    width: double.infinity,
+                    color: Colors.black54,
+                    child: const Center(
+                      child: Icon(
+                        Icons.videocam,
+                        color: Colors.white54,
+                        size: 48,
+                      ),
+                    ),
                   ),
                 // 再生アイコン
                 Container(

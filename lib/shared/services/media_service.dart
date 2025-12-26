@@ -3,7 +3,9 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
 import '../models/post_model.dart';
 
 /// メディアアップロードサービス
@@ -116,13 +118,86 @@ class MediaService {
     final snapshot = await uploadTask;
     final downloadUrl = await snapshot.ref.getDownloadURL();
 
+    // 動画の場合はサムネイルを生成してアップロード
+    String? thumbnailUrl;
+    if (type == MediaType.video) {
+      thumbnailUrl = await _generateAndUploadThumbnail(
+        videoPath: filePath,
+        userId: userId,
+      );
+    }
+
     return MediaItem(
       url: downloadUrl,
       type: type,
       fileName: fileName ?? path.basename(filePath),
       mimeType: _getMimeType(extension),
       fileSize: fileSize,
+      thumbnailUrl: thumbnailUrl,
     );
+  }
+
+  /// 動画のサムネイルを生成してアップロード
+  Future<String?> _generateAndUploadThumbnail({
+    required String videoPath,
+    required String userId,
+  }) async {
+    try {
+      debugPrint('MediaService: Generating video thumbnail...');
+
+      // 一時ディレクトリを取得
+      final tempDir = await getTemporaryDirectory();
+
+      // サムネイルを生成
+      final thumbnailPath = await VideoThumbnail.thumbnailFile(
+        video: videoPath,
+        thumbnailPath: tempDir.path,
+        imageFormat: ImageFormat.JPEG,
+        maxHeight: 400,
+        quality: 75,
+      );
+
+      if (thumbnailPath == null) {
+        debugPrint('MediaService: Failed to generate thumbnail');
+        return null;
+      }
+
+      debugPrint('MediaService: Thumbnail generated at $thumbnailPath');
+
+      // サムネイルをFirebase Storageにアップロード
+      final thumbnailFile = File(thumbnailPath);
+      final thumbnailFileName = '${_uuid.v4()}_thumb.jpg';
+      final thumbnailStoragePath =
+          'posts/$userId/thumbnails/$thumbnailFileName';
+
+      final ref = _storage.ref().child(thumbnailStoragePath);
+      final uploadTask = ref.putFile(
+        thumbnailFile,
+        SettableMetadata(
+          contentType: 'image/jpeg',
+          customMetadata: {
+            'type': 'video_thumbnail',
+            'uploadedAt': DateTime.now().millisecondsSinceEpoch.toString(),
+          },
+        ),
+      );
+
+      final snapshot = await uploadTask;
+      final thumbnailUrl = await snapshot.ref.getDownloadURL();
+
+      // 一時ファイルを削除
+      try {
+        await thumbnailFile.delete();
+      } catch (e) {
+        debugPrint('MediaService: Failed to delete temp thumbnail: $e');
+      }
+
+      debugPrint('MediaService: Thumbnail uploaded: $thumbnailUrl');
+      return thumbnailUrl;
+    } catch (e) {
+      debugPrint('MediaService: Error generating thumbnail: $e');
+      return null;
+    }
   }
 
   /// 複数ファイルをアップロード
