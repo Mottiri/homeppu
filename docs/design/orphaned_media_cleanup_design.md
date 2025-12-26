@@ -79,6 +79,7 @@ if (postId指定 && 投稿不存在) → 削除
 schedule: "0 3 * * *"  # 毎日午前3時
 timezone: "Asia/Tokyo"
 target: cleanupOrphanedMedia
+timeoutSeconds: 600    # 10分タイムアウト（2025-12-26追加）
 ```
 
 ## 処理制限

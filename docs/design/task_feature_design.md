@@ -189,16 +189,34 @@
 | 事前リマインダー | 🔔 タスクリマインダー | 「タスク名」の30分前です | 設定した事前時間 |
 | 予定時刻通知 | 📋 タスクの時間です | 「タスク名」の予定時刻になりました | 予定時刻ちょうど |
 
-### 11.3 技術実装
-*   **Cloud Scheduler**: 毎分実行
-*   **Cloud Functions**: `sendTaskReminders`
+### 11.3 技術実装（イベント駆動方式 - 2025-12-26更新）
+*   **アーキテクチャ**: ポーリング方式からイベント駆動方式に変更
+*   **Cloud Tasks**: `task-reminders` キューでリマインダーをスケジュール
+*   **Firestore Triggers**:
+    *   `scheduleTaskRemindersOnCreate`: タスク作成時にリマインダーを登録
+    *   `scheduleTaskReminders`: タスク更新時に古いリマインダーをキャンセル→新規登録
+*   **HTTP Endpoint**: `executeTaskReminder` - Cloud Tasksから呼び出されて通知送信
 *   **重複防止**: `sentReminders` コレクションで送信済みを記録
-*   **Firestoreインデックス**: `isCompleted` + `scheduledAt` の複合インデックス
+*   **スケジュール管理**: `scheduledReminders` コレクションでCloud Tasks名を記録
 
-### 11.4 実装ステータス
+### 11.4 更新時のフロー
+1. タスクの`scheduledAt`または`reminders`が変更されると`scheduleTaskReminders`が発火
+2. 既存の`scheduledReminders`をクエリして、対応するCloud Tasksをキャンセル
+3. Firestoreから`scheduledReminders`レコードを削除
+4. 新しいリマインダー時刻を計算してCloud Tasksに登録
+5. 新しい`scheduledReminders`レコードを作成
+
+### 11.5 コスト最適化（2025-12-26）
+| 指標 | 変更前（ポーリング） | 変更後（イベント駆動） |
+|------|---------------------|----------------------|
+| Cloud Functions呼び出し | 1440回/日（毎分） | タスク作成/更新分のみ |
+| Firestoreクエリ | 毎分全タスク検索 | タスク変更時のみ |
+
+### 11.6 実装ステータス
 - [x] 事前リマインダー通知 ✅
 - [x] 予定時刻通知 ✅
 - [x] 重複送信防止 ✅
+- [x] イベント駆動方式への移行 ✅ (2025-12-26)
 
 ## 12. カテゴリ機能
 
