@@ -722,59 +722,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               label: const Text('サークルAI投稿を生成'),
                             ),
                           ),
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: () async {
-                                try {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('投稿のisVisibleマイグレーション中...'),
-                                      backgroundColor: AppColors.primary,
-                                      duration: Duration(seconds: 60),
-                                    ),
-                                  );
-                                  final functions =
-                                      FirebaseFunctions.instanceFor(
-                                        region: 'asia-northeast1',
-                                      );
-                                  final result = await functions
-                                      .httpsCallable('migratePostsIsVisible')
-                                      .call();
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(
-                                      context,
-                                    ).hideCurrentSnackBar();
-                                    final data =
-                                        result.data as Map<String, dynamic>?;
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          'マイグレーション完了！更新: ${data?['updated']}件, スキップ: ${data?['skipped']}件',
-                                        ),
-                                        backgroundColor: AppColors.success,
-                                      ),
-                                    );
-                                  }
-                                } catch (e) {
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(
-                                      context,
-                                    ).hideCurrentSnackBar();
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('エラー: $e'),
-                                        backgroundColor: AppColors.error,
-                                      ),
-                                    );
-                                  }
-                                }
-                              },
-                              icon: const Icon(Icons.build),
-                              label: const Text('投稿isVisibleマイグレーション'),
-                            ),
-                          ),
+
                           const SizedBox(height: 12),
                           SizedBox(
                             width: double.infinity,
