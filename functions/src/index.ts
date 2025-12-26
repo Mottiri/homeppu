@@ -5469,50 +5469,78 @@ ${recentPostsSection}
 /**
  * サークルAI投稿を定期実行（Cloud Scheduler用）
  * 毎日朝9時と夜20時に実行を想定
+ * 
+ * 最適化版（2025-12-26）:
+ * - 全サークル走査ではなくランダムに最大100件選択
+ * - 前日に投稿したサークルは除外
+ * - コスト削減のため処理数を制限
  */
+const MAX_CIRCLES_PER_RUN = 100; // 1回のトリガーで処理する最大サークル数
+
 export const generateCircleAIPosts = functionsV1.region("asia-northeast1").runWith({
   secrets: ["GEMINI_API_KEY"],
   timeoutSeconds: 120,
   memory: "256MB",
 }).pubsub.schedule("0 9,20 * * *").timeZone("Asia/Tokyo").onRun(async () => {
-  console.log("=== generateCircleAIPosts START (Scheduler) ===");
+  console.log("=== generateCircleAIPosts START (Scheduler - Optimized) ===");
 
   try {
-    // すべてのサークルを取得
-    const circlesSnapshot = await db.collection("circles").get();
     const tasksClient = new CloudTasksClient();
     const project = process.env.GCLOUD_PROJECT || PROJECT_ID;
     const queue = "generate-circle-ai-posts";
     const location = "asia-northeast1";
 
-    let scheduledCount = 0;
+    // 昨日の日付を取得（除外用）
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split("T")[0]; // "YYYY-MM-DD"
 
-    for (const circleDoc of circlesSnapshot.docs) {
+    // 昨日投稿したサークルIDリストを取得
+    const historyDoc = await db.collection("circleAIPostHistory").doc(yesterdayStr).get();
+    const excludedCircleIds: string[] = historyDoc.exists ? (historyDoc.data()?.circleIds || []) : [];
+    console.log(`Excluding ${excludedCircleIds.length} circles from yesterday`);
+
+    // 削除されていないサークルを取得
+    const circlesSnapshot = await db.collection("circles")
+      .where("isDeleted", "==", false)
+      .get();
+
+    // AIがいるサークルのみフィルタリング
+    const eligibleCircles = circlesSnapshot.docs.filter(doc => {
+      const data = doc.data();
+      const generatedAIs = data.generatedAIs as Array<{ id: string; name: string; avatarIndex: number }> || [];
+      // AIがいない、または昨日投稿済みのサークルは除外
+      return generatedAIs.length > 0 && !excludedCircleIds.includes(doc.id);
+    });
+
+    console.log(`Eligible circles: ${eligibleCircles.length} (after exclusion)`);
+
+    // ランダムに最大100件選択
+    const shuffled = eligibleCircles.sort(() => Math.random() - 0.5);
+    const selectedCircles = shuffled.slice(0, MAX_CIRCLES_PER_RUN);
+
+    console.log(`Selected ${selectedCircles.length} circles for processing`);
+
+    let scheduledCount = 0;
+    const postedCircleIds: string[] = [];
+
+    // 今日の日付
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayTimestamp = admin.firestore.Timestamp.fromDate(today);
+    const todayStr = new Date().toISOString().split("T")[0];
+
+    for (const circleDoc of selectedCircles) {
       const circleData = circleDoc.data();
       const circleId = circleDoc.id;
-
-      // 削除されたサークルはスキップ
-      if (circleData.isDeleted) {
-        console.log(`Circle ${circleId} is deleted, skipping`);
-        continue;
-      }
 
       const generatedAIs = circleData.generatedAIs as Array<{
         id: string;
         name: string;
         avatarIndex: number;
-      }> || [];
-
-      if (generatedAIs.length === 0) {
-        console.log(`Circle ${circleId} has no AIs, skipping`);
-        continue;
-      }
+      }>;
 
       // すでに今日投稿があるかチェック
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayTimestamp = admin.firestore.Timestamp.fromDate(today);
-
       const todayPosts = await db.collection("posts")
         .where("circleId", "==", circleId)
         .where("createdAt", ">=", todayTimestamp)
@@ -5534,7 +5562,6 @@ export const generateCircleAIPosts = functionsV1.region("asia-northeast1").runWi
       // Cloud Tasksにタスクを登録
       const queuePath = tasksClient.queuePath(project, location, queue);
       const targetUrl = `https://${location}-${project}.cloudfunctions.net/executeCircleAIPost`;
-      // デフォルトのApp Engineサービスアカウントを使用
       const serviceAccountEmail = `${project}@appspot.gserviceaccount.com`;
 
       const payload = {
@@ -5564,9 +5591,25 @@ export const generateCircleAIPosts = functionsV1.region("asia-northeast1").runWi
         await tasksClient.createTask({ parent: queuePath, task });
         console.log(`Scheduled post for ${circleData.name} at ${scheduleTime.toISOString()} (delay: ${delayMinutes}min)`);
         scheduledCount++;
+        postedCircleIds.push(circleId);
       } catch (error) {
         console.error(`Error scheduling task for circle ${circleId}:`, error);
       }
+    }
+
+    // 今日の投稿履歴を保存（明日の除外用）
+    if (postedCircleIds.length > 0) {
+      const historyRef = db.collection("circleAIPostHistory").doc(todayStr);
+      const existingHistory = await historyRef.get();
+      const existingIds: string[] = existingHistory.exists ? (existingHistory.data()?.circleIds || []) : [];
+      const mergedIds = [...new Set([...existingIds, ...postedCircleIds])];
+
+      await historyRef.set({
+        date: todayStr,
+        circleIds: mergedIds,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      console.log(`Saved ${mergedIds.length} circle IDs to history for ${todayStr}`);
     }
 
     console.log(`=== generateCircleAIPosts COMPLETE: Scheduled ${scheduledCount} posts ===`);
@@ -5575,6 +5618,7 @@ export const generateCircleAIPosts = functionsV1.region("asia-northeast1").runWi
     console.error("=== generateCircleAIPosts ERROR:", error);
   }
 });
+
 
 /**
  * サークルAI投稿を実行するワーカー（Cloud Tasksから呼び出し）
@@ -6330,6 +6374,24 @@ export const cleanupOrphanedMedia = onSchedule(
       } catch (error) {
         console.error(`Error checking reaction ${reactionDoc.id}:`, error);
       }
+    }
+
+    // サークルAI投稿履歴のクリーンアップ（2日以上前の履歴を削除）
+    const twoDaysAgo = new Date();
+    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+    const twoDaysAgoStr = twoDaysAgo.toISOString().split("T")[0];
+
+    const oldHistorySnapshot = await db.collection("circleAIPostHistory")
+      .where("date", "<", twoDaysAgoStr)
+      .get();
+
+    let historyDeleted = 0;
+    for (const doc of oldHistorySnapshot.docs) {
+      await doc.ref.delete();
+      historyDeleted++;
+    }
+    if (historyDeleted > 0) {
+      console.log(`Deleted ${historyDeleted} old circleAIPostHistory documents`);
     }
 
     console.log(`=== cleanupOrphanedMedia COMPLETE: checked=${checkedCount}, deleted=${deletedCount}, orphanedPosts=${orphanedPostsDeleted}, orphanedComments=${orphanedCommentsDeleted}, orphanedReactions=${orphanedReactionsDeleted} ===`);
