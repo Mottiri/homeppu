@@ -1,7 +1,7 @@
 # Cloud Functions リファレンス
 
 **最終更新**: 2025-12-26  
-**総関数数**: 48個
+**総関数数**: 45個
 
 ---
 
@@ -23,7 +23,6 @@
 |--------|--------|------|
 | `initializeAIAccounts` | Callable | AIアカウントの初期セットアップ（管理用） |
 | `generateAIPosts` | Callable | AIによる自動投稿生成 |
-| `populateAIUsers` | Callable | AIユーザーを追加作成（管理用） |
 | `deleteAllAIUsers` | Callable | 全AIユーザーを削除（管理用・危険） |
 
 ---
@@ -63,11 +62,9 @@
 | `generateCircleAIPosts` | Scheduled | 毎日サークルAI投稿をスケジュール |
 | `executeCircleAIPost` | HTTP | Cloud Tasksから呼び出されるAI投稿実行 |
 | `triggerCircleAIPosts` | Callable | サークルAI投稿の手動トリガー（テスト用） |
-| `triggerCircleAIPostsHttp` | HTTP | 同上（HTTP版） |
-| `evolveCircleAIs` | HTTP | サークルAIのレベルアップ処理 |
+| `evolveCircleAIs` | Scheduled | サークルAIのレベルアップ処理（毎月1日） |
 | `triggerEvolveCircleAIs` | Callable | サークルAI進化の手動トリガー |
 | `cleanupOrphanedCircleAIs` | Callable | 孤立したサークルAIのクリーンアップ |
-| `cleanupOrphanedCircleAIsHttp` | HTTP | 同上（HTTP版） |
 
 ---
 
@@ -134,10 +131,10 @@
 
 | タイプ | 説明 | 関数数 |
 |--------|------|--------|
-| **Callable** | クライアントから直接呼び出し | 24 |
+| **Callable** | クライアントから直接呼び出し | 21 |
 | **Firestore Trigger** | Firestoreドキュメント変更時に発火 | 10 |
-| **HTTP** | HTTPリクエストで呼び出し（Cloud Tasks用） | 12 |
-| **Scheduled** | Cloud Schedulerで定期実行 | 2 |
+| **HTTP** | HTTPリクエストで呼び出し（Cloud Tasks用） | 9 |
+| **Scheduled** | Cloud Schedulerで定期実行 | 3 |
 
 ---
 
