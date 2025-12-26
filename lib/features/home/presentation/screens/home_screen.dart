@@ -255,11 +255,12 @@ class _TimelineTab extends StatelessWidget {
       );
     }
 
-    // おすすめタブ（全体）
+    // おすすめタブ（全体）- サークル投稿を除外
     return _PostsList(
       query: FirebaseFirestore.instance
           .collection('posts')
           .where('isVisible', isEqualTo: true)
+          .where('circleId', isNull: true)
           .orderBy('createdAt', descending: true)
           .limit(AppConstants.postsPerPage),
       isAIViewer: currentUser?.isAI ?? false,
