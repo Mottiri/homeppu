@@ -1,7 +1,7 @@
 # Cloud Functions リファレンス
 
 **最終更新**: 2025-12-26  
-**総関数数**: 45個
+**総関数数**: 46個
 
 ---
 
@@ -22,7 +22,8 @@
 | 関数名 | タイプ | 説明 |
 |--------|--------|------|
 | `initializeAIAccounts` | Callable | AIアカウントの初期セットアップ（管理用） |
-| `generateAIPosts` | Callable | AIによる自動投稿生成 |
+| `generateAIPosts` | Callable | AIによる自動投稿生成（手動トリガー） |
+| `scheduleAIPosts` | Scheduled | 毎日10時に5人のAIを選択して自動投稿スケジュール |
 | `deleteAllAIUsers` | Callable | 全AIユーザーを削除（管理用・危険） |
 
 ---
@@ -134,7 +135,7 @@
 | **Callable** | クライアントから直接呼び出し | 21 |
 | **Firestore Trigger** | Firestoreドキュメント変更時に発火 | 10 |
 | **HTTP** | HTTPリクエストで呼び出し（Cloud Tasks用） | 9 |
-| **Scheduled** | Cloud Schedulerで定期実行 | 3 |
+| **Scheduled** | Cloud Schedulerで定期実行 | 4 |
 
 ---
 

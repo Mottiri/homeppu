@@ -39,7 +39,7 @@ class NotificationService {
 
     // ローカル通知の初期化
     const androidSettings = AndroidInitializationSettings(
-      '@mipmap/ic_launcher',
+      '@drawable/ic_notification',
     );
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: false,
@@ -122,7 +122,7 @@ class NotificationService {
       channelDescription: '一般的な通知',
       importance: Importance.high,
       priority: Priority.high,
-      icon: '@mipmap/ic_launcher',
+      icon: '@drawable/ic_notification',
     );
 
     const iosDetails = DarwinNotificationDetails(
