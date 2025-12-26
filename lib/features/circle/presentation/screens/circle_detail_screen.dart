@@ -768,20 +768,22 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                                       ],
                                     ),
                                   ),
-                                  const PopupMenuItem(
-                                    value: 'requests',
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          Icons.person_add_outlined,
-                                          color: Color(0xFF00ACC1),
-                                          size: 20,
-                                        ),
-                                        SizedBox(width: 8),
-                                        Text('参加申請'),
-                                      ],
+                                  // 招待制サークルのみ参加申請を表示
+                                  if (!circle.isPublic)
+                                    const PopupMenuItem(
+                                      value: 'requests',
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.person_add_outlined,
+                                            color: Color(0xFF00ACC1),
+                                            size: 20,
+                                          ),
+                                          SizedBox(width: 8),
+                                          Text('参加申請'),
+                                        ],
+                                      ),
                                     ),
-                                  ),
                                   const PopupMenuItem(
                                     value: 'delete',
                                     child: Row(
