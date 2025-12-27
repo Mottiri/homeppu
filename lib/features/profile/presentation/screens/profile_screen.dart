@@ -13,6 +13,7 @@ import '../../../../shared/services/follow_service.dart';
 import '../../../../shared/services/post_service.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
 import '../../../../shared/widgets/virtue_indicator.dart';
+import '../../../home/presentation/widgets/reaction_background.dart';
 
 /// プロフィール画面
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -733,197 +734,215 @@ class _ProfilePostCardState extends State<_ProfilePostCard> {
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: InkWell(
-        onTap: () => context.push('/post/${widget.post.id}'),
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ヘッダー（自分のプロフィールなら削除ボタン）
-              if (widget.isMyProfile)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    if (_isDeleting)
-                      const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    else
-                      PopupMenuButton<String>(
-                        icon: Icon(
-                          Icons.more_horiz,
-                          color: AppColors.textHint,
-                          size: 20,
-                        ),
-                        onSelected: (value) {
-                          if (value == 'delete') {
-                            _deletePost();
-                          }
-                        },
-                        itemBuilder: (context) => [
-                          const PopupMenuItem(
-                            value: 'delete',
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.delete_outline,
-                                  size: 18,
-                                  color: Colors.red,
-                                ),
-                                SizedBox(width: 8),
-                                Text(
-                                  'この投稿を削除',
-                                  style: TextStyle(color: Colors.red),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                  ],
-                ),
-
-              // サークル名バッジ（サークル投稿の場合）
-              if (widget.post.circleId != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: FutureBuilder<DocumentSnapshot>(
-                    future: FirebaseFirestore.instance
-                        .collection('circles')
-                        .doc(widget.post.circleId)
-                        .get(),
-                    builder: (context, snapshot) {
-                      // ロード中は何も表示しない
-                      if (!snapshot.hasData) {
-                        return const SizedBox.shrink();
-                      }
-                      // サークルが削除されている場合
-                      if (!snapshot.data!.exists) {
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade200,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.group_off_outlined,
-                                size: 14,
-                                color: Colors.grey,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '削除済みサークル',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-                      final circleName =
-                          snapshot.data!.get('name') as String? ?? 'サークル';
-                      return GestureDetector(
-                        onTap: () =>
-                            context.push('/circle/${widget.post.circleId}'),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: AppColors.primary.withValues(alpha: 0.3),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.group_outlined,
-                                size: 14,
-                                color: AppColors.primary,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                circleName,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.primary,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-
-              // 投稿内容
-              Text(
-                widget.post.content,
-                style: Theme.of(context).textTheme.bodyLarge,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          // リアクション背景
+          if (widget.post.reactions.isNotEmpty)
+            Positioned.fill(
+              child: ReactionBackground(
+                reactions: widget.post.reactions,
+                postId: widget.post.id,
+                opacity: 0.15,
+                maxIcons: 50,
               ),
-              const SizedBox(height: 12),
-
-              // フッター
-              Row(
+            ),
+          // コンテンツ
+          InkWell(
+            onTap: () => context.push('/post/${widget.post.id}'),
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 時間
+                  // ヘッダー（自分のプロフィールなら削除ボタン）
+                  if (widget.isMyProfile)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        if (_isDeleting)
+                          const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        else
+                          PopupMenuButton<String>(
+                            icon: Icon(
+                              Icons.more_horiz,
+                              color: AppColors.textHint,
+                              size: 20,
+                            ),
+                            onSelected: (value) {
+                              if (value == 'delete') {
+                                _deletePost();
+                              }
+                            },
+                            itemBuilder: (context) => [
+                              const PopupMenuItem(
+                                value: 'delete',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.delete_outline,
+                                      size: 18,
+                                      color: Colors.red,
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'この投稿を削除',
+                                      style: TextStyle(color: Colors.red),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
+
+                  // サークル名バッジ（サークル投稿の場合）
+                  if (widget.post.circleId != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: FutureBuilder<DocumentSnapshot>(
+                        future: FirebaseFirestore.instance
+                            .collection('circles')
+                            .doc(widget.post.circleId)
+                            .get(),
+                        builder: (context, snapshot) {
+                          // ロード中は何も表示しない
+                          if (!snapshot.hasData) {
+                            return const SizedBox.shrink();
+                          }
+                          // サークルが削除されている場合
+                          if (!snapshot.data!.exists) {
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade200,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.group_off_outlined,
+                                    size: 14,
+                                    color: Colors.grey,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '削除済みサークル',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+                          final circleName =
+                              snapshot.data!.get('name') as String? ?? 'サークル';
+                          return GestureDetector(
+                            onTap: () =>
+                                context.push('/circle/${widget.post.circleId}'),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: AppColors.primary.withValues(
+                                    alpha: 0.3,
+                                  ),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.group_outlined,
+                                    size: 14,
+                                    color: AppColors.primary,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    circleName,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.primary,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+
+                  // 投稿内容
                   Text(
-                    timeago.format(widget.post.createdAt, locale: 'ja'),
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: AppColors.textHint),
+                    widget.post.content,
+                    style: Theme.of(context).textTheme.bodyLarge,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
                   ),
+                  const SizedBox(height: 12),
 
-                  // メディアアイコン
-                  if (widget.post.allMedia.isNotEmpty) ...[
-                    const SizedBox(width: 12),
-                    ..._buildMediaIcons(),
-                  ],
-
-                  const Spacer(),
-                  // リアクション数
+                  // フッター
                   Row(
                     children: [
-                      Icon(Icons.favorite, size: 16, color: AppColors.love),
-                      const SizedBox(width: 4),
+                      // 時間
                       Text(
-                        '${widget.post.reactions.values.fold(0, (a, b) => a + b)}',
-                        style: Theme.of(context).textTheme.bodySmall,
+                        timeago.format(widget.post.createdAt, locale: 'ja'),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.textHint,
+                        ),
                       ),
-                      const SizedBox(width: 12),
-                      // コメント数（PostModelから取得）
+
+                      // メディアアイコン
+                      if (widget.post.allMedia.isNotEmpty) ...[
+                        const SizedBox(width: 12),
+                        ..._buildMediaIcons(),
+                      ],
+
+                      const Spacer(),
+                      // リアクション数
                       Row(
-                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(
-                            Icons.chat_bubble_outline,
-                            size: 16,
-                            color: AppColors.textHint,
-                          ),
+                          Icon(Icons.favorite, size: 16, color: AppColors.love),
                           const SizedBox(width: 4),
                           Text(
-                            '${widget.post.commentCount}',
+                            '${widget.post.reactions.values.fold(0, (a, b) => a + b)}',
                             style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          const SizedBox(width: 12),
+                          // コメント数（PostModelから取得）
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.chat_bubble_outline,
+                                size: 16,
+                                color: AppColors.textHint,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${widget.post.commentCount}',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -931,9 +950,9 @@ class _ProfilePostCardState extends State<_ProfilePostCard> {
                   ),
                 ],
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
