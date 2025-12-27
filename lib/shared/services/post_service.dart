@@ -101,6 +101,14 @@ class PostService {
         for (final media in post.allMedia) {
           debugPrint('PostService: Deleting media from Storage: ${media.url}');
           await mediaService.deleteMedia(media.url);
+
+          // サムネイルも削除
+          if (media.thumbnailUrl != null && media.thumbnailUrl!.isNotEmpty) {
+            debugPrint(
+              'PostService: Deleting thumbnail from Storage: ${media.thumbnailUrl}',
+            );
+            await mediaService.deleteMedia(media.thumbnailUrl!);
+          }
         }
         debugPrint('PostService: Deleted ${post.allMedia.length} media files');
       }

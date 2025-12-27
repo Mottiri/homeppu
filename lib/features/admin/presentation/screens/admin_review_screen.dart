@@ -271,6 +271,11 @@ class _AdminReviewScreenState extends ConsumerState<AdminReviewScreen> {
         final mediaService = MediaService();
         for (final media in post.allMedia) {
           await mediaService.deleteMedia(media.url);
+
+          // サムネイルも削除
+          if (media.thumbnailUrl != null && media.thumbnailUrl!.isNotEmpty) {
+            await mediaService.deleteMedia(media.thumbnailUrl!);
+          }
         }
       }
 
