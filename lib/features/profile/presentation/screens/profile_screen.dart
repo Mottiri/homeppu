@@ -601,39 +601,10 @@ class _UserPostsListState extends State<_UserPostsList>
                 fontSize: 13,
               ),
               dividerColor: Colors.transparent,
-              tabs: [
-                Tab(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.home_outlined, size: 18),
-                      const SizedBox(width: 4),
-                      if (_tlPosts.isNotEmpty) _buildBadge(_tlPosts.length, 0),
-                    ],
-                  ),
-                ),
-                Tab(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.people_outline, size: 18),
-                      const SizedBox(width: 4),
-                      if (_circlePosts.isNotEmpty)
-                        _buildBadge(_circlePosts.length, 1),
-                    ],
-                  ),
-                ),
-                Tab(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.star_outline, size: 18),
-                      const SizedBox(width: 4),
-                      if (_favoritePosts.isNotEmpty)
-                        _buildBadge(_favoritePosts.length, 2),
-                    ],
-                  ),
-                ),
+              tabs: const [
+                Tab(child: Icon(Icons.home_outlined, size: 20)),
+                Tab(child: Icon(Icons.people_outline, size: 20)),
+                Tab(child: Icon(Icons.star_outline, size: 20)),
               ],
             ),
           ),
@@ -648,20 +619,6 @@ class _UserPostsListState extends State<_UserPostsList>
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildBadge(int count, int tabIndex) {
-    return Container(
-      margin: const EdgeInsets.only(left: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: _tabController.index == tabIndex
-            ? Colors.white.withValues(alpha: 0.3)
-            : AppColors.primary.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text('$count', style: const TextStyle(fontSize: 11)),
     );
   }
 
@@ -807,7 +764,7 @@ class _ProfilePostCardState extends State<_ProfilePostCard> {
                 reactions: widget.post.reactions,
                 postId: widget.post.id,
                 opacity: 0.15,
-                maxIcons: 50,
+                maxIcons: 15,
               ),
             ),
           // コンテンツ
