@@ -171,8 +171,8 @@ class MediaService {
         video: videoPath,
         thumbnailPath: tempDir.path,
         imageFormat: ImageFormat.JPEG,
-        maxHeight: 400,
-        quality: 75,
+        maxHeight: 800,
+        quality: 90,
       );
       debugPrint('MediaService: Thumbnail result: $thumbnailPath');
 
