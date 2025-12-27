@@ -179,9 +179,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         child: SafeArea(
           child: NotificationListener<ScrollNotification>(
             onNotification: (notification) {
-              if (notification is ScrollEndNotification &&
-                  notification.metrics.extentAfter < 300) {
-                _userPostsListKey.currentState?.loadMoreCurrentTab();
+              if (notification is ScrollEndNotification) {
+                debugPrint(
+                  'ProfileScreen: ScrollEnd - extentAfter: ${notification.metrics.extentAfter}',
+                );
+                if (notification.metrics.extentAfter < 300) {
+                  debugPrint(
+                    'ProfileScreen: Near bottom, calling loadMoreCurrentTab',
+                  );
+                  _userPostsListKey.currentState?.loadMoreCurrentTab();
+                }
               }
               return false;
             },
@@ -465,7 +472,11 @@ class _UserPostsListState extends State<_UserPostsList>
 
   /// 親から呼び出されるメソッド：現在のタブの追加読み込み
   void loadMoreCurrentTab() {
+    debugPrint(
+      'ProfileScreen: loadMoreCurrentTab called - tab: $_currentTab, hasMore: ${_tabHasMore[_currentTab]}, isLoadingMore: ${_tabIsLoadingMore[_currentTab]}, lastDoc: ${_tabLastDocuments[_currentTab] != null}',
+    );
     if (_tabHasMore[_currentTab] && !_tabIsLoadingMore[_currentTab]) {
+      debugPrint('ProfileScreen: Conditions met, calling _loadMoreTabPosts');
       _loadMoreTabPosts(_currentTab);
     }
   }
@@ -524,7 +535,7 @@ class _UserPostsListState extends State<_UserPostsList>
     setState(() => _tabIsLoading[tabIndex] = true);
 
     try {
-      final snapshot = await _buildQuery(tabIndex).limit(20).get();
+      final snapshot = await _buildQuery(tabIndex).limit(10).get();
       debugPrint(
         'ProfileScreen: Got ${snapshot.docs.length} docs from Firestore',
       );
@@ -551,7 +562,7 @@ class _UserPostsListState extends State<_UserPostsList>
           _tabLastDocuments[tabIndex] = snapshot.docs.isNotEmpty
               ? snapshot.docs.last
               : null;
-          _tabHasMore[tabIndex] = snapshot.docs.length == 20;
+          _tabHasMore[tabIndex] = snapshot.docs.length == 10;
           _tabIsLoading[tabIndex] = false;
           debugPrint(
             'ProfileScreen: hasMore[${tabIndex}] = ${_tabHasMore[tabIndex]}',
@@ -567,18 +578,27 @@ class _UserPostsListState extends State<_UserPostsList>
   }
 
   Future<void> _loadMoreTabPosts(int tabIndex) async {
+    debugPrint('ProfileScreen: _loadMoreTabPosts started for tab $tabIndex');
     if (!_tabHasMore[tabIndex] ||
         _tabIsLoadingMore[tabIndex] ||
         _tabLastDocuments[tabIndex] == null) {
+      debugPrint(
+        'ProfileScreen: _loadMoreTabPosts early return - hasMore: ${_tabHasMore[tabIndex]}, isLoadingMore: ${_tabIsLoadingMore[tabIndex]}, lastDoc: ${_tabLastDocuments[tabIndex] != null}',
+      );
       return;
     }
 
     setState(() => _tabIsLoadingMore[tabIndex] = true);
+    debugPrint('ProfileScreen: _loadMoreTabPosts - set isLoadingMore = true');
 
     try {
+      debugPrint('ProfileScreen: _loadMoreTabPosts - querying Firestore...');
       final snapshot = await _buildQuery(
         tabIndex,
-      ).limit(20).startAfterDocument(_tabLastDocuments[tabIndex]!).get();
+      ).limit(10).startAfterDocument(_tabLastDocuments[tabIndex]!).get();
+      debugPrint(
+        'ProfileScreen: _loadMoreTabPosts - got ${snapshot.docs.length} docs',
+      );
 
       var newPosts = snapshot.docs
           .map((doc) => PostModel.fromFirestore(doc))
@@ -600,7 +620,7 @@ class _UserPostsListState extends State<_UserPostsList>
           _tabLastDocuments[tabIndex] = snapshot.docs.isNotEmpty
               ? snapshot.docs.last
               : null;
-          _tabHasMore[tabIndex] = snapshot.docs.length == 20;
+          _tabHasMore[tabIndex] = snapshot.docs.length == 10;
           _tabIsLoadingMore[tabIndex] = false;
         });
       }
@@ -708,7 +728,7 @@ class _UserPostsListState extends State<_UserPostsList>
       physics: const NeverScrollableScrollPhysics(),
       itemCount: posts.length + (_tabHasMore[tabIndex] ? 1 : 0),
       itemBuilder: (context, index) {
-        // 追加読み込み
+        // ローディングインジケーター（最後のアイテム）
         if (index == posts.length) {
           if (_tabIsLoadingMore[tabIndex]) {
             return const Padding(
@@ -718,12 +738,9 @@ class _UserPostsListState extends State<_UserPostsList>
               ),
             );
           }
-          if (_tabHasMore[tabIndex]) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              _loadMoreTabPosts(tabIndex);
-            });
-          }
-          return const SizedBox.shrink();
+          // 追加データがある場合はスペースを確保
+          // 実際の読み込みはNotificationListenerでトリガー
+          return const SizedBox(height: 50);
         }
 
         final post = posts[index];
