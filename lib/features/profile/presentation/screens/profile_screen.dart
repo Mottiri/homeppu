@@ -445,16 +445,18 @@ class _UserPostsListState extends State<_UserPostsList>
   bool _isLoadingMore = false;
   late TabController _tabController;
 
-  // TL投稿とサークル投稿を分離
+  // TL投稿、サークル投稿、お気に入りを分離
   List<PostModel> get _tlPosts =>
-      _posts.where((p) => p.circleId == null).toList();
+      _posts.where((p) => p.circleId == null && !p.isFavorite).toList();
   List<PostModel> get _circlePosts =>
-      _posts.where((p) => p.circleId != null).toList();
+      _posts.where((p) => p.circleId != null && !p.isFavorite).toList();
+  List<PostModel> get _favoritePosts =>
+      _posts.where((p) => p.isFavorite).toList();
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _loadPosts();
   }
 
@@ -603,7 +605,8 @@ class _UserPostsListState extends State<_UserPostsList>
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text('TL投稿'),
+                      const Icon(Icons.home_outlined, size: 18),
+                      const SizedBox(width: 4),
                       if (_tlPosts.isNotEmpty) _buildBadge(_tlPosts.length, 0),
                     ],
                   ),
@@ -612,9 +615,21 @@ class _UserPostsListState extends State<_UserPostsList>
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text('サークル'),
+                      const Icon(Icons.people_outline, size: 18),
+                      const SizedBox(width: 4),
                       if (_circlePosts.isNotEmpty)
                         _buildBadge(_circlePosts.length, 1),
+                    ],
+                  ),
+                ),
+                Tab(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.star_outline, size: 18),
+                      const SizedBox(width: 4),
+                      if (_favoritePosts.isNotEmpty)
+                        _buildBadge(_favoritePosts.length, 2),
                     ],
                   ),
                 ),
@@ -623,7 +638,13 @@ class _UserPostsListState extends State<_UserPostsList>
           ),
           const SizedBox(height: 12),
           // 投稿リスト
-          _buildPostList(_tabController.index == 0 ? _tlPosts : _circlePosts),
+          _buildPostList(
+            _tabController.index == 0
+                ? _tlPosts
+                : _tabController.index == 1
+                ? _circlePosts
+                : _favoritePosts,
+          ),
         ],
       ),
     );
@@ -730,6 +751,37 @@ class _ProfilePostCardState extends State<_ProfilePostCard> {
     }
   }
 
+  Future<void> _toggleFavorite() async {
+    try {
+      final newValue = !widget.post.isFavorite;
+      await FirebaseFirestore.instance
+          .collection('posts')
+          .doc(widget.post.id)
+          .update({'isFavorite': newValue});
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(newValue ? 'お気に入りに追加しました' : 'お気に入りから削除しました'),
+            backgroundColor: AppColors.success,
+            duration: const Duration(seconds: 1),
+          ),
+        );
+        // リストを更新
+        widget.onDeleted?.call();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('エラーが発生しました: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -761,6 +813,16 @@ class _ProfilePostCardState extends State<_ProfilePostCard> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
+                        // お気に入りアイコン
+                        if (widget.post.isFavorite)
+                          const Padding(
+                            padding: EdgeInsets.only(right: 8),
+                            child: Icon(
+                              Icons.star,
+                              size: 18,
+                              color: Colors.amber,
+                            ),
+                          ),
                         if (_isDeleting)
                           const SizedBox(
                             width: 20,
@@ -777,9 +839,31 @@ class _ProfilePostCardState extends State<_ProfilePostCard> {
                             onSelected: (value) {
                               if (value == 'delete') {
                                 _deletePost();
+                              } else if (value == 'favorite') {
+                                _toggleFavorite();
                               }
                             },
                             itemBuilder: (context) => [
+                              PopupMenuItem(
+                                value: 'favorite',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      widget.post.isFavorite
+                                          ? Icons.star
+                                          : Icons.star_outline,
+                                      size: 18,
+                                      color: Colors.amber,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      widget.post.isFavorite
+                                          ? 'お気に入りから削除'
+                                          : 'お気に入りに追加',
+                                    ),
+                                  ],
+                                ),
+                              ),
                               const PopupMenuItem(
                                 value: 'delete',
                                 child: Row(

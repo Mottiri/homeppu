@@ -64,6 +64,7 @@ class PostModel {
   final bool isVisible;
   final bool isPinned; // ピン留め
   final bool isPinnedTop; // トップ表示ピン
+  final bool isFavorite; // お気に入り
 
   PostModel({
     required this.id,
@@ -81,6 +82,7 @@ class PostModel {
     this.isVisible = true,
     this.isPinned = false,
     this.isPinnedTop = false,
+    this.isFavorite = false,
   });
 
   factory PostModel.fromFirestore(DocumentSnapshot doc) {
@@ -110,6 +112,7 @@ class PostModel {
       isVisible: data['isVisible'] ?? true,
       isPinned: data['isPinned'] ?? false,
       isPinnedTop: data['isPinnedTop'] ?? false,
+      isFavorite: data['isFavorite'] ?? false,
     );
   }
 
@@ -129,6 +132,7 @@ class PostModel {
       'isVisible': isVisible,
       'isPinned': isPinned,
       'isPinnedTop': isPinnedTop,
+      'isFavorite': isFavorite,
     };
   }
 
@@ -153,6 +157,7 @@ class PostModel {
     bool? isVisible,
     bool? isPinned,
     bool? isPinnedTop,
+    bool? isFavorite,
   }) {
     return PostModel(
       id: id ?? this.id,
@@ -170,6 +175,7 @@ class PostModel {
       isVisible: isVisible ?? this.isVisible,
       isPinned: isPinned ?? this.isPinned,
       isPinnedTop: isPinnedTop ?? this.isPinnedTop,
+      isFavorite: isFavorite ?? this.isFavorite,
     );
   }
 
