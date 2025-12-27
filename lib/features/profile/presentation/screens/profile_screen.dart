@@ -704,12 +704,20 @@ class _UserPostsListState extends State<_UserPostsList>
 
         final post = posts[index];
         return _ProfilePostCard(
-          key: ValueKey(post.id),
+          key: ValueKey('${post.id}_${post.isFavorite}'),
           post: post,
           isMyProfile: widget.isMyProfile,
           onDeleted: () {
             setState(() {
               _posts.removeWhere((p) => p.id == post.id);
+            });
+          },
+          onFavoriteToggled: (bool isFavorite) {
+            setState(() {
+              final index = _posts.indexWhere((p) => p.id == post.id);
+              if (index != -1) {
+                _posts[index] = _posts[index].copyWith(isFavorite: isFavorite);
+              }
             });
           },
         );
@@ -723,12 +731,14 @@ class _ProfilePostCard extends StatefulWidget {
   final PostModel post;
   final bool isMyProfile;
   final VoidCallback? onDeleted;
+  final void Function(bool isFavorite)? onFavoriteToggled;
 
   const _ProfilePostCard({
     super.key,
     required this.post,
     this.isMyProfile = false,
     this.onDeleted,
+    this.onFavoriteToggled,
   });
 
   @override
@@ -768,8 +778,8 @@ class _ProfilePostCardState extends State<_ProfilePostCard> {
             duration: const Duration(seconds: 1),
           ),
         );
-        // リストを更新
-        widget.onDeleted?.call();
+        // リストを即時更新
+        widget.onFavoriteToggled?.call(newValue);
       }
     } catch (e) {
       if (mounted) {
