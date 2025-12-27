@@ -460,12 +460,19 @@ class _UserPostsListState extends State<_UserPostsList>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
-  // 全投稿を一括管理（最初30件 + 追加読み込み分）
+  // TL/サークル用：全投稿を一括管理（最初30件 + 追加読み込み分）
   List<PostModel> _posts = [];
   DocumentSnapshot? _lastDocument;
   bool _hasMore = true;
   bool _isLoading = true;
   bool _isLoadingMore = false;
+
+  // お気に入り用：別途Firestoreから直接クエリ
+  List<PostModel> _favoritePosts = [];
+  DocumentSnapshot? _favoriteLastDocument;
+  bool _favoriteHasMore = true;
+  bool _favoriteIsLoading = false;
+  bool _favoriteIsLoadingMore = false;
 
   // 初期読み込み件数
   static const int _initialLoadCount = 30;
@@ -478,8 +485,6 @@ class _UserPostsListState extends State<_UserPostsList>
       _posts.where((p) => p.circleId == null).toList();
   List<PostModel> get _circlePosts =>
       _posts.where((p) => p.circleId != null).toList();
-  List<PostModel> get _favoritePosts =>
-      _posts.where((p) => p.isFavorite).toList();
 
   List<PostModel> get _currentPosts {
     switch (_currentTab) {
@@ -496,8 +501,16 @@ class _UserPostsListState extends State<_UserPostsList>
 
   /// 親から呼び出されるメソッド：追加読み込み
   void loadMoreCurrentTab() {
-    if (_hasMore && !_isLoadingMore) {
-      _loadMorePosts();
+    if (_currentTab == 2) {
+      // お気に入りタブ
+      if (_favoriteHasMore && !_favoriteIsLoadingMore) {
+        _loadMoreFavorites();
+      }
+    } else {
+      // TL/サークルタブ
+      if (_hasMore && !_isLoadingMore) {
+        _loadMorePosts();
+      }
     }
   }
 
@@ -518,14 +531,21 @@ class _UserPostsListState extends State<_UserPostsList>
 
   void _onTabChanged() {
     if (!_tabController.indexIsChanging) {
-      // タブ切替時：30件を超えた分を破棄
-      if (_posts.length > _initialLoadCount) {
-        setState(() {
-          _posts = _posts.take(_initialLoadCount).toList();
-          // lastDocumentをリセット（30件目のドキュメントに戻す）
-          // 次回追加読み込み時に再取得される
-          _hasMore = true;
-        });
+      final tabIndex = _tabController.index;
+
+      if (tabIndex == 2) {
+        // お気に入りタブ：まだ読み込んでいなければ読み込み
+        if (_favoritePosts.isEmpty && !_favoriteIsLoading) {
+          _loadFavorites();
+        }
+      } else {
+        // TL/サークルタブ：30件を超えた分を破棄
+        if (_posts.length > _initialLoadCount) {
+          setState(() {
+            _posts = _posts.take(_initialLoadCount).toList();
+            _hasMore = true;
+          });
+        }
       }
       setState(() {});
     }
@@ -608,10 +628,100 @@ class _UserPostsListState extends State<_UserPostsList>
     }
   }
 
+  /// お気に入り投稿の読み込み（Firestoreから直接クエリ）
+  Future<void> _loadFavorites() async {
+    setState(() => _favoriteIsLoading = true);
+
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('posts')
+          .where('userId', isEqualTo: widget.userId)
+          .where('isFavorite', isEqualTo: true)
+          .orderBy('createdAt', descending: true)
+          .limit(_loadMoreCount)
+          .get();
+
+      var posts = snapshot.docs
+          .map((doc) => PostModel.fromFirestore(doc))
+          .toList();
+
+      // AIモードのフィルタリング
+      if (!widget.isMyProfile && !widget.viewerIsAI) {
+        posts = posts.where((post) => post.postMode != 'ai').toList();
+      }
+
+      if (mounted) {
+        setState(() {
+          _favoritePosts = posts;
+          _favoriteLastDocument = snapshot.docs.isNotEmpty
+              ? snapshot.docs.last
+              : null;
+          _favoriteHasMore = snapshot.docs.length == _loadMoreCount;
+          _favoriteIsLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading favorites: $e');
+      if (mounted) {
+        setState(() => _favoriteIsLoading = false);
+      }
+    }
+  }
+
+  /// お気に入り投稿の追加読み込み
+  Future<void> _loadMoreFavorites() async {
+    if (!_favoriteHasMore ||
+        _favoriteIsLoadingMore ||
+        _favoriteLastDocument == null) {
+      return;
+    }
+
+    setState(() => _favoriteIsLoadingMore = true);
+
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('posts')
+          .where('userId', isEqualTo: widget.userId)
+          .where('isFavorite', isEqualTo: true)
+          .orderBy('createdAt', descending: true)
+          .limit(_loadMoreCount)
+          .startAfterDocument(_favoriteLastDocument!)
+          .get();
+
+      var newPosts = snapshot.docs
+          .map((doc) => PostModel.fromFirestore(doc))
+          .toList();
+
+      // AIモードのフィルタリング
+      if (!widget.isMyProfile && !widget.viewerIsAI) {
+        newPosts = newPosts.where((post) => post.postMode != 'ai').toList();
+      }
+
+      if (mounted) {
+        setState(() {
+          _favoritePosts.addAll(newPosts);
+          _favoriteLastDocument = snapshot.docs.isNotEmpty
+              ? snapshot.docs.last
+              : null;
+          _favoriteHasMore = snapshot.docs.length == _loadMoreCount;
+          _favoriteIsLoadingMore = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading more favorites: $e');
+      if (mounted) {
+        setState(() => _favoriteIsLoadingMore = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // ロード中
-    if (_isLoading) {
+    final isCurrentlyLoading = _currentTab == 2
+        ? _favoriteIsLoading
+        : _isLoading;
+    if (isCurrentlyLoading) {
       return const SliverToBoxAdapter(
         child: Center(
           child: Padding(
@@ -699,14 +809,19 @@ class _UserPostsListState extends State<_UserPostsList>
       );
     }
 
+    final hasMore = _currentTab == 2 ? _favoriteHasMore : _hasMore;
+    final isLoadingMore = _currentTab == 2
+        ? _favoriteIsLoadingMore
+        : _isLoadingMore;
+
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: posts.length + (_hasMore ? 1 : 0),
+      itemCount: posts.length + (hasMore ? 1 : 0),
       itemBuilder: (context, index) {
         // ローディングインジケーター（最後のアイテム）
         if (index == posts.length) {
-          if (_isLoadingMore) {
+          if (isLoadingMore) {
             return const Padding(
               padding: EdgeInsets.all(16),
               child: Center(
@@ -726,13 +841,26 @@ class _UserPostsListState extends State<_UserPostsList>
           onDeleted: () {
             setState(() {
               _posts.removeWhere((p) => p.id == post.id);
+              _favoritePosts.removeWhere((p) => p.id == post.id);
             });
           },
           onFavoriteToggled: (bool isFavorite) {
             setState(() {
+              // TL/サークル投稿を更新
               final idx = _posts.indexWhere((p) => p.id == post.id);
               if (idx != -1) {
                 _posts[idx] = _posts[idx].copyWith(isFavorite: isFavorite);
+              }
+
+              // お気に入りリストを更新
+              if (isFavorite) {
+                // お気に入りに追加
+                if (!_favoritePosts.any((p) => p.id == post.id)) {
+                  _favoritePosts.insert(0, post.copyWith(isFavorite: true));
+                }
+              } else {
+                // お気に入りから削除
+                _favoritePosts.removeWhere((p) => p.id == post.id);
               }
             });
           },
