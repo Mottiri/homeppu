@@ -500,10 +500,14 @@ class _UserPostsListState extends State<_UserPostsList>
   }
 
   Future<void> _loadTabPosts(int tabIndex) async {
+    debugPrint('ProfileScreen: Loading tab $tabIndex posts...');
     setState(() => _tabIsLoading[tabIndex] = true);
 
     try {
       final snapshot = await _buildQuery(tabIndex).limit(20).get();
+      debugPrint(
+        'ProfileScreen: Got ${snapshot.docs.length} docs from Firestore',
+      );
 
       var posts = snapshot.docs
           .map((doc) => PostModel.fromFirestore(doc))
@@ -519,6 +523,8 @@ class _UserPostsListState extends State<_UserPostsList>
         posts = posts.where((post) => post.postMode != 'ai').toList();
       }
 
+      debugPrint('ProfileScreen: After filtering: ${posts.length} posts');
+
       if (mounted) {
         setState(() {
           _tabPosts[tabIndex] = posts;
@@ -527,6 +533,9 @@ class _UserPostsListState extends State<_UserPostsList>
               : null;
           _tabHasMore[tabIndex] = snapshot.docs.length == 20;
           _tabIsLoading[tabIndex] = false;
+          debugPrint(
+            'ProfileScreen: hasMore[${tabIndex}] = ${_tabHasMore[tabIndex]}',
+          );
         });
       }
     } catch (e) {
@@ -599,40 +608,56 @@ class _UserPostsListState extends State<_UserPostsList>
 
     // タブ表示
     return SliverToBoxAdapter(
-      child: Column(
-        children: [
-          // タブバー
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: TabBar(
-              controller: _tabController,
-              indicator: BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.circular(10),
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          // 親のスクロールイベントを監視
+          if (notification is ScrollUpdateNotification) {
+            final metrics = notification.metrics;
+            // 下部200px以内になったら追加読み込み
+            if (metrics.pixels >= metrics.maxScrollExtent - 200) {
+              if (_tabHasMore[_currentTab] && !_tabIsLoadingMore[_currentTab]) {
+                debugPrint('ProfileScreen: Near bottom, loading more...');
+                _loadMoreTabPosts(_currentTab);
+              }
+            }
+          }
+          return false; // イベントを伝播させる
+        },
+        child: Column(
+          children: [
+            // タブバー
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(12),
               ),
-              indicatorSize: TabBarIndicatorSize.tab,
-              labelColor: Colors.white,
-              unselectedLabelColor: AppColors.textSecondary,
-              labelStyle: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
+              child: TabBar(
+                controller: _tabController,
+                indicator: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                indicatorSize: TabBarIndicatorSize.tab,
+                labelColor: Colors.white,
+                unselectedLabelColor: AppColors.textSecondary,
+                labelStyle: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+                dividerColor: Colors.transparent,
+                tabs: const [
+                  Tab(child: Icon(Icons.home_outlined, size: 20)),
+                  Tab(child: Icon(Icons.people_outline, size: 20)),
+                  Tab(child: Icon(Icons.star_outline, size: 20)),
+                ],
               ),
-              dividerColor: Colors.transparent,
-              tabs: const [
-                Tab(child: Icon(Icons.home_outlined, size: 20)),
-                Tab(child: Icon(Icons.people_outline, size: 20)),
-                Tab(child: Icon(Icons.star_outline, size: 20)),
-              ],
             ),
-          ),
-          const SizedBox(height: 12),
-          // 投稿リスト
-          _buildPostList(_currentTab),
-        ],
+            const SizedBox(height: 12),
+            // 投稿リスト
+            _buildPostList(_currentTab),
+          ],
+        ),
       ),
     );
   }
