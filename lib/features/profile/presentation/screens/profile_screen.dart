@@ -520,6 +520,7 @@ class _UserPostsListState extends State<_UserPostsList>
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(_onTabChanged);
     _loadPosts();
+    _loadFavorites(); // お気に入りも並行読み込み
   }
 
   @override
