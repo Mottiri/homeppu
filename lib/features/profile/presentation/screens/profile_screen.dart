@@ -32,6 +32,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _isFollowing = false;
   bool _isFollowLoading = false;
   final _followService = FollowService();
+  final _userPostsListKey = GlobalKey<_UserPostsListState>();
 
   @override
   void initState() {
@@ -176,243 +177,254 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       body: Container(
         decoration: const BoxDecoration(gradient: AppColors.warmGradient),
         child: SafeArea(
-          child: CustomScrollView(
-            slivers: [
-              // ヘッダー
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Row(
-                    children: [
-                      if (!_isOwnProfile)
-                        IconButton(
-                          onPressed: () => context.pop(),
-                          icon: const Icon(Icons.arrow_back),
-                        ),
-                      Text(
-                        _isOwnProfile ? 'マイページ' : 'プロフィール',
-                        style: Theme.of(context).textTheme.headlineMedium,
-                      ),
-                      const Spacer(),
-                      // 管理者専用：レビュー画面リンク
-                      if (_isOwnProfile && widget.userId == null)
-                        StreamBuilder<String?>(
-                          stream: Stream.value(
-                            ref.read(currentUserProvider).valueOrNull?.uid,
-                          ),
-                          builder: (context, snapshot) {
-                            const adminUid = 'hYr5LUH4mhR60oQfVOggrjGYJjG2';
-                            if (snapshot.data == adminUid) {
-                              return IconButton(
-                                onPressed: () => context.push('/admin-review'),
-                                icon: const Icon(Icons.flag_outlined),
-                                tooltip: '要審査投稿',
-                              );
-                            }
-                            return const SizedBox.shrink();
-                          },
-                        ),
-                      if (_isOwnProfile)
-                        IconButton(
-                          onPressed: () => context.push('/settings'),
-                          icon: const Icon(Icons.settings_outlined),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // プロフィールカード
-              SliverToBoxAdapter(
-                child: Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 16),
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              if (notification is ScrollEndNotification &&
+                  notification.metrics.extentAfter < 300) {
+                _userPostsListKey.currentState?.loadMoreCurrentTab();
+              }
+              return false;
+            },
+            child: CustomScrollView(
+              slivers: [
+                // ヘッダー
+                SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
+                    padding: const EdgeInsets.all(20),
+                    child: Row(
                       children: [
-                        // アバター
-                        AvatarWidget(avatarIndex: user.avatarIndex, size: 80),
-                        const SizedBox(height: 16),
-
-                        // 名前
+                        if (!_isOwnProfile)
+                          IconButton(
+                            onPressed: () => context.pop(),
+                            icon: const Icon(Icons.arrow_back),
+                          ),
                         Text(
-                          user.displayName,
-                          style: Theme.of(context).textTheme.headlineSmall,
+                          _isOwnProfile ? 'マイページ' : 'プロフィール',
+                          style: Theme.of(context).textTheme.headlineMedium,
                         ),
-
-                        // フォローボタン（他ユーザーのみ）
-                        if (!_isOwnProfile) ...[
-                          const SizedBox(height: 16),
-                          SizedBox(
-                            width: 140,
-                            child: ElevatedButton(
-                              onPressed: _isFollowLoading
-                                  ? null
-                                  : _toggleFollow,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: _isFollowing
-                                    ? AppColors.surfaceVariant
-                                    : AppColors.primary,
-                                foregroundColor: _isFollowing
-                                    ? AppColors.textPrimary
-                                    : Colors.white,
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 12,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(24),
-                                  side: _isFollowing
-                                      ? BorderSide(
-                                          color: AppColors.primary.withValues(
-                                            alpha: 0.3,
-                                          ),
-                                        )
-                                      : BorderSide.none,
-                                ),
-                              ),
-                              child: _isFollowLoading
-                                  ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: AppColors.primary,
-                                      ),
-                                    )
-                                  : Text(_isFollowing ? 'フォロー中' : 'フォローする'),
+                        const Spacer(),
+                        // 管理者専用：レビュー画面リンク
+                        if (_isOwnProfile && widget.userId == null)
+                          StreamBuilder<String?>(
+                            stream: Stream.value(
+                              ref.read(currentUserProvider).valueOrNull?.uid,
                             ),
+                            builder: (context, snapshot) {
+                              const adminUid = 'hYr5LUH4mhR60oQfVOggrjGYJjG2';
+                              if (snapshot.data == adminUid) {
+                                return IconButton(
+                                  onPressed: () =>
+                                      context.push('/admin-review'),
+                                  icon: const Icon(Icons.flag_outlined),
+                                  tooltip: '要審査投稿',
+                                );
+                              }
+                              return const SizedBox.shrink();
+                            },
                           ),
-                        ],
-
-                        // 自己紹介
-                        if (user.bio != null && user.bio!.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            user.bio!,
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(color: AppColors.textSecondary),
-                            textAlign: TextAlign.center,
+                        if (_isOwnProfile)
+                          IconButton(
+                            onPressed: () => context.push('/settings'),
+                            icon: const Icon(Icons.settings_outlined),
                           ),
-                        ],
-
-                        const SizedBox(height: 20),
-
-                        // 統計
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            _StatItem(
-                              label: '投稿',
-                              value: '${user.totalPosts}',
-                              icon: Icons.article_outlined,
-                            ),
-                            _StatItem(
-                              label: '称賛',
-                              value: '${user.totalPraises}',
-                              icon: Icons.favorite_outline,
-                            ),
-                            // 自分のプロフィールの場合は詳細な徳ポイント表示
-                            if (_isOwnProfile)
-                              const VirtueIndicator(showLabel: true, size: 50)
-                            else
-                              _StatItem(
-                                label: '徳',
-                                value: '${user.virtue}',
-                                icon: Icons.stars_outlined,
-                                color: AppColors.virtue,
-                              ),
-                          ],
-                        ),
-
-                        // BAN状態の警告
-                        if (user.isBanned) ...[
-                          const SizedBox(height: 16),
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: AppColors.error.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: AppColors.error.withValues(alpha: 0.3),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  Icons.warning_amber_rounded,
-                                  color: AppColors.error,
-                                ),
-                                const SizedBox(width: 8),
-                                const Expanded(
-                                  child: Text(
-                                    'アカウントが制限されています。投稿やコメントができません。',
-                                    style: TextStyle(
-                                      color: AppColors.error,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
                       ],
                     ),
                   ),
                 ),
-              ),
 
-              const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                // プロフィールカード
+                SliverToBoxAdapter(
+                  child: Card(
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        children: [
+                          // アバター
+                          AvatarWidget(avatarIndex: user.avatarIndex, size: 80),
+                          const SizedBox(height: 16),
 
-              // フォロー中（自分のプロフィールのみ）
-              // 実際のfollowingリストの長さを使用（followingCountとの不整合を防ぐ）
-              if (_isOwnProfile && user.following.isNotEmpty) ...[
+                          // 名前
+                          Text(
+                            user.displayName,
+                            style: Theme.of(context).textTheme.headlineSmall,
+                          ),
+
+                          // フォローボタン（他ユーザーのみ）
+                          if (!_isOwnProfile) ...[
+                            const SizedBox(height: 16),
+                            SizedBox(
+                              width: 140,
+                              child: ElevatedButton(
+                                onPressed: _isFollowLoading
+                                    ? null
+                                    : _toggleFollow,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: _isFollowing
+                                      ? AppColors.surfaceVariant
+                                      : AppColors.primary,
+                                  foregroundColor: _isFollowing
+                                      ? AppColors.textPrimary
+                                      : Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(24),
+                                    side: _isFollowing
+                                        ? BorderSide(
+                                            color: AppColors.primary.withValues(
+                                              alpha: 0.3,
+                                            ),
+                                          )
+                                        : BorderSide.none,
+                                  ),
+                                ),
+                                child: _isFollowLoading
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: AppColors.primary,
+                                        ),
+                                      )
+                                    : Text(_isFollowing ? 'フォロー中' : 'フォローする'),
+                              ),
+                            ),
+                          ],
+
+                          // 自己紹介
+                          if (user.bio != null && user.bio!.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              user.bio!,
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(color: AppColors.textSecondary),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+
+                          const SizedBox(height: 20),
+
+                          // 統計
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              _StatItem(
+                                label: '投稿',
+                                value: '${user.totalPosts}',
+                                icon: Icons.article_outlined,
+                              ),
+                              _StatItem(
+                                label: '称賛',
+                                value: '${user.totalPraises}',
+                                icon: Icons.favorite_outline,
+                              ),
+                              // 自分のプロフィールの場合は詳細な徳ポイント表示
+                              if (_isOwnProfile)
+                                const VirtueIndicator(showLabel: true, size: 50)
+                              else
+                                _StatItem(
+                                  label: '徳',
+                                  value: '${user.virtue}',
+                                  icon: Icons.stars_outlined,
+                                  color: AppColors.virtue,
+                                ),
+                            ],
+                          ),
+
+                          // BAN状態の警告
+                          if (user.isBanned) ...[
+                            const SizedBox(height: 16),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: AppColors.error.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: AppColors.error.withValues(alpha: 0.3),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.warning_amber_rounded,
+                                    color: AppColors.error,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Expanded(
+                                    child: Text(
+                                      'アカウントが制限されています。投稿やコメントができません。',
+                                      style: TextStyle(
+                                        color: AppColors.error,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SliverToBoxAdapter(child: SizedBox(height: 24)),
+
+                // フォロー中（自分のプロフィールのみ）
+                // 実際のfollowingリストの長さを使用（followingCountとの不整合を防ぐ）
+                if (_isOwnProfile && user.following.isNotEmpty) ...[
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Row(
+                        children: [
+                          Text(
+                            'フォロー中',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 12)),
+                  SliverToBoxAdapter(
+                    child: _FollowingList(followingIds: user.following),
+                  ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                ],
+
+                // 過去の投稿
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Row(
-                      children: [
-                        Text(
-                          'フォロー中',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                      ],
+                    child: Text(
+                      '${user.displayName}さんの投稿',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),
+
                 const SliverToBoxAdapter(child: SizedBox(height: 12)),
-                SliverToBoxAdapter(
-                  child: _FollowingList(followingIds: user.following),
+
+                // 投稿一覧
+                _UserPostsList(
+                  key: _userPostsListKey,
+                  userId: user.uid,
+                  isMyProfile: _isOwnProfile,
+                  viewerIsAI:
+                      ref.watch(currentUserProvider).valueOrNull?.isAI ?? false,
                 ),
-                const SliverToBoxAdapter(child: SizedBox(height: 24)),
+
+                const SliverToBoxAdapter(child: SizedBox(height: 100)),
               ],
-
-              // 過去の投稿
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Text(
-                    '${user.displayName}さんの投稿',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-
-              const SliverToBoxAdapter(child: SizedBox(height: 12)),
-
-              // 投稿一覧
-              _UserPostsList(
-                userId: user.uid,
-                isMyProfile: _isOwnProfile,
-                viewerIsAI:
-                    ref.watch(currentUserProvider).valueOrNull?.isAI ?? false,
-              ),
-
-              const SliverToBoxAdapter(child: SizedBox(height: 100)),
-            ],
+            ),
           ),
         ),
       ),
@@ -427,6 +439,7 @@ class _UserPostsList extends StatefulWidget {
   final bool viewerIsAI;
 
   const _UserPostsList({
+    super.key,
     required this.userId,
     this.isMyProfile = false,
     this.viewerIsAI = false,
@@ -449,6 +462,13 @@ class _UserPostsListState extends State<_UserPostsList>
   final List<bool> _tabIsLoadingMore = [false, false, false];
 
   int get _currentTab => _tabController.index;
+
+  /// 親から呼び出されるメソッド：現在のタブの追加読み込み
+  void loadMoreCurrentTab() {
+    if (_tabHasMore[_currentTab] && !_tabIsLoadingMore[_currentTab]) {
+      _loadMoreTabPosts(_currentTab);
+    }
+  }
 
   @override
   void initState() {
@@ -608,56 +628,40 @@ class _UserPostsListState extends State<_UserPostsList>
 
     // タブ表示
     return SliverToBoxAdapter(
-      child: NotificationListener<ScrollNotification>(
-        onNotification: (notification) {
-          // 親のスクロールイベントを監視
-          if (notification is ScrollUpdateNotification) {
-            final metrics = notification.metrics;
-            // 下部200px以内になったら追加読み込み
-            if (metrics.pixels >= metrics.maxScrollExtent - 200) {
-              if (_tabHasMore[_currentTab] && !_tabIsLoadingMore[_currentTab]) {
-                debugPrint('ProfileScreen: Near bottom, loading more...');
-                _loadMoreTabPosts(_currentTab);
-              }
-            }
-          }
-          return false; // イベントを伝播させる
-        },
-        child: Column(
-          children: [
-            // タブバー
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: TabBar(
-                controller: _tabController,
-                indicator: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                indicatorSize: TabBarIndicatorSize.tab,
-                labelColor: Colors.white,
-                unselectedLabelColor: AppColors.textSecondary,
-                labelStyle: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                ),
-                dividerColor: Colors.transparent,
-                tabs: const [
-                  Tab(child: Icon(Icons.home_outlined, size: 20)),
-                  Tab(child: Icon(Icons.people_outline, size: 20)),
-                  Tab(child: Icon(Icons.star_outline, size: 20)),
-                ],
-              ),
+      child: Column(
+        children: [
+          // タブバー
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(12),
             ),
-            const SizedBox(height: 12),
-            // 投稿リスト
-            _buildPostList(_currentTab),
-          ],
-        ),
+            child: TabBar(
+              controller: _tabController,
+              indicator: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              indicatorSize: TabBarIndicatorSize.tab,
+              labelColor: Colors.white,
+              unselectedLabelColor: AppColors.textSecondary,
+              labelStyle: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+              dividerColor: Colors.transparent,
+              tabs: const [
+                Tab(child: Icon(Icons.home_outlined, size: 20)),
+                Tab(child: Icon(Icons.people_outline, size: 20)),
+                Tab(child: Icon(Icons.star_outline, size: 20)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          // 投稿リスト
+          _buildPostList(_currentTab),
+        ],
       ),
     );
   }
