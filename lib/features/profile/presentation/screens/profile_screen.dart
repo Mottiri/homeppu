@@ -446,10 +446,11 @@ class _UserPostsListState extends State<_UserPostsList>
   late TabController _tabController;
 
   // TL投稿、サークル投稿、お気に入りを分離
+  // お気に入りはTL/サークルにも残る（コピー扱い）
   List<PostModel> get _tlPosts =>
-      _posts.where((p) => p.circleId == null && !p.isFavorite).toList();
+      _posts.where((p) => p.circleId == null).toList();
   List<PostModel> get _circlePosts =>
-      _posts.where((p) => p.circleId != null && !p.isFavorite).toList();
+      _posts.where((p) => p.circleId != null).toList();
   List<PostModel> get _favoritePosts =>
       _posts.where((p) => p.isFavorite).toList();
 
