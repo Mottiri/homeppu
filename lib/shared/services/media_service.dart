@@ -143,12 +143,30 @@ class MediaService {
     required String userId,
   }) async {
     try {
-      debugPrint('MediaService: Generating video thumbnail...');
+      debugPrint(
+        'MediaService: ========== Thumbnail Generation Start ==========',
+      );
+      debugPrint('MediaService: Video path: $videoPath');
+
+      // ファイルの存在確認
+      final videoFile = File(videoPath);
+      final exists = await videoFile.exists();
+      debugPrint('MediaService: Video file exists: $exists');
+
+      if (!exists) {
+        debugPrint('MediaService: ERROR - Video file does not exist!');
+        return null;
+      }
+
+      final fileSize = await videoFile.length();
+      debugPrint('MediaService: Video file size: ${fileSize ~/ 1024}KB');
 
       // 一時ディレクトリを取得
       final tempDir = await getTemporaryDirectory();
+      debugPrint('MediaService: Temp directory: ${tempDir.path}');
 
       // サムネイルを生成
+      debugPrint('MediaService: Calling VideoThumbnail.thumbnailFile...');
       final thumbnailPath = await VideoThumbnail.thumbnailFile(
         video: videoPath,
         thumbnailPath: tempDir.path,
@@ -156,16 +174,32 @@ class MediaService {
         maxHeight: 400,
         quality: 75,
       );
+      debugPrint('MediaService: Thumbnail result: $thumbnailPath');
 
       if (thumbnailPath == null) {
-        debugPrint('MediaService: Failed to generate thumbnail');
+        debugPrint(
+          'MediaService: ERROR - Failed to generate thumbnail (null returned)',
+        );
         return null;
       }
 
-      debugPrint('MediaService: Thumbnail generated at $thumbnailPath');
+      // サムネイルファイルの存在確認
+      final thumbnailFile = File(thumbnailPath);
+      final thumbExists = await thumbnailFile.exists();
+      debugPrint('MediaService: Thumbnail file exists: $thumbExists');
+
+      if (!thumbExists) {
+        debugPrint(
+          'MediaService: ERROR - Thumbnail file does not exist after generation!',
+        );
+        return null;
+      }
+
+      final thumbSize = await thumbnailFile.length();
+      debugPrint('MediaService: Thumbnail file size: ${thumbSize ~/ 1024}KB');
 
       // サムネイルをFirebase Storageにアップロード
-      final thumbnailFile = File(thumbnailPath);
+      debugPrint('MediaService: Uploading thumbnail to Firebase Storage...');
       final thumbnailFileName = '${_uuid.v4()}_thumb.jpg';
       final thumbnailStoragePath =
           'posts/$userId/thumbnails/$thumbnailFileName';
@@ -188,14 +222,22 @@ class MediaService {
       // 一時ファイルを削除
       try {
         await thumbnailFile.delete();
+        debugPrint('MediaService: Temp thumbnail deleted');
       } catch (e) {
         debugPrint('MediaService: Failed to delete temp thumbnail: $e');
       }
 
-      debugPrint('MediaService: Thumbnail uploaded: $thumbnailUrl');
+      debugPrint(
+        'MediaService: ========== Thumbnail Generation Success ==========',
+      );
+      debugPrint('MediaService: Thumbnail URL: $thumbnailUrl');
       return thumbnailUrl;
-    } catch (e) {
-      debugPrint('MediaService: Error generating thumbnail: $e');
+    } catch (e, stackTrace) {
+      debugPrint(
+        'MediaService: ========== Thumbnail Generation FAILED ==========',
+      );
+      debugPrint('MediaService: Error: $e');
+      debugPrint('MediaService: Stack trace: $stackTrace');
       return null;
     }
   }

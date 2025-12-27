@@ -88,6 +88,17 @@ service firebase.storage {
       allow delete: if isAuthenticated() && request.auth.uid == userId;
     }
     
+    // 投稿メディア - 動画サムネイル
+    match /posts/{userId}/thumbnails/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() 
+                   && request.auth.uid == userId 
+                   && isValidProfileSize()  // 5MB limit for thumbnails
+                   && isImage();
+      // 本人のみ削除可能
+      allow delete: if isAuthenticated() && request.auth.uid == userId;
+    }
+    
     // 後方互換性：古い形式の投稿画像
     match /posts/{postId}/{fileName} {
       allow read: if isAuthenticated();
