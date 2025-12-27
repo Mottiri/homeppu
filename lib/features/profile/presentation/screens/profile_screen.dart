@@ -460,24 +460,44 @@ class _UserPostsListState extends State<_UserPostsList>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
-  // 各タブの状態を独立して管理
-  // 0: TL投稿, 1: サークル投稿, 2: お気に入り
-  final List<List<PostModel>> _tabPosts = [[], [], []];
-  final List<DocumentSnapshot?> _tabLastDocuments = [null, null, null];
-  final List<bool> _tabHasMore = [true, true, true];
-  final List<bool> _tabIsLoading = [true, false, false];
-  final List<bool> _tabIsLoadingMore = [false, false, false];
+  // 全投稿を一括管理（最初30件 + 追加読み込み分）
+  List<PostModel> _posts = [];
+  DocumentSnapshot? _lastDocument;
+  bool _hasMore = true;
+  bool _isLoading = true;
+  bool _isLoadingMore = false;
+
+  // 初期読み込み件数
+  static const int _initialLoadCount = 30;
+  static const int _loadMoreCount = 10;
 
   int get _currentTab => _tabController.index;
 
-  /// 親から呼び出されるメソッド：現在のタブの追加読み込み
+  // タブごとにフィルタリング
+  List<PostModel> get _tlPosts =>
+      _posts.where((p) => p.circleId == null).toList();
+  List<PostModel> get _circlePosts =>
+      _posts.where((p) => p.circleId != null).toList();
+  List<PostModel> get _favoritePosts =>
+      _posts.where((p) => p.isFavorite).toList();
+
+  List<PostModel> get _currentPosts {
+    switch (_currentTab) {
+      case 0:
+        return _tlPosts;
+      case 1:
+        return _circlePosts;
+      case 2:
+        return _favoritePosts;
+      default:
+        return _tlPosts;
+    }
+  }
+
+  /// 親から呼び出されるメソッド：追加読み込み
   void loadMoreCurrentTab() {
-    debugPrint(
-      'ProfileScreen: loadMoreCurrentTab called - tab: $_currentTab, hasMore: ${_tabHasMore[_currentTab]}, isLoadingMore: ${_tabIsLoadingMore[_currentTab]}, lastDoc: ${_tabLastDocuments[_currentTab] != null}',
-    );
-    if (_tabHasMore[_currentTab] && !_tabIsLoadingMore[_currentTab]) {
-      debugPrint('ProfileScreen: Conditions met, calling _loadMoreTabPosts');
-      _loadMoreTabPosts(_currentTab);
+    if (_hasMore && !_isLoadingMore) {
+      _loadMorePosts();
     }
   }
 
@@ -486,7 +506,7 @@ class _UserPostsListState extends State<_UserPostsList>
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(_onTabChanged);
-    _loadTabPosts(0); // 最初のタブを読み込み
+    _loadPosts();
   }
 
   @override
@@ -498,116 +518,74 @@ class _UserPostsListState extends State<_UserPostsList>
 
   void _onTabChanged() {
     if (!_tabController.indexIsChanging) {
-      final tabIndex = _tabController.index;
-      // まだ読み込んでいないタブなら読み込み
-      if (_tabPosts[tabIndex].isEmpty && _tabHasMore[tabIndex]) {
-        _loadTabPosts(tabIndex);
+      // タブ切替時：30件を超えた分を破棄
+      if (_posts.length > _initialLoadCount) {
+        setState(() {
+          _posts = _posts.take(_initialLoadCount).toList();
+          // lastDocumentをリセット（30件目のドキュメントに戻す）
+          // 次回追加読み込み時に再取得される
+          _hasMore = true;
+        });
       }
       setState(() {});
     }
   }
 
-  /// 各タブ用のFirestoreクエリを構築
-  Query<Map<String, dynamic>> _buildQuery(int tabIndex) {
-    var query = FirebaseFirestore.instance
-        .collection('posts')
-        .where('userId', isEqualTo: widget.userId);
-
-    switch (tabIndex) {
-      case 0: // TL投稿
-        query = query.where('circleId', isNull: true);
-        break;
-      case 1: // サークル投稿
-        // circleIdがnullでない投稿を取得
-        // Firestoreでは直接 isNull: false は使えないので、
-        // 全投稿を取得してクライアント側でフィルタリング
-        break;
-      case 2: // お気に入り
-        query = query.where('isFavorite', isEqualTo: true);
-        break;
-    }
-
-    return query.orderBy('createdAt', descending: true);
-  }
-
-  Future<void> _loadTabPosts(int tabIndex) async {
-    debugPrint('ProfileScreen: Loading tab $tabIndex posts...');
-    setState(() => _tabIsLoading[tabIndex] = true);
+  Future<void> _loadPosts() async {
+    setState(() => _isLoading = true);
 
     try {
-      final snapshot = await _buildQuery(tabIndex).limit(10).get();
-      debugPrint(
-        'ProfileScreen: Got ${snapshot.docs.length} docs from Firestore',
-      );
+      final snapshot = await FirebaseFirestore.instance
+          .collection('posts')
+          .where('userId', isEqualTo: widget.userId)
+          .orderBy('createdAt', descending: true)
+          .limit(_initialLoadCount)
+          .get();
 
       var posts = snapshot.docs
           .map((doc) => PostModel.fromFirestore(doc))
           .toList();
-
-      // サークル投稿タブの場合、circleIdがnullでないもののみ
-      if (tabIndex == 1) {
-        posts = posts.where((p) => p.circleId != null).toList();
-      }
 
       // AIモードのフィルタリング
       if (!widget.isMyProfile && !widget.viewerIsAI) {
         posts = posts.where((post) => post.postMode != 'ai').toList();
       }
 
-      debugPrint('ProfileScreen: After filtering: ${posts.length} posts');
-
       if (mounted) {
         setState(() {
-          _tabPosts[tabIndex] = posts;
-          _tabLastDocuments[tabIndex] = snapshot.docs.isNotEmpty
-              ? snapshot.docs.last
-              : null;
-          _tabHasMore[tabIndex] = snapshot.docs.length == 10;
-          _tabIsLoading[tabIndex] = false;
-          debugPrint(
-            'ProfileScreen: hasMore[${tabIndex}] = ${_tabHasMore[tabIndex]}',
-          );
+          _posts = posts;
+          _lastDocument = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
+          _hasMore = snapshot.docs.length == _initialLoadCount;
+          _isLoading = false;
         });
       }
     } catch (e) {
-      debugPrint('Error loading tab $tabIndex posts: $e');
+      debugPrint('Error loading posts: $e');
       if (mounted) {
-        setState(() => _tabIsLoading[tabIndex] = false);
+        setState(() => _isLoading = false);
       }
     }
   }
 
-  Future<void> _loadMoreTabPosts(int tabIndex) async {
-    debugPrint('ProfileScreen: _loadMoreTabPosts started for tab $tabIndex');
-    if (!_tabHasMore[tabIndex] ||
-        _tabIsLoadingMore[tabIndex] ||
-        _tabLastDocuments[tabIndex] == null) {
-      debugPrint(
-        'ProfileScreen: _loadMoreTabPosts early return - hasMore: ${_tabHasMore[tabIndex]}, isLoadingMore: ${_tabIsLoadingMore[tabIndex]}, lastDoc: ${_tabLastDocuments[tabIndex] != null}',
-      );
+  Future<void> _loadMorePosts() async {
+    if (!_hasMore || _isLoadingMore || _lastDocument == null) {
       return;
     }
 
-    setState(() => _tabIsLoadingMore[tabIndex] = true);
-    debugPrint('ProfileScreen: _loadMoreTabPosts - set isLoadingMore = true');
+    setState(() => _isLoadingMore = true);
 
     try {
-      debugPrint('ProfileScreen: _loadMoreTabPosts - querying Firestore...');
-      final snapshot = await _buildQuery(
-        tabIndex,
-      ).limit(10).startAfterDocument(_tabLastDocuments[tabIndex]!).get();
-      debugPrint(
-        'ProfileScreen: _loadMoreTabPosts - got ${snapshot.docs.length} docs',
-      );
+      final snapshot = await FirebaseFirestore.instance
+          .collection('posts')
+          .where('userId', isEqualTo: widget.userId)
+          .orderBy('createdAt', descending: true)
+          .limit(_loadMoreCount)
+          .startAfterDocument(_lastDocument!)
+          .get();
 
       var newPosts = snapshot.docs
           .map((doc) => PostModel.fromFirestore(doc))
           .toList();
-
-      // サークル投稿タブの場合、circleIdがnullでないもののみ
-      if (tabIndex == 1) {
-        newPosts = newPosts.where((p) => p.circleId != null).toList();
-      }
 
       // AIモードのフィルタリング
       if (!widget.isMyProfile && !widget.viewerIsAI) {
@@ -616,26 +594,24 @@ class _UserPostsListState extends State<_UserPostsList>
 
       if (mounted) {
         setState(() {
-          _tabPosts[tabIndex].addAll(newPosts);
-          _tabLastDocuments[tabIndex] = snapshot.docs.isNotEmpty
-              ? snapshot.docs.last
-              : null;
-          _tabHasMore[tabIndex] = snapshot.docs.length == 10;
-          _tabIsLoadingMore[tabIndex] = false;
+          _posts.addAll(newPosts);
+          _lastDocument = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
+          _hasMore = snapshot.docs.length == _loadMoreCount;
+          _isLoadingMore = false;
         });
       }
     } catch (e) {
-      debugPrint('Error loading more tab $tabIndex posts: $e');
+      debugPrint('Error loading more posts: $e');
       if (mounted) {
-        setState(() => _tabIsLoadingMore[tabIndex] = false);
+        setState(() => _isLoadingMore = false);
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // 現在のタブがロード中
-    if (_tabIsLoading[_currentTab]) {
+    // ロード中
+    if (_isLoading) {
       return const SliverToBoxAdapter(
         child: Center(
           child: Padding(
@@ -680,18 +656,18 @@ class _UserPostsListState extends State<_UserPostsList>
           ),
           const SizedBox(height: 12),
           // 投稿リスト
-          _buildPostList(_currentTab),
+          _buildPostList(),
         ],
       ),
     );
   }
 
-  Widget _buildPostList(int tabIndex) {
-    final posts = _tabPosts[tabIndex];
+  Widget _buildPostList() {
+    final posts = _currentPosts;
 
     if (posts.isEmpty) {
       String emptyMessage;
-      switch (tabIndex) {
+      switch (_currentTab) {
         case 0:
           emptyMessage = 'まだTL投稿がないよ';
           break;
@@ -710,7 +686,7 @@ class _UserPostsListState extends State<_UserPostsList>
         child: Column(
           children: [
             Text(
-              tabIndex == 2 ? '⭐' : '📝',
+              _currentTab == 2 ? '⭐' : '📝',
               style: const TextStyle(fontSize: 48),
             ),
             const SizedBox(height: 8),
@@ -726,11 +702,11 @@ class _UserPostsListState extends State<_UserPostsList>
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: posts.length + (_tabHasMore[tabIndex] ? 1 : 0),
+      itemCount: posts.length + (_hasMore ? 1 : 0),
       itemBuilder: (context, index) {
         // ローディングインジケーター（最後のアイテム）
         if (index == posts.length) {
-          if (_tabIsLoadingMore[tabIndex]) {
+          if (_isLoadingMore) {
             return const Padding(
               padding: EdgeInsets.all(16),
               child: Center(
@@ -739,7 +715,6 @@ class _UserPostsListState extends State<_UserPostsList>
             );
           }
           // 追加データがある場合はスペースを確保
-          // 実際の読み込みはNotificationListenerでトリガー
           return const SizedBox(height: 50);
         }
 
@@ -750,34 +725,14 @@ class _UserPostsListState extends State<_UserPostsList>
           isMyProfile: widget.isMyProfile,
           onDeleted: () {
             setState(() {
-              _tabPosts[tabIndex].removeWhere((p) => p.id == post.id);
-              // TL/サークルから削除した場合、お気に入りからも削除
-              if (tabIndex != 2) {
-                _tabPosts[2].removeWhere((p) => p.id == post.id);
-              }
+              _posts.removeWhere((p) => p.id == post.id);
             });
           },
           onFavoriteToggled: (bool isFavorite) {
             setState(() {
-              // 現在のタブの投稿を更新
-              final idx = _tabPosts[tabIndex].indexWhere(
-                (p) => p.id == post.id,
-              );
+              final idx = _posts.indexWhere((p) => p.id == post.id);
               if (idx != -1) {
-                _tabPosts[tabIndex][idx] = _tabPosts[tabIndex][idx].copyWith(
-                  isFavorite: isFavorite,
-                );
-              }
-
-              // お気に入りタブを更新
-              if (isFavorite) {
-                // お気に入りに追加
-                if (!_tabPosts[2].any((p) => p.id == post.id)) {
-                  _tabPosts[2].insert(0, post.copyWith(isFavorite: true));
-                }
-              } else {
-                // お気に入りから削除
-                _tabPosts[2].removeWhere((p) => p.id == post.id);
+                _posts[idx] = _posts[idx].copyWith(isFavorite: isFavorite);
               }
             });
           },
