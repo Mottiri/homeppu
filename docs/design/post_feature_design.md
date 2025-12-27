@@ -124,11 +124,12 @@ Google Gemini 2.0 Flashモデルを使用し、文脈を含めた判定を行い
 ### MediaItem Structure
 ```dart
 {
-  'url': String,      // Storage URL
-  'type': String,     // 'image' | 'video' | 'file'
+  'url': String,          // Storage URL
+  'type': String,         // 'image' | 'video' | 'file'
   'fileName': String?,
   'mimeType': String?,
-  'fileSize': int?
+  'fileSize': int?,
+  'thumbnailUrl': String? // 動画のサムネイル画像URL
 }
 ```
 

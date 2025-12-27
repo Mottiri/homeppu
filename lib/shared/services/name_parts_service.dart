@@ -100,3 +100,4 @@ class UpdateNameResult {
     required this.message,
   });
 }
+
