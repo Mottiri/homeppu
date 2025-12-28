@@ -10,7 +10,8 @@ import '../../../../shared/models/goal_model.dart';
 import '../../../../shared/providers/goal_provider.dart';
 
 class CreateGoalScreen extends ConsumerStatefulWidget {
-  const CreateGoalScreen({super.key});
+  final GoalModel? goal;
+  const CreateGoalScreen({super.key, this.goal});
 
   @override
   ConsumerState<CreateGoalScreen> createState() => _CreateGoalScreenState();
@@ -37,6 +38,18 @@ class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.goal != null) {
+      _titleController.text = widget.goal!.title;
+      _descriptionController.text = widget.goal!.description ?? '';
+      _deadline = widget.goal!.deadline;
+      _selectedColorValue = widget.goal!.colorValue;
+      _reminders = List.from(widget.goal!.reminders);
+    }
+  }
+
+  @override
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
@@ -54,31 +67,47 @@ class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen> {
 
       final goalService = ref.read(goalServiceProvider);
 
-      final newGoal = GoalModel(
-        id: const Uuid().v4(),
-        userId: user.uid,
-        title: _titleController.text.trim(),
-        description: _descriptionController.text.trim().isEmpty
-            ? null
-            : _descriptionController.text.trim(),
-        deadline: _deadline,
-        colorValue: _selectedColorValue,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-        reminders: _reminders,
-      );
-
-      await goalService.createGoal(newGoal);
+      if (widget.goal != null) {
+        // 更新モード
+        final updatedGoal = widget.goal!.copyWith(
+          title: _titleController.text.trim(),
+          description: _descriptionController.text.trim().isEmpty
+              ? null
+              : _descriptionController.text.trim(),
+          deadline: _deadline,
+          colorValue: _selectedColorValue,
+          updatedAt: DateTime.now(),
+          reminders: _reminders,
+          // 必要ならforceClearCompletedAtなども調整できるが、基本は編集のみ
+        );
+        await goalService.updateGoal(updatedGoal);
+      } else {
+        // 新規作成モード
+        final newGoal = GoalModel(
+          id: const Uuid().v4(),
+          userId: user.uid,
+          title: _titleController.text.trim(),
+          description: _descriptionController.text.trim().isEmpty
+              ? null
+              : _descriptionController.text.trim(),
+          deadline: _deadline,
+          colorValue: _selectedColorValue,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+          reminders: _reminders,
+        );
+        await goalService.createGoal(newGoal);
+      }
 
       if (mounted) {
         context.pop();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
-              children: const [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 8),
-                Text('目標を作成しました！頑張りましょう✨'),
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 8),
+                Text(widget.goal != null ? '目標を更新しました！' : '目標を作成しました！頑張りましょう✨'),
               ],
             ),
             backgroundColor: AppColors.success,
@@ -112,7 +141,7 @@ class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('新しい目標'),
+        title: Text(widget.goal != null ? '目標を編集' : '新しい目標'),
         leading: IconButton(
           icon: Container(
             padding: const EdgeInsets.all(8),
@@ -519,23 +548,22 @@ class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen> {
                 )
               : Row(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Icon(
+                  children: [
+                    const Icon(
                       Icons.rocket_launch_rounded,
                       color: Colors.white,
                       size: 22,
                     ),
-                    SizedBox(width: 8),
+                    const SizedBox(width: 8),
                     Text(
-                      'この目標で始める',
-                      style: TextStyle(
+                      widget.goal != null ? '変更を保存する' : 'この目標で始める',
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                   ],
-                ),
         ),
       ),
     );

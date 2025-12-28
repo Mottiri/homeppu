@@ -10,6 +10,7 @@ import '../../../../shared/models/task_model.dart';
 import '../../../../shared/services/goal_service.dart';
 import '../../../../shared/services/task_service.dart';
 import '../../../../shared/providers/goal_provider.dart';
+import 'create_goal_screen.dart';
 
 class GoalDetailScreen extends ConsumerStatefulWidget {
   final String goalId;
@@ -137,6 +138,27 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
               onPressed: () => context.pop(),
             ),
             actions: [
+              IconButton(
+                icon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.edit_rounded,
+                    size: 20,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => CreateGoalScreen(goal: goal),
+                    ),
+                  );
+                },
+              ),
               IconButton(
                 icon: Container(
                   padding: const EdgeInsets.all(8),
