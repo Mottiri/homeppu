@@ -6582,7 +6582,9 @@ export const cleanupOrphanedMedia = onSchedule(
  */
 function calculateGoalReminderTime(deadline: Date, reminder: { unit: string; value: number }): Date {
   const ms = deadline.getTime();
-  if (reminder.unit === "hours") {
+  if (reminder.unit === "minutes") {
+    return new Date(ms - reminder.value * 60 * 1000);
+  } else if (reminder.unit === "hours") {
     return new Date(ms - reminder.value * 60 * 60 * 1000);
   } else if (reminder.unit === "days") {
     return new Date(ms - reminder.value * 24 * 60 * 60 * 1000);
@@ -6747,9 +6749,11 @@ export const scheduleGoalRemindersOnCreate = onDocumentCreated(
       }
 
       const reminderKey = `${reminder.unit}_${reminder.value}`;
-      const timeLabel = reminder.unit === "hours"
-        ? `${reminder.value}時間`
-        : `${reminder.value}日`;
+      const timeLabel = reminder.unit === "minutes"
+        ? `${reminder.value}分`
+        : reminder.unit === "hours"
+          ? `${reminder.value}時間`
+          : `${reminder.value}日`;
 
       const payload = {
         goalId,
@@ -6884,9 +6888,11 @@ export const scheduleGoalReminders = onDocumentUpdated(
       }
 
       const reminderKey = `${reminder.unit}_${reminder.value}`;
-      const timeLabel = reminder.unit === "hours"
-        ? `${reminder.value}時間`
-        : `${reminder.value}日`;
+      const timeLabel = reminder.unit === "minutes"
+        ? `${reminder.value}分`
+        : reminder.unit === "hours"
+          ? `${reminder.value}時間`
+          : `${reminder.value}日`;
 
       const payload = {
         goalId,

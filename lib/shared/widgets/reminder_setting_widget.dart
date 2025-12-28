@@ -199,11 +199,10 @@ class _ReminderSettingWidgetState extends State<ReminderSettingWidget> {
                         value: unit,
                         isDense: true,
                         items: [
-                          if (!widget.isGoal)
-                            const DropdownMenuItem(
-                              value: 'minutes',
-                              child: Text('分'),
-                            ),
+                          const DropdownMenuItem(
+                            value: 'minutes',
+                            child: Text('分'),
+                          ),
                           const DropdownMenuItem(
                             value: 'hours',
                             child: Text('時間'),

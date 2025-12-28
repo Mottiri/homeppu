@@ -272,7 +272,7 @@ class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen> {
                                     children: [
                                       Text(
                                         DateFormat(
-                                          'yyyy年M月d日',
+                                          'yyyy年M月d日 H:mm',
                                         ).format(_deadline!),
                                         style: TextStyle(
                                           fontSize: 16,
@@ -542,11 +542,13 @@ class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen> {
   }
 
   Future<void> _selectDeadline() async {
+    final today = DateTime.now();
+    final todayMidnight = DateTime(today.year, today.month, today.day);
     final picked = await showDatePicker(
       context: context,
-      initialDate: _deadline ?? DateTime.now().add(const Duration(days: 30)),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 3650)),
+      initialDate: _deadline ?? todayMidnight.add(const Duration(days: 30)),
+      firstDate: todayMidnight,
+      lastDate: todayMidnight.add(const Duration(days: 3650)),
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -562,7 +564,38 @@ class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen> {
       },
     );
     if (picked != null) {
-      setState(() => _deadline = picked);
+      // 時間選択ダイアログ
+      if (!mounted) return;
+      final pickedTime = await showTimePicker(
+        context: context,
+        initialTime: _deadline != null
+            ? TimeOfDay.fromDateTime(_deadline!)
+            : const TimeOfDay(hour: 23, minute: 59),
+        builder: (context, child) {
+          return Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme: ColorScheme.light(
+                primary: Color(_selectedColorValue),
+                onPrimary: Colors.white,
+                surface: Colors.white,
+                onSurface: AppColors.textPrimary,
+              ),
+            ),
+            child: child!,
+          );
+        },
+      );
+      if (pickedTime != null) {
+        setState(() {
+          _deadline = DateTime(
+            picked.year,
+            picked.month,
+            picked.day,
+            pickedTime.hour,
+            pickedTime.minute,
+          );
+        });
+      }
     }
   }
 }
