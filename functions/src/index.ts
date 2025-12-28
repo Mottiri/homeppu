@@ -6653,8 +6653,11 @@ export const executeGoalReminder = onRequest(
       }
 
       // 通知タイトル・本文
-      const title = "🚩 目標リマインダー";
-      const body = `「${goalTitle}」の期限まで${timeLabel}です`;
+      const isDeadline = type === "goal_deadline";
+      const title = isDeadline ? "🚩 目標の期限です！" : "🚩 目標リマインダー";
+      const body = isDeadline
+        ? `「${goalTitle}」の期限になりました。達成状況を確認しましょう！`
+        : `「${goalTitle}」の期限まで${timeLabel}です`;
 
       // FCM送信
       await admin.messaging().send({
@@ -6797,6 +6800,50 @@ export const scheduleGoalRemindersOnCreate = onDocumentCreated(
         console.error(`[GoalReminder] Failed to create task:`, e);
       }
     }
+
+    // 2. 期限時刻通知（期限ちょうど）
+    if (deadline > now) {
+      const deadlinePayload = {
+        goalId,
+        userId,
+        goalTitle,
+        timeLabel: "期限",
+        reminderKey: "deadline",
+        type: "goal_deadline",
+      };
+
+      const deadlineTask = {
+        httpRequest: {
+          httpMethod: "POST" as const,
+          url: targetUrl,
+          headers: { "Content-Type": "application/json" },
+          body: Buffer.from(JSON.stringify(deadlinePayload)).toString("base64"),
+          oidcToken: {
+            serviceAccountEmail,
+            audience: targetUrl,
+          },
+        },
+        scheduleTime: {
+          seconds: Math.floor(deadline.getTime() / 1000),
+        },
+      };
+
+      try {
+        const [response] = await tasksClient.createTask({ parent: queuePath, task: deadlineTask });
+        console.log(`[GoalReminder] Created deadline task: ${response.name}`);
+
+        await db.collection("scheduledReminders").add({
+          goalId,
+          reminderKey: "deadline",
+          type: "goal_deadline",
+          scheduledFor: deadline,
+          cloudTaskName: response.name,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (e) {
+        console.error(`[GoalReminder] Failed to create deadline task:`, e);
+      }
+    }
   }
 );
 
@@ -6933,6 +6980,50 @@ export const scheduleGoalReminders = onDocumentUpdated(
         });
       } catch (e) {
         console.error(`[GoalReminder] Failed to create task:`, e);
+      }
+    }
+
+    // 2. 期限時刻通知（期限ちょうど）
+    if (deadline > now) {
+      const deadlinePayload = {
+        goalId,
+        userId,
+        goalTitle,
+        timeLabel: "期限",
+        reminderKey: "deadline",
+        type: "goal_deadline",
+      };
+
+      const deadlineTask = {
+        httpRequest: {
+          httpMethod: "POST" as const,
+          url: targetUrl,
+          headers: { "Content-Type": "application/json" },
+          body: Buffer.from(JSON.stringify(deadlinePayload)).toString("base64"),
+          oidcToken: {
+            serviceAccountEmail,
+            audience: targetUrl,
+          },
+        },
+        scheduleTime: {
+          seconds: Math.floor(deadline.getTime() / 1000),
+        },
+      };
+
+      try {
+        const [response] = await tasksClient.createTask({ parent: queuePath, task: deadlineTask });
+        console.log(`[GoalReminder] Created deadline task: ${response.name}`);
+
+        await db.collection("scheduledReminders").add({
+          goalId,
+          reminderKey: "deadline",
+          type: "goal_deadline",
+          scheduledFor: deadline,
+          cloudTaskName: response.name,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (e) {
+        console.error(`[GoalReminder] Failed to create deadline task:`, e);
       }
     }
   }

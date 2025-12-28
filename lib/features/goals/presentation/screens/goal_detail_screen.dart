@@ -120,7 +120,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
         slivers: [
           // カスタムAppBar
           SliverAppBar(
-            expandedHeight: 280,
+            expandedHeight: 320,
             pinned: true,
             backgroundColor: isCompleted
                 ? const Color(0xFFFFF8E1)
