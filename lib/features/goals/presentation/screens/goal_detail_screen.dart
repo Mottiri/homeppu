@@ -278,7 +278,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
                     _buildStatusChip(
                       icon: Icons.check_circle_rounded,
                       label:
-                          '${DateFormat('yyyy/MM/dd').format(goal.completedAt!)} 達成',
+                          '${DateFormat('yyyy/MM/dd HH:mm').format(goal.completedAt!)} 達成',
                       color: AppColors.success,
                     ),
                   if (!isCompleted && daysRemaining != null) ...[
@@ -288,7 +288,9 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
                     const SizedBox(width: 8),
                     _buildStatusChip(
                       icon: Icons.event_rounded,
-                      label: DateFormat('yyyy/MM/dd').format(goal.deadline!),
+                      label: DateFormat(
+                        'yyyy/MM/dd HH:mm',
+                      ).format(goal.deadline!),
                       color: AppColors.textSecondary,
                     ),
                   ],

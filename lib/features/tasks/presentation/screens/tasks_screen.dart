@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:confetti/confetti.dart';
@@ -391,8 +392,16 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
           final totalCount = progress[1];
           if (completedCount >= totalCount && totalCount > 0) {
             isGoalCompleted = true;
-            // TODO: Get goal title if needed
-            goalTitle = '目標';
+            // 目標タイトルを取得
+            final goalDoc = await FirebaseFirestore.instance
+                .collection('goals')
+                .doc(task.goalId!)
+                .get();
+            if (goalDoc.exists) {
+              goalTitle = goalDoc.data()?['title'] as String? ?? '目標';
+            } else {
+              goalTitle = '目標';
+            }
           }
         }
       }

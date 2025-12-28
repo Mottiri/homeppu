@@ -546,7 +546,7 @@ class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen> {
     final todayMidnight = DateTime(today.year, today.month, today.day);
     final picked = await showDatePicker(
       context: context,
-      initialDate: _deadline ?? todayMidnight.add(const Duration(days: 30)),
+      initialDate: _deadline ?? today,
       firstDate: todayMidnight,
       lastDate: todayMidnight.add(const Duration(days: 3650)),
       builder: (context, child) {
@@ -570,7 +570,7 @@ class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen> {
         context: context,
         initialTime: _deadline != null
             ? TimeOfDay.fromDateTime(_deadline!)
-            : const TimeOfDay(hour: 23, minute: 59),
+            : TimeOfDay.fromDateTime(today),
         builder: (context, child) {
           return Theme(
             data: Theme.of(context).copyWith(
