@@ -1,6 +1,6 @@
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import * as functionsV1 from "firebase-functions/v1";
-import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
 
@@ -6570,5 +6570,364 @@ export const cleanupOrphanedMedia = onSchedule(
     }
 
     console.log(`=== cleanupOrphanedMedia COMPLETE: checked=${checkedCount}, deleted=${deletedCount}, orphanedPosts=${orphanedPostsDeleted}, orphanedComments=${orphanedCommentsDeleted}, orphanedReactions=${orphanedReactionsDeleted} ===`);
+  }
+);
+
+// ============================================================
+// 目標リマインダー通知機能
+// ============================================================
+
+/**
+ * 目標リマインダー用時刻計算（期限から逆算）
+ */
+function calculateGoalReminderTime(deadline: Date, reminder: { unit: string; value: number }): Date {
+  const ms = deadline.getTime();
+  if (reminder.unit === "hours") {
+    return new Date(ms - reminder.value * 60 * 60 * 1000);
+  } else if (reminder.unit === "days") {
+    return new Date(ms - reminder.value * 24 * 60 * 60 * 1000);
+  }
+  return new Date(ms);
+}
+
+/**
+ * 目標リマインダー実行エンドポイント
+ */
+export const executeGoalReminder = onRequest(
+  { region: "asia-northeast1" },
+  async (req, res) => {
+    // 認証チェック（Cloud Tasksからのみ呼び出し可能）
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      res.status(401).send("Unauthorized");
+      return;
+    }
+
+    try {
+      const { goalId, userId, goalTitle, timeLabel, reminderKey, type } = req.body;
+
+      if (!goalId || !userId) {
+        res.status(400).send("Missing required fields");
+        return;
+      }
+
+      // 重複チェック
+      const sentKey = `goal_${goalId}_${type}_${reminderKey}`;
+      const sentDoc = await db.collection("sentReminders").doc(sentKey).get();
+      if (sentDoc.exists) {
+        console.log(`[GoalReminder] Already sent: ${sentKey}`);
+        res.status(200).send("Already sent");
+        return;
+      }
+
+      // 目標がまだ存在し、未完了か確認
+      const goalDoc = await db.collection("goals").doc(goalId).get();
+      if (!goalDoc.exists) {
+        console.log(`[GoalReminder] Goal ${goalId} no longer exists`);
+        res.status(200).send("Goal deleted");
+        return;
+      }
+
+      const goalData = goalDoc.data();
+      if (goalData?.completedAt) {
+        console.log(`[GoalReminder] Goal ${goalId} is already completed`);
+        res.status(200).send("Goal completed");
+        return;
+      }
+
+      // ユーザーのFCMトークン取得
+      const userDoc = await db.collection("users").doc(userId).get();
+      if (!userDoc.exists) {
+        console.log(`[GoalReminder] User ${userId} not found`);
+        res.status(200).send("User not found");
+        return;
+      }
+
+      const fcmToken = userDoc.data()?.fcmToken;
+      if (!fcmToken) {
+        console.log(`[GoalReminder] User ${userId} has no FCM token`);
+        res.status(200).send("No FCM token");
+        return;
+      }
+
+      // 通知タイトル・本文
+      const title = "🚩 目標リマインダー";
+      const body = `「${goalTitle}」の期限まで${timeLabel}です`;
+
+      // FCM送信
+      await admin.messaging().send({
+        token: fcmToken,
+        notification: { title, body },
+        data: {
+          type: "goal_reminder",
+          goalId,
+        },
+        android: {
+          priority: "high",
+          notification: {
+            channelId: "reminders",
+            priority: "high",
+          },
+        },
+        apns: {
+          payload: {
+            aps: {
+              sound: "default",
+              badge: 1,
+            },
+          },
+        },
+      });
+
+      // 送信済みとして記録
+      await db.collection("sentReminders").doc(sentKey).set({
+        goalId,
+        userId,
+        type,
+        reminderKey,
+        sentAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      console.log(`[GoalReminder] Sent: ${goalId} - ${timeLabel}`);
+      res.status(200).send("OK");
+    } catch (error) {
+      console.error("[GoalReminder] Error:", error);
+      res.status(500).send("Error");
+    }
+  }
+);
+
+/**
+ * 目標作成時にリマインダーをスケジュール
+ */
+export const scheduleGoalRemindersOnCreate = onDocumentCreated(
+  { document: "goals/{goalId}", region: "asia-northeast1" },
+  async (event) => {
+    const goalId = event.params.goalId;
+    const data = event.data?.data();
+
+    if (!data) return;
+
+    // 完了済みは無視
+    if (data.completedAt) return;
+
+    const deadline = (data.deadline as admin.firestore.Timestamp)?.toDate();
+    if (!deadline) {
+      console.log(`[GoalReminder] Goal ${goalId} has no deadline`);
+      return;
+    }
+
+    const userId = data.userId as string;
+    const goalTitle = (data.title as string) || "目標";
+    const reminders = data.reminders as Array<{ unit: string; value: number }> | undefined;
+
+    if (!reminders || reminders.length === 0) {
+      console.log(`[GoalReminder] Goal ${goalId} has no reminders`);
+      return;
+    }
+
+    console.log(`[GoalReminder] Scheduling reminders for new goal ${goalId}`);
+
+    const tasksClient = new CloudTasksClient();
+    const project = process.env.GCLOUD_PROJECT || PROJECT_ID;
+    const location = LOCATION;
+
+    const queuePath = tasksClient.queuePath(project, location, TASK_REMINDER_QUEUE);
+    const targetUrl = `https://${location}-${project}.cloudfunctions.net/executeGoalReminder`;
+    const serviceAccountEmail = `${project}@appspot.gserviceaccount.com`;
+
+    const now = new Date();
+
+    for (const reminder of reminders) {
+      const reminderTime = calculateGoalReminderTime(deadline, reminder);
+
+      if (reminderTime <= now) {
+        console.log(`[GoalReminder] Skipping past reminder: ${reminderTime.toISOString()}`);
+        continue;
+      }
+
+      const reminderKey = `${reminder.unit}_${reminder.value}`;
+      const timeLabel = reminder.unit === "hours"
+        ? `${reminder.value}時間`
+        : `${reminder.value}日`;
+
+      const payload = {
+        goalId,
+        userId,
+        goalTitle,
+        timeLabel,
+        reminderKey,
+        type: "goal_reminder",
+      };
+
+      const task = {
+        httpRequest: {
+          httpMethod: "POST" as const,
+          url: targetUrl,
+          headers: { "Content-Type": "application/json" },
+          body: Buffer.from(JSON.stringify(payload)).toString("base64"),
+          oidcToken: {
+            serviceAccountEmail,
+            audience: targetUrl,
+          },
+        },
+        scheduleTime: {
+          seconds: Math.floor(reminderTime.getTime() / 1000),
+        },
+      };
+
+      try {
+        const [response] = await tasksClient.createTask({ parent: queuePath, task });
+        console.log(`[GoalReminder] Created task: ${response.name}`);
+
+        // scheduledRemindersに記録
+        await db.collection("scheduledReminders").add({
+          goalId,
+          reminderKey,
+          type: "goal_reminder",
+          scheduledFor: reminderTime,
+          cloudTaskName: response.name,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (e) {
+        console.error(`[GoalReminder] Failed to create task:`, e);
+      }
+    }
+  }
+);
+
+/**
+ * 目標更新時にリマインダーを再スケジュール
+ */
+export const scheduleGoalReminders = onDocumentUpdated(
+  { document: "goals/{goalId}", region: "asia-northeast1" },
+  async (event) => {
+    const goalId = event.params.goalId;
+    const beforeData = event.data?.before.data();
+    const afterData = event.data?.after.data();
+
+    if (!afterData) return;
+
+    // 完了した目標は無視
+    if (afterData.completedAt) {
+      console.log(`[GoalReminder] Goal ${goalId} is completed, skipping`);
+      return;
+    }
+
+    const deadline = (afterData.deadline as admin.firestore.Timestamp)?.toDate();
+    if (!deadline) {
+      console.log(`[GoalReminder] Goal ${goalId} has no deadline`);
+      return;
+    }
+
+    // 期限またはリマインダーが変更されたか確認
+    const beforeDeadline = (beforeData?.deadline as admin.firestore.Timestamp)?.toDate();
+    const beforeReminders = JSON.stringify(beforeData?.reminders || []);
+    const afterReminders = JSON.stringify(afterData.reminders || []);
+
+    if (
+      beforeDeadline?.getTime() === deadline.getTime() &&
+      beforeReminders === afterReminders
+    ) {
+      console.log(`[GoalReminder] Goal ${goalId} schedule unchanged`);
+      return;
+    }
+
+    const userId = afterData.userId as string;
+    const goalTitle = (afterData.title as string) || "目標";
+    const reminders = afterData.reminders as Array<{ unit: string; value: number }> | undefined;
+
+    console.log(`[GoalReminder] Rescheduling reminders for goal ${goalId}`);
+
+    const tasksClient = new CloudTasksClient();
+    const project = process.env.GCLOUD_PROJECT || PROJECT_ID;
+    const location = LOCATION;
+
+    // 既存のリマインダータスクをキャンセル
+    const existingReminders = await db.collection("scheduledReminders")
+      .where("goalId", "==", goalId)
+      .get();
+
+    const batch = db.batch();
+    for (const doc of existingReminders.docs) {
+      const taskName = doc.data().cloudTaskName;
+      if (taskName) {
+        try {
+          await tasksClient.deleteTask({ name: taskName });
+          console.log(`[GoalReminder] Cancelled task: ${taskName}`);
+        } catch (e) {
+          console.log(`[GoalReminder] Task already gone: ${taskName}`);
+        }
+      }
+      batch.delete(doc.ref);
+    }
+    await batch.commit();
+
+    if (!reminders || reminders.length === 0) {
+      console.log(`[GoalReminder] Goal ${goalId} has no reminders after update`);
+      return;
+    }
+
+    // 新しいリマインダーをスケジュール
+    const queuePath = tasksClient.queuePath(project, location, TASK_REMINDER_QUEUE);
+    const targetUrl = `https://${location}-${project}.cloudfunctions.net/executeGoalReminder`;
+    const serviceAccountEmail = `${project}@appspot.gserviceaccount.com`;
+
+    const now = new Date();
+
+    for (const reminder of reminders) {
+      const reminderTime = calculateGoalReminderTime(deadline, reminder);
+
+      if (reminderTime <= now) {
+        console.log(`[GoalReminder] Skipping past reminder: ${reminderTime.toISOString()}`);
+        continue;
+      }
+
+      const reminderKey = `${reminder.unit}_${reminder.value}`;
+      const timeLabel = reminder.unit === "hours"
+        ? `${reminder.value}時間`
+        : `${reminder.value}日`;
+
+      const payload = {
+        goalId,
+        userId,
+        goalTitle,
+        timeLabel,
+        reminderKey,
+        type: "goal_reminder",
+      };
+
+      const task = {
+        httpRequest: {
+          httpMethod: "POST" as const,
+          url: targetUrl,
+          headers: { "Content-Type": "application/json" },
+          body: Buffer.from(JSON.stringify(payload)).toString("base64"),
+          oidcToken: {
+            serviceAccountEmail,
+            audience: targetUrl,
+          },
+        },
+        scheduleTime: {
+          seconds: Math.floor(reminderTime.getTime() / 1000),
+        },
+      };
+
+      try {
+        const [response] = await tasksClient.createTask({ parent: queuePath, task });
+        console.log(`[GoalReminder] Created task: ${response.name}`);
+
+        await db.collection("scheduledReminders").add({
+          goalId,
+          reminderKey,
+          type: "goal_reminder",
+          scheduledFor: reminderTime,
+          cloudTaskName: response.name,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (e) {
+        console.error(`[GoalReminder] Failed to create task:`, e);
+      }
+    }
   }
 );

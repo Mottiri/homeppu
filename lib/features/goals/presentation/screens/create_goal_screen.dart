@@ -23,14 +23,12 @@ class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen> {
 
   DateTime? _deadline;
   int _selectedColorValue = 0xFFFF8A80; // Default: AppColors.primary
-  bool _isPublic = false;
   bool _isLoading = false;
   List<Map<String, dynamic>> _reminders = [];
 
   final List<Map<String, dynamic>> _colorOptions = [
     {'color': 0xFFFF8A80, 'name': 'コーラル'},
     {'color': 0xFFFFAB91, 'name': 'ピーチ'},
-    {'color': 0xFFFFE082, 'name': 'イエロー'},
     {'color': 0xFF81C784, 'name': 'グリーン'},
     {'color': 0xFF64B5F6, 'name': 'ブルー'},
     {'color': 0xFFB39DDB, 'name': 'パープル'},
@@ -67,7 +65,6 @@ class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen> {
         colorValue: _selectedColorValue,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
-        isPublic: _isPublic,
         reminders: _reminders,
       );
 
@@ -347,29 +344,6 @@ class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen> {
                     ),
                   ],
                 ],
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // 公開設定セクション
-            _buildSectionCard(
-              icon: _isPublic ? Icons.public_rounded : Icons.lock_rounded,
-              iconColor: _isPublic ? AppColors.info : AppColors.textHint,
-              title: '公開設定',
-              child: SwitchListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                title: Text(
-                  _isPublic ? '公開する' : '自分だけに表示',
-                  style: const TextStyle(fontSize: 14),
-                ),
-                subtitle: Text(
-                  _isPublic ? '他のユーザーもあなたの目標を見られます' : '目標は自分だけに表示されます',
-                  style: TextStyle(fontSize: 12, color: AppColors.textHint),
-                ),
-                value: _isPublic,
-                onChanged: (val) => setState(() => _isPublic = val),
-                activeTrackColor: AppColors.info,
               ),
             ),
 
