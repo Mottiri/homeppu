@@ -133,10 +133,15 @@ class GoalService {
 
   // Get Progress (Saturation Logic Helper)
   // Returns tuple: [completedCount, totalCount]
-  Future<List<int>> getGoalProgress(String goalId) async {
-    final tasksSnapshot = await _tasksCollection
-        .where('goalId', isEqualTo: goalId)
-        .get();
+  Future<List<int>> getGoalProgress(String goalId, {String? userId}) async {
+    var query = _tasksCollection.where('goalId', isEqualTo: goalId);
+
+    // セキュリティルール対応: userIdフィルターが必要
+    if (userId != null) {
+      query = query.where('userId', isEqualTo: userId);
+    }
+
+    final tasksSnapshot = await query.get();
 
     final total = tasksSnapshot.docs.length;
     if (total == 0) return [0, 0];

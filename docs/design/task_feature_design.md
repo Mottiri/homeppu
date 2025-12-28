@@ -239,3 +239,51 @@
 *   **カテゴリ変更**: TaskDetailSheet内にChoiceChipでカテゴリ選択UI
 *   **copyWith対応**: `TaskModel.copyWith`に`clearCategoryId`フラグを追加し、nullへの変更に対応
 
+## 13. ストリーク自動投稿機能 ✅ (2025-12-28)
+
+### 13.1 概要
+繰り返しタスクの連続完了（ストリーク）を記録し、節目達成時または目標達成時に自動でお祝い投稿を作成する機能。
+
+### 13.2 データ構造
+
+| フィールド | 型 | 説明 |
+|---|---|---|
+| `TaskModel.streak` | int | 連続達成日数 |
+| `TaskModel.completionPostId` | String? | 自動投稿のID（取り消し時の削除用） |
+
+### 13.3 ストリーク計算ロジック
+*   **対象**: `recurrenceGroupId` を持つ繰り返しタスクのみ
+*   **計算タイミング**: タスク完了時（`TaskService.completeTask`）
+*   **計算方法**:
+    *   同じグループの直前タスクが完了済み → `前のstreak + 1`
+    *   直前タスクが未完了 → `1` にリセット
+*   **取り消し時**: `streak = 0` にリセット
+
+### 13.4 マイルストーン判定
+| 区分 | 日数 | 称賛ワード例 |
+|---|---|---|
+| 初期 | 3, 7, 14, 21 | 三日坊主脱出！, 1週間継続！ |
+| 定着期 | 30, 60, 90... | 1ヶ月達成、習慣の達人！ |
+| 長期 | 100, 200... / 365, 730... | 100日達成、伝説級の記録！ |
+
+### 13.5 自動投稿
+*   **トリガー**: マイルストーン達成 or 目標達成（タスク完了でgoalId紐付きの目標が100%達成）
+*   **投稿先**: Cloud Functions経由（`AIService.createPostWithRateLimit`）
+*   **投稿内容例**:
+    *   🔥 「タスク名」を7日連続達成しました！
+    *   🎉 目標「目標名」を達成しました！おめでとうございます！
+*   **投稿削除**: タスク完了取り消し時、`completionPostId` を使って自動削除
+
+### 13.6 UI演出
+| 要素 | 説明 |
+|---|---|
+| **ConfettiWidget** | マイルストーン達成時に紙吹雪アニメーション |
+| **Snackbar** | 称賛ワード付き（例: 🎉 7日連続達成！1週間継続！） |
+| **TaskCard** | 🔥アイコン + ストリーク数をリアルタイム表示 |
+
+### 13.7 技術実装
+*   **TaskService**: `completeTask`, `uncompleteTask`, `saveCompletionPostId`, `isMilestone`, `getMilestoneMessage`
+*   **PostService**: `createTaskCompletionPost`, `deletePostById`
+*   **GoalService**: `getGoalProgress` にuserIdパラメーター追加（セキュリティルール対応）
+*   **Firestoreインデックス**: `tasks`コレクションに`userId + recurrenceGroupId + scheduledAt DESC`追加
+

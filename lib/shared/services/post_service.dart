@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../core/constants/app_colors.dart';
 import '../models/post_model.dart';
 import 'media_service.dart';
+import 'ai_service.dart';
 
 /// 投稿関連の共通ロジックを提供するサービス
 class PostService {
@@ -138,6 +139,88 @@ class PostService {
           ),
         );
       }
+      return false;
+    }
+  }
+
+  /// タスク完了時の自動投稿を作成（ストリーク節目・目標達成用）
+  /// 戻り値: 作成された投稿のID（削除用に保存すること）
+  Future<String?> createTaskCompletionPost({
+    required String userId,
+    required String userDisplayName,
+    required int userAvatarIndex,
+    required String taskContent,
+    required int streak,
+    bool isGoalCompletion = false,
+    String? goalTitle,
+  }) async {
+    try {
+      // 投稿内容を生成
+      String content;
+      if (isGoalCompletion && goalTitle != null) {
+        content = '🎉 目標「$goalTitle」を達成しました！おめでとうございます！';
+      } else {
+        content = '🔥 「$taskContent」を${streak}日連続達成しました！';
+      }
+
+      // Cloud Functions経由で投稿を作成（セキュリティルールでクライアント直接作成は禁止）
+      final aiService = AIService();
+      final postId = await aiService.createPostWithRateLimit(
+        content: content,
+        userDisplayName: userDisplayName,
+        userAvatarIndex: userAvatarIndex,
+        postMode: 'ai', // システムによる自動投稿
+      );
+
+      debugPrint(
+        'PostService: Created auto-post $postId for ${isGoalCompletion ? "goal" : "streak $streak"}',
+      );
+      return postId;
+    } catch (e) {
+      debugPrint('PostService: Failed to create auto-post: $e');
+      return null;
+    }
+  }
+
+  /// 投稿をIDで削除（確認ダイアログなし、内部用）
+  Future<bool> deletePostById(String postId, String userId) async {
+    try {
+      final postDoc = await _firestore.collection('posts').doc(postId).get();
+      if (!postDoc.exists) return false;
+
+      final batch = _firestore.batch();
+
+      // コメント削除
+      final comments = await _firestore
+          .collection('comments')
+          .where('postId', isEqualTo: postId)
+          .get();
+      for (final doc in comments.docs) {
+        batch.delete(doc.reference);
+      }
+
+      // リアクション削除
+      final reactions = await _firestore
+          .collection('reactions')
+          .where('postId', isEqualTo: postId)
+          .get();
+      for (final doc in reactions.docs) {
+        batch.delete(doc.reference);
+      }
+
+      // 投稿削除
+      batch.delete(_firestore.collection('posts').doc(postId));
+
+      // ユーザー投稿数デクリメント
+      batch.update(_firestore.collection('users').doc(userId), {
+        'totalPosts': FieldValue.increment(-1),
+      });
+
+      await batch.commit();
+      debugPrint('PostService: Deleted auto-post $postId');
+      return true;
+    } catch (e) {
+      debugPrint('PostService: Failed to delete auto-post: $e');
       return false;
     }
   }

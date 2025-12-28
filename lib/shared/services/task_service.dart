@@ -367,23 +367,115 @@ class TaskService {
   // Complete / Uncomplete (Optimistic UI handled by Widget, DB access here)
   // ------------------------------------------------------------------------
 
+  /// マイルストーン判定用の定数
+  static const List<int> _initialMilestones = [3, 7, 14, 21];
+
+  /// マイルストーン判定
+  static bool isMilestone(int streak) {
+    // 初期マイルストーン
+    if (_initialMilestones.contains(streak)) return true;
+    // 30日ごと (30, 60, 90...)
+    if (streak >= 30 && streak % 30 == 0) return true;
+    // 100日ごと (100, 200, 300...)
+    if (streak >= 100 && streak % 100 == 0) return true;
+    // 1年ごと (365, 730...)
+    if (streak >= 365 && streak % 365 == 0) return true;
+    return false;
+  }
+
+  /// マイルストーンに応じた称賛ワードを取得
+  static String getMilestoneMessage(int streak) {
+    if (streak == 3) return '三日坊主脱出';
+    if (streak == 7) return '1週間継続';
+    if (streak == 14) return '2週間継続';
+    if (streak == 21) return '3週間継続';
+    if (streak == 30) return '1ヶ月達成、習慣の達人';
+    if (streak == 60) return '2ヶ月継続';
+    if (streak == 90) return '3ヶ月継続';
+    if (streak == 100) return '100日達成、伝説級の記録';
+    if (streak == 365) return '1年達成、伝説級の記録';
+    if (streak >= 365 && streak % 365 == 0) return '${streak ~/ 365}年達成、伝説級の記録';
+    if (streak >= 100 && streak % 100 == 0) return '${streak}日達成';
+    if (streak >= 30 && streak % 30 == 0) return '${streak ~/ 30}ヶ月継続';
+    return '素晴らしい';
+  }
+
   /// タスクを完了
-  /// 徳ポイント計算はサーバー側トリガーで行うため、ここではフラグ更新のみ
-  Future<void> completeTask(String taskId) async {
+  /// 戻り値: ストリーク数（マイルストーン判定用。0=繰り返しなし）
+  Future<int> completeTask(String taskId) async {
+    final taskDoc = await _firestore.collection('tasks').doc(taskId).get();
+    if (!taskDoc.exists) return 0;
+
+    final task = TaskModel.fromFirestore(taskDoc);
+    int newStreak = 0;
+
+    // ストリーク計算（繰り返しタスクのみ）
+    if (task.recurrenceGroupId != null && task.scheduledAt != null) {
+      // 同じグループで、自分より前（scheduledAtが小さい）のタスクを取得
+      final previousTaskQuery = await _firestore
+          .collection('tasks')
+          .where('userId', isEqualTo: task.userId)
+          .where('recurrenceGroupId', isEqualTo: task.recurrenceGroupId)
+          .where(
+            'scheduledAt',
+            isLessThan: Timestamp.fromDate(task.scheduledAt!),
+          )
+          .orderBy('scheduledAt', descending: true)
+          .limit(1)
+          .get();
+
+      if (previousTaskQuery.docs.isNotEmpty) {
+        final previousTask = TaskModel.fromFirestore(
+          previousTaskQuery.docs.first,
+        );
+        if (previousTask.isCompleted) {
+          // 前のタスクが完了済みなら、そのストリーク+1
+          newStreak = previousTask.streak + 1;
+        } else {
+          // 前のタスクが未完了ならリセット
+          newStreak = 1;
+        }
+      } else {
+        // 最初のタスク
+        newStreak = 1;
+      }
+    }
+
+    // Firestore更新
     await _firestore.collection('tasks').doc(taskId).update({
       'isCompleted': true,
+      'streak': newStreak,
       'lastCompletedAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
-      // streakの計算はトリガーに任せるか、あるいは簡易的に+1してもよいが、
-      // サーバーが正解を持っているのでUI側で楽観的表示するだけで十分
     });
+
+    return newStreak;
   }
 
   /// タスクの完了を取り消し
-  Future<void> uncompleteTask(String taskId) async {
+  /// 戻り値: 削除すべきcompletionPostIdがあればそれを返す
+  Future<String?> uncompleteTask(String taskId) async {
+    final taskDoc = await _firestore.collection('tasks').doc(taskId).get();
+    if (!taskDoc.exists) return null;
+
+    final task = TaskModel.fromFirestore(taskDoc);
+    final postIdToDelete = task.completionPostId;
+
     await _firestore.collection('tasks').doc(taskId).update({
       'isCompleted': false,
-      'lastCompletedAt': null, // または以前の値に戻す？履歴がないと不明。nullでOK
+      'streak': 0, // ストリークをリセット
+      'lastCompletedAt': null,
+      'completionPostId': null, // 投稿IDもクリア
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    return postIdToDelete;
+  }
+
+  /// タスクにcompletionPostIdを保存
+  Future<void> saveCompletionPostId(String taskId, String postId) async {
+    await _firestore.collection('tasks').doc(taskId).update({
+      'completionPostId': postId,
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }

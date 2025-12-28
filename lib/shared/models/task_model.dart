@@ -77,6 +77,9 @@ class TaskModel {
   // Reminders - [{value: 30, unit: 'minutes'}, ...]
   final List<Map<String, dynamic>> reminders;
 
+  // Auto-post ID for streak milestone / goal completion posts
+  final String? completionPostId;
+
   TaskModel({
     required this.id,
     required this.userId,
@@ -105,6 +108,7 @@ class TaskModel {
     this.attachmentUrls = const [],
     this.goalId,
     this.reminders = const [],
+    this.completionPostId,
   });
 
   factory TaskModel.fromFirestore(DocumentSnapshot doc) {
@@ -177,6 +181,7 @@ class TaskModel {
               ?.map((r) => Map<String, dynamic>.from(r as Map))
               .toList() ??
           [],
+      completionPostId: data['completionPostId'],
     );
   }
 
@@ -207,6 +212,7 @@ class TaskModel {
       'attachmentUrls': attachmentUrls,
       'goalId': goalId,
       'reminders': reminders,
+      'completionPostId': completionPostId,
     };
   }
 
@@ -238,8 +244,10 @@ class TaskModel {
     List<String>? attachmentUrls,
     String? goalId,
     List<Map<String, dynamic>>? reminders,
+    String? completionPostId,
     bool clearRecurrence = false, // 繰り返し設定をクリアするフラグ
     bool clearCategoryId = false, // カテゴリをnullに戻すフラグ
+    bool clearCompletionPostId = false, // 投稿IDをクリアするフラグ
   }) {
     return TaskModel(
       id: id ?? this.id,
@@ -279,6 +287,9 @@ class TaskModel {
       attachmentUrls: attachmentUrls ?? this.attachmentUrls,
       goalId: goalId ?? this.goalId,
       reminders: reminders ?? this.reminders,
+      completionPostId: clearCompletionPostId
+          ? null
+          : (completionPostId ?? this.completionPostId),
     );
   }
 

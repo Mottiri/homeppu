@@ -3,11 +3,15 @@ import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:confetti/confetti.dart';
 import '../../../../shared/models/task_model.dart';
 import '../../../../shared/models/category_model.dart';
 import '../../../../shared/providers/task_screen_provider.dart';
 import '../../../../shared/services/task_service.dart';
 import '../../../../shared/services/category_service.dart';
+import '../../../../shared/services/post_service.dart';
+import '../../../../shared/services/goal_service.dart';
+import '../../../../shared/providers/auth_provider.dart';
 
 import '../widgets/task_detail_sheet.dart';
 import '../widgets/task_card.dart';
@@ -34,6 +38,8 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
     with TickerProviderStateMixin, WidgetsBindingObserver {
   final TaskService _taskService = TaskService();
   final CategoryService _categoryService = CategoryService();
+  final PostService _postService = PostService();
+  final GoalService _goalService = GoalService();
   late TabController _tabController;
   late PageController _pageController;
   final int _initialPage = 10000;
@@ -43,6 +49,9 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
   bool _isEditMode = false;
   final Set<String> _selectedTaskIds = {};
   late AnimationController _shakeController;
+
+  // Confetti Controller for streak milestone celebration
+  late ConfettiController _confettiController;
 
   List<CategoryModel> _categories = [];
 
@@ -112,6 +121,11 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
       duration: const Duration(milliseconds: 100),
     );
 
+    // Confetti controller for milestone celebrations
+    _confettiController = ConfettiController(
+      duration: const Duration(seconds: 2),
+    );
+
     // ハイライト対象の設定
     _highlightTaskId = widget.highlightTaskId;
 
@@ -157,6 +171,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
     _tabController.dispose();
     _pageController.dispose();
     _shakeController.dispose();
+    _confettiController.dispose();
     _taskListScrollController.dispose();
     super.dispose();
   }
@@ -344,19 +359,90 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
         _updateTaskLocally(updatedTask);
       });
 
-      // API Call
-      await _taskService.completeTask(task.id);
+      // API Call - returns new streak count
+      final newStreak = await _taskService.completeTask(task.id);
 
-      // Async Sync (Silent) - Removed to prevent race condition/stomp of optimistic UI
-      // await _loadData(showLoading: false);
+      // Update local task with new streak for real-time display
+      if (mounted && newStreak > 0) {
+        final taskWithStreak = task.copyWith(
+          isCompleted: true,
+          lastCompletedAt: DateTime.now(),
+          streak: newStreak,
+        );
+        setState(() {
+          _updateTaskLocally(taskWithStreak);
+        });
+      }
+
+      // Check for milestone achievement (streak)
+      bool isMilestone = TaskService.isMilestone(newStreak);
+
+      // Check for Goal completion
+      bool isGoalCompleted = false;
+      String? goalTitle;
+      if (task.goalId != null && task.goalId!.isNotEmpty) {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          final progress = await _goalService.getGoalProgress(
+            task.goalId!,
+            userId: user.uid,
+          );
+          final completedCount = progress[0] + 1; // +1 for this task
+          final totalCount = progress[1];
+          if (completedCount >= totalCount && totalCount > 0) {
+            isGoalCompleted = true;
+            // TODO: Get goal title if needed
+            goalTitle = '目標';
+          }
+        }
+      }
+
+      // Auto-post if milestone or goal completion
+      if (isMilestone || isGoalCompleted) {
+        final user = FirebaseAuth.instance.currentUser;
+        final userAsync = ref.read(currentUserProvider);
+        final userData = userAsync.valueOrNull;
+
+        if (user != null && userData != null) {
+          final postId = await _postService.createTaskCompletionPost(
+            userId: user.uid,
+            userDisplayName: userData.displayName,
+            userAvatarIndex: userData.avatarIndex,
+            taskContent: task.content,
+            streak: newStreak,
+            isGoalCompletion: isGoalCompleted,
+            goalTitle: goalTitle,
+          );
+
+          // Save post ID to task for undo
+          if (postId != null) {
+            await _taskService.saveCompletionPostId(task.id, postId);
+          }
+
+          // Celebration!
+          if (mounted) {
+            _confettiController.play();
+          }
+        }
+      }
 
       if (mounted) {
-        // 簡易メッセージ
+        // Custom snackbar message
+        String message;
+        if (isGoalCompleted) {
+          message = '🎉 目標達成！おめでとうございます！目標達成を投稿しました！';
+        } else if (isMilestone) {
+          final milestoneMsg = TaskService.getMilestoneMessage(newStreak);
+          message = '🎉 ${newStreak}日連続達成！$milestoneMsg！タスクを完了したことを投稿しました！';
+        } else {
+          message = '🎉 タスク完了！ (+徳ポイント)';
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🎉 タスク完了！ (+徳ポイント)'),
+          SnackBar(
+            content: Text(message),
             backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
+            duration: Duration(seconds: isMilestone || isGoalCompleted ? 4 : 2),
           ),
         );
       }
@@ -428,14 +514,29 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
         _updateTaskLocally(updatedTask);
       });
 
-      await _taskService.uncompleteTask(task.id);
+      // API Call - returns postId to delete if any
+      final postIdToDelete = await _taskService.uncompleteTask(task.id);
+
+      // Delete auto-post if it exists
+      bool postDeleted = false;
+      if (postIdToDelete != null && postIdToDelete.isNotEmpty) {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          postDeleted = await _postService.deletePostById(
+            postIdToDelete,
+            user.uid,
+          );
+        }
+      }
+
       await _loadData(showLoading: false);
 
       if (mounted) {
+        final message = postDeleted ? '完了を取り消しました。自動投稿を削除しました' : '完了を取り消しました';
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('完了を取り消しました'),
-            duration: Duration(seconds: 2),
+          SnackBar(
+            content: Text(message),
+            duration: const Duration(seconds: 2),
           ),
         );
       }
@@ -822,51 +923,76 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
                 ),
               ],
       ),
-      body: Column(
+      body: Stack(
         children: [
-          WeekCalendarStrip(
-            selectedDate: _selectedDate,
-            onDateSelected: (date) {
-              setState(() => _selectedDate = date);
-              ref.read(selectedDateProvider.notifier).state = date;
-              final page = _getPageIndex(date);
-              _pageController.jumpToPage(page);
-            },
-            tasks: _taskData,
+          // Main content
+          Column(
+            children: [
+              WeekCalendarStrip(
+                selectedDate: _selectedDate,
+                onDateSelected: (date) {
+                  setState(() => _selectedDate = date);
+                  ref.read(selectedDateProvider.notifier).state = date;
+                  final page = _getPageIndex(date);
+                  _pageController.jumpToPage(page);
+                },
+                tasks: _taskData,
+              ),
+              Expanded(
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : PageView.builder(
+                        controller: _pageController,
+                        physics: const PageScrollPhysics(),
+                        onPageChanged: (index) {
+                          final newDate = _getDateFromIndex(index);
+                          setState(() {
+                            _selectedDate = newDate;
+                          });
+                          ref.read(selectedDateProvider.notifier).state =
+                              newDate;
+                        },
+                        itemBuilder: (context, index) {
+                          final date = _getDateFromIndex(index);
+                          return TabBarView(
+                            controller: _tabController,
+                            physics: const NeverScrollableScrollPhysics(),
+                            children: [
+                              _buildTaskList(_defaultTasks, 'task', null, date),
+                              ..._categories.map(
+                                (cat) => _buildTaskList(
+                                  _categoryTasks[cat.id] ?? [],
+                                  'custom',
+                                  cat,
+                                  date,
+                                ),
+                              ),
+                              const SizedBox(),
+                            ],
+                          );
+                        },
+                      ),
+              ),
+            ],
           ),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : PageView.builder(
-                    controller: _pageController,
-                    physics: const PageScrollPhysics(),
-                    onPageChanged: (index) {
-                      final newDate = _getDateFromIndex(index);
-                      setState(() {
-                        _selectedDate = newDate;
-                      });
-                      ref.read(selectedDateProvider.notifier).state = newDate;
-                    },
-                    itemBuilder: (context, index) {
-                      final date = _getDateFromIndex(index);
-                      return TabBarView(
-                        controller: _tabController,
-                        physics: const NeverScrollableScrollPhysics(),
-                        children: [
-                          _buildTaskList(_defaultTasks, 'task', null, date),
-                          ..._categories.map(
-                            (cat) => _buildTaskList(
-                              _categoryTasks[cat.id] ?? [],
-                              'custom',
-                              cat,
-                              date,
-                            ),
-                          ),
-                          const SizedBox(),
-                        ],
-                      );
-                    },
-                  ),
+          // Confetti animation for milestone celebrations
+          Align(
+            alignment: Alignment.topCenter,
+            child: ConfettiWidget(
+              confettiController: _confettiController,
+              blastDirectionality: BlastDirectionality.explosive,
+              shouldLoop: false,
+              colors: const [
+                Colors.green,
+                Colors.blue,
+                Colors.pink,
+                Colors.orange,
+                Colors.purple,
+                Colors.yellow,
+              ],
+              numberOfParticles: 30,
+              gravity: 0.2,
+            ),
           ),
         ],
       ),
