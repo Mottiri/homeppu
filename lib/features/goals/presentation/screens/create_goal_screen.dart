@@ -564,6 +564,7 @@ class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen> {
                       ),
                     ),
                   ],
+                ),
         ),
       ),
     );
