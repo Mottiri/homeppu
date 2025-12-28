@@ -52,7 +52,7 @@ export class GeminiProvider implements AIProvider {
     async generateText(prompt: string, options?: AIOptions): Promise<string> {
         const genAI = new GoogleGenerativeAI(this.apiKey);
         const model = genAI.getGenerativeModel({
-            model: "gemini-2.5-flash-lite",
+            model: "gemini-2.5-flash",
             generationConfig: {
                 temperature: options?.temperature ?? 0.7,
                 maxOutputTokens: options?.maxTokens ?? 1024,
@@ -70,7 +70,7 @@ export class GeminiProvider implements AIProvider {
     async generateWithImage(prompt: string, imageBase64: string, mimeType: string, options?: AIOptions): Promise<string> {
         const genAI = new GoogleGenerativeAI(this.apiKey);
         const model = genAI.getGenerativeModel({
-            model: "gemini-2.5-flash-lite",
+            model: "gemini-2.5-flash",
             generationConfig: {
                 temperature: options?.temperature ?? 0.7,
                 maxOutputTokens: options?.maxTokens ?? 1024,
