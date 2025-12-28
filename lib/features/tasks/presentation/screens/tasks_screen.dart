@@ -406,6 +406,9 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
         }
       }
 
+      // Use a variable to track if a post was actually made
+      bool didPost = false;
+
       // Auto-post if milestone or goal completion
       if (isMilestone || isGoalCompleted) {
         final user = FirebaseAuth.instance.currentUser;
@@ -413,19 +416,38 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
         final userData = userAsync.valueOrNull;
 
         if (user != null && userData != null) {
-          final postId = await _postService.createTaskCompletionPost(
-            userId: user.uid,
-            userDisplayName: userData.displayName,
-            userAvatarIndex: userData.avatarIndex,
-            taskContent: task.content,
-            streak: newStreak,
-            isGoalCompletion: isGoalCompleted,
-            goalTitle: goalTitle,
-          );
+          // Check Auto Post Settings
+          final autoPostSettings = userData.autoPostSettings;
+          final isMilestoneEnabled = autoPostSettings['milestones'] ?? true;
+          final isGoalEnabled = autoPostSettings['goals'] ?? true;
 
-          // Save post ID to task for undo
-          if (postId != null) {
-            await _taskService.saveCompletionPostId(task.id, postId);
+          bool shouldPost = false;
+          bool isGoalPost = false;
+
+          if (isGoalCompleted && isGoalEnabled) {
+            shouldPost = true;
+            isGoalPost = true;
+          } else if (isMilestone && isMilestoneEnabled) {
+            shouldPost = true;
+            isGoalPost = false;
+          }
+
+          if (shouldPost) {
+            final postId = await _postService.createTaskCompletionPost(
+              userId: user.uid,
+              userDisplayName: userData.displayName,
+              userAvatarIndex: userData.avatarIndex,
+              taskContent: task.content,
+              streak: newStreak,
+              isGoalCompletion: isGoalPost,
+              goalTitle: goalTitle,
+            );
+
+            // Save post ID to task for undo
+            if (postId != null) {
+              await _taskService.saveCompletionPostId(task.id, postId);
+              didPost = true;
+            }
           }
 
           // Celebration!
@@ -439,10 +461,14 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
         // Custom snackbar message
         String message;
         if (isGoalCompleted) {
-          message = '🎉 目標達成！おめでとうございます！目標達成を投稿しました！';
+          message = didPost
+              ? '🎉 目標達成！おめでとうございます！目標達成を投稿しました！'
+              : '🎉 目標達成！おめでとうございます！';
         } else if (isMilestone) {
           final milestoneMsg = TaskService.getMilestoneMessage(newStreak);
-          message = '🎉 ${newStreak}日連続達成！$milestoneMsg！タスクを完了したことを投稿しました！';
+          message = didPost
+              ? '🎉 ${newStreak}日連続達成！$milestoneMsg！タスクを完了したことを投稿しました！'
+              : '🎉 ${newStreak}日連続達成！$milestoneMsg！';
         } else {
           message = '🎉 タスク完了！ (+徳ポイント)';
         }

@@ -27,6 +27,7 @@ class UserModel {
   final DateTime? lastNameChangeAt; // 最後に名前を変更した日時
   final String? fcmToken; // プッシュ通知用トークン
   final Map<String, bool> notificationSettings; // 通知設定
+  final Map<String, bool> autoPostSettings; // 自動投稿設定
 
   UserModel({
     required this.uid,
@@ -54,6 +55,7 @@ class UserModel {
 
     this.fcmToken,
     this.notificationSettings = const {'comments': true, 'reactions': true},
+    this.autoPostSettings = const {'milestones': true, 'goals': true},
   });
 
   factory UserModel.fromFirestore(DocumentSnapshot doc) {
@@ -86,6 +88,9 @@ class UserModel {
       notificationSettings: Map<String, bool>.from(
         data['notificationSettings'] ?? {'comments': true, 'reactions': true},
       ),
+      autoPostSettings: Map<String, bool>.from(
+        data['autoPostSettings'] ?? {'milestones': true, 'goals': true},
+      ),
     );
   }
 
@@ -114,6 +119,7 @@ class UserModel {
       if (lastNameChangeAt != null)
         'lastNameChangeAt': Timestamp.fromDate(lastNameChangeAt!),
       'notificationSettings': notificationSettings,
+      'autoPostSettings': autoPostSettings,
     };
   }
 
@@ -142,6 +148,7 @@ class UserModel {
     DateTime? lastNameChangeAt,
     String? fcmToken,
     Map<String, bool>? notificationSettings,
+    Map<String, bool>? autoPostSettings,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -168,6 +175,7 @@ class UserModel {
       lastNameChangeAt: lastNameChangeAt ?? this.lastNameChangeAt,
       fcmToken: fcmToken ?? this.fcmToken,
       notificationSettings: notificationSettings ?? this.notificationSettings,
+      autoPostSettings: autoPostSettings ?? this.autoPostSettings,
     );
   }
 }

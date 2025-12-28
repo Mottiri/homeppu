@@ -353,6 +353,76 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
             const SizedBox(height: 16),
 
+            // 自動投稿設定
+            Card(
+              child: ExpansionTile(
+                leading: const Icon(Icons.celebration_outlined),
+                title: const Text('自動投稿設定'),
+                subtitle: Consumer(
+                  builder: (context, ref, _) {
+                    final user = ref.watch(currentUserProvider).valueOrNull;
+                    final enabledCount =
+                        (user?.autoPostSettings.values.where((e) => e).length ??
+                        0);
+                    return Text(enabledCount == 0 ? 'すべてオフ' : 'カスタマイズ中');
+                  },
+                ),
+                children: [
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final user = ref.watch(currentUserProvider).valueOrNull;
+                      if (user == null) return const SizedBox.shrink();
+
+                      return Column(
+                        children: [
+                          SwitchListTile(
+                            title: const Text('ストリーク達成時'),
+                            subtitle: const Text('連続達成（マイルストーン）した時に自動で投稿します'),
+                            secondary: const Icon(
+                              Icons.local_fire_department_outlined,
+                            ),
+                            value: user.autoPostSettings['milestones'] ?? true,
+                            onChanged: (value) async {
+                              final authService = ref.read(authServiceProvider);
+                              final newSettings = Map<String, bool>.from(
+                                user.autoPostSettings,
+                              );
+                              newSettings['milestones'] = value;
+
+                              await authService.updateUserProfile(
+                                uid: user.uid,
+                                autoPostSettings: newSettings,
+                              );
+                            },
+                          ),
+                          const Divider(height: 1),
+                          SwitchListTile(
+                            title: const Text('目標達成時'),
+                            subtitle: const Text('目標を達成した時に自動で投稿します'),
+                            secondary: const Icon(Icons.flag_outlined),
+                            value: user.autoPostSettings['goals'] ?? true,
+                            onChanged: (value) async {
+                              final authService = ref.read(authServiceProvider);
+                              final newSettings = Map<String, bool>.from(
+                                user.autoPostSettings,
+                              );
+                              newSettings['goals'] = value;
+
+                              await authService.updateUserProfile(
+                                uid: user.uid,
+                                autoPostSettings: newSettings,
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+
             // 公開範囲設定
             Card(
               child: ExpansionTile(
