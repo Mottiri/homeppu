@@ -23,10 +23,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
 
   // カテゴリタブの定義
   static const _tabs = [
-    (NotificationCategory.support, 'サポート', Icons.support_agent),
     (NotificationCategory.timeline, 'TL', Icons.chat_bubble_outline),
-    (NotificationCategory.circle, 'サークル', Icons.group_outlined),
     (NotificationCategory.task, 'タスク', Icons.task_alt),
+    (NotificationCategory.circle, 'サークル', Icons.group_outlined),
+    (NotificationCategory.support, 'サポート', Icons.support_agent),
   ];
 
   @override

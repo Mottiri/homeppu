@@ -51,6 +51,72 @@ const VIRTUE_CONFIG = {
   warningThreshold: 30,   // 警告表示閾値
 };
 
+// ===============================================
+// プッシュ通知送信ヘルパー（サポート通知用）
+// ===============================================
+
+/**
+ * 指定ユーザーにプッシュ通知のみを送信（Firestore保存なし）
+ */
+async function sendPushOnly(
+  userId: string,
+  title: string,
+  body: string,
+  data?: { [key: string]: string }
+): Promise<void> {
+  try {
+    const userDoc = await db.collection("users").doc(userId).get();
+    const userData = userDoc.data();
+    const fcmToken = userData?.fcmToken;
+
+    if (!fcmToken) {
+      console.log(`No FCM token for user ${userId}, skipping push notification`);
+      return;
+    }
+
+    const message: admin.messaging.Message = {
+      token: fcmToken,
+      notification: {
+        title,
+        body,
+      },
+      data: data || {},
+      android: {
+        priority: "high",
+        notification: {
+          channelId: "default_channel",
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: "default",
+            badge: 1,
+          },
+        },
+      },
+    };
+
+    await admin.messaging().send(message);
+    console.log(`Push notification sent to user ${userId}: ${title}`);
+  } catch (error: unknown) {
+    // トークンが無効な場合はトークンを削除
+    if (error && typeof error === "object" && "code" in error) {
+      const firebaseError = error as { code: string };
+      if (
+        firebaseError.code === "messaging/invalid-registration-token" ||
+        firebaseError.code === "messaging/registration-token-not-registered"
+      ) {
+        console.log(`Removing invalid FCM token for user ${userId}`);
+        await db.collection("users").doc(userId).update({
+          fcmToken: admin.firestore.FieldValue.delete(),
+        });
+      }
+    }
+    console.error(`Error sending push notification to ${userId}:`, error);
+  }
+}
+
 // ネガティブ判定のカテゴリ
 type NegativeCategory =
   | "harassment"      // 誹謗中傷
@@ -7121,10 +7187,11 @@ export const createInquiry = onCall(
 
       // 管理者に通知を送信
       for (const adminUid of ADMIN_UIDS) {
+        const notifyBody = `${userDisplayName}さんから問い合わせ「${subject}」が届きました`;
         await db.collection("users").doc(adminUid).collection("notifications").add({
           type: "inquiry_received",
           title: "新規問い合わせ",
-          body: `${userDisplayName}さんから問い合わせ「${subject}」が届きました`,
+          body: notifyBody,
           senderId: userId,
           senderName: userDisplayName,
           senderAvatarUrl: String(userAvatarIndex),
@@ -7132,6 +7199,8 @@ export const createInquiry = onCall(
           isRead: false,
           createdAt: now,
         });
+        // プッシュ通知も送信
+        await sendPushOnly(adminUid, "新規問い合わせ", notifyBody, { inquiryId: inquiryRef.id });
       }
 
       console.log(`Created inquiry: ${inquiryRef.id}`);
@@ -7206,10 +7275,11 @@ export const sendInquiryMessage = onCall(
 
       // 管理者に通知を送信
       for (const adminUid of ADMIN_UIDS) {
+        const notifyBody = `${userDisplayName}さんが「${inquiryData.subject}」に返信しました`;
         await db.collection("users").doc(adminUid).collection("notifications").add({
           type: "inquiry_user_reply",
           title: "問い合わせに返信",
-          body: `${userDisplayName}さんが「${inquiryData.subject}」に返信しました`,
+          body: notifyBody,
           senderId: userId,
           senderName: userDisplayName,
           senderAvatarUrl: String(userAvatarIndex),
@@ -7217,6 +7287,8 @@ export const sendInquiryMessage = onCall(
           isRead: false,
           createdAt: now,
         });
+        // プッシュ通知も送信
+        await sendPushOnly(adminUid, "問い合わせに返信", notifyBody, { inquiryId });
       }
 
       console.log(`Added message to inquiry: ${inquiryId}`);
@@ -7286,14 +7358,17 @@ export const sendInquiryReply = onCall(
 
       // ユーザーに通知を送信
       const targetUserId = inquiryData.userId;
+      const notifyBody = `「${inquiryData.subject}」に運営チームから返信があります`;
       await db.collection("users").doc(targetUserId).collection("notifications").add({
         type: "inquiry_reply",
         title: "問い合わせに返信がありました",
-        body: `「${inquiryData.subject}」に運営チームから返信があります`,
+        body: notifyBody,
         inquiryId,
         isRead: false,
         createdAt: now,
       });
+      // プッシュ通知も送信
+      await sendPushOnly(targetUserId, "問い合わせに返信がありました", notifyBody, { inquiryId });
 
       console.log(`Sent reply to inquiry: ${inquiryId}`);
 
@@ -7364,14 +7439,17 @@ export const updateInquiryStatus = onCall(
 
       // ユーザーに通知を送信
       const targetUserId = inquiryData.userId;
+      const notifyBody = `「${inquiryData.subject}」のステータスが「${statusLabel}」に変更されました`;
       await db.collection("users").doc(targetUserId).collection("notifications").add({
         type: "inquiry_status_changed",
         title: "問い合わせステータス変更",
-        body: `「${inquiryData.subject}」のステータスが「${statusLabel}」に変更されました`,
+        body: notifyBody,
         inquiryId,
         isRead: false,
         createdAt: now,
       });
+      // プッシュ通知も送信
+      await sendPushOnly(targetUserId, "問い合わせステータス変更", notifyBody, { inquiryId });
 
       console.log(`Updated inquiry status: ${inquiryId} -> ${status}`);
 
