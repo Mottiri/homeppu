@@ -89,6 +89,45 @@ class _AdminInquiryDetailScreenState
   }
 
   Future<void> _changeStatus(InquiryStatus newStatus) async {
+    // 解決済みの場合はダイアログを表示
+    if (newStatus == InquiryStatus.resolved) {
+      final result = await _showResolveDialog();
+      if (result == null) return; // キャンセル
+
+      try {
+        await _inquiryService.updateStatus(
+          widget.inquiryId,
+          newStatus,
+          saveToSpreadsheet: result.saveToSpreadsheet,
+          resolutionCategory: result.resolutionCategory,
+          remarks: result.remarks,
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                result.saveToSpreadsheet
+                    ? 'ステータスを「${newStatus.label}」に変更し、スプレッドシートに記録しました'
+                    : 'ステータスを「${newStatus.label}」に変更しました',
+              ),
+              backgroundColor: AppColors.success,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('変更に失敗しました: $e'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+      }
+      return;
+    }
+
+    // その他のステータスは従来通り
     try {
       await _inquiryService.updateStatus(widget.inquiryId, newStatus);
       if (mounted) {
@@ -109,6 +148,111 @@ class _AdminInquiryDetailScreenState
         );
       }
     }
+  }
+
+  /// 解決時ダイアログを表示
+  Future<_ResolveDialogResult?> _showResolveDialog() async {
+    bool saveToSpreadsheet = false;
+    String resolutionCategory = '完了';
+    final remarksController = TextEditingController();
+
+    return showDialog<_ResolveDialogResult>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('ステータスを「解決済み」に変更'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // スプレッドシート記録チェックボックス
+                CheckboxListTile(
+                  title: const Text('スプレッドシートに記録する'),
+                  value: saveToSpreadsheet,
+                  onChanged: (value) {
+                    setDialogState(() => saveToSpreadsheet = value ?? false);
+                  },
+                  controlAffinity: ListTileControlAffinity.leading,
+                  contentPadding: EdgeInsets.zero,
+                ),
+
+                // チェックがONの場合のみ表示
+                if (saveToSpreadsheet) ...[
+                  const SizedBox(height: 16),
+                  const Text(
+                    '解決後カテゴリ',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: ['対応予定', '要検討', '対応必須', '対応不要', '完了']
+                        .map(
+                          (category) => ChoiceChip(
+                            label: Text(category),
+                            selected: resolutionCategory == category,
+                            showCheckmark: false,
+                            onSelected: (selected) {
+                              if (selected) {
+                                setDialogState(
+                                  () => resolutionCategory = category,
+                                );
+                              }
+                            },
+                            selectedColor: AppColors.primaryLight,
+                            labelStyle: TextStyle(
+                              color: resolutionCategory == category
+                                  ? AppColors.primary
+                                  : AppColors.textPrimary,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    '備考（任意）',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: remarksController,
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      hintText: '備考を入力',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('キャンセル'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(
+                  context,
+                  _ResolveDialogResult(
+                    saveToSpreadsheet: saveToSpreadsheet,
+                    resolutionCategory: resolutionCategory,
+                    remarks: remarksController.text.trim(),
+                  ),
+                );
+              },
+              child: const Text('解決済みにする'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -518,4 +662,17 @@ class _StatusDot extends StatelessWidget {
       decoration: BoxDecoration(color: color, shape: BoxShape.circle),
     );
   }
+}
+
+/// 解決時ダイアログの結果を保持するクラス
+class _ResolveDialogResult {
+  final bool saveToSpreadsheet;
+  final String resolutionCategory;
+  final String remarks;
+
+  _ResolveDialogResult({
+    required this.saveToSpreadsheet,
+    required this.resolutionCategory,
+    required this.remarks,
+  });
 }

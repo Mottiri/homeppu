@@ -9,6 +9,7 @@ import { GoogleGenerativeAI, Part, GenerativeModel } from "@google/generative-ai
 import { GoogleAIFileManager } from "@google/generative-ai/server";
 import * as https from "https";
 import { CloudTasksClient } from "@google-cloud/tasks";
+import { google } from "googleapis";
 
 // プロジェクトIDとロケーション（Cloud Tasks用）
 const PROJECT_ID = "positive-sns"; // ※デプロイ環境に合わせて変更される前提、またはprocess.env.GCLOUD_PROJECT
@@ -19,6 +20,11 @@ const QUEUE_NAME = "generateAIComment";
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
 // OpenAI API Key
 const openaiApiKey = defineSecret("OPENAI_API_KEY");
+// Google Sheets サービスアカウントキー
+const sheetsServiceAccountKey = defineSecret("SHEETS_SERVICE_ACCOUNT");
+
+// Google Sheets 設定
+const SPREADSHEET_ID = "1XsgrEmsdIkc5Cd_y8sIkBXFImshHPbqqxwJu9wWv4BY";
 
 import { AIProviderFactory } from "./ai/provider";
 import * as fs from "fs";
@@ -114,6 +120,71 @@ async function sendPushOnly(
       }
     }
     console.error(`Error sending push notification to ${userId}:`, error);
+  }
+}
+
+// ===============================================
+// Google Sheets 書き込みヘルパー
+// ===============================================
+
+/**
+ * 問い合わせをGoogleスプレッドシートに追記
+ */
+async function appendInquiryToSpreadsheet(data: {
+  inquiryId: string;
+  userId: string;
+  category: string;
+  subject: string;
+  firstMessage: string;
+  conversationLog: string;
+  resolvedAt: string;
+  resolutionCategory: string;
+  remarks: string;
+  createdAt: string;
+}): Promise<void> {
+  try {
+    // サービスアカウントキーを取得
+    const keyJson = sheetsServiceAccountKey.value();
+    if (!keyJson) {
+      console.error("SHEETS_SERVICE_ACCOUNT secret not found");
+      return;
+    }
+
+    const credentials = JSON.parse(keyJson);
+    const auth = new google.auth.GoogleAuth({
+      credentials,
+      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    });
+
+    const sheets = google.sheets({ version: "v4", auth });
+
+    // 行データを作成
+    const row = [
+      data.createdAt,        // A: 日時
+      data.userId,           // B: UID
+      data.category,         // C: カテゴリ
+      data.subject,          // D: 件名
+      data.firstMessage,     // E: 内容
+      data.conversationLog,  // F: 会話全文
+      data.resolvedAt,       // G: 解決日
+      data.resolutionCategory, // H: 解決後カテゴリ
+      data.remarks,          // I: 備考
+    ];
+
+    // スプレッドシートに追記
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: "A:I",
+      valueInputOption: "USER_ENTERED",
+      requestBody: {
+        values: [row],
+      },
+    });
+
+    console.log(`Appended inquiry ${data.inquiryId} to spreadsheet`);
+  } catch (error) {
+    console.error("Error appending to spreadsheet:", error);
+    // スプレッドシート書き込みエラーは致命的ではないので、スローしない
   }
 }
 
@@ -7382,17 +7453,23 @@ export const sendInquiryReply = onCall(
 );
 
 /**
- * 問い合わせステータスを変更
+ * 問い合わせステータスを変更（スプレッドシート連携オプション付き）
  */
 export const updateInquiryStatus = onCall(
-  { region: "asia-northeast1" },
+  { region: "asia-northeast1", secrets: [sheetsServiceAccountKey] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "ログインが必要です");
     }
 
     const adminId = request.auth.uid;
-    const { inquiryId, status } = request.data;
+    const {
+      inquiryId,
+      status,
+      saveToSpreadsheet = false,
+      resolutionCategory = "",
+      remarks = ""
+    } = request.data;
 
     // 管理者チェック
     const ADMIN_UIDS = ["hYr5LUH4mhR60oQfVOggrjGYJjG2"];
@@ -7410,7 +7487,7 @@ export const updateInquiryStatus = onCall(
       throw new HttpsError("invalid-argument", "無効なステータスです");
     }
 
-    console.log(`=== updateInquiryStatus: inquiryId=${inquiryId}, status=${status} ===`);
+    console.log(`=== updateInquiryStatus: inquiryId=${inquiryId}, status=${status}, saveToSpreadsheet=${saveToSpreadsheet} ===`);
 
     try {
       const inquiryRef = db.collection("inquiries").doc(inquiryId);
@@ -7422,12 +7499,20 @@ export const updateInquiryStatus = onCall(
 
       const inquiryData = inquiryDoc.data()!;
       const now = admin.firestore.FieldValue.serverTimestamp();
+      const nowDate = new Date();
 
       // ステータスを更新
-      await inquiryRef.update({
+      const updateData: { [key: string]: unknown } = {
         status,
         updatedAt: now,
-      });
+      };
+
+      // 解決済みの場合、resolvedAtを記録
+      if (status === "resolved") {
+        updateData.resolvedAt = now;
+      }
+
+      await inquiryRef.update(updateData);
 
       // ステータスのラベルを取得
       const statusLabels: { [key: string]: string } = {
@@ -7436,6 +7521,58 @@ export const updateInquiryStatus = onCall(
         resolved: "解決済み",
       };
       const statusLabel = statusLabels[status] || status;
+
+      // スプレッドシートに保存（解決済み かつ オプションONの場合）
+      if (status === "resolved" && saveToSpreadsheet) {
+        // 全メッセージを取得して会話ログを作成
+        const messagesSnapshot = await inquiryRef.collection("messages")
+          .orderBy("createdAt", "asc")
+          .get();
+
+        let conversationLog = "";
+        let firstMessage = "";
+
+        messagesSnapshot.docs.forEach((doc, index) => {
+          const msg = doc.data();
+          const msgDate = msg.createdAt?.toDate?.() || new Date();
+          const dateStr = `${msgDate.getFullYear()}-${String(msgDate.getMonth() + 1).padStart(2, "0")}-${String(msgDate.getDate()).padStart(2, "0")} ${String(msgDate.getHours()).padStart(2, "0")}:${String(msgDate.getMinutes()).padStart(2, "0")}`;
+          const sender = msg.senderType === "admin" ? "運営チーム" : "ユーザー";
+          conversationLog += `[${dateStr} ${sender}]\n${msg.content}\n\n`;
+
+          if (index === 0) {
+            firstMessage = msg.content || "";
+          }
+        });
+
+        // 問い合わせ作成日時
+        const createdAtDate = inquiryData.createdAt?.toDate?.() || new Date();
+        const createdAtStr = `${createdAtDate.getFullYear()}-${String(createdAtDate.getMonth() + 1).padStart(2, "0")}-${String(createdAtDate.getDate()).padStart(2, "0")} ${String(createdAtDate.getHours()).padStart(2, "0")}:${String(createdAtDate.getMinutes()).padStart(2, "0")}`;
+
+        // 解決日時
+        const resolvedAtStr = `${nowDate.getFullYear()}-${String(nowDate.getMonth() + 1).padStart(2, "0")}-${String(nowDate.getDate()).padStart(2, "0")} ${String(nowDate.getHours()).padStart(2, "0")}:${String(nowDate.getMinutes()).padStart(2, "0")}`;
+
+        // カテゴリラベル
+        const categoryLabels: { [key: string]: string } = {
+          bug: "バグ報告",
+          feature: "機能要望",
+          account: "アカウント関連",
+          other: "その他",
+        };
+        const categoryLabel = categoryLabels[inquiryData.category] || inquiryData.category;
+
+        await appendInquiryToSpreadsheet({
+          inquiryId,
+          userId: inquiryData.userId,
+          category: categoryLabel,
+          subject: inquiryData.subject,
+          firstMessage,
+          conversationLog: conversationLog.trim(),
+          resolvedAt: resolvedAtStr,
+          resolutionCategory,
+          remarks,
+          createdAt: createdAtStr,
+        });
+      }
 
       // ユーザーに通知を送信
       const targetUserId = inquiryData.userId;
