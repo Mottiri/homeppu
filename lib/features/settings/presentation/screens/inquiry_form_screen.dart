@@ -154,6 +154,7 @@ class _InquiryFormScreenState extends ConsumerState<InquiryFormScreen> {
                           return ChoiceChip(
                             label: Text(category.label),
                             selected: isSelected,
+                            showCheckmark: false, // チェックマークを非表示にして配置ズレを防止
                             onSelected: (selected) {
                               if (selected) {
                                 setState(() => _selectedCategory = category);
