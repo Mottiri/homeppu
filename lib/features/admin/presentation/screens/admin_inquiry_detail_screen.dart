@@ -170,47 +170,66 @@ class _AdminInquiryDetailScreenState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // ユーザー情報
-                      Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 20,
-                            backgroundColor: AppColors.primaryLight,
-                            child: Text(
-                              inquiry.userDisplayName.isNotEmpty
-                                  ? inquiry.userDisplayName[0]
-                                  : '?',
-                              style: const TextStyle(
-                                color: AppColors.primary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  inquiry.userDisplayName,
+                      // ユーザー情報（タップでプロフィール画面へ）
+                      InkWell(
+                        onTap: () => context.push('/profile/${inquiry.userId}'),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 20,
+                                backgroundColor: AppColors.primaryLight,
+                                child: Text(
+                                  inquiry.userDisplayName.isNotEmpty
+                                      ? inquiry.userDisplayName[0]
+                                      : '?',
                                   style: const TextStyle(
+                                    color: AppColors.primary,
                                     fontWeight: FontWeight.bold,
-                                    fontSize: 16,
                                   ),
                                 ),
-                                Text(
-                                  timeago.format(
-                                    inquiry.createdAt,
-                                    locale: 'ja',
-                                  ),
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(color: AppColors.textHint),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text(
+                                          inquiry.userDisplayName,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        const Icon(
+                                          Icons.chevron_right,
+                                          size: 16,
+                                          color: AppColors.textHint,
+                                        ),
+                                      ],
+                                    ),
+                                    Text(
+                                      timeago.format(
+                                        inquiry.createdAt,
+                                        locale: 'ja',
+                                      ),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(color: AppColors.textHint),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
+                              ),
+                              _StatusBadge(status: inquiry.status),
+                            ],
                           ),
-                          _StatusBadge(status: inquiry.status),
-                        ],
+                        ),
                       ),
                       const SizedBox(height: 12),
                       // カテゴリと件名

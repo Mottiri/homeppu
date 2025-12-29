@@ -207,6 +207,41 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // 問い合わせコレクション
+    match /inquiries/{inquiryId} {
+      // 管理者判定関数
+      function isAdmin() {
+        return request.auth.uid == 'hYr5LUH4mhR60oQfVOggrjGYJjG2';
+      }
+      
+      // 読み取り: 管理者は全件、ユーザーは自分のみ
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.userId == request.auth.uid
+      );
+      
+      // 更新: 本人（hasUnreadReply）または管理者
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        (resource.data.userId == request.auth.uid && 
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hasUnreadReply']))
+      );
+      
+      // 作成・削除: Cloud Functionsのみ
+      allow create, delete: if false;
+      
+      // メッセージサブコレクション
+      match /messages/{messageId} {
+        // 読み取り: 管理者または問い合わせオーナー
+        allow read: if isAuthenticated() && (
+          isAdmin() ||
+          get(/databases/$(database)/documents/inquiries/$(inquiryId)).data.userId == request.auth.uid
+        );
+        // 書き込み: Cloud Functionsのみ
+        allow write: if false;
+      }
+    }
+
     // 要審査投稿コレクション（管理者専用）
     match /pendingReviews/{reviewId} {
       // 管理者のみ読み取り可能

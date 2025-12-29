@@ -127,6 +127,16 @@ service firebase.storage {
       // 本人のみ削除可能
       allow delete: if isAuthenticated() && request.auth.uid == userId;
     }
+
+    // 問い合わせ添付画像
+    match /inquiries/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() 
+                   && isValidProfileSize()  // 5MB limit
+                   && isImage();
+      // 管理者のみ削除可能
+      allow delete: if isAuthenticated() && request.auth.uid == 'hYr5LUH4mhR60oQfVOggrjGYJjG2';
+    }
   }
 }
 
