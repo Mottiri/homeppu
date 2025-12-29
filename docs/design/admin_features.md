@@ -209,9 +209,11 @@ hYr5LUH4mhR60oQfVOggrjGYJjG2
 | ファイル | 内容 |
 |----------|------|
 | `lib/shared/services/inquiry_service.dart` | 問い合わせサービス |
-| `lib/features/settings/presentation/screens/inquiry_list_screen.dart` | 一覧画面 |
+| `lib/features/settings/presentation/screens/inquiry_list_screen.dart` | ユーザー用一覧画面 |
 | `lib/features/settings/presentation/screens/inquiry_form_screen.dart` | 新規フォーム |
-| `lib/features/settings/presentation/screens/inquiry_detail_screen.dart` | 詳細画面（チャット形式） |
+| `lib/features/settings/presentation/screens/inquiry_detail_screen.dart` | ユーザー用詳細画面 |
+| `lib/features/admin/presentation/screens/admin_inquiry_list_screen.dart` | 管理者用一覧画面 |
+| `lib/features/admin/presentation/screens/admin_inquiry_detail_screen.dart` | 管理者用詳細画面（返信・ステータス変更） |
 
 ### 5.4 Cloud Functions
 
@@ -221,10 +223,8 @@ hYr5LUH4mhR60oQfVOggrjGYJjG2
 | `sendInquiryMessage` | onCall | ユーザーからのメッセージ送信 |
 | `sendInquiryReply` | onCall | 管理者からの返信（管理者UID制限あり） |
 
-### 5.5 今後の実装予定（Phase 3）
+### 5.5 今後の実装予定（Phase 4）
 
-- 管理者用問い合わせ一覧・詳細画面
-- ステータス変更UI
 - 返信時のプッシュ通知
 
 ## 6. 今後の拡張性

@@ -25,6 +25,8 @@ import '../../features/goals/presentation/screens/goal_detail_screen.dart';
 import '../../features/goals/presentation/screens/completed_goals_screen.dart';
 import '../../features/notifications/presentation/screens/notifications_screen.dart';
 import '../../features/admin/presentation/screens/admin_review_screen.dart';
+import '../../features/admin/presentation/screens/admin_inquiry_list_screen.dart';
+import '../../features/admin/presentation/screens/admin_inquiry_detail_screen.dart';
 import '../../features/settings/presentation/screens/inquiry_list_screen.dart';
 import '../../features/settings/presentation/screens/inquiry_form_screen.dart';
 import '../../features/settings/presentation/screens/inquiry_detail_screen.dart';
@@ -303,6 +305,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final inquiryId = state.pathParameters['inquiryId']!;
           return InquiryDetailScreen(inquiryId: inquiryId);
+        },
+      ),
+
+      // 管理者用問い合わせ一覧
+      GoRoute(
+        path: '/admin/inquiries',
+        name: 'adminInquiryList',
+        builder: (context, state) => const AdminInquiryListScreen(),
+      ),
+
+      // 管理者用問い合わせ詳細
+      GoRoute(
+        path: '/admin/inquiry/:inquiryId',
+        name: 'adminInquiryDetail',
+        builder: (context, state) {
+          final inquiryId = state.pathParameters['inquiryId']!;
+          return AdminInquiryDetailScreen(inquiryId: inquiryId);
         },
       ),
     ],
