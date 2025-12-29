@@ -467,8 +467,8 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
         } else if (isMilestone) {
           final milestoneMsg = TaskService.getMilestoneMessage(newStreak);
           message = didPost
-              ? '🎉 ${newStreak}日連続達成！$milestoneMsg！タスクを完了したことを投稿しました！'
-              : '🎉 ${newStreak}日連続達成！$milestoneMsg！';
+              ? '🎉 $newStreak日連続達成！$milestoneMsg！タスクを完了したことを投稿しました！'
+              : '🎉 $newStreak日連続達成！$milestoneMsg！';
         } else {
           message = '🎉 タスク完了！ (+徳ポイント)';
         }

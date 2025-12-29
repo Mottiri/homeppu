@@ -395,7 +395,7 @@ class TaskService {
     if (streak == 100) return '100日達成、伝説級の記録';
     if (streak == 365) return '1年達成、伝説級の記録';
     if (streak >= 365 && streak % 365 == 0) return '${streak ~/ 365}年達成、伝説級の記録';
-    if (streak >= 100 && streak % 100 == 0) return '${streak}日達成';
+    if (streak >= 100 && streak % 100 == 0) return '$streak日達成';
     if (streak >= 30 && streak % 30 == 0) return '${streak ~/ 30}ヶ月継続';
     return '素晴らしい';
   }

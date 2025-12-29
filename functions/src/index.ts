@@ -7058,3 +7058,213 @@ export const scheduleGoalReminders = onDocumentUpdated(
     }
   }
 );
+
+// ===============================================
+// 問い合わせ・要望機能
+// ===============================================
+
+/**
+ * 新規問い合わせを作成
+ */
+export const createInquiry = onCall(
+  { region: "asia-northeast1" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    const userId = request.auth.uid;
+    const { category, subject, content, imageUrl } = request.data;
+
+    if (!category || !subject || !content) {
+      throw new HttpsError("invalid-argument", "カテゴリ、件名、内容は必須です");
+    }
+
+    console.log(`=== createInquiry: userId=${userId}, category=${category} ===`);
+
+    try {
+      // ユーザー情報を取得
+      const userDoc = await db.collection("users").doc(userId).get();
+      const userData = userDoc.data();
+      const userDisplayName = userData?.displayName || "匿名ユーザー";
+      const userAvatarIndex = userData?.avatarIndex || 0;
+
+      // 問い合わせを作成
+      const inquiryRef = db.collection("inquiries").doc();
+      const now = admin.firestore.FieldValue.serverTimestamp();
+
+      await inquiryRef.set({
+        userId,
+        userDisplayName,
+        userAvatarIndex,
+        category,
+        subject,
+        status: "open",
+        hasUnreadReply: false,
+        hasUnreadMessage: true, // 管理者向け未読
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      // 最初のメッセージを追加
+      await inquiryRef.collection("messages").add({
+        senderId: userId,
+        senderName: userDisplayName,
+        senderType: "user",
+        content,
+        imageUrl: imageUrl || null,
+        createdAt: now,
+      });
+
+      console.log(`Created inquiry: ${inquiryRef.id}`);
+
+      return { success: true, inquiryId: inquiryRef.id };
+    } catch (error) {
+      console.error("Error creating inquiry:", error);
+      throw new HttpsError("internal", "問い合わせの作成に失敗しました");
+    }
+  }
+);
+
+/**
+ * ユーザーがメッセージを送信
+ */
+export const sendInquiryMessage = onCall(
+  { region: "asia-northeast1" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    const userId = request.auth.uid;
+    const { inquiryId, content, imageUrl } = request.data;
+
+    if (!inquiryId || !content) {
+      throw new HttpsError("invalid-argument", "問い合わせIDと内容は必須です");
+    }
+
+    console.log(`=== sendInquiryMessage: inquiryId=${inquiryId} ===`);
+
+    try {
+      // 問い合わせの存在と所有者確認
+      const inquiryRef = db.collection("inquiries").doc(inquiryId);
+      const inquiryDoc = await inquiryRef.get();
+
+      if (!inquiryDoc.exists) {
+        throw new HttpsError("not-found", "問い合わせが見つかりません");
+      }
+
+      const inquiryData = inquiryDoc.data()!;
+      if (inquiryData.userId !== userId) {
+        throw new HttpsError("permission-denied", "この問い合わせにはアクセスできません");
+      }
+
+      // ユーザー情報を取得
+      const userDoc = await db.collection("users").doc(userId).get();
+      const userData = userDoc.data();
+      const userDisplayName = userData?.displayName || "匿名ユーザー";
+
+      const now = admin.firestore.FieldValue.serverTimestamp();
+
+      // メッセージを追加
+      await inquiryRef.collection("messages").add({
+        senderId: userId,
+        senderName: userDisplayName,
+        senderType: "user",
+        content,
+        imageUrl: imageUrl || null,
+        createdAt: now,
+      });
+
+      // 問い合わせを更新
+      await inquiryRef.update({
+        hasUnreadMessage: true, // 管理者向け未読
+        updatedAt: now,
+      });
+
+      console.log(`Added message to inquiry: ${inquiryId}`);
+
+      return { success: true };
+    } catch (error) {
+      if (error instanceof HttpsError) throw error;
+      console.error("Error sending inquiry message:", error);
+      throw new HttpsError("internal", "メッセージの送信に失敗しました");
+    }
+  }
+);
+
+/**
+ * 管理者が返信を送信
+ */
+export const sendInquiryReply = onCall(
+  { region: "asia-northeast1" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    const adminId = request.auth.uid;
+    const { inquiryId, content } = request.data;
+
+    // 管理者チェック（ハードコード - 実際は設定から取得すべき）
+    const ADMIN_UIDS = ["hYr5LUH4mhR60oQfVOggrjGYJjG2"];
+    if (!ADMIN_UIDS.includes(adminId)) {
+      throw new HttpsError("permission-denied", "管理者権限が必要です");
+    }
+
+    if (!inquiryId || !content) {
+      throw new HttpsError("invalid-argument", "問い合わせIDと内容は必須です");
+    }
+
+    console.log(`=== sendInquiryReply: inquiryId=${inquiryId} ===`);
+
+    try {
+      const inquiryRef = db.collection("inquiries").doc(inquiryId);
+      const inquiryDoc = await inquiryRef.get();
+
+      if (!inquiryDoc.exists) {
+        throw new HttpsError("not-found", "問い合わせが見つかりません");
+      }
+
+      const inquiryData = inquiryDoc.data()!;
+      const now = admin.firestore.FieldValue.serverTimestamp();
+
+      // 返信メッセージを追加
+      await inquiryRef.collection("messages").add({
+        senderId: adminId,
+        senderName: "運営チーム",
+        senderType: "admin",
+        content,
+        imageUrl: null,
+        createdAt: now,
+      });
+
+      // 問い合わせを更新
+      await inquiryRef.update({
+        hasUnreadReply: true, // ユーザー向け未読
+        hasUnreadMessage: false, // 管理者は既読
+        status: "in_progress", // 対応中に変更
+        updatedAt: now,
+      });
+
+      // ユーザーに通知を送信
+      const targetUserId = inquiryData.userId;
+      await db.collection("users").doc(targetUserId).collection("notifications").add({
+        type: "inquiry_reply",
+        title: "問い合わせに返信がありました",
+        body: `「${inquiryData.subject}」に運営チームから返信があります`,
+        inquiryId,
+        isRead: false,
+        createdAt: now,
+      });
+
+      console.log(`Sent reply to inquiry: ${inquiryId}`);
+
+      return { success: true };
+    } catch (error) {
+      if (error instanceof HttpsError) throw error;
+      console.error("Error sending inquiry reply:", error);
+      throw new HttpsError("internal", "返信の送信に失敗しました");
+    }
+  }
+);

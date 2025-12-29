@@ -25,6 +25,9 @@ import '../../features/goals/presentation/screens/goal_detail_screen.dart';
 import '../../features/goals/presentation/screens/completed_goals_screen.dart';
 import '../../features/notifications/presentation/screens/notifications_screen.dart';
 import '../../features/admin/presentation/screens/admin_review_screen.dart';
+import '../../features/settings/presentation/screens/inquiry_list_screen.dart';
+import '../../features/settings/presentation/screens/inquiry_form_screen.dart';
+import '../../features/settings/presentation/screens/inquiry_detail_screen.dart';
 import '../../shared/providers/auth_provider.dart';
 
 /// アプリのルーター設定
@@ -277,6 +280,30 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/admin-review',
         name: 'adminReview',
         builder: (context, state) => const AdminReviewScreen(),
+      ),
+
+      // 問い合わせ一覧
+      GoRoute(
+        path: '/inquiry',
+        name: 'inquiryList',
+        builder: (context, state) => const InquiryListScreen(),
+      ),
+
+      // 問い合わせ新規作成
+      GoRoute(
+        path: '/inquiry/new',
+        name: 'inquiryForm',
+        builder: (context, state) => const InquiryFormScreen(),
+      ),
+
+      // 問い合わせ詳細
+      GoRoute(
+        path: '/inquiry/:inquiryId',
+        name: 'inquiryDetail',
+        builder: (context, state) {
+          final inquiryId = state.pathParameters['inquiryId']!;
+          return InquiryDetailScreen(inquiryId: inquiryId);
+        },
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

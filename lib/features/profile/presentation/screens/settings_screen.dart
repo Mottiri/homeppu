@@ -10,6 +10,7 @@ import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/providers/ai_provider.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
 import '../../../../shared/services/name_parts_service.dart';
+import '../../../../shared/services/inquiry_service.dart';
 import 'name_edit_screen.dart';
 
 /// 公開範囲モード
@@ -538,6 +539,59 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         );
                       },
                     ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // サポート
+            Card(
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(
+                      Icons.mail_outline,
+                      color: AppColors.primary,
+                    ),
+                    title: const Text('問い合わせ・要望'),
+                    subtitle: const Text('バグ報告や機能要望を送信'),
+                    trailing: StreamBuilder<int>(
+                      stream: InquiryService().getUnreadCount(),
+                      builder: (context, snapshot) {
+                        final count = snapshot.data ?? 0;
+                        if (count == 0) {
+                          return const Icon(Icons.chevron_right);
+                        }
+                        return Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.error,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                '$count',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Icon(Icons.chevron_right),
+                          ],
+                        );
+                      },
+                    ),
+                    onTap: () => context.push('/inquiry'),
                   ),
                 ],
               ),

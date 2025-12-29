@@ -355,6 +355,35 @@ class MediaService {
     return await snapshot.ref.getDownloadURL();
   }
 
+  /// 問い合わせ画像をアップロード
+  Future<String> uploadInquiryImage(File file) async {
+    final fileSize = await file.length();
+
+    // サイズチェック (5MB)
+    if (fileSize > maxImageSize) {
+      throw Exception('ファイルサイズが大きすぎます（最大${maxImageSize ~/ (1024 * 1024)}MB）');
+    }
+
+    // ファイル名を生成
+    final extension = path.extension(file.path).toLowerCase();
+    final uniqueFileName = '${_uuid.v4()}$extension';
+    final storagePath = 'inquiries/$uniqueFileName';
+
+    // アップロード
+    final ref = _storage.ref().child(storagePath);
+    final uploadTask = ref.putFile(
+      file,
+      SettableMetadata(
+        contentType: _getMimeType(extension),
+        customMetadata: {'uploadedAt': DateTime.now().toIso8601String()},
+      ),
+    );
+
+    // 完了を待つ
+    final snapshot = await uploadTask;
+    return await snapshot.ref.getDownloadURL();
+  }
+
   /// メディアを削除
   Future<void> deleteMedia(String url) async {
     try {

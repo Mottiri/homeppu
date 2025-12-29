@@ -160,7 +160,7 @@ class PostService {
       if (isGoalCompletion && goalTitle != null) {
         content = '🎉 目標「$goalTitle」を達成しました！おめでとうございます！';
       } else {
-        content = '🔥 「$taskContent」を${streak}日連続達成しました！';
+        content = '🔥 「$taskContent」を$streak日連続達成しました！';
       }
 
       // Cloud Functions経由で投稿を作成（セキュリティルールでクライアント直接作成は禁止）

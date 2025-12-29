@@ -160,6 +160,73 @@ hYr5LUH4mhR60oQfVOggrjGYJjG2
 }
 ```
 
-## 5. 今後の拡張性
+## 5. 問い合わせ・要望機能
+
+ユーザーからの問い合わせや機能要望を受け付け、管理者が返信できるチケット形式の機能。
+
+### 5.1 概要
+
+| 項目 | 詳細 |
+|------|------|
+| コミュニケーション方式 | チケット形式（複数往復可） |
+| 既読管理 | ✅ あり（未読マーク表示） |
+| 添付ファイル | ✅ スクリーンショット可 |
+| 返信者名 | 「運営チーム」で統一 |
+| ステータス管理 | 管理者が手動で変更 |
+
+### 5.2 データ構造
+
+#### inquiriesコレクション
+```typescript
+{
+  userId: string,           // 送信者UID
+  userDisplayName: string,  // 送信者名
+  userAvatarIndex: number,  // 送信者アバター
+  category: string,         // "bug" | "feature" | "account" | "other"
+  subject: string,          // 件名
+  status: string,           // "open" | "in_progress" | "resolved"
+  hasUnreadReply: boolean,  // ユーザー向け未読
+  hasUnreadMessage: boolean, // 管理者向け未読
+  createdAt: Timestamp,
+  updatedAt: Timestamp
+}
+```
+
+#### messagesサブコレクション
+```typescript
+{
+  senderId: string,
+  senderName: string,       // ユーザー名 or "運営チーム"
+  senderType: string,       // "user" | "admin"
+  content: string,
+  imageUrl: string | null,
+  createdAt: Timestamp
+}
+```
+
+### 5.3 実装ファイル
+
+| ファイル | 内容 |
+|----------|------|
+| `lib/shared/services/inquiry_service.dart` | 問い合わせサービス |
+| `lib/features/settings/presentation/screens/inquiry_list_screen.dart` | 一覧画面 |
+| `lib/features/settings/presentation/screens/inquiry_form_screen.dart` | 新規フォーム |
+| `lib/features/settings/presentation/screens/inquiry_detail_screen.dart` | 詳細画面（チャット形式） |
+
+### 5.4 Cloud Functions
+
+| 関数名 | トリガー | 説明 |
+|--------|----------|------|
+| `createInquiry` | onCall | 新規問い合わせ作成 |
+| `sendInquiryMessage` | onCall | ユーザーからのメッセージ送信 |
+| `sendInquiryReply` | onCall | 管理者からの返信（管理者UID制限あり） |
+
+### 5.5 今後の実装予定（Phase 3）
+
+- 管理者用問い合わせ一覧・詳細画面
+- ステータス変更UI
+- 返信時のプッシュ通知
+
+## 6. 今後の拡張性
 - **画像投稿**: 現在はテキストのみですが、`mediaItems` フィールドの拡張により画像付き投稿も可能です。
 - **個別スケジュール**: 特定のAIのみ指定して投稿させる機能などへの拡張が容易です。
