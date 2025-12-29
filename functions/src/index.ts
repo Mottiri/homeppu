@@ -7082,6 +7082,9 @@ export const createInquiry = onCall(
 
     console.log(`=== createInquiry: userId=${userId}, category=${category} ===`);
 
+    // 管理者UID（通知送信先）
+    const ADMIN_UIDS = ["hYr5LUH4mhR60oQfVOggrjGYJjG2"];
+
     try {
       // ユーザー情報を取得
       const userDoc = await db.collection("users").doc(userId).get();
@@ -7116,6 +7119,21 @@ export const createInquiry = onCall(
         createdAt: now,
       });
 
+      // 管理者に通知を送信
+      for (const adminUid of ADMIN_UIDS) {
+        await db.collection("users").doc(adminUid).collection("notifications").add({
+          type: "inquiry_received",
+          title: "新規問い合わせ",
+          body: `${userDisplayName}さんから問い合わせ「${subject}」が届きました`,
+          senderId: userId,
+          senderName: userDisplayName,
+          senderAvatarUrl: String(userAvatarIndex),
+          inquiryId: inquiryRef.id,
+          isRead: false,
+          createdAt: now,
+        });
+      }
+
       console.log(`Created inquiry: ${inquiryRef.id}`);
 
       return { success: true, inquiryId: inquiryRef.id };
@@ -7145,6 +7163,9 @@ export const sendInquiryMessage = onCall(
 
     console.log(`=== sendInquiryMessage: inquiryId=${inquiryId} ===`);
 
+    // 管理者UID（通知送信先）
+    const ADMIN_UIDS = ["hYr5LUH4mhR60oQfVOggrjGYJjG2"];
+
     try {
       // 問い合わせの存在と所有者確認
       const inquiryRef = db.collection("inquiries").doc(inquiryId);
@@ -7163,6 +7184,7 @@ export const sendInquiryMessage = onCall(
       const userDoc = await db.collection("users").doc(userId).get();
       const userData = userDoc.data();
       const userDisplayName = userData?.displayName || "匿名ユーザー";
+      const userAvatarIndex = userData?.avatarIndex || 0;
 
       const now = admin.firestore.FieldValue.serverTimestamp();
 
@@ -7181,6 +7203,21 @@ export const sendInquiryMessage = onCall(
         hasUnreadMessage: true, // 管理者向け未読
         updatedAt: now,
       });
+
+      // 管理者に通知を送信
+      for (const adminUid of ADMIN_UIDS) {
+        await db.collection("users").doc(adminUid).collection("notifications").add({
+          type: "inquiry_user_reply",
+          title: "問い合わせに返信",
+          body: `${userDisplayName}さんが「${inquiryData.subject}」に返信しました`,
+          senderId: userId,
+          senderName: userDisplayName,
+          senderAvatarUrl: String(userAvatarIndex),
+          inquiryId,
+          isRead: false,
+          createdAt: now,
+        });
+      }
 
       console.log(`Added message to inquiry: ${inquiryId}`);
 
@@ -7265,6 +7302,84 @@ export const sendInquiryReply = onCall(
       if (error instanceof HttpsError) throw error;
       console.error("Error sending inquiry reply:", error);
       throw new HttpsError("internal", "返信の送信に失敗しました");
+    }
+  }
+);
+
+/**
+ * 問い合わせステータスを変更
+ */
+export const updateInquiryStatus = onCall(
+  { region: "asia-northeast1" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+
+    const adminId = request.auth.uid;
+    const { inquiryId, status } = request.data;
+
+    // 管理者チェック
+    const ADMIN_UIDS = ["hYr5LUH4mhR60oQfVOggrjGYJjG2"];
+    if (!ADMIN_UIDS.includes(adminId)) {
+      throw new HttpsError("permission-denied", "管理者権限が必要です");
+    }
+
+    if (!inquiryId || !status) {
+      throw new HttpsError("invalid-argument", "問い合わせIDとステータスは必須です");
+    }
+
+    // 有効なステータスかチェック
+    const VALID_STATUSES = ["open", "in_progress", "resolved"];
+    if (!VALID_STATUSES.includes(status)) {
+      throw new HttpsError("invalid-argument", "無効なステータスです");
+    }
+
+    console.log(`=== updateInquiryStatus: inquiryId=${inquiryId}, status=${status} ===`);
+
+    try {
+      const inquiryRef = db.collection("inquiries").doc(inquiryId);
+      const inquiryDoc = await inquiryRef.get();
+
+      if (!inquiryDoc.exists) {
+        throw new HttpsError("not-found", "問い合わせが見つかりません");
+      }
+
+      const inquiryData = inquiryDoc.data()!;
+      const now = admin.firestore.FieldValue.serverTimestamp();
+
+      // ステータスを更新
+      await inquiryRef.update({
+        status,
+        updatedAt: now,
+      });
+
+      // ステータスのラベルを取得
+      const statusLabels: { [key: string]: string } = {
+        open: "未対応",
+        in_progress: "対応中",
+        resolved: "解決済み",
+      };
+      const statusLabel = statusLabels[status] || status;
+
+      // ユーザーに通知を送信
+      const targetUserId = inquiryData.userId;
+      await db.collection("users").doc(targetUserId).collection("notifications").add({
+        type: "inquiry_status_changed",
+        title: "問い合わせステータス変更",
+        body: `「${inquiryData.subject}」のステータスが「${statusLabel}」に変更されました`,
+        inquiryId,
+        isRead: false,
+        createdAt: now,
+      });
+
+      console.log(`Updated inquiry status: ${inquiryId} -> ${status}`);
+
+      return { success: true };
+    } catch (error) {
+      if (error instanceof HttpsError) throw error;
+      console.error("Error updating inquiry status:", error);
+      throw new HttpsError("internal", "ステータスの変更に失敗しました");
     }
   }
 );

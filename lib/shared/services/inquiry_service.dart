@@ -251,12 +251,10 @@ class InquiryService {
     );
   }
 
-  /// ステータスを変更（管理者用）
+  /// ステータスを変更（管理者用）- Cloud Functionsで通知送信
   Future<void> updateStatus(String inquiryId, InquiryStatus status) async {
-    await _firestore.collection('inquiries').doc(inquiryId).update({
-      'status': status.value,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    final callable = _functions.httpsCallable('updateInquiryStatus');
+    await callable.call({'inquiryId': inquiryId, 'status': status.value});
   }
 
   /// 返信を送信（管理者用）

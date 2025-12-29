@@ -23,7 +23,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
 
   // カテゴリタブの定義
   static const _tabs = [
-    (NotificationCategory.all, 'すべて', Icons.notifications),
+    (NotificationCategory.support, 'サポート', Icons.support_agent),
     (NotificationCategory.timeline, 'TL', Icons.chat_bubble_outline),
     (NotificationCategory.circle, 'サークル', Icons.group_outlined),
     (NotificationCategory.task, 'タスク', Icons.task_alt),
@@ -166,9 +166,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
     List<NotificationModel> notifications,
     NotificationCategory category,
   ) {
-    if (category == NotificationCategory.all) {
-      return notifications.where((n) => !n.isRead).length;
-    }
+    // サポートカテゴリは他と同じロジックで処理
     return notifications
         .where((n) => !n.isRead && getCategoryFromType(n.type) == category)
         .length;
@@ -179,9 +177,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
     List<NotificationModel> notifications,
     NotificationCategory category,
   ) {
-    if (category == NotificationCategory.all) {
-      return notifications;
-    }
+    // 各カテゴリに該当する通知のみ返す
     return notifications
         .where((n) => getCategoryFromType(n.type) == category)
         .toList();
@@ -277,7 +273,10 @@ class _NotificationTile extends ConsumerWidget {
         }
 
         // 遷移先を決定
-        if (notification.postId != null && context.mounted) {
+        if (notification.inquiryId != null && context.mounted) {
+          // サポート通知は問い合わせ詳細画面へ
+          context.push('/inquiry/${notification.inquiryId}');
+        } else if (notification.postId != null && context.mounted) {
           context.push('/post/${notification.postId}');
         } else if (notification.circleId != null && context.mounted) {
           // 拒否/削除通知は遷移しない

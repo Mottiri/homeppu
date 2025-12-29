@@ -12,11 +12,16 @@ enum NotificationType {
   // タスク関連
   taskReminder,
   taskScheduled,
+  // サポート（問い合わせ）関連
+  inquiryReply, // 運営から返信があった
+  inquiryStatusChanged, // ステータスが変更された
+  inquiryReceived, // 新規問い合わせ受信（管理者向け）
+  inquiryUserReply, // ユーザーから返信があった（管理者向け）
 }
 
 /// 通知のカテゴリ（タブ分類用）
 enum NotificationCategory {
-  all, // すべて
+  support, // サポート通知
   timeline, // TL通知（コメント、リアクション）
   circle, // サークル通知
   task, // タスク通知
@@ -36,6 +41,11 @@ NotificationCategory getCategoryFromType(NotificationType type) {
     case NotificationType.taskReminder:
     case NotificationType.taskScheduled:
       return NotificationCategory.task;
+    case NotificationType.inquiryReply:
+    case NotificationType.inquiryStatusChanged:
+    case NotificationType.inquiryReceived:
+    case NotificationType.inquiryUserReply:
+      return NotificationCategory.support;
     case NotificationType.system:
       return NotificationCategory.timeline; // システム通知はTLに分類
   }
@@ -52,6 +62,7 @@ class NotificationModel {
   final String body;
   final String? postId; // 関連する投稿ID
   final String? circleId; // 関連するサークルID
+  final String? inquiryId; // 関連する問い合わせID（サポート通知用）
   final bool isRead;
   final DateTime createdAt;
 
@@ -66,6 +77,7 @@ class NotificationModel {
     required this.body,
     this.postId,
     this.circleId,
+    this.inquiryId,
     this.isRead = false,
     required this.createdAt,
   });
@@ -83,6 +95,7 @@ class NotificationModel {
       body: data['body'] ?? '',
       postId: data['postId'],
       circleId: data['circleId'],
+      inquiryId: data['inquiryId'],
       isRead: data['isRead'] ?? false,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
@@ -99,6 +112,7 @@ class NotificationModel {
       'body': body,
       'postId': postId,
       'circleId': circleId,
+      'inquiryId': inquiryId,
       'isRead': isRead,
       'createdAt': Timestamp.fromDate(createdAt),
     };
@@ -124,6 +138,15 @@ class NotificationModel {
         return NotificationType.taskReminder;
       case 'task_scheduled':
         return NotificationType.taskScheduled;
+      // サポート関連
+      case 'inquiry_reply':
+        return NotificationType.inquiryReply;
+      case 'inquiry_status_changed':
+        return NotificationType.inquiryStatusChanged;
+      case 'inquiry_received':
+        return NotificationType.inquiryReceived;
+      case 'inquiry_user_reply':
+        return NotificationType.inquiryUserReply;
       default:
         return NotificationType.system;
     }
