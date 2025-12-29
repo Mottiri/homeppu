@@ -94,6 +94,7 @@ class CircleModel {
       'memberCount': memberCount,
       'postCount': postCount,
       'rules': rules,
+      'isDeleted': isDeleted,
     };
   }
 

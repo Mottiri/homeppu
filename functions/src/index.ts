@@ -4188,6 +4188,7 @@ ${getSystemPrompt(persona, "みんな")}
       userAvatarIndex: persona.avatarIndex,
       content: content,
       postMode: "mix", // 公開範囲
+      circleId: null, // タイムラインのクエリ(where circleId isNull)にマッチさせるため明示的にnullを設定
       createdAt: createdAt,
       reactions: reactions,
       commentCount: 0,
@@ -5634,14 +5635,15 @@ export const generateCircleAIPosts = functionsV1.region("asia-northeast1").runWi
     const excludedCircleIds: string[] = historyDoc.exists ? (historyDoc.data()?.circleIds || []) : [];
     console.log(`Excluding ${excludedCircleIds.length} circles from yesterday`);
 
-    // 削除されていないサークルを取得
-    const circlesSnapshot = await db.collection("circles")
-      .where("isDeleted", "==", false)
-      .get();
+    // 全サークルを取得（isDeletedフィールドがないサークルも含める）
+    const circlesSnapshot = await db.collection("circles").get();
 
-    // AIがいるサークルのみフィルタリング
+    // AIがいて、削除されていないサークルのみフィルタリング
     const eligibleCircles = circlesSnapshot.docs.filter(doc => {
       const data = doc.data();
+      // isDeletedがtrue（明示的に削除済み）の場合は除外
+      // isDeletedがfalseまたは未設定の場合は対象
+      if (data.isDeleted === true) return false;
       const generatedAIs = data.generatedAIs as Array<{ id: string; name: string; avatarIndex: number }> || [];
       // AIがいない、または昨日投稿済みのサークルは除外
       return generatedAIs.length > 0 && !excludedCircleIds.includes(doc.id);
@@ -5886,14 +5888,14 @@ export const triggerCircleAIPosts = onCall(
       const excludedCircleIds: string[] = historyDoc.exists ? (historyDoc.data()?.circleIds || []) : [];
       console.log(`Excluding ${excludedCircleIds.length} circles from yesterday`);
 
-      // 削除されていないサークルを取得
-      const circlesSnapshot = await db.collection("circles")
-        .where("isDeleted", "==", false)
-        .get();
+      // 全サークルを取得（isDeletedフィールドがないサークルも含める）
+      const circlesSnapshot = await db.collection("circles").get();
 
-      // AIがいるサークルのみフィルタリング
+      // AIがいて、削除されていないサークルのみフィルタリング
       const eligibleCircles = circlesSnapshot.docs.filter(doc => {
         const data = doc.data();
+        // isDeletedがtrue（明示的に削除済み）の場合は除外
+        if (data.isDeleted === true) return false;
         const generatedAIs = data.generatedAIs as Array<{ id: string; name: string; avatarIndex: number }> || [];
         return generatedAIs.length > 0 && !excludedCircleIds.includes(doc.id);
       });
