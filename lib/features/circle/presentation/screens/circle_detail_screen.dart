@@ -1371,6 +1371,12 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                                     post.id,
                                     isPinned,
                                   );
+                                  // ローカルリストも更新してUIに反映
+                                  setState(() {
+                                    _posts[index] = post.copyWith(
+                                      isPinned: isPinned,
+                                    );
+                                  });
                                 }
                               : null,
                           onDeleted: () {

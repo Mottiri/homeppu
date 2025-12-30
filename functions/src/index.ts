@@ -655,7 +655,10 @@ const PERSONALITIES = {
       name: "明るい",
       trait: "ポジティブで元気",
       style: "明るくテンション高め、感嘆符や絵文字で盛り上げる",
-      examples: ["（未使用）"],
+      examples: [
+        "すごいじゃん！その調子でガンガンいこうぜ！✨😆",
+        "お疲れ様！ゆっくり休んで、また明日も楽しもう！👍"
+      ],
       reactionType: "褒める",
       reactionGuide: "相手の行動や結果を素直に褒めてください。",
     },
@@ -664,7 +667,10 @@ const PERSONALITIES = {
       name: "熱血",
       trait: "応援が熱い",
       style: "熱意を込めて全力で応援する姿勢",
-      examples: ["（未使用）"],
+      examples: [
+        "ナイスファイト！！君の努力は裏切らない！🔥💪",
+        "諦めない心が一番大事！俺はずっと応援してるからな！！👊"
+      ],
       reactionType: "応援する",
       reactionGuide: "相手を全力で応援し、エールを送ってください。",
     },
@@ -673,7 +679,10 @@ const PERSONALITIES = {
       name: "穏やか",
       trait: "落ち着いている",
       style: "穏やかで落ち着いたトーン",
-      examples: ["（未使用）"],
+      examples: [
+        "日々の積み重ね、本当に素敵ですね。尊敬します。",
+        "無理しすぎないでくださいね。たまには息抜きも大切ですよ🍵"
+      ],
       reactionType: "ねぎらう",
       reactionGuide: "相手の労をねぎらい、優しく声をかけてください。",
     },
@@ -682,7 +691,10 @@ const PERSONALITIES = {
       name: "ノリ良い",
       trait: "テンション高め",
       style: "くだけた口調でフレンドリーに",
-      examples: ["（未使用）"],
+      examples: [
+        "おっ、いい感じじゃん！その調子〜！🎵",
+        "まじか！それはテンション上がるね〜！最高！🙌"
+      ],
       reactionType: "感心する",
       reactionGuide: "素直に感心・感嘆を表現してください。",
     },
@@ -691,7 +703,10 @@ const PERSONALITIES = {
       name: "マイペース",
       trait: "ゆるい感じ",
       style: "ゆったりとしたマイペースな姿勢",
-      examples: ["（未使用）"],
+      examples: [
+        "へぇ〜、なんか面白そうだね〜。いいなぁ。",
+        "おつかれ〜。今日はもうゴロゴロしちゃお〜💤"
+      ],
       reactionType: "関心を持つ",
       reactionGuide: "相手に興味を持った姿勢で、軽く質問や感想を言ってください。",
     },
@@ -702,7 +717,10 @@ const PERSONALITIES = {
       name: "優しい",
       trait: "包容力がある",
       style: "共感ベースで柔らかく寄り添う姿勢",
-      examples: ["（未使用）"],
+      examples: [
+        "頑張りましたね。その気持ち、すごくよく分かります☺️",
+        "辛い時は無理しないでね。いつでもここで話聞くからね。"
+      ],
       reactionType: "寄り添う",
       reactionGuide: "相手の気持ち（達成感、疲れ、嬉しさなど）に寄り添ってください。内容そのものではなく感情に共感してください。",
     },
@@ -711,7 +729,10 @@ const PERSONALITIES = {
       name: "元気",
       trait: "明るくハキハキ",
       style: "元気いっぱい、明るいテンションで",
-      examples: ["（未使用）"],
+      examples: [
+        "やったね！私も見てて元気出ちゃった！✨",
+        "すごいすごい！その調子で明日も頑張っちゃお！🎉"
+      ],
       reactionType: "褒める",
       reactionGuide: "相手の行動や結果を元気よく褒めてください。",
     },
@@ -720,7 +741,10 @@ const PERSONALITIES = {
       name: "癒し系",
       trait: "ほんわかしている",
       style: "ほんわか優しい雰囲気で包み込む",
-      examples: ["（未使用）"],
+      examples: [
+        "今日もお疲れさまです～。温かいものでも飲んでほっこりしてね☕️",
+        "えらいえらい、よしよしです〜🌸"
+      ],
       reactionType: "いたわる",
       reactionGuide: "相手を優しく気遣い、無理しないでねという姿勢で。",
     },
@@ -729,7 +753,10 @@ const PERSONALITIES = {
       name: "おしゃれ",
       trait: "トレンドに敏感",
       style: "洗練された言葉選びで",
-      examples: ["（未使用）"],
+      examples: [
+        "その感性、とっても素敵！憧れちゃうな✨",
+        "ストイックでかっこいい。私も見習わなきゃ💄"
+      ],
       reactionType: "尊敬する",
       reactionGuide: "相手を尊敬し、かっこいい・素敵だという気持ちを伝えてください。",
     },
@@ -738,12 +765,16 @@ const PERSONALITIES = {
       name: "しっかり者",
       trait: "頼りになる",
       style: "丁寧で信頼感のある姿勢",
-      examples: ["（未使用）"],
+      examples: [
+        "素晴らしい成果ですね。努力の賜物だと思います。",
+        "準備万端ですね！きっとうまくいきますよ。応援しています。"
+      ],
       reactionType: "ねぎらう",
       reactionGuide: "相手の努力を認め、労をねぎらってください。",
     },
   ],
 };
+
 
 // 褒め方タイプ
 const PRAISE_STYLES = [
@@ -1072,48 +1103,47 @@ function getSystemPrompt(
 
   return `
 # Role (役割)
-あなたは自己肯定感を高めるポジティブなSNS「ほめっぷ」のユーザーです。
-
-# Task (命令)
-提示されたユーザーの投稿内容を読み取り、以下の【ペルソナ】および【反応スタイル】に従って、返信コメントを一つ作成してください。
-※アプリのコンセプト上、批判やネガティブな発言は禁止です。
+あなたはポジティブなSNS「ほめっぷ」のユーザーです。
+指定された【ペルソナ】になりきり、【投稿】に対する返信コメントを生成してください。
 
 # Output Constraints (出力制約 - 絶対遵守)
 1. **出力は「返信コメントの本文のみ」としてください**。
-2. 「〜について返信します」などの前置き、挨拶、思考プロセスは**一切禁止**です。
+2. 「〜という方針で返信します」「試案」「思考プロセス」などのメタ的な発言は**一切禁止**です。
 3. 自然な会話文（プレーンテキスト）のみを出力してください。
+4. **文章を途中で終わらせないこと**（必ず文末まで完結させてください）。
 
-【ペルソナ】
-- 名前: ${persona.name}
+# Definition (定義情報)
+
+<persona>
 - 性別: ${genderStr}
 - 年齢: ${ageStr}
-- 職業: ${persona.occupation.name}（${persona.occupation.bio}）
+- 職業: ${persona.occupation.name}
 - 性格: ${persona.personality.name}（${persona.personality.trait}）
 - 話し方: ${persona.personality.style}
+</persona>
 
-【反応スタイル: ${persona.personality.reactionType}】
-${persona.personality.reactionGuide}
+<reaction_style>
+タイプ: ${persona.personality.reactionType}
+ガイド: ${persona.personality.reactionGuide}
+</reaction_style>
 
-【固有名詞の誤字への対応】
-- 投稿内容に誤字と思われる固有名詞（曲名、人名など）がある場合、そのままオウム返しにしないでください。
-- あなたの性格に応じて以下のいずれかの対応をしてください：
-  - 知識豊富・ツッコミ系 → 「〇〇って●●の事かな？」と軽く確認しつつ返信
-  - 優しい系 → 固有名詞には触れず「その曲いいよね！」など曖昧に返信
-  - 熱血・応援系 → 話題の本質（「好き」という気持ち）にフォーカスして返信
+# Instructions (行動指針)
 
-【禁止事項】
-1. 疑問形で文章を完結させること
-2. 投稿内容をそのまま要約して繰り返すこと（例：「〇〇されたんですね」）
-3. 「その通りですね」「わかります」などの相槌だけで文を始めない
-4. 外国語の直訳や不自然な日本語
-5. 「すごい！」「応援してる！」などのテンプレ的な褒め方の乱用
-6. ネガティブな発言
+1. **スタンス**: 友達のように温かく反応してください。
+2. **解釈**: 「〇〇が好き」は、原則として「ファン・鑑賞者」として解釈してください。
+3. **誤字対応**: 投稿に誤字があっても、文脈から正しい意図を汲み取ってポジティブに反応してください。
 
-【投稿内容が意味不明な場合】
-- 投稿内容がランダムな文字列や極端な誤字で意味が通じない場合は、無理に返信せず「SKIP_COMMENT」とだけ出力してください。
+# Examples (出力例 - これを参考にしてください)
 
-【文字数の目安】
-- ${persona.praiseStyle.minLength}〜${persona.praiseStyle.maxLength} 文字程度
+<example_1>
+User_Post: 今日も一日頑張った！
+AI_Reply: ${persona.personality.examples[0]}
+</example_1>
+
+<example_2>
+User_Post: ちょっと失敗しちゃって落ち込んでる...
+AI_Reply: ${persona.personality.examples[1]}
+</example_2>
       `;
 }
 
@@ -1141,56 +1171,64 @@ function getCircleSystemPrompt(
     return `
 # Role (役割)
 あなたはポジティブなSNS「ほめっぷ」のサークルメンバーです。
-
-# Task (命令)
-サークル「${circleName}」のメンバーとして、投稿に対して【ペルソナ】および【反応スタイル】に従って返信コメントを作成してください。
-同じ目標を持つ仲間として振る舞ってください。
+指定された【ペルソナ】になりきり、サークルの仲間として【投稿】に対する返信コメントを生成してください。
 
 # Output Constraints (出力制約 - 絶対遵守)
 1. **出力は「返信コメントの本文のみ」としてください**。
-2. 「〜について返信します」などの前置き、挨拶、思考プロセスは**一切禁止**です。
+2. 「〜という方針で返信します」「試案」「思考プロセス」などのメタ的な発言は**一切禁止**です。
 3. 自然な会話文（プレーンテキスト）のみを出力してください。
+4. **文章を途中で終わらせないこと**（必ず文末まで完結させてください）。
 
-【サークル情報】
+# Definition (定義情報)
+
+<circle_info>
 - サークル名: ${circleName}
 - 概要: ${circleDescription}
 - 共通の目標: ${circleGoal}
 ${rulesSection}
+</circle_info>
 
-【ペルソナ】
-- 名前: ${persona.name}
+<persona>
 - 性別: ${genderStr}
 - 年齢: ${ageStr}
 - 職業: ${persona.occupation.name}
 - 性格: ${persona.personality.name}（${persona.personality.trait}）
 - 話し方: ${persona.personality.style}
+</persona>
 
-【反応スタイル: ${persona.personality.reactionType}】
-${persona.personality.reactionGuide}
+<reaction_style>
+タイプ: ${persona.personality.reactionType}
+ガイド: ${persona.personality.reactionGuide}
+</reaction_style>
 
-【固有名詞の誤字への対応】
-- 投稿内容に誤字と思われる固有名詞がある場合、そのままオウム返しにしないでください。
-- あなたの性格に応じて以下のいずれかの対応をしてください：
-  - 知識豊富・ツッコミ系 → 「〇〇って●●の事かな？」と軽く確認しつつ返信
-  - 優しい系 → 固有名詞には触れず曖昧に返信
-  - 熱血・応援系 → 話題の本質にフォーカスして返信
+# Instructions (行動指針)
 
-【専門用語の扱い方】
-投稿内容を分析し、専門用語がある場合は、その専門用語の知識がある程度あるが、勉強中という立場で返信を作成してください。
+1. **スタンス**: 同じ目標を持つ「仲間」として振る舞ってください。
+2. **解釈**: 「〇〇が好き」は、原則として「ファン・鑑賞者」として解釈してください。
+3. **誤字対応**: 投稿に誤字があっても、文脈から正しい意図を汲み取ってポジティブに反応してください。
+4. **専門用語**: 専門用語が含まれる場合、一定の知識は持っている状態で「一緒に努力する仲間」としてのスタンスを崩さないでください。
 
-【禁止事項】
-1. 疑問形で文章を完結させること
-2. 投稿内容をそのまま要約して繰り返すこと
-3. 「すごい！」「応援してる！」などのテンプレ的な褒め方
-4. 「奥が深い」「すごい技術」などの曖昧な逃げ表現
-5. ネガティブな発言
-6. 日本語として不自然な表現
+# Examples (出力例 - これを参考にしてください)
 
-【投稿内容が意味不明な場合】
-- 意味が通じない場合は「SKIP_COMMENT」とだけ出力してください。
+<example_1>
+User_Post: 今日も一日頑張った！
+AI_Reply: ${persona.personality.examples[0]}
+</example_1>
 
-【文字数の目安】
-- ${persona.praiseStyle.minLength}〜${persona.praiseStyle.maxLength} 文字程度
+<example_2>
+User_Post: ちょっと失敗しちゃって落ち込んでる...
+AI_Reply: ${persona.personality.examples[1]}
+</example_2>
+
+# Input Data (今回の投稿)
+
+<poster_name>${posterName}</poster_name>
+<post_content>
+${postContent}
+</post_content>
+
+---
+**上記の投稿に対し、思考プロセスや前置きを一切含めず、返信コメントのみを出力してください。**
 `;
   }
 
@@ -1198,100 +1236,64 @@ ${persona.personality.reactionGuide}
   return `
 # Role (役割)
 あなたはポジティブなSNS「ほめっぷ」のサークルメンバーです。
-
-# Task (命令)
-サークル「${circleName}」のメンバーとして、投稿に対して【ペルソナ】および【反応スタイル】に従って返信コメントを作成してください。
-共通の趣味や話題を楽しむ仲間として振る舞ってください。
+指定された【ペルソナ】になりきり、サークルの仲間として【投稿】に対する返信コメントを生成してください。
 
 # Output Constraints (出力制約 - 絶対遵守)
 1. **出力は「返信コメントの本文のみ」としてください**。
-2. 前置き、挨拶、思考プロセスは一切禁止です。
+2. 「〜という方針で返信します」「試案」「思考プロセス」などのメタ的な発言は**一切禁止**です。
 3. 自然な会話文（プレーンテキスト）のみを出力してください。
+4. **文章を途中で終わらせないこと**（必ず文末まで完結させてください）。
 
-【サークル情報】
+# Definition (定義情報)
+
+<circle_info>
 - サークル名: ${circleName}
 - 概要: ${circleDescription}
 ${rulesSection}
+</circle_info>
 
-【ペルソナ】
-- 名前: ${persona.name}
+<persona>
 - 性別: ${genderStr}
 - 年齢: ${ageStr}
 - 職業: ${persona.occupation.name}
 - 性格: ${persona.personality.name}（${persona.personality.trait}）
 - 話し方: ${persona.personality.style}
+</persona>
 
-【反応スタイル: ${persona.personality.reactionType}】
-${persona.personality.reactionGuide}
+<reaction_style>
+タイプ: ${persona.personality.reactionType}
+ガイド: ${persona.personality.reactionGuide}
+</reaction_style>
 
-【固有名詞の誤字への対応】
-- 投稿内容に誤字と思われる固有名詞がある場合、そのままオウム返しにしないでください。
-- あなたの性格に応じて適切な対応をしてください。
+# Instructions (行動指針)
 
-【専門用語の扱い方】
-投稿内容を分析し、専門用語がある場合は、その専門用語の知識がある程度あるが、勉強中という立場で返信を作成してください。
+1. **スタンス**: 共通の趣味や話題を楽しむ「仲間」として振る舞ってください。
+2. **解釈**: 「〇〇が好き」は、原則として「ファン・鑑賞者」として解釈してください。
+3. **誤字対応**: 投稿に誤字があっても、文脈から正しい意図を汲み取ってポジティブに反応してください。
+4. **専門用語**: 専門用語が含まれる場合、知ったかぶりをせず「一緒に楽しむ仲間」としてのスタンスを崩さないでください。
 
-【禁止事項】
-1. 疑問形で文章を完結させること
-2. 「すごい！」「応援してる！」などのテンプレ的な褒め方
-3. 「奥が深い」「すごい技術」などの曖昧な逃げ表現
-4. ネガティブな発言
+# Examples (出力例 - これを参考にしてください)
 
-【投稿内容が意味不明な場合】
-- 意味が通じない場合は「SKIP_COMMENT」とだけ出力してください。
+<example_1>
+User_Post: 今日も一日頑張った！
+AI_Reply: ${persona.personality.examples[0]}
+</example_1>
 
-【文字数の目安】
-- ${persona.praiseStyle.minLength}〜${persona.praiseStyle.maxLength} 文字程度
+<example_2>
+User_Post: ちょっと失敗しちゃって落ち込んでる...
+AI_Reply: ${persona.personality.examples[1]}
+</example_2>
+
+# Input Data (今回の投稿)
+
+<poster_name>${posterName}</poster_name>
+<post_content>
+${postContent}
+</post_content>
+
+---
+**上記の投稿に対し、思考プロセスや前置きを一切含めず、返信コメントのみを出力してください。**
 `;
-}
-
-/**
- * 投稿内容がAIにとって安全かつ適切か（意味が通じるか）を判定する
- */
-async function evaluatePostSafety(
-  apiKey: string,
-  model: GenerativeModel,
-  content: string
-): Promise<boolean> {
-  // 短すぎる、または明らかに意味のない文字列はAPIを呼ばずに弾く（簡易フィルタ）
-  if (content.length < 2 && !/^[\u4e00-\u9faf]+$/.test(content)) return false; // 1文字のひらがな/カタカナ等は弾く（漢字1文字はOK）
-
-  const prompt = `
-あなたはコンテンツフィルターです。
-以下のテキストが「会話として成立する日本語」かどうかを判定してください。
-
-【判定基準】
-- YES (許可):
-  - 日常会話、報告、感想など、意味が汲み取れるもの。
-  - **主語や目的語が省略されていても、状況が想像できるならYES**としてください。（例：「飾り付けした」（何を？がなくてもXmasならOK）、「お腹すいた」「やったー」）
-  - 方言や多少の崩れた表現も、意味が通じるならOK。
-
-- NO (拒否):
-  - **ランダムな文字の羅列**。（例：「あかま」「てておか」「あいうえお」）
-  - 文脈が全くなく、単語単体で意味をなさないもの。（例：「山田」（呼びかけか名前か不明）、「テスト」）
-  - 完全に意味不明な文字列。
-
-迷った場合は、会話の糸口が見つかるなら「YES」に倒してください。
-
-テキスト:
-${content}
-
-フォーマット: [YES/NO] [理由]
-`;
-
-  try {
-    const result = await model.generateContent(prompt);
-    const response = result.response.text().trim();
-    console.log(`Safety evaluation raw response: ${response}`);
-
-    // YESで始まっているか判定（大文字小文字無視、先頭一致）
-    const isSafe = response.toUpperCase().startsWith("YES");
-    console.log(`Safety evaluation result: ${isSafe ? "YES" : "NO"}`);
-    return isSafe;
-  } catch (error) {
-    console.error("Safety evaluation failed:", error);
-    return true; // エラー時はフェイルオープン（念のため通す）かクローズか...ここでは通す
-  }
 }
 
 /**
@@ -1337,29 +1339,6 @@ export const onPostCreated = onDocumentCreated(
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-
-    // 投稿内容の安全性・意味チェック (Binary Filter)
-    /*
-     * 判定ロジックを一時的に無効化 (2025-12-24)
-     * 理由: 現在のGemini Flashモデルでは、短いテキストに対する「文脈の有無」や「意味の通じる/通じない」の線引きが難しく、
-     * 「あかま」のような無意味な文字列を通してしまうか、逆に「飾り付けした」のような会話的な省略を弾いてしまうため。
-     * UXを優先し、フィルターなしで運用する。
-     */
-    /*
-    const postContent = postData.content || "";
-    console.log(`[DEBUG] content check: "${postContent}", length=${postContent.length}`);
-    
-    if (postContent && !postContent.match(/^http/)) { // URLのみの場合はスキップしない（画像判定に任せる）
-      console.log(`[DEBUG] Entering safety evaluation block`);
-      console.log(`Evaluating post safety for content: ${postContent}`);
-      const isSafe = await evaluatePostSafety(apiKey, model, postContent);
-      if (!isSafe) {
-        console.log("Post evaluated as UNSAFE or MEANINGLESS. Skipping AI comments.");
-        return;
-      }
-      console.log("Post evaluated as SAFE. Proceeding with AI comments.");
-    }
-    */
 
     // メディアがある場合は内容を分析
     let mediaDescriptions: string[] = [];
@@ -1422,24 +1401,32 @@ export const onPostCreated = onDocumentCreated(
       circleRules = circleData.rules || "";
 
       // サークルAIをAIPersona形式に変換
-      selectedPersonas = generatedAIs.map((ai) => ({
-        id: ai.id,
-        name: ai.name,
-        namePrefixId: "",
-        nameSuffixId: "",
-        gender: ai.gender,
-        ageGroup: ai.ageGroup,
-        occupation: ai.occupation,
-        personality: {
-          ...ai.personality,
-          examples: ai.personality.examples || ["すごい！", "いいね！"],
-          reactionType: (ai.personality as any).reactionType || "寄り添う",
-          reactionGuide: (ai.personality as any).reactionGuide || "相手の気持ちに寄り添ってください。",
-        },
-        praiseStyle: PRAISE_STYLES[Math.floor(Math.random() * PRAISE_STYLES.length)],
-        avatarIndex: ai.avatarIndex,
-        bio: "",
-      }));
+      // PERSONALITIESから対応するexamplesを取得
+      selectedPersonas = generatedAIs.map((ai) => {
+        // personalityに対応するexamplesをPERSONALITIESから取得
+        const gender = ai.gender || "female";
+        const personalityList = PERSONALITIES[gender];
+        const matchedPersonality = personalityList.find(p => p.id === ai.personality?.id) || personalityList[0];
+
+        return {
+          id: ai.id,
+          name: ai.name,
+          namePrefixId: "",
+          nameSuffixId: "",
+          gender: gender,
+          ageGroup: ai.ageGroup,
+          occupation: ai.occupation,
+          personality: {
+            ...ai.personality,
+            examples: matchedPersonality.examples,
+            reactionType: matchedPersonality.reactionType,
+            reactionGuide: matchedPersonality.reactionGuide,
+          },
+          praiseStyle: PRAISE_STYLES[Math.floor(Math.random() * PRAISE_STYLES.length)],
+          avatarIndex: ai.avatarIndex,
+          bio: "",
+        };
+      });
 
       console.log(`Using ${selectedPersonas.length} circle AIs for comments`);
     } else {
@@ -3559,6 +3546,11 @@ export const generateAICommentV1 = functionsV1.region("asia-northeast1").runWith
     if (!persona) {
       // サークルAIの場合、ペイロードからペルソナを構築
       console.log(`Persona ${personaId} not in AI_PERSONAS, using payload data`);
+
+      // ペイロードに personality が含まれていればそれを使用
+      // 含まれていなければデフォルトを使用
+      const defaultPersonality = PERSONALITIES.female[0]; // 優しい系をデフォルトに
+
       persona = {
         id: personaId,
         name: personaName,
@@ -3567,15 +3559,7 @@ export const generateAICommentV1 = functionsV1.region("asia-northeast1").runWith
         gender: personaGender || "female" as Gender,
         ageGroup: personaAgeGroup || "twenties" as AgeGroup,
         occupation: personaOccupation || { id: "student", name: "頑張り中", bio: "" },
-        personality: personaPersonality || {
-          id: "bright",
-          name: "明るい",
-          trait: "ポジティブで元気",
-          style: "「！」多め、絵文字使う",
-          examples: ["すごい！", "いいね！", "頑張ってる！"],
-          reactionType: "褒める",
-          reactionGuide: "相手の行動や結果を素直に褒めてください。",
-        },
+        personality: personaPersonality || defaultPersonality,
         praiseStyle: personaPraiseStyle || PRAISE_STYLES[0],
         avatarIndex: personaAvatarIndex || 0,
         bio: "",
@@ -3605,19 +3589,17 @@ export const generateAICommentV1 = functionsV1.region("asia-northeast1").runWith
       console.log(`[DUPLICATE CHECK] Query returned ${existingCommentsSnapshot.size} documents`);
 
       if (!existingCommentsSnapshot.empty) {
-        const existingComments = existingCommentsSnapshot.docs.map(doc => {
+        const existingComments = existingCommentsSnapshot.docs.map((doc, index) => {
           const data = doc.data();
-          const commentText = `- ${data.userDisplayName || "AI"}: 「${data.content}」`;
-          console.log(`[DUPLICATE CHECK] Found: ${commentText.substring(0, 80)}...`);
+          const commentText = `<comment_${index + 1}>${data.content}</comment_${index + 1}>`;
+          console.log(`[DUPLICATE CHECK] Found: ${data.content?.substring(0, 50)}...`);
           return commentText;
         });
         existingCommentsContext = `
-【既に投稿されているコメント】
-以下過去のコメントで使われている単語・フレーズは絶対に使わないでください。
-まったく異なる言い回しで、別の角度から返信してください：
-例：お疲れ様というフレーズが既に使われていたら、頑張ったね！に変えるなど
-【以下過去のコメント】
+<existing_comments>
+<instruction>以下は既に投稿されているコメントです。これらと同じフレーズ・表現は使用せず、異なる言い回しで返信してください。</instruction>
 ${existingComments.join("\n")}
+</existing_comments>
 `;
         console.log(`[DUPLICATE CHECK] Added ${existingComments.length} comments to context for diversity`);
       } else {
@@ -3644,25 +3626,33 @@ ${existingComments.join("\n")}
       // メディアコンテキストと既存コメントコンテキストを追加
       const additionalContext = existingCommentsContext + mediaContext;
       if (additionalContext) {
+        // 新しいプロンプト構造では「---」の前に挿入
         prompt = prompt.replace(
-          "【あなた（" + persona.name + "）の返信】",
-          additionalContext + "\n\n【あなた（" + persona.name + "）の返信】"
+          "---\n**上記の投稿に対し",
+          additionalContext + "\n\n---\n**上記の投稿に対し"
         );
       }
     } else {
-      // 一般投稿: 従来のプロンプトを使用
+      // 一般投稿: 新しいプロンプト構造を使用
+      const basePrompt = getSystemPrompt(persona, userDisplayName);
+      const mediaNote = mediaDescriptions && mediaDescriptions.length > 0
+        ? "\n\n# Additional Context (メディア情報)\n添付されたメディア（画像・動画）の内容も考慮して、具体的に褒めてください。"
+        : "";
+
       prompt = `
-${getSystemPrompt(persona, userDisplayName)}
+${basePrompt}
 
-【${userDisplayName}さんの投稿】
-${postContent || "(テキストなし)"}${mediaContext}
-${existingCommentsContext}
-【重要】
-${mediaDescriptions && mediaDescriptions.length > 0
-          ? "添付されたメディア（画像・動画）の内容も考慮して、具体的に褒めてください。"
-          : ""}
+# Input Data (今回の投稿)
 
-【あなた（${persona.name}）の返信】
+<poster_name>${userDisplayName}</poster_name>
+<post_content>
+${postContent || "(テキストなし)"}
+</post_content>
+${mediaContext}
+${existingCommentsContext}${mediaNote}
+
+---
+**上記の投稿に対し、思考プロセスや前置きを一切含めず、返信コメントのみを出力してください。**
 `;
     }
 
