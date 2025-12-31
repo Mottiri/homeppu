@@ -27,6 +27,7 @@ import '../../features/notifications/presentation/screens/notifications_screen.d
 import '../../features/admin/presentation/screens/admin_review_screen.dart';
 import '../../features/admin/presentation/screens/admin_inquiry_list_screen.dart';
 import '../../features/admin/presentation/screens/admin_inquiry_detail_screen.dart';
+import '../../features/admin/presentation/screens/admin_reports_screen.dart';
 import '../../features/settings/presentation/screens/inquiry_list_screen.dart';
 import '../../features/settings/presentation/screens/inquiry_form_screen.dart';
 import '../../features/settings/presentation/screens/inquiry_detail_screen.dart';
@@ -313,6 +314,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/admin/inquiries',
         name: 'adminInquiryList',
         builder: (context, state) => const AdminInquiryListScreen(),
+      ),
+
+      // 管理者用通報一覧
+      GoRoute(
+        path: '/admin/reports',
+        name: 'adminReports',
+        builder: (context, state) => const AdminReportsScreen(),
       ),
 
       // 管理者用問い合わせ詳細
