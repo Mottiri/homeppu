@@ -55,7 +55,7 @@ export class GeminiProvider implements AIProvider {
             model: "gemini-2.5-flash",
             generationConfig: {
                 temperature: options?.temperature ?? 0.7,
-                maxOutputTokens: options?.maxTokens ?? 1024,
+                maxOutputTokens: options?.maxTokens ?? 4096,
             },
         });
 
@@ -64,7 +64,23 @@ export class GeminiProvider implements AIProvider {
 
         const result = await model.generateContent(fullPrompt);
         const response = result.response;
-        return response.text();
+        const text = response.text();
+
+        // デバッグ: Geminiのレスポンス詳細をログ出力
+        const candidate = response.candidates?.[0];
+        console.log("[GEMINI DEBUG]", JSON.stringify({
+            finishReason: candidate?.finishReason,
+            contentLength: text?.length || 0,
+            usageMetadata: response.usageMetadata,
+            safetyRatings: candidate?.safetyRatings?.map(r => ({ category: r.category, probability: r.probability })),
+        }));
+
+        // finish_reasonがMAX_TOKENSの場合は警告
+        if (candidate?.finishReason === "MAX_TOKENS") {
+            console.warn("[GEMINI WARNING] Response was truncated due to MAX_TOKENS limit!");
+        }
+
+        return text;
     }
 
     async generateWithImage(prompt: string, imageBase64: string, mimeType: string, options?: AIOptions): Promise<string> {
@@ -73,7 +89,7 @@ export class GeminiProvider implements AIProvider {
             model: "gemini-2.5-flash",
             generationConfig: {
                 temperature: options?.temperature ?? 0.7,
-                maxOutputTokens: options?.maxTokens ?? 1024,
+                maxOutputTokens: options?.maxTokens ?? 4096,
             },
         });
 
