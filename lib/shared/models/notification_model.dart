@@ -17,6 +17,7 @@ enum NotificationType {
   inquiryStatusChanged, // ステータスが変更された
   inquiryReceived, // 新規問い合わせ受信（管理者向け）
   inquiryUserReply, // ユーザーから返信があった（管理者向け）
+  inquiryDeletionWarning, // 削除予告通知
 }
 
 /// 通知のカテゴリ（タブ分類用）
@@ -45,6 +46,7 @@ NotificationCategory getCategoryFromType(NotificationType type) {
     case NotificationType.inquiryStatusChanged:
     case NotificationType.inquiryReceived:
     case NotificationType.inquiryUserReply:
+    case NotificationType.inquiryDeletionWarning:
       return NotificationCategory.support;
     case NotificationType.system:
       return NotificationCategory.timeline; // システム通知はTLに分類
@@ -147,6 +149,8 @@ class NotificationModel {
         return NotificationType.inquiryReceived;
       case 'inquiry_user_reply':
         return NotificationType.inquiryUserReply;
+      case 'inquiry_deletion_warning':
+        return NotificationType.inquiryDeletionWarning;
       default:
         return NotificationType.system;
     }

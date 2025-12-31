@@ -7500,6 +7500,9 @@ export const updateInquiryStatus = onCall(
       // 解決済みの場合、resolvedAtを記録
       if (status === "resolved") {
         updateData.resolvedAt = now;
+      } else {
+        // 解決済み以外に変更された場合、resolvedAtを削除（カウントリセット）
+        updateData.resolvedAt = admin.firestore.FieldValue.delete();
       }
 
       await inquiryRef.update(updateData);
@@ -7588,3 +7591,187 @@ export const updateInquiryStatus = onCall(
     }
   }
 );
+
+/**
+ * 問い合わせ自動クリーンアップ（毎日実行）
+ * - 6日経過: 削除予告通知
+ * - 7日経過: 本体削除 + アーカイブ保存
+ */
+export const cleanupResolvedInquiries = onSchedule(
+  {
+    schedule: "0 3 * * *", // 毎日午前3時（日本時間）
+    timeZone: "Asia/Tokyo",
+    region: "asia-northeast1",
+  },
+  async () => {
+    console.log("=== cleanupResolvedInquiries started ===");
+
+    const now = new Date();
+    const sixDaysAgo = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    // 解決済みの問い合わせを取得
+    const inquiriesSnapshot = await db.collection("inquiries")
+      .where("status", "==", "resolved")
+      .get();
+
+    console.log(`Found ${inquiriesSnapshot.size} resolved inquiries`);
+
+    for (const doc of inquiriesSnapshot.docs) {
+      const inquiry = doc.data();
+      const inquiryId = doc.id;
+      const resolvedAt = inquiry.resolvedAt?.toDate?.();
+
+      if (!resolvedAt) {
+        console.log(`Inquiry ${inquiryId} has no resolvedAt, skipping`);
+        continue;
+      }
+
+      // 7日以上経過 → 削除
+      if (resolvedAt <= sevenDaysAgo) {
+        console.log(`Deleting inquiry ${inquiryId} (resolved at ${resolvedAt})`);
+        await deleteInquiryWithArchive(inquiryId, inquiry);
+        continue;
+      }
+
+      // 6日以上経過 & 7日未満 → 削除予告通知
+      if (resolvedAt <= sixDaysAgo && resolvedAt > sevenDaysAgo) {
+        console.log(`Sending deletion warning for inquiry ${inquiryId}`);
+        await sendDeletionWarning(inquiryId, inquiry);
+      }
+    }
+
+    console.log("=== cleanupResolvedInquiries completed ===");
+  }
+);
+
+/**
+ * 問い合わせを削除し、アーカイブに保存
+ */
+async function deleteInquiryWithArchive(
+  inquiryId: string,
+  inquiry: FirebaseFirestore.DocumentData
+): Promise<void> {
+  try {
+    const inquiryRef = db.collection("inquiries").doc(inquiryId);
+
+    // 1. メッセージを取得して会話ログを作成
+    const messagesSnapshot = await inquiryRef.collection("messages")
+      .orderBy("createdAt", "asc")
+      .get();
+
+    let conversationLog = "";
+    let firstMessage = "";
+
+    messagesSnapshot.docs.forEach((msgDoc, index) => {
+      const msg = msgDoc.data();
+      const msgDate = msg.createdAt?.toDate?.() || new Date();
+      const dateStr = `${msgDate.getFullYear()}-${String(msgDate.getMonth() + 1).padStart(2, "0")}-${String(msgDate.getDate()).padStart(2, "0")} ${String(msgDate.getHours()).padStart(2, "0")}:${String(msgDate.getMinutes()).padStart(2, "0")}`;
+      const sender = msg.senderType === "admin" ? "運営チーム" : "ユーザー";
+      conversationLog += `[${dateStr} ${sender}]\n${msg.content}\n\n`;
+
+      if (index === 0) {
+        firstMessage = msg.content || "";
+      }
+    });
+
+    // 2. カテゴリラベル
+    const categoryLabels: { [key: string]: string } = {
+      bug: "バグ報告",
+      feature: "機能要望",
+      account: "アカウント関連",
+      other: "その他",
+    };
+    const categoryLabel = categoryLabels[inquiry.category] || inquiry.category;
+
+    // 3. 日時フォーマット
+    const createdAtDate = inquiry.createdAt?.toDate?.() || new Date();
+    const resolvedAtDate = inquiry.resolvedAt?.toDate?.() || new Date();
+    const formatDate = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+
+    // 4. アーカイブに保存
+    await db.collection("inquiry_archives").add({
+      originalInquiryId: inquiryId,
+      userId: inquiry.userId,
+      userDisplayName: inquiry.userDisplayName,
+      category: categoryLabel,
+      subject: inquiry.subject,
+      firstMessage,
+      conversationLog: conversationLog.trim(),
+      createdAt: inquiry.createdAt,
+      resolvedAt: inquiry.resolvedAt,
+      archivedAt: admin.firestore.FieldValue.serverTimestamp(),
+      // 1年後に削除予定
+      expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+    });
+
+    console.log(`Archived inquiry ${inquiryId}`);
+
+    // 5. メッセージサブコレクションを削除
+    const batch = db.batch();
+    messagesSnapshot.docs.forEach((msgDoc) => {
+      batch.delete(msgDoc.ref);
+    });
+    await batch.commit();
+
+    console.log(`Deleted ${messagesSnapshot.size} messages for inquiry ${inquiryId}`);
+
+    // 6. Storage画像を削除（存在する場合）
+    // 画像URLからファイルパスを抽出して削除
+    for (const msgDoc of messagesSnapshot.docs) {
+      const msg = msgDoc.data();
+      if (msg.imageUrl) {
+        try {
+          // URLからファイルパスを抽出
+          const urlMatch = msg.imageUrl.match(/inquiries%2F([^?]+)/);
+          if (urlMatch) {
+            const filePath = `inquiries/${decodeURIComponent(urlMatch[1])}`;
+            await admin.storage().bucket().file(filePath).delete();
+            console.log(`Deleted storage file: ${filePath}`);
+          }
+        } catch (storageError) {
+          console.error(`Error deleting storage file for inquiry ${inquiryId}:`, storageError);
+        }
+      }
+    }
+
+    // 7. 問い合わせ本体を削除
+    await inquiryRef.delete();
+    console.log(`Deleted inquiry ${inquiryId}`);
+
+  } catch (error) {
+    console.error(`Error deleting inquiry ${inquiryId}:`, error);
+  }
+}
+
+/**
+ * 削除予告通知を送信
+ */
+async function sendDeletionWarning(
+  inquiryId: string,
+  inquiry: FirebaseFirestore.DocumentData
+): Promise<void> {
+  try {
+    const userId = inquiry.userId;
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    const notifyBody = `「${inquiry.subject}」は明日削除されます（ステータス: 解決済み）`;
+
+    // アプリ内通知
+    await db.collection("users").doc(userId).collection("notifications").add({
+      type: "inquiry_deletion_warning",
+      title: "問い合わせ削除予告",
+      body: notifyBody,
+      inquiryId,
+      isRead: false,
+      createdAt: now,
+    });
+
+    // プッシュ通知
+    await sendPushOnly(userId, "問い合わせ削除予告", notifyBody, { inquiryId });
+
+    console.log(`Sent deletion warning to user ${userId} for inquiry ${inquiryId}`);
+  } catch (error) {
+    console.error(`Error sending deletion warning for inquiry ${inquiryId}:`, error);
+  }
+}
