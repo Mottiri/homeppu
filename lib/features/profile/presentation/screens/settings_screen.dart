@@ -732,6 +732,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ),
                           ),
                           const SizedBox(height: 12),
+                          // 通報管理
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: () => context.push('/admin/reports'),
+                              icon: const Icon(Icons.flag_outlined),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.warning,
+                                foregroundColor: Colors.white,
+                              ),
+                              label: const Text('通報管理'),
+                            ),
+                          ),
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton.icon(
