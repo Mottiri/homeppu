@@ -2505,6 +2505,9 @@ ${content}
 
 /**
  * コンテンツを通報する
+ * - 重複チェック（1ユーザー1投稿1回）
+ * - 5件で自動非表示化 + 投稿者通知
+ * - 3件で徳ポイント減少
  */
 export const reportContent = onCall(
   { region: "asia-northeast1" },
@@ -2536,6 +2539,8 @@ export const reportContent = onCall(
       throw new HttpsError("already-exists", "既にこの内容を通報しています");
     }
 
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
     // 通報を記録
     const reportRef = await db.collection("reports").add({
       reporterId: reporterId,
@@ -2544,7 +2549,7 @@ export const reportContent = onCall(
       contentType: contentType,  // "post" | "comment"
       reason: reason,
       status: "pending",  // pending, reviewed, resolved, dismissed
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: now,
     });
 
     // 対象ユーザーの通報カウントを増加
@@ -2553,14 +2558,51 @@ export const reportContent = onCall(
       reportCount: admin.firestore.FieldValue.increment(1),
     });
 
-    // 通報が3件以上溜まったら自動で徳を減少
-    const reportsCount = await db
+    // 同一コンテンツへの通報数をカウント
+    const contentReportsSnapshot = await db
+      .collection("reports")
+      .where("contentId", "==", contentId)
+      .where("status", "==", "pending")
+      .get();
+
+    const contentReportCount = contentReportsSnapshot.size;
+    console.log(`Report count for content ${contentId}: ${contentReportCount}`);
+
+    // 5件以上で自動非表示化
+    if (contentReportCount >= 5) {
+      if (contentType === "post") {
+        const postRef = db.collection("posts").doc(contentId);
+        await postRef.update({
+          isHidden: true,
+          hiddenAt: now,
+          hiddenReason: "通報多数のため自動非表示",
+        });
+
+        // 投稿者に通知
+        await db.collection("users").doc(targetUserId).collection("notifications").add({
+          type: "post_hidden",
+          title: "投稿が非表示になりました",
+          body: "複数の通報があったため、投稿が一時的に非表示になりました。運営が確認します。",
+          postId: contentId,
+          isRead: false,
+          createdAt: now,
+        });
+
+        // プッシュ通知
+        await sendPushOnly(targetUserId, "投稿が非表示になりました", "複数の通報があったため、投稿が一時的に非表示になりました。", { postId: contentId });
+
+        console.log(`Post ${contentId} hidden due to ${contentReportCount} reports`);
+      }
+    }
+
+    // 対象ユーザーへの累積通報が3件以上で徳減少
+    const userReportsSnapshot = await db
       .collection("reports")
       .where("targetUserId", "==", targetUserId)
       .where("status", "==", "pending")
       .get();
 
-    if (reportsCount.size >= 3) {
+    if (userReportsSnapshot.size >= 3) {
       const virtueResult = await decreaseVirtue(
         targetUserId,
         "複数の通報を受けたため",
@@ -2569,7 +2611,7 @@ export const reportContent = onCall(
 
       // 通報をreviewedに更新
       const batch = db.batch();
-      reportsCount.docs.forEach((doc) => {
+      userReportsSnapshot.docs.forEach((doc) => {
         batch.update(doc.ref, { status: "reviewed" });
       });
       await batch.commit();
@@ -2580,7 +2622,7 @@ export const reportContent = onCall(
     return {
       success: true,
       reportId: reportRef.id,
-      message: "通報を受け付けました。ご協力ありがとうございます。",
+      message: "通報内容を運営チームで審査します。ご協力ありがとうございました！",
     };
   }
 );
