@@ -13,6 +13,7 @@ import '../../../../shared/services/follow_service.dart';
 import '../../../../shared/services/post_service.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
 import '../../../../shared/widgets/virtue_indicator.dart';
+import '../../../admin/presentation/widgets/admin_menu_bottom_sheet.dart';
 import '../../../home/presentation/widgets/reaction_background.dart';
 
 /// プロフィール画面
@@ -210,7 +211,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           style: Theme.of(context).textTheme.headlineMedium,
                         ),
                         const Spacer(),
-                        // 管理者専用：レビュー画面リンク
+                        // 管理者専用メニュー
                         if (_isOwnProfile && widget.userId == null)
                           StreamBuilder<String?>(
                             stream: Stream.value(
@@ -219,12 +220,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             builder: (context, snapshot) {
                               const adminUid = 'hYr5LUH4mhR60oQfVOggrjGYJjG2';
                               if (snapshot.data == adminUid) {
-                                return IconButton(
-                                  onPressed: () =>
-                                      context.push('/admin-review'),
-                                  icon: const Icon(Icons.flag_outlined),
-                                  tooltip: '要審査投稿',
-                                );
+                                return const AdminMenuIcon();
                               }
                               return const SizedBox.shrink();
                             },
