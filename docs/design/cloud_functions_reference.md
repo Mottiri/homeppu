@@ -1,7 +1,7 @@
 # Cloud Functions リファレンス
 
-**最終更新**: 2025-12-26  
-**総関数数**: 46個
+**最終更新**: 2026-01-01  
+**総関数数**: 48個
 
 ---
 
@@ -125,6 +125,16 @@
 | 関数名 | タイプ | 説明 |
 |--------|--------|------|
 | `cleanupOrphanedMedia` | Scheduled | 毎日3時に孤立メディア・データをクリーンアップ |
+| `cleanupReports` | Scheduled | 毎日0時に1ヶ月以上前の解決済み通報を自動削除 |
+| `onPostDeleted` | Firestore Trigger | 投稿削除時にコメント・リアクション・通知・メディアをカスケード削除 |
+
+---
+
+## 12. プッシュ通知自動化
+
+| 関数名 | タイプ | 説明 |
+|--------|--------|------|
+| `onNotificationCreated` | Firestore Trigger | 通知ドキュメント作成時に自動でFCMプッシュ通知を送信 |
 
 ---
 
@@ -133,9 +143,9 @@
 | タイプ | 説明 | 関数数 |
 |--------|------|--------|
 | **Callable** | クライアントから直接呼び出し | 21 |
-| **Firestore Trigger** | Firestoreドキュメント変更時に発火 | 10 |
+| **Firestore Trigger** | Firestoreドキュメント変更時に発火 | 12 |
 | **HTTP** | HTTPリクエストで呼び出し（Cloud Tasks用） | 9 |
-| **Scheduled** | Cloud Schedulerで定期実行 | 4 |
+| **Scheduled** | Cloud Schedulerで定期実行 | 5 |
 
 ---
 

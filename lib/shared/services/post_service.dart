@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../models/post_model.dart';
-import 'media_service.dart';
 import 'ai_service.dart';
 
 /// 投稿関連の共通ロジックを提供するサービス
@@ -51,68 +50,11 @@ class PostService {
     if (confirmed != true) return false;
 
     try {
-      // バッチ処理で一括削除（整合性担保とルール回避のため）
-      final batch = _firestore.batch();
+      // 投稿ドキュメントを削除（カスケード削除はCloud Functionsで処理）
+      await _firestore.collection('posts').doc(post.id).delete();
 
-      // 1. 関連するコメントを削除対象に追加
-      // Note: 投稿を先に消すと、コメント削除のセキュリティルール(get(post))が失敗するため
-      // バッチにするか、コメント→投稿の順で消す必要がある。バッチが確実。
-      final comments = await _firestore
-          .collection('comments')
-          .where('postId', isEqualTo: post.id)
-          .get();
-
-      for (final doc in comments.docs) {
-        batch.delete(doc.reference);
-      }
-
-      // 2. 関連するリアクションも削除対象に追加
-      final reactions = await _firestore
-          .collection('reactions')
-          .where('postId', isEqualTo: post.id)
-          .get();
-
-      for (final doc in reactions.docs) {
-        batch.delete(doc.reference);
-      }
-
-      // 3. 投稿自体を削除対象に追加
-      batch.delete(_firestore.collection('posts').doc(post.id));
-
-      // 4. ユーザーの投稿数を減少
-      batch.update(_firestore.collection('users').doc(post.userId), {
-        'totalPosts': FieldValue.increment(-1),
-      });
-
-      // 5. サークル投稿の場合、postCountをデクリメント
-      if (post.circleId != null && post.circleId!.isNotEmpty) {
-        batch.update(_firestore.collection('circles').doc(post.circleId), {
-          'postCount': FieldValue.increment(-1),
-        });
-      }
-
-      // コミット
       debugPrint('PostService: Deleting post: ${post.id}');
-      await batch.commit();
       debugPrint('PostService: Post deleted successfully');
-
-      // 6. Storageからメディアを削除（バッチ外で実行）
-      if (post.allMedia.isNotEmpty) {
-        final mediaService = MediaService();
-        for (final media in post.allMedia) {
-          debugPrint('PostService: Deleting media from Storage: ${media.url}');
-          await mediaService.deleteMedia(media.url);
-
-          // サムネイルも削除
-          if (media.thumbnailUrl != null && media.thumbnailUrl!.isNotEmpty) {
-            debugPrint(
-              'PostService: Deleting thumbnail from Storage: ${media.thumbnailUrl}',
-            );
-            await mediaService.deleteMedia(media.thumbnailUrl!);
-          }
-        }
-        debugPrint('PostService: Deleted ${post.allMedia.length} media files');
-      }
 
       // 成功メッセージ
       if (context.mounted) {
@@ -185,38 +127,8 @@ class PostService {
   /// 投稿をIDで削除（確認ダイアログなし、内部用）
   Future<bool> deletePostById(String postId, String userId) async {
     try {
-      final postDoc = await _firestore.collection('posts').doc(postId).get();
-      if (!postDoc.exists) return false;
-
-      final batch = _firestore.batch();
-
-      // コメント削除
-      final comments = await _firestore
-          .collection('comments')
-          .where('postId', isEqualTo: postId)
-          .get();
-      for (final doc in comments.docs) {
-        batch.delete(doc.reference);
-      }
-
-      // リアクション削除
-      final reactions = await _firestore
-          .collection('reactions')
-          .where('postId', isEqualTo: postId)
-          .get();
-      for (final doc in reactions.docs) {
-        batch.delete(doc.reference);
-      }
-
-      // 投稿削除
-      batch.delete(_firestore.collection('posts').doc(postId));
-
-      // ユーザー投稿数デクリメント
-      batch.update(_firestore.collection('users').doc(userId), {
-        'totalPosts': FieldValue.increment(-1),
-      });
-
-      await batch.commit();
+      // 投稿ドキュメントを削除（カスケード削除はCloud Functionsで処理）
+      await _firestore.collection('posts').doc(postId).delete();
       debugPrint('PostService: Deleted auto-post $postId');
       return true;
     } catch (e) {

@@ -1,5 +1,5 @@
 // ignore_for_file: use_build_context_synchronously
-import 'package:cloud_functions/cloud_functions.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,9 +7,9 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../shared/providers/auth_provider.dart';
-import '../../../../shared/providers/ai_provider.dart';
+
 import '../../../../shared/widgets/avatar_selector.dart';
-import '../../../../shared/services/name_parts_service.dart';
+
 import '../../../../shared/services/inquiry_service.dart';
 import 'name_edit_screen.dart';
 
@@ -669,295 +669,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
             const SizedBox(height: 16),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 32),
 
-            // 管理者設定（開発用）
-            if (ref.watch(currentUserProvider).valueOrNull?.email ==
-                'movielike4@gmail.com')
-              Card(
-                child: ExpansionTile(
-                  leading: const Icon(Icons.admin_panel_settings),
-                  title: const Text('管理者設定'),
-                  subtitle: const Text(
-                    '開発者専用',
-                    style: TextStyle(fontSize: 12, color: AppColors.textHint),
-                  ),
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      child: Column(
-                        children: [
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: () async {
-                                try {
-                                  final aiService = ref.read(aiServiceProvider);
-                                  await aiService.initializeAIAccounts();
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('AIアカウントを作成しました！🤖'),
-                                        backgroundColor: AppColors.success,
-                                      ),
-                                    );
-                                  }
-                                } catch (e) {
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('エラー: $e'),
-                                        backgroundColor: AppColors.error,
-                                      ),
-                                    );
-                                  }
-                                }
-                              },
-                              icon: const Icon(Icons.group_add),
-                              label: const Text('AIアカウントを初期化'),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          // 問い合わせ管理
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: () => context.push('/admin/inquiries'),
-                              icon: const Icon(Icons.mail_outline),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primary,
-                                foregroundColor: Colors.white,
-                              ),
-                              label: const Text('問い合わせ管理'),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          // 通報管理
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: () => context.push('/admin/reports'),
-                              icon: const Icon(Icons.flag_outlined),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.warning,
-                                foregroundColor: Colors.white,
-                              ),
-                              label: const Text('通報管理'),
-                            ),
-                          ),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: () async {
-                                try {
-                                  final aiService = ref.read(aiServiceProvider);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('AI投稿を生成中...（少し時間がかかります）'),
-                                      backgroundColor: AppColors.primary,
-                                      duration: Duration(seconds: 10),
-                                    ),
-                                  );
-                                  final result = await aiService
-                                      .generateAIPosts();
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(
-                                      context,
-                                    ).hideCurrentSnackBar();
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          'AI投稿を生成しました！📝 ${result['posts']}件の投稿、${result['comments']}件のコメント',
-                                        ),
-                                        backgroundColor: AppColors.success,
-                                      ),
-                                    );
-                                  }
-                                } catch (e) {
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(
-                                      context,
-                                    ).hideCurrentSnackBar();
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('エラー: $e'),
-                                        backgroundColor: AppColors.error,
-                                      ),
-                                    );
-                                  }
-                                }
-                              },
-                              icon: const Icon(Icons.auto_awesome),
-                              label: const Text('AI過去投稿を生成'),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: () async {
-                                final namePartsService = NamePartsService();
-                                try {
-                                  await namePartsService.initializeNameParts();
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('名前パーツを初期化しました'),
-                                      ),
-                                    );
-                                  }
-                                } catch (e) {
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('エラー: $e')),
-                                    );
-                                  }
-                                }
-                              },
-                              icon: const Icon(Icons.abc),
-                              label: const Text('名前パーツ初期化'),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: () async {
-                                try {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'サークルAI投稿を生成中...（少し時間がかかります）',
-                                      ),
-                                      backgroundColor: AppColors.primary,
-                                      duration: Duration(seconds: 30),
-                                    ),
-                                  );
-                                  final functions =
-                                      FirebaseFunctions.instanceFor(
-                                        region: 'asia-northeast1',
-                                      );
-                                  final result = await functions
-                                      .httpsCallable('triggerCircleAIPosts')
-                                      .call();
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(
-                                      context,
-                                    ).hideCurrentSnackBar();
-                                    final data =
-                                        result.data as Map<String, dynamic>?;
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          'サークルAI投稿を生成しました！🎯 ${data?['totalPosts'] ?? 0}件',
-                                        ),
-                                        backgroundColor: AppColors.success,
-                                      ),
-                                    );
-                                  }
-                                } catch (e) {
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(
-                                      context,
-                                    ).hideCurrentSnackBar();
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('エラー: $e'),
-                                        backgroundColor: AppColors.error,
-                                      ),
-                                    );
-                                  }
-                                }
-                              },
-                              icon: const Icon(Icons.groups),
-                              label: const Text('サークルAI投稿を生成'),
-                            ),
-                          ),
-
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: () async {
-                                final confirmed = await showDialog<bool>(
-                                  context: context,
-                                  builder: (context) => AlertDialog(
-                                    title: const Text('本当に削除しますか？'),
-                                    content: const Text(
-                                      '全てのAIユーザーと、その投稿・コメント・リアクションが完全に削除されます。\nこの操作は取り消せません。',
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(context, false),
-                                        child: const Text('キャンセル'),
-                                      ),
-                                      ElevatedButton(
-                                        onPressed: () =>
-                                            Navigator.pop(context, true),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: AppColors.error,
-                                          foregroundColor: Colors.white,
-                                        ),
-                                        child: const Text('全削除実行'),
-                                      ),
-                                    ],
-                                  ),
-                                );
-
-                                if (confirmed != true) return;
-
-                                try {
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'AIユーザーを削除中...（数分かかる場合があります）',
-                                        ),
-                                        duration: Duration(minutes: 5),
-                                      ),
-                                    );
-                                  }
-
-                                  final aiService = ref.read(aiServiceProvider);
-                                  await aiService.deleteAllAIUsers();
-
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(
-                                      context,
-                                    ).hideCurrentSnackBar();
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('AIデータの全削除が完了しました！🧹'),
-                                        backgroundColor: AppColors.success,
-                                      ),
-                                    );
-                                  }
-                                } catch (e) {
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(
-                                      context,
-                                    ).hideCurrentSnackBar();
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('エラー: $e')),
-                                    );
-                                  }
-                                }
-                              },
-                              icon: const Icon(Icons.delete_forever),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.error,
-                                foregroundColor: Colors.white,
-                              ),
-                              label: const Text('データ全削除（危険）'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+            // バージョン情報
+            Center(
+              child: Text(
+                'Version 1.0.0',
+                style: Theme.of(context).textTheme.bodySmall,
               ),
+            ),
+
+            const SizedBox(height: 100),
 
             const SizedBox(height: 32),
 

@@ -34,7 +34,8 @@ service cloud.firestore {
          allow read: if isAuthenticated() && isOwner(userId);
          allow update: if isAuthenticated() && isOwner(userId); // 既読更新用
          allow delete: if isAuthenticated() && isOwner(userId); // 削除用
-         allow create: if false; // サーバー側でのみ作成
+         // 管理者は通知を作成可能、サーバー側も作成可能（Admin SDKはルール無視なのでルール不要だが、クライアントSDKからは必要）
+         allow create: if request.auth.uid == 'hYr5LUH4mhR60oQfVOggrjGYJjG2'; 
       }
 
       // カテゴリサブコレクション
@@ -91,17 +92,17 @@ service cloud.firestore {
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isPinned', 'isPinnedTop']) &&
          exists(/databases/$(database)/documents/circles/$(resource.data.circleId)) &&
          get(/databases/$(database)/documents/circles/$(resource.data.circleId)).data.ownerId == request.auth.uid) ||
-        // 管理者はneedsReviewを更新可能
-        (request.auth.uid == 'hYr5LUH4mhR60oQfVOggrjGYJjG2' &&
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['needsReview']))
+        // 管理者は全ての更新が可能
+        request.auth.uid == 'hYr5LUH4mhR60oQfVOggrjGYJjG2'
       );
       
-      // 削除: 投稿者 または サークル投稿の場合はサークルオーナーも可
+      // 削除: 投稿者 または サークル投稿の場合はサークルオーナーも可、管理者は削除可能
       allow delete: if isAuthenticated() && (
         isOwner(resource.data.userId) ||
         (resource.data.circleId != null && 
          exists(/databases/$(database)/documents/circles/$(resource.data.circleId)) &&
-         get(/databases/$(database)/documents/circles/$(resource.data.circleId)).data.ownerId == request.auth.uid)
+         get(/databases/$(database)/documents/circles/$(resource.data.circleId)).data.ownerId == request.auth.uid) ||
+        request.auth.uid == 'hYr5LUH4mhR60oQfVOggrjGYJjG2'
       );
     }
     
@@ -114,12 +115,13 @@ service cloud.firestore {
       allow create: if isAuthenticated() && isNotBanned() && 
         request.resource.data.userId == request.auth.uid;
       
-      // 削除: コメント投稿者 または 元投稿の所有者 または サークルオーナー
+      // 削除: コメント投稿者 または 元投稿の所有者 または サークルオーナー または 管理者
       allow delete: if isAuthenticated() && (
         isOwner(resource.data.userId) ||
         isOwner(get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.userId) ||
         (get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.circleId != null &&
-         get(/databases/$(database)/documents/circles/$(get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.circleId)).data.ownerId == request.auth.uid)
+         get(/databases/$(database)/documents/circles/$(get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.circleId)).data.ownerId == request.auth.uid) ||
+        request.auth.uid == 'hYr5LUH4mhR60oQfVOggrjGYJjG2'
       );
     }
     
@@ -132,12 +134,13 @@ service cloud.firestore {
       allow create: if isAuthenticated() && isNotBanned() && 
         request.resource.data.userId == request.auth.uid;
       
-      // 削除: リアクションした本人 または 元投稿の所有者 または サークルオーナー
+      // 削除: リアクションした本人 または 元投稿の所有者 または サークルオーナー または 管理者
       allow delete: if isAuthenticated() && (
         isOwner(resource.data.userId) ||
         isOwner(get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.userId) ||
         (get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.circleId != null &&
-         get(/databases/$(database)/documents/circles/$(get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.circleId)).data.ownerId == request.auth.uid)
+         get(/databases/$(database)/documents/circles/$(get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.circleId)).data.ownerId == request.auth.uid) ||
+        request.auth.uid == 'hYr5LUH4mhR60oQfVOggrjGYJjG2'
       );
     }
 
@@ -186,12 +189,6 @@ service cloud.firestore {
       );
     }
     
-    // 通報コレクション
-    match /reports/{reportId} {
-      // 作成のみ許可（Cloud Functionsで処理）
-      allow read: if false;
-      allow create: if false;
-    }
     
     // 徳ポイント履歴コレクション
     match /virtueHistory/{historyId} {
@@ -238,8 +235,18 @@ service cloud.firestore {
           get(/databases/$(database)/documents/inquiries/$(inquiryId)).data.userId == request.auth.uid
         );
         // 書き込み: Cloud Functionsのみ
-        allow write: if false;
+        allow create, delete: if false;
       }
+    }
+
+    // 通報コレクション
+    match /reports/{reportId} {
+      // 管理者のみ読み取り可能
+      allow read: if isAuthenticated() && request.auth.uid == 'hYr5LUH4mhR60oQfVOggrjGYJjG2';
+      // 管理者のみ更新可能（ステータス変更）
+      allow update: if isAuthenticated() && request.auth.uid == 'hYr5LUH4mhR60oQfVOggrjGYJjG2';
+      // 作成・削除はCloud Functionsのみ
+      allow create, delete: if false;
     }
 
     // 要審査投稿コレクション（管理者専用）
@@ -251,9 +258,6 @@ service cloud.firestore {
       // 作成・削除はCloud Functionsのみ
       allow create, delete: if false;
     }
-
-    // 投稿の管理者更新許可（needsReviewフラグ）
-    // ※postsコレクションの既存ルールを活用
   }
 }
 

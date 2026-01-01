@@ -28,6 +28,7 @@ import '../../features/admin/presentation/screens/admin_review_screen.dart';
 import '../../features/admin/presentation/screens/admin_inquiry_list_screen.dart';
 import '../../features/admin/presentation/screens/admin_inquiry_detail_screen.dart';
 import '../../features/admin/presentation/screens/admin_reports_screen.dart';
+import '../../features/admin/presentation/screens/admin_report_detail_screen.dart';
 import '../../features/settings/presentation/screens/inquiry_list_screen.dart';
 import '../../features/settings/presentation/screens/inquiry_form_screen.dart';
 import '../../features/settings/presentation/screens/inquiry_detail_screen.dart';
@@ -132,11 +133,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             name: 'userProfile',
             builder: (context, state) {
               final userId = state.pathParameters['userId']!;
-              // ユニークなキーを使用してNavigatorキー重複を防止
-              return ProfileScreen(
-                key: ValueKey('profile_$userId'),
-                userId: userId,
-              );
+              return ProfileScreen(userId: userId);
             },
           ),
         ],
@@ -321,6 +318,26 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/admin/reports',
         name: 'adminReports',
         builder: (context, state) => const AdminReportsScreen(),
+      ),
+
+      // 管理者用通報詳細
+      GoRoute(
+        path: '/admin/reports/:reportId',
+        name: 'adminReportDetail',
+        builder: (context, state) {
+          final reportId = state.pathParameters['reportId']!;
+          return AdminReportDetailScreen(reportId: reportId);
+        },
+      ),
+
+      // 管理者用ユーザープロフィール（ShellRoute外）
+      GoRoute(
+        path: '/admin/user/:userId',
+        name: 'adminUserProfile',
+        builder: (context, state) {
+          final userId = state.pathParameters['userId']!;
+          return ProfileScreen(userId: userId);
+        },
       ),
 
       // 管理者用問い合わせ詳細

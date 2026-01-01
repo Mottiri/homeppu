@@ -184,10 +184,34 @@ sequenceDiagram
 
 ### Cloud Functions
 - [index.ts](file:///c:/Dev/homeppu/functions/src/index.ts)
-  - `sendPushNotification` - プッシュ通知送信ヘルパー
+  - `sendPushOnly` - プッシュ通知送信ヘルパー（FCMペイロード自動文字列化対応）
+  - `onNotificationCreated` - 通知ドキュメント作成時に自動プッシュ送信
   - `onCommentCreatedNotify` - コメント通知
   - `onReactionAddedNotify` - リアクション通知
-  - `sendTaskReminders` - タスクリマインダー
+  - `executeTaskReminder` - タスクリマインダー（Cloud Tasks経由）
 
 ### クライアント
 - [notification_service.dart](file:///c:/Dev/homeppu/lib/shared/services/notification_service.dart)
+
+---
+
+## プッシュ通知の自動化 (2026-01-01追加)
+
+### 概要
+従来は各機能で個別にプッシュ通知を送信していましたが、`onNotificationCreated` トリガーにより **Firestoreに通知を保存するだけでプッシュ通知も自動送信** される仕組みに変更しました。
+
+### 対応する通知タイプ
+
+| 通知タイプ | 設定チェック | 説明 |
+|-----------|-------------|------|
+| `comment` | あり | ユーザー設定でOFF可能 |
+| `reaction` | あり | ユーザー設定でOFF可能 |
+| `task_reminder` | なし | 常に送信（重要通知） |
+| `admin_report` | なし | 常に送信（管理者向け） |
+| `post_deleted` | なし | 常に送信（重要通知） |
+
+### FCM dataペイロードの制約
+FCMの `data` フィールドは **すべての値が文字列** である必要があるため、`sendPushOnly` ヘルパー内で以下の変換を行います：
+- `Timestamp` → ISO形式の文字列
+- `boolean` → `"true"` / `"false"`
+- その他 → `String()` で変換

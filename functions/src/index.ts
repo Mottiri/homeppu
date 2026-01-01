@@ -1,7 +1,8 @@
-import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentUpdated, onDocumentDeleted } from "firebase-functions/v2/firestore";
 import * as functionsV1 from "firebase-functions/v1";
 import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
+import { setGlobalOptions } from "firebase-functions/v2"; // Global Options
 import { defineSecret } from "firebase-functions/params";
 
 import * as admin from "firebase-admin";
@@ -12,7 +13,7 @@ import { CloudTasksClient } from "@google-cloud/tasks";
 import { google } from "googleapis";
 
 // プロジェクトIDとロケーション（Cloud Tasks用）
-const PROJECT_ID = "positive-sns"; // ※デプロイ環境に合わせて変更される前提、またはprocess.env.GCLOUD_PROJECT
+const PROJECT_ID = "positive-sns";
 const LOCATION = "asia-northeast1";
 const QUEUE_NAME = "generateAIComment";
 
@@ -33,6 +34,9 @@ import * as path from "path";
 
 admin.initializeApp();
 const db = admin.firestore();
+
+// Set global options for v2 functions
+setGlobalOptions({ region: "asia-northeast1" });
 
 /**
  * AIProviderFactoryを作成するヘルパー関数
@@ -68,7 +72,7 @@ async function sendPushOnly(
   userId: string,
   title: string,
   body: string,
-  data?: { [key: string]: string }
+  data?: Record<string, unknown>
 ): Promise<void> {
   try {
     const userDoc = await db.collection("users").doc(userId).get();
@@ -80,17 +84,38 @@ async function sendPushOnly(
       return;
     }
 
+    // チャンネルIDの決定
+    let channelId = "default_channel";
+    if (data?.type === "task_reminder" || data?.type === "task_due") {
+      channelId = "task_reminders";
+    }
+
+    // FCM dataペイロードは全て文字列である必要があるため変換
+    const stringifiedData: { [key: string]: string } = {};
+    if (data) {
+      for (const [key, value] of Object.entries(data)) {
+        if (value !== undefined && value !== null) {
+          // Timestamp オブジェクトの場合は toDate().toISOString() を使用
+          if (typeof value === "object" && "toDate" in value && typeof value.toDate === "function") {
+            stringifiedData[key] = value.toDate().toISOString();
+          } else {
+            stringifiedData[key] = String(value);
+          }
+        }
+      }
+    }
+
     const message: admin.messaging.Message = {
       token: fcmToken,
       notification: {
         title,
         body,
       },
-      data: data || {},
+      data: stringifiedData,
       android: {
         priority: "high",
         notification: {
-          channelId: "default_channel",
+          channelId,
         },
       },
       apns: {
@@ -104,7 +129,7 @@ async function sendPushOnly(
     };
 
     await admin.messaging().send(message);
-    console.log(`Push notification sent to user ${userId}: ${title}`);
+    console.log(`Push notification sent to user ${userId}: ${title} (channel: ${channelId})`);
   } catch (error: unknown) {
     // トークンが無効な場合はトークンを削除
     if (error && typeof error === "object" && "code" in error) {
@@ -2619,6 +2644,30 @@ export const reportContent = onCall(
       console.log(`Auto virtue decrease for ${targetUserId}: ${virtueResult.newVirtue} `);
     }
 
+    // ===============================================
+    // 管理者への通知（新規通報）
+    // ===============================================
+    const ADMIN_UID = "hYr5LUH4mhR60oQfVOggrjGYJjG2";
+    if (reporterId !== ADMIN_UID) {
+      try {
+        const notifyBody = `新規通報: ${reason} (対象: ${targetUserId})`;
+
+        // アプリ内通知 (プッシュ通知はonNotificationCreatedで自動送信)
+        await db.collection("users").doc(ADMIN_UID).collection("notifications").add({
+          type: "admin_report",
+          title: "新規通報を受信",
+          body: notifyBody,
+          reportId: reportRef.id,
+          isRead: false,
+          createdAt: now,
+        });
+
+        console.log(`Sent admin notification for report ${reportRef.id}`);
+      } catch (e) {
+        console.error("Failed to send admin notification:", e);
+      }
+    }
+
     return {
       success: true,
       reportId: reportRef.id,
@@ -4765,35 +4814,24 @@ export const executeTaskReminder = functionsV1.region("asia-northeast1").runWith
       return;
     }
 
-    // 通知を送信
+    // 通知を保存 (onNotificationCreatedにより自動でプッシュ通知も送信される)
     const title = type === "on_time" ? "📋 タスクの時間です" : "🔔 タスクリマインダー";
     const body = type === "on_time"
       ? `「${taskContent}」の予定時刻になりました`
       : `「${taskContent}」の${timeLabel}です`;
 
-    await admin.messaging().send({
-      token: fcmToken,
-      notification: { title, body },
-      data: {
-        type: type === "on_time" ? "task_due" : "task_reminder",
-        taskId: taskId,
-      },
-      android: {
-        priority: "high",
-        notification: {
-          sound: "default",
-          channelId: "task_reminders",
-        },
-      },
-      apns: {
-        payload: {
-          aps: {
-            sound: "default",
-            badge: 1,
-          },
-        },
-      },
+    await db.collection("users").doc(userId).collection("notifications").add({
+      type: "task_reminder",
+      title,
+      body,
+      isRead: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      taskId,
+      reminderKey,
+      clientType: type,
     });
+
+    console.log(`[Reminder] Notification saved for ${taskId} - ${reminderKey}`);
 
     // 送信済みとして記録
     await sentRef.set({
@@ -7809,11 +7847,247 @@ async function sendDeletionWarning(
       createdAt: now,
     });
 
-    // プッシュ通知
-    await sendPushOnly(userId, "問い合わせ削除予告", notifyBody, { inquiryId });
+    // プッシュ通知 (onNotificationCreatedで自動送信)
 
     console.log(`Sent deletion warning to user ${userId} for inquiry ${inquiryId}`);
   } catch (error) {
     console.error(`Error sending deletion warning for inquiry ${inquiryId}:`, error);
   }
 }
+
+// ===============================================
+// 定期実行処理
+// ===============================================
+
+/**
+ * 毎日深夜に実行されるレポートクリーンアップ処理
+ * 対処済み（reviewed/dismissed）かつ1ヶ月以上前のレポートを削除する
+ */
+export const cleanupReports = onSchedule(
+  {
+    schedule: "every day 00:00",
+    timeZone: "Asia/Tokyo",
+    timeoutSeconds: 300,
+  },
+  async (event) => {
+    console.log("Starting cleanupReports function...");
+
+    try {
+      // 1ヶ月前の日時を計算
+      const cutoffDate = new Date();
+      cutoffDate.setMonth(cutoffDate.getMonth() - 1);
+      const cutoffTimestamp = admin.firestore.Timestamp.fromDate(cutoffDate);
+
+      // Reviewed reports
+      // status == 'reviewed' AND createdAt < cutoffTimestamp
+      const reviewedSnapshot = await db
+        .collection("reports")
+        .where("status", "==", "reviewed")
+        .where("createdAt", "<", cutoffTimestamp)
+        .get();
+
+      // Dismissed reports
+      // status == 'dismissed' AND createdAt < cutoffTimestamp
+      const dismissedSnapshot = await db
+        .collection("reports")
+        .where("status", "==", "dismissed")
+        .where("createdAt", "<", cutoffTimestamp)
+        .get();
+
+      console.log(
+        `Found ${reviewedSnapshot.size} reviewed and ${dismissedSnapshot.size} dismissed reports to delete.`
+      );
+
+      // 削除対象のドキュメントを結合
+      const allDocs = [...reviewedSnapshot.docs, ...dismissedSnapshot.docs];
+
+      if (allDocs.length === 0) {
+        console.log("No reports to delete.");
+        return;
+      }
+
+      // バッチ処理で削除（500件ずつ）
+      const MAX_BATCH_SIZE = 500;
+      const chunks = [];
+      for (let i = 0; i < allDocs.length; i += MAX_BATCH_SIZE) {
+        chunks.push(allDocs.slice(i, i + MAX_BATCH_SIZE));
+      }
+
+      let deletedCount = 0;
+      for (const chunk of chunks) {
+        const batch = db.batch();
+        chunk.forEach((doc) => {
+          batch.delete(doc.ref);
+        });
+        await batch.commit();
+        deletedCount += chunk.length;
+        console.log(`Deleted batch of ${chunk.length} reports.`);
+      }
+
+      console.log(`Cleanup completed. Total deleted: ${deletedCount}`);
+    } catch (error) {
+      console.error("Error in cleanupReports:", error);
+    }
+  }
+);
+
+// ===================================
+// カスケード削除 (Post)
+// ===================================
+/**
+ * 投稿削除トリガー
+ * - コメント、リアクションの削除
+ * - Storageの画像削除
+ * - ユーザー/サークルの投稿数減算
+ */
+export const onPostDeleted = onDocumentDeleted("posts/{postId}", async (event) => {
+  const snap = event.data;
+  if (!snap) return;
+
+  const postData = snap.data();
+  const postId = event.params.postId;
+  const userRef = postData.userId ? db.collection("users").doc(postData.userId) : null;
+  const circleRef = postData.circleId ? db.collection("circles").doc(postData.circleId) : null;
+
+  console.log(`=== onPostDeleted: postId=${postId} start ===`);
+
+  try {
+    const batch = db.batch();
+    let opCount = 0;
+
+    // 1. コメント削除
+    const commentsSnap = await db.collection("comments").where("postId", "==", postId).get();
+    commentsSnap.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+      opCount++;
+    });
+
+    // 2. リアクション削除
+    const reactionsSnap = await db.collection("reactions").where("postId", "==", postId).get();
+    reactionsSnap.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+      opCount++;
+    });
+
+    // 3. 関連通知の削除 (Post Owner)
+    // 自分の投稿に対する「いいね」「コメント」通知などを削除
+    if (userRef) {
+      const notificationsSnap = await userRef.collection("notifications").where("postId", "==", postId).get();
+      notificationsSnap.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+        opCount++;
+      });
+    }
+
+    // 4. ユーザー投稿数 減算
+    if (userRef) {
+      batch.update(userRef, {
+        totalPosts: admin.firestore.FieldValue.increment(-1),
+      });
+      opCount++;
+    }
+
+    // 4. サークル投稿数 減算
+    if (circleRef) {
+      batch.update(circleRef, {
+        postCount: admin.firestore.FieldValue.increment(-1),
+      });
+      opCount++;
+    }
+
+    if (opCount > 0) {
+      await batch.commit();
+      console.log(`Deleted ${commentsSnap.size} comments, ${reactionsSnap.size} reactions.`);
+    }
+
+    // 5. Storage削除
+    const bucket = admin.storage().bucket();
+    const mediaItems = postData.mediaItems;
+    if (Array.isArray(mediaItems) && mediaItems.length > 0) {
+      console.log(`Attempting to delete ${mediaItems.length} media items...`);
+      for (const item of mediaItems) {
+        if (item.url) {
+          try {
+            // URLからパスを抽出
+            // 形式: https://firebasestorage.googleapis.com/v0/b/[bucket]/o/[path]?alt=...
+            const urlObj = new URL(item.url);
+            const pathSegments = urlObj.pathname.split("/o/");
+            if (pathSegments.length >= 2) {
+              const encodedPath = pathSegments[1];
+              const storagePath = decodeURIComponent(encodedPath);
+
+              console.log(`Deleting storage file: ${storagePath}`);
+              await bucket.file(storagePath).delete();
+
+              // 動画の場合、サムネイルも削除
+              if (item.thumbnailUrl) {
+                try {
+                  const thumbUrlObj = new URL(item.thumbnailUrl);
+                  const thumbPathSegments = thumbUrlObj.pathname.split("/o/");
+                  if (thumbPathSegments.length >= 2) {
+                    const thumbPath = decodeURIComponent(thumbPathSegments[1]);
+                    console.log(`Deleting thumbnail file: ${thumbPath}`);
+                    await bucket.file(thumbPath).delete();
+                  }
+                } catch (e) {
+                  console.warn(`Failed to delete thumbnail (${item.thumbnailUrl}):`, e);
+                }
+              }
+
+            } else {
+              console.warn(`Could not extract path from URL: ${item.url}`);
+            }
+          } catch (e) {
+            console.warn(`Failed to delete media (${item.url}):`, e);
+          }
+        }
+      }
+    }
+
+  } catch (error) {
+    console.error(`Error in onPostDeleted for ${postId}:`, error);
+  }
+});
+
+// ===================================
+// プッシュ通知自動送信
+// ===================================
+/**
+ * 通知ドキュメント作成時に自動的にFCMプッシュ通知を送信
+ * トリガー: users/{userId}/notifications/{notificationId}
+ */
+export const onNotificationCreated = onDocumentCreated("users/{userId}/notifications/{notificationId}", async (event) => {
+  const snap = event.data;
+  if (!snap) return;
+  const data = snap.data();
+  const userId = event.params.userId;
+
+  // タイトルと本文があれば送信
+  if (data.title && data.body) {
+    try {
+      // ユーザー設定を確認
+      const userDoc = await db.collection("users").doc(userId).get();
+      const userData = userDoc.data();
+      if (!userData) return;
+
+      const settings = userData.notificationSettings || {};
+      const type = data.type;
+
+      // 通知設定チェック (コメントとリアクションのみチェック、他は重要通知として通す)
+      if (type === 'comment' && settings.comments === false) {
+        console.log(`Skipping push for ${type} due to user settings`);
+        return;
+      }
+      if (type === 'reaction' && settings.reactions === false) {
+        console.log(`Skipping push for ${type} due to user settings`);
+        return;
+      }
+
+      await sendPushOnly(userId, data.title, data.body, { ...data, notificationId: event.params.notificationId });
+      console.log(`Auto push notification sent to ${userId} for notification ${event.params.notificationId}`);
+    } catch (e) {
+      console.error(`Failed to send auto push notification to ${userId}:`, e);
+    }
+  }
+});
+
