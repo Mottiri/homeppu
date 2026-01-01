@@ -173,7 +173,7 @@ class _AdminReportDetailScreenState
       builder: (context, snapshot) {
         final doc = snapshot.data;
         final docData = doc?.data() as Map<String, dynamic>?;
-        final isHidden = docData?['isHidden'] == true;
+        final isHidden = docData?['isVisible'] == false;
 
         // 遷移先の投稿IDを特定
         String? targetPostId;
@@ -590,8 +590,9 @@ class _AdminReportDetailScreenState
         }
       } else if (action == 'resolved') {
         if (data['contentType'] == 'post') {
+          // 投稿を再表示
           await _firestore.collection('posts').doc(data['contentId']).update({
-            'isHidden': false,
+            'isVisible': true,
             'hiddenAt': FieldValue.delete(),
             'hiddenReason': FieldValue.delete(),
           });

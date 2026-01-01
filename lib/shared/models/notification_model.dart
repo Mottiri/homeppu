@@ -18,6 +18,10 @@ enum NotificationType {
   inquiryReceived, // 新規問い合わせ受信（管理者向け）
   inquiryUserReply, // ユーザーから返信があった（管理者向け）
   inquiryDeletionWarning, // 削除予告通知
+  // 管理者向け
+  adminReport, // 新規通報（管理者向け）
+  postDeleted, // 投稿削除通知（ユーザー向け）
+  postHidden, // 投稿非表示通知（ユーザー向け）
 }
 
 /// 通知のカテゴリ（タブ分類用）
@@ -47,6 +51,9 @@ NotificationCategory getCategoryFromType(NotificationType type) {
     case NotificationType.inquiryReceived:
     case NotificationType.inquiryUserReply:
     case NotificationType.inquiryDeletionWarning:
+    case NotificationType.adminReport:
+    case NotificationType.postDeleted:
+    case NotificationType.postHidden:
       return NotificationCategory.support;
     case NotificationType.system:
       return NotificationCategory.timeline; // システム通知はTLに分類
@@ -151,6 +158,13 @@ class NotificationModel {
         return NotificationType.inquiryUserReply;
       case 'inquiry_deletion_warning':
         return NotificationType.inquiryDeletionWarning;
+      // 管理者・ユーザー向け
+      case 'admin_report':
+        return NotificationType.adminReport;
+      case 'post_deleted':
+        return NotificationType.postDeleted;
+      case 'post_hidden':
+        return NotificationType.postHidden;
       default:
         return NotificationType.system;
     }

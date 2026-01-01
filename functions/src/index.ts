@@ -2598,7 +2598,7 @@ export const reportContent = onCall(
       if (contentType === "post") {
         const postRef = db.collection("posts").doc(contentId);
         await postRef.update({
-          isHidden: true,
+          isVisible: false,
           hiddenAt: now,
           hiddenReason: "通報多数のため自動非表示",
         });
@@ -2620,29 +2620,8 @@ export const reportContent = onCall(
       }
     }
 
-    // 対象ユーザーへの累積通報が3件以上で徳減少
-    const userReportsSnapshot = await db
-      .collection("reports")
-      .where("targetUserId", "==", targetUserId)
-      .where("status", "==", "pending")
-      .get();
-
-    if (userReportsSnapshot.size >= 3) {
-      const virtueResult = await decreaseVirtue(
-        targetUserId,
-        "複数の通報を受けたため",
-        VIRTUE_CONFIG.lossPerReport
-      );
-
-      // 通報をreviewedに更新
-      const batch = db.batch();
-      userReportsSnapshot.docs.forEach((doc) => {
-        batch.update(doc.ref, { status: "reviewed" });
-      });
-      await batch.commit();
-
-      console.log(`Auto virtue decrease for ${targetUserId}: ${virtueResult.newVirtue} `);
-    }
+    // [削除] 対象ユーザーへの累積通報が3件以上で徳減少・ステータス自動変更
+    // → 管理者が手動で対応するため不要
 
     // ===============================================
     // 管理者への通知（新規通報）
