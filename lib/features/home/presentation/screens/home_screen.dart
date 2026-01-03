@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
@@ -44,7 +45,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(gradient: AppColors.warmGradient),
+        decoration: const BoxDecoration(
+          // 放射状グラデーション背景で深みを演出
+          gradient: AppColors.heroGradient,
+        ),
         child: SafeArea(
           child: NestedScrollView(
             headerSliverBuilder: (context, innerBoxIsScrolled) {
@@ -56,12 +60,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
-                        // ロゴ（中央）
+                        // ロゴ（中央）- 繊細なアニメーション
                         Image.asset(
                           'assets/icons/logo.png',
                           width: 72,
                           height: 72,
-                        ),
+                        )
+                            .animate(
+                              onPlay: (controller) => controller.repeat(),
+                            )
+                            .shimmer(
+                              duration: 3000.ms,
+                              color: AppColors.primary.withValues(alpha: 0.1),
+                            ),
                         // 通知アイコン（右端）
                         Positioned(
                           right: 0,

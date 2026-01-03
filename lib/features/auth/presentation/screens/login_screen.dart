@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
@@ -83,16 +84,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 children: [
                   const SizedBox(height: 40),
 
-                  // ロゴ・タイトル
+                  // ロゴ・タイトル - ステージ化されたアニメーション
                   const Center(
                     child: Text('🌸', style: TextStyle(fontSize: 64)),
-                  ),
+                  )
+                      .animate()
+                      .fadeIn(duration: 600.ms, curve: Curves.easeOut)
+                      .scale(
+                        begin: const Offset(0.8, 0.8),
+                        end: const Offset(1.0, 1.0),
+                        duration: 600.ms,
+                        curve: Curves.elasticOut,
+                      )
+                      .then()
+                      .shimmer(
+                        duration: 1500.ms,
+                        color: AppColors.primary.withValues(alpha: 0.3),
+                      ),
                   const SizedBox(height: 16),
                   Text(
                     'おかえりなさい！',
                     style: Theme.of(context).textTheme.displaySmall,
                     textAlign: TextAlign.center,
-                  ),
+                  )
+                      .animate()
+                      .fadeIn(delay: 200.ms, duration: 500.ms)
+                      .slideY(
+                        begin: 0.3,
+                        end: 0,
+                        delay: 200.ms,
+                        duration: 500.ms,
+                        curve: Curves.easeOut,
+                      ),
                   const SizedBox(height: 8),
                   Text(
                     'また会えてうれしいな☺️',
@@ -100,7 +123,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       color: AppColors.textSecondary,
                     ),
                     textAlign: TextAlign.center,
-                  ),
+                  )
+                      .animate()
+                      .fadeIn(delay: 400.ms, duration: 500.ms)
+                      .slideY(
+                        begin: 0.3,
+                        end: 0,
+                        delay: 400.ms,
+                        duration: 500.ms,
+                        curve: Curves.easeOut,
+                      ),
 
                   const SizedBox(height: 48),
 
@@ -131,7 +163,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     const SizedBox(height: 24),
                   ],
 
-                  // 入力フォーム
+                  // 入力フォーム - スライドインアニメーション
                   AuthTextField(
                     controller: _emailController,
                     label: 'メールアドレス',
@@ -147,7 +179,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       }
                       return null;
                     },
-                  ),
+                  )
+                      .animate()
+                      .fadeIn(delay: 600.ms, duration: 400.ms)
+                      .slideX(
+                        begin: -0.2,
+                        end: 0,
+                        delay: 600.ms,
+                        duration: 400.ms,
+                        curve: Curves.easeOut,
+                      ),
                   const SizedBox(height: 16),
 
                   AuthTextField(
@@ -162,7 +203,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       }
                       return null;
                     },
-                  ),
+                  )
+                      .animate()
+                      .fadeIn(delay: 700.ms, duration: 400.ms)
+                      .slideX(
+                        begin: -0.2,
+                        end: 0,
+                        delay: 700.ms,
+                        duration: 400.ms,
+                        curve: Curves.easeOut,
+                      ),
 
                   // パスワード忘れ
                   Align(
@@ -177,7 +227,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                   const SizedBox(height: 24),
 
-                  // ログインボタン
+                  // ログインボタン - スケールアニメーション
                   SizedBox(
                     height: 56,
                     child: ElevatedButton(
@@ -193,7 +243,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             )
                           : const Text('ログイン'),
                     ),
-                  ),
+                  )
+                      .animate()
+                      .fadeIn(delay: 800.ms, duration: 400.ms)
+                      .scale(
+                        begin: const Offset(0.9, 0.9),
+                        end: const Offset(1.0, 1.0),
+                        delay: 800.ms,
+                        duration: 400.ms,
+                        curve: Curves.easeOut,
+                      ),
 
                   const SizedBox(height: 24),
 

@@ -213,16 +213,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         const Spacer(),
                         // 管理者専用メニュー
                         if (_isOwnProfile && widget.userId == null)
-                          StreamBuilder<String?>(
-                            stream: Stream.value(
-                              ref.read(currentUserProvider).valueOrNull?.uid,
-                            ),
-                            builder: (context, snapshot) {
-                              const adminUid = 'hYr5LUH4mhR60oQfVOggrjGYJjG2';
-                              if (snapshot.data == adminUid) {
-                                return const AdminMenuIcon();
-                              }
-                              return const SizedBox.shrink();
+                          Consumer(
+                            builder: (context, ref, _) {
+                              final isAdmin = ref.watch(isAdminProvider);
+                              return isAdmin.when(
+                                data: (admin) =>
+                                    admin ? const AdminMenuIcon() : const SizedBox.shrink(),
+                                loading: () => const SizedBox.shrink(),
+                                error: (_, _) => const SizedBox.shrink(),
+                              );
                             },
                           ),
                         if (_isOwnProfile)

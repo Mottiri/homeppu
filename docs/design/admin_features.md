@@ -99,9 +99,44 @@ sequenceDiagram
 
 フラグ付き投稿（モデレーションで曖昧判定されたもの）を管理者がレビュー・判断する機能。
 
-### 3.1 管理者UID
+### 3.1 管理者権限システム (2026-01-03 Custom Claims移行)
+
+**従来**: ハードコードされたUID
+**現在**: Firebase Custom Claimsベースの動的管理
+
+#### 仕組み
+
+| 項目 | 詳細 |
+|------|------|
+| 管理者判定 | `request.auth.token.admin == true` |
+| 権限付与 | `setAdminRole` Cloud Function |
+| 権限削除 | `removeAdminRole` Cloud Function |
+| クライアント判定 | `isAdminProvider` (Custom Claims取得) |
+
+#### Cloud Functions
+
+| 関数名 | 説明 |
+|--------|------|
+| `setAdminRole` | 対象ユーザーに管理者権限を付与（既存管理者のみ実行可能） |
+| `removeAdminRole` | 対象ユーザーの管理者権限を削除（自分自身は削除不可） |
+
+#### 初期設定
+
+```bash
+# 初期管理者の設定
+cd functions
+node scripts/set_initial_admin.js
 ```
-hYr5LUH4mhR60oQfVOggrjGYJjG2
+
+詳細手順: [setup_admin_custom_claims.md](../admin/setup_admin_custom_claims.md)
+
+#### セキュリティルール
+
+```javascript
+// firestore.rules
+function isAdmin() {
+  return request.auth != null && request.auth.token.admin == true;
+}
 ```
 
 ### 3.2 レビュー画面

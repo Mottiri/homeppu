@@ -38,6 +38,45 @@ const db = admin.firestore();
 // Set global options for v2 functions
 setGlobalOptions({ region: "asia-northeast1" });
 
+// ===============================================
+// 管理者権限チェック用ヘルパー関数
+// ===============================================
+
+/**
+ * ユーザーが管理者かどうかをCustom Claimsでチェック
+ */
+async function isAdmin(uid: string): Promise<boolean> {
+  try {
+    const user = await admin.auth().getUser(uid);
+    return user.customClaims?.admin === true;
+  } catch (error) {
+    console.error(`Error checking admin status for ${uid}:`, error);
+    return false;
+  }
+}
+
+/**
+ * 管理者権限を持つすべてのユーザーのUIDを取得
+ */
+async function getAdminUids(): Promise<string[]> {
+  const adminUids: string[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    const listUsersResult = await admin.auth().listUsers(1000, pageToken);
+
+    listUsersResult.users.forEach((userRecord) => {
+      if (userRecord.customClaims?.admin === true) {
+        adminUids.push(userRecord.uid);
+      }
+    });
+
+    pageToken = listUsersResult.pageToken;
+  } while (pageToken);
+
+  return adminUids;
+}
+
 /**
  * AIProviderFactoryを作成するヘルパー関数
  * 関数内でSecretにアクセスし、ファクトリーを返す
@@ -2167,8 +2206,8 @@ export const createPostWithModeration = onCall(
     // ===============================================
     // テスト用: 管理者の添付付き投稿は常にフラグを付ける
     // ===============================================
-    const ADMIN_UID = "hYr5LUH4mhR60oQfVOggrjGYJjG2";
-    if (userId === ADMIN_UID && mediaItems && Array.isArray(mediaItems) && mediaItems.length > 0) {
+    const userIsAdmin = await isAdmin(userId);
+    if (userIsAdmin && mediaItems && Array.isArray(mediaItems) && mediaItems.length > 0) {
       needsReview = true;
       needsReviewReason = "【テスト】管理者の添付付き投稿";
       console.log(`TEST FLAG: Admin post with media flagged for review`);
@@ -2444,36 +2483,41 @@ ${content}
           reviewed: false,
         });
 
-        // アプリ内通知を作成（管理者のnotificationsサブコレクション）
-        await db.collection("users").doc(ADMIN_UID).collection("notifications").add({
-          type: "review_needed",
-          title: "要審査投稿",
-          body: `フラグ付き投稿があります: ${needsReviewReason}`,
-          postId: postRef.id,
-          fromUserId: userId,
-          fromUserName: userDisplayName,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          read: false,
-        });
-        console.log("Admin in-app notification created");
+        // 全管理者にアプリ内通知を作成
+        const adminUids = await getAdminUids();
+        const notifyBody = `フラグ付き投稿があります: ${needsReviewReason}`;
 
-        // 管理者にFCM通知を送信
-        const adminUserDoc = await db.collection("users").doc(ADMIN_UID).get();
-        const fcmToken = adminUserDoc.data()?.fcmToken;
-        if (fcmToken) {
-          await admin.messaging().send({
-            token: fcmToken,
-            notification: {
-              title: "要審査投稿",
-              body: `フラグ付き投稿があります: ${needsReviewReason}`,
-            },
-            data: {
-              type: "review_needed",
-              postId: postRef.id,
-            },
+        for (const adminUid of adminUids) {
+          await db.collection("users").doc(adminUid).collection("notifications").add({
+            type: "review_needed",
+            title: "要審査投稿",
+            body: notifyBody,
+            postId: postRef.id,
+            fromUserId: userId,
+            fromUserName: userDisplayName,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            read: false,
           });
-          console.log("Admin FCM notification sent successfully");
+
+          // 管理者にFCM通知を送信
+          const adminUserDoc = await db.collection("users").doc(adminUid).get();
+          const fcmToken = adminUserDoc.data()?.fcmToken;
+          if (fcmToken) {
+            await admin.messaging().send({
+              token: fcmToken,
+              notification: {
+                title: "要審査投稿",
+                body: notifyBody,
+              },
+              data: {
+                type: "review_needed",
+                postId: postRef.id,
+              },
+            });
+            console.log(`Admin FCM notification sent to ${adminUid}`);
+          }
         }
+        console.log("Admin notifications created");
       } catch (notifyError) {
         console.error("Failed to notify admin:", notifyError);
         // 通知失敗しても投稿は提出
@@ -2613,8 +2657,7 @@ export const reportContent = onCall(
           createdAt: now,
         });
 
-        // プッシュ通知
-        await sendPushOnly(targetUserId, "投稿が非表示になりました", "複数の通報があったため、投稿が一時的に非表示になりました。", { postId: contentId });
+        // プッシュ通知はonNotificationCreatedが自動送信
 
         console.log(`Post ${contentId} hidden due to ${contentReportCount} reports`);
       }
@@ -2626,20 +2669,23 @@ export const reportContent = onCall(
     // ===============================================
     // 管理者への通知（新規通報）
     // ===============================================
-    const ADMIN_UID = "hYr5LUH4mhR60oQfVOggrjGYJjG2";
-    if (reporterId !== ADMIN_UID) {
+    const reporterIsAdmin = await isAdmin(reporterId);
+    if (!reporterIsAdmin) {
       try {
+        const adminUids = await getAdminUids();
         const notifyBody = `新規通報: ${reason} (対象: ${targetUserId})`;
 
-        // アプリ内通知 (プッシュ通知はonNotificationCreatedで自動送信)
-        await db.collection("users").doc(ADMIN_UID).collection("notifications").add({
-          type: "admin_report",
-          title: "新規通報を受信",
-          body: notifyBody,
-          reportId: reportRef.id,
-          isRead: false,
-          createdAt: now,
-        });
+        // 全管理者にアプリ内通知を送信 (プッシュ通知はonNotificationCreatedで自動送信)
+        for (const adminUid of adminUids) {
+          await db.collection("users").doc(adminUid).collection("notifications").add({
+            type: "admin_report",
+            title: "新規通報を受信",
+            body: notifyBody,
+            reportId: reportRef.id,
+            isRead: false,
+            createdAt: now,
+          });
+        }
 
         console.log(`Sent admin notification for report ${reportRef.id}`);
       } catch (e) {
@@ -7268,8 +7314,8 @@ export const createInquiry = onCall(
 
     console.log(`=== createInquiry: userId=${userId}, category=${category} ===`);
 
-    // 管理者UID（通知送信先）
-    const ADMIN_UIDS = ["hYr5LUH4mhR60oQfVOggrjGYJjG2"];
+    // 管理者UID一覧を取得
+    const adminUids = await getAdminUids();
 
     try {
       // ユーザー情報を取得
@@ -7306,7 +7352,7 @@ export const createInquiry = onCall(
       });
 
       // 管理者に通知を送信
-      for (const adminUid of ADMIN_UIDS) {
+      for (const adminUid of adminUids) {
         const notifyBody = `${userDisplayName}さんから問い合わせ「${subject}」が届きました`;
         await db.collection("users").doc(adminUid).collection("notifications").add({
           type: "inquiry_received",
@@ -7319,8 +7365,7 @@ export const createInquiry = onCall(
           isRead: false,
           createdAt: now,
         });
-        // プッシュ通知も送信
-        await sendPushOnly(adminUid, "新規問い合わせ", notifyBody, { inquiryId: inquiryRef.id });
+        // プッシュ通知はonNotificationCreatedが自動送信
       }
 
       console.log(`Created inquiry: ${inquiryRef.id}`);
@@ -7352,8 +7397,8 @@ export const sendInquiryMessage = onCall(
 
     console.log(`=== sendInquiryMessage: inquiryId=${inquiryId} ===`);
 
-    // 管理者UID（通知送信先）
-    const ADMIN_UIDS = ["hYr5LUH4mhR60oQfVOggrjGYJjG2"];
+    // 管理者UID一覧を取得
+    const adminUids = await getAdminUids();
 
     try {
       // 問い合わせの存在と所有者確認
@@ -7394,7 +7439,7 @@ export const sendInquiryMessage = onCall(
       });
 
       // 管理者に通知を送信
-      for (const adminUid of ADMIN_UIDS) {
+      for (const adminUid of adminUids) {
         const notifyBody = `${userDisplayName}さんが「${inquiryData.subject}」に返信しました`;
         await db.collection("users").doc(adminUid).collection("notifications").add({
           type: "inquiry_user_reply",
@@ -7407,8 +7452,7 @@ export const sendInquiryMessage = onCall(
           isRead: false,
           createdAt: now,
         });
-        // プッシュ通知も送信
-        await sendPushOnly(adminUid, "問い合わせに返信", notifyBody, { inquiryId });
+        // プッシュ通知はonNotificationCreatedが自動送信
       }
 
       console.log(`Added message to inquiry: ${inquiryId}`);
@@ -7435,9 +7479,9 @@ export const sendInquiryReply = onCall(
     const adminId = request.auth.uid;
     const { inquiryId, content } = request.data;
 
-    // 管理者チェック（ハードコード - 実際は設定から取得すべき）
-    const ADMIN_UIDS = ["hYr5LUH4mhR60oQfVOggrjGYJjG2"];
-    if (!ADMIN_UIDS.includes(adminId)) {
+    // 管理者チェック
+    const adminIsAdmin = await isAdmin(adminId);
+    if (!adminIsAdmin) {
       throw new HttpsError("permission-denied", "管理者権限が必要です");
     }
 
@@ -7487,8 +7531,7 @@ export const sendInquiryReply = onCall(
         isRead: false,
         createdAt: now,
       });
-      // プッシュ通知も送信
-      await sendPushOnly(targetUserId, "問い合わせに返信がありました", notifyBody, { inquiryId });
+      // プッシュ通知はonNotificationCreatedが自動送信
 
       console.log(`Sent reply to inquiry: ${inquiryId}`);
 
@@ -7521,8 +7564,8 @@ export const updateInquiryStatus = onCall(
     } = request.data;
 
     // 管理者チェック
-    const ADMIN_UIDS = ["hYr5LUH4mhR60oQfVOggrjGYJjG2"];
-    if (!ADMIN_UIDS.includes(adminId)) {
+    const adminIsAdmin = await isAdmin(adminId);
+    if (!adminIsAdmin) {
       throw new HttpsError("permission-denied", "管理者権限が必要です");
     }
 
@@ -7637,8 +7680,7 @@ export const updateInquiryStatus = onCall(
         isRead: false,
         createdAt: now,
       });
-      // プッシュ通知も送信
-      await sendPushOnly(targetUserId, "問い合わせステータス変更", notifyBody, { inquiryId });
+      // プッシュ通知はonNotificationCreatedが自動送信
 
       console.log(`Updated inquiry status: ${inquiryId} -> ${status}`);
 
@@ -8067,6 +8109,83 @@ export const onNotificationCreated = onDocumentCreated("users/{userId}/notificat
     } catch (e) {
       console.error(`Failed to send auto push notification to ${userId}:`, e);
     }
+  }
+});
+
+// ===================================
+// 管理者権限管理
+// ===================================
+
+/**
+ * 管理者権限を設定（既存の管理者のみが実行可能）
+ */
+export const setAdminRole = onCall(async (request) => {
+  const callerId = request.auth?.uid;
+  if (!callerId) {
+    throw new HttpsError("unauthenticated", "認証が必要です");
+  }
+
+  // 呼び出し元が管理者かチェック
+  const callerIsAdmin = await isAdmin(callerId);
+  if (!callerIsAdmin) {
+    throw new HttpsError("permission-denied", "管理者権限が必要です");
+  }
+
+  const { targetUid } = request.data;
+  if (!targetUid || typeof targetUid !== "string") {
+    throw new HttpsError("invalid-argument", "対象ユーザーIDが必要です");
+  }
+
+  try {
+    // Custom Claimを設定
+    await admin.auth().setCustomUserClaims(targetUid, { admin: true });
+    console.log(`Admin role granted to user: ${targetUid} by ${callerId}`);
+
+    return { success: true, message: `ユーザー ${targetUid} を管理者に設定しました` };
+  } catch (error) {
+    console.error(`Error setting admin role for ${targetUid}:`, error);
+    throw new HttpsError("internal", "管理者権限の設定に失敗しました");
+  }
+});
+
+/**
+ * 管理者権限を削除（既存の管理者のみが実行可能）
+ */
+export const removeAdminRole = onCall(async (request) => {
+  const callerId = request.auth?.uid;
+  if (!callerId) {
+    throw new HttpsError("unauthenticated", "認証が必要です");
+  }
+
+  // 呼び出し元が管理者かチェック
+  const callerIsAdmin = await isAdmin(callerId);
+  if (!callerIsAdmin) {
+    throw new HttpsError("permission-denied", "管理者権限が必要です");
+  }
+
+  const { targetUid } = request.data;
+  if (!targetUid || typeof targetUid !== "string") {
+    throw new HttpsError("invalid-argument", "対象ユーザーIDが必要です");
+  }
+
+  // 自分自身の管理者権限は削除できない
+  if (callerId === targetUid) {
+    throw new HttpsError("invalid-argument", "自分自身の管理者権限は削除できません");
+  }
+
+  try {
+    // Custom Claimを削除（adminをfalseに設定）
+    const user = await admin.auth().getUser(targetUid);
+    const claims = user.customClaims || {};
+    delete claims.admin;
+    await admin.auth().setCustomUserClaims(targetUid, claims);
+
+    console.log(`Admin role removed from user: ${targetUid} by ${callerId}`);
+
+    return { success: true, message: `ユーザー ${targetUid} の管理者権限を削除しました` };
+  } catch (error) {
+    console.error(`Error removing admin role for ${targetUid}:`, error);
+    throw new HttpsError("internal", "管理者権限の削除に失敗しました");
   }
 });
 

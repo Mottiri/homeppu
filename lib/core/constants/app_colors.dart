@@ -47,22 +47,56 @@ class AppColors {
   static const Color error = Color(0xFFE57373);
   static const Color info = Color(0xFF64B5F6);
 
-  // グラデーション
+  // グラデーション - より大胆で深みのある表現
   static const LinearGradient primaryGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: [primary, secondary],
   );
 
+  // メッシュ風の複雑なグラデーション背景
   static const LinearGradient warmGradient = LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: [Color(0xFFFFF3E8), Color(0xFFFFFBF5)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      Color(0xFFFFF8F2), // 温かみのあるオフホワイト
+      Color(0xFFFFF3E8), // ピーチ
+      Color(0xFFFFEFDB), // より深いウォームトーン
+    ],
+    stops: [0.0, 0.5, 1.0],
   );
 
+  // 放射状グラデーション（ヒーロー要素用）
+  static const RadialGradient heroGradient = RadialGradient(
+    center: Alignment.topRight,
+    radius: 1.5,
+    colors: [
+      Color(0xFFFFBCB0), // プライマリライト
+      Color(0xFFFFF3E8), // 背景セカンダリ
+      Color(0xFFFFFBF5), // 背景
+    ],
+    stops: [0.0, 0.6, 1.0],
+  );
+
+  // カードの立体的なグラデーション
   static const LinearGradient cardGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFFFFFFFF), Color(0xFFFFF8F2)],
+    colors: [
+      Color(0xFFFFFFFF),
+      Color(0xFFFFFBF5),
+      Color(0xFFFFF8F2),
+    ],
+    stops: [0.0, 0.7, 1.0],
+  );
+
+  // アクセント用の鮮やかなグラデーション
+  static const LinearGradient accentGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      Color(0xFFFFE082), // アクセント
+      Color(0xFFFFAB91), // セカンダリ
+    ],
   );
 }

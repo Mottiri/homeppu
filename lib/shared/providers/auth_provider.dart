@@ -39,6 +39,27 @@ final currentUserProvider = StreamProvider<UserModel?>((ref) {
   );
 });
 
+/// 現在のユーザーが管理者かどうか
+final isAdminProvider = StreamProvider<bool>((ref) {
+  final authState = ref.watch(authStateProvider);
+
+  return authState.when(
+    data: (user) async* {
+      if (user == null) {
+        yield false;
+        return;
+      }
+
+      // Custom Claimsから管理者フラグを取得
+      final idTokenResult = await user.getIdTokenResult(true); // forceRefresh: true
+      final isAdmin = idTokenResult.claims?['admin'] == true;
+      yield isAdmin;
+    },
+    loading: () => Stream.value(false),
+    error: (e, _) => Stream.value(false),
+  );
+});
+
 /// 認証サービス
 class AuthService {
   final FirebaseAuth _auth;

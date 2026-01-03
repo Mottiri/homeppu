@@ -40,19 +40,20 @@ class AppTheme {
         foregroundColor: AppColors.textPrimary,
         elevation: 0,
         centerTitle: true,
-        titleTextStyle: GoogleFonts.notoSansJp(
+        titleTextStyle: GoogleFonts.zenMaruGothic(
           fontSize: 18,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w700,
           color: AppColors.textPrimary,
+          letterSpacing: 0.5,
         ),
       ),
 
-      // カード
+      // カード - より深い影と立体感
       cardTheme: CardThemeData(
         color: AppColors.surface,
-        elevation: 2,
-        shadowColor: AppColors.primary.withValues(alpha: 0.1),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        elevation: 6,
+        shadowColor: AppColors.primary.withValues(alpha: 0.15),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       ),
 
@@ -61,15 +62,16 @@ class AppTheme {
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
           foregroundColor: AppColors.textOnPrimary,
-          elevation: 3,
-          shadowColor: AppColors.primary.withValues(alpha: 0.3),
+          elevation: 4,
+          shadowColor: AppColors.primary.withValues(alpha: 0.4),
           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(30),
           ),
-          textStyle: GoogleFonts.notoSansJp(
+          textStyle: GoogleFonts.zenMaruGothic(
             fontSize: 16,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.5,
           ),
         ),
       ),
@@ -207,35 +209,43 @@ class AppTheme {
 
   static TextTheme get _textTheme {
     return TextTheme(
-      displayLarge: GoogleFonts.notoSansJp(
+      // Display: 大きな見出し - 個性的な丸ゴシックで親しみやすさを演出
+      displayLarge: GoogleFonts.zenMaruGothic(
         fontSize: 32,
         fontWeight: FontWeight.w700,
         color: AppColors.textPrimary,
+        letterSpacing: 0.5,
       ),
-      displayMedium: GoogleFonts.notoSansJp(
+      displayMedium: GoogleFonts.zenMaruGothic(
         fontSize: 28,
         fontWeight: FontWeight.w700,
         color: AppColors.textPrimary,
+        letterSpacing: 0.5,
       ),
-      displaySmall: GoogleFonts.notoSansJp(
+      displaySmall: GoogleFonts.zenMaruGothic(
         fontSize: 24,
-        fontWeight: FontWeight.w600,
+        fontWeight: FontWeight.w700,
         color: AppColors.textPrimary,
+        letterSpacing: 0.3,
       ),
-      headlineLarge: GoogleFonts.notoSansJp(
+      // Headline: 中見出し - やや控えめな丸ゴシック
+      headlineLarge: GoogleFonts.zenMaruGothic(
         fontSize: 22,
         fontWeight: FontWeight.w600,
         color: AppColors.textPrimary,
+        letterSpacing: 0.2,
       ),
-      headlineMedium: GoogleFonts.notoSansJp(
+      headlineMedium: GoogleFonts.zenMaruGothic(
         fontSize: 20,
         fontWeight: FontWeight.w600,
         color: AppColors.textPrimary,
+        letterSpacing: 0.2,
       ),
-      headlineSmall: GoogleFonts.notoSansJp(
+      headlineSmall: GoogleFonts.zenMaruGothic(
         fontSize: 18,
         fontWeight: FontWeight.w600,
         color: AppColors.textPrimary,
+        letterSpacing: 0.1,
       ),
       titleLarge: GoogleFonts.notoSansJp(
         fontSize: 16,
