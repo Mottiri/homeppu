@@ -5424,43 +5424,7 @@ export const sendJoinRequest = onCall(
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      // プッシュ通知を送信
-      try {
-        const ownerDoc = await db.collection("users").doc(ownerId).get();
-        const ownerFcmToken = ownerDoc.data()?.fcmToken;
-
-        if (ownerFcmToken) {
-          await admin.messaging().send({
-            token: ownerFcmToken,
-            notification: {
-              title: `${applicantName}さんから参加申請`,
-              body: `${circleName}への参加申請が届きました`,
-            },
-            data: {
-              type: "join_request_received",
-              circleId: circleId,
-            },
-            android: {
-              priority: "high",
-              notification: {
-                channelId: "default",
-              },
-            },
-            apns: {
-              payload: {
-                aps: {
-                  sound: "default",
-                  badge: 1,
-                },
-              },
-            },
-          });
-          console.log(`Push notification sent to owner: ${ownerId}`);
-        }
-      } catch (pushError) {
-        console.error(`Failed to send push notification:`, pushError);
-        // プッシュ通知失敗は無視して続行
-      }
+      // プッシュ通知はonNotificationCreatedトリガーで自動送信される
 
       console.log(`=== sendJoinRequest SUCCESS: ${userId} -> ${circleId} ===`);
       return { success: true };
