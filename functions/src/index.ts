@@ -2498,24 +2498,7 @@ ${content}
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
             read: false,
           });
-
-          // 管理者にFCM通知を送信
-          const adminUserDoc = await db.collection("users").doc(adminUid).get();
-          const fcmToken = adminUserDoc.data()?.fcmToken;
-          if (fcmToken) {
-            await admin.messaging().send({
-              token: fcmToken,
-              notification: {
-                title: "要審査投稿",
-                body: notifyBody,
-              },
-              data: {
-                type: "review_needed",
-                postId: postRef.id,
-              },
-            });
-            console.log(`Admin FCM notification sent to ${adminUid}`);
-          }
+          // プッシュ通知はonNotificationCreatedトリガーで自動送信される
         }
         console.log("Admin notifications created");
       } catch (notifyError) {
@@ -4951,15 +4934,7 @@ export const deleteCircle = onCall(
               isRead: false,
               createdAt: admin.firestore.FieldValue.serverTimestamp(),
             });
-
-            const userDoc = await db.collection("users").doc(memberId).get();
-            if (userDoc.data()?.fcmToken) {
-              await admin.messaging().send({
-                token: userDoc.data()!.fcmToken,
-                notification: { title: notificationTitle, body: notificationMessage },
-                data: { type: "circle_deleted", circleName: circleName },
-              });
-            }
+            // プッシュ通知はonNotificationCreatedトリガーで自動送信される
           } catch (e) {
             console.error(`Notification failed for ${memberId}:`, e);
           }
@@ -5708,24 +5683,7 @@ export const onCircleUpdated = onDocumentUpdated(
             isRead: false,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
           });
-
-          // プッシュ通知
-          const userDoc = await db.collection("users").doc(memberId).get();
-          const userData = userDoc.data();
-          if (userData?.fcmToken) {
-            await admin.messaging().send({
-              token: userData.fcmToken,
-              notification: {
-                title: `🔔 ${circleName}`,
-                body: notificationBody,
-              },
-              data: {
-                type: "circle_settings_changed",
-                circleId: circleId,
-                circleName: circleName,
-              },
-            });
-          }
+          // プッシュ通知はonNotificationCreatedトリガーで自動送信される
         } catch (notifyError) {
           console.error(`Failed to notify member ${memberId}:`, notifyError);
         }
