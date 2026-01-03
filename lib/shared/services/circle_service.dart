@@ -348,6 +348,30 @@ class CircleService {
     return circle.ownerId == userId;
   }
 
+  // 副オーナーかどうかをチェック
+  bool isSubOwner(CircleModel circle, String userId) {
+    return circle.subOwnerId == userId;
+  }
+
+  // オーナーまたは副オーナーかどうかをチェック
+  bool isOwnerOrSubOwner(CircleModel circle, String userId) {
+    return isOwner(circle, userId) || isSubOwner(circle, userId);
+  }
+
+  // 副オーナーを任命（オーナーのみ実行可能）
+  Future<void> setSubOwner(String circleId, String subOwnerId) async {
+    await _firestore.collection('circles').doc(circleId).update({
+      'subOwnerId': subOwnerId,
+    });
+  }
+
+  // 副オーナーを解任（オーナーのみ実行可能）
+  Future<void> removeSubOwner(String circleId) async {
+    await _firestore.collection('circles').doc(circleId).update({
+      'subOwnerId': null,
+    });
+  }
+
   // 投稿カウントをインクリメント
   Future<void> incrementPostCount(String circleId) async {
     await _firestore.collection('circles').doc(circleId).update({

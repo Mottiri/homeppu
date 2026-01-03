@@ -656,6 +656,10 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
         final isOwner =
             currentUser != null &&
             circleService.isOwner(circle, currentUser.uid);
+        final isSubOwner =
+            currentUser != null &&
+            circleService.isSubOwner(circle, currentUser.uid);
+        final canManagePins = isOwner || isSubOwner;
 
         // 非公開サークルで非メンバーの場合、申請中かチェック
         if (!circle.isPublic && !isMember && currentUser != null) {
@@ -950,6 +954,8 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                                                 extra: {
                                                   'circleName': circle.name,
                                                   'ownerId': circle.ownerId,
+                                                  'subOwnerId':
+                                                      circle.subOwnerId,
                                                   'memberIds': circle.memberIds,
                                                 },
                                               );
@@ -1225,7 +1231,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                                       GestureDetector(
                                         onTap: () => _showPinnedPostsList(
                                           pinnedPosts,
-                                          isOwner,
+                                          canManagePins,
                                         ),
                                         child: Row(
                                           children: [
@@ -1364,8 +1370,8 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                         return PostCard(
                           key: ValueKey(post.id),
                           post: post,
-                          isCircleOwner: isOwner,
-                          onPinToggle: isOwner
+                          isCircleOwner: canManagePins,
+                          onPinToggle: canManagePins
                               ? (isPinned) async {
                                   await circleService.togglePinPost(
                                     post.id,

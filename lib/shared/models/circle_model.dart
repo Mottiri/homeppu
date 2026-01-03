@@ -8,6 +8,7 @@ class CircleModel {
   final String description;
   final String category;
   final String ownerId;
+  final String? subOwnerId; // 副オーナーUID（null = 未設定）
   final List<String> memberIds;
   final CircleAIMode aiMode;
   final List<Map<String, dynamic>> generatedAIs; // AI persona data
@@ -29,6 +30,7 @@ class CircleModel {
     required this.description,
     required this.category,
     required this.ownerId,
+    this.subOwnerId,
     required this.memberIds,
     required this.aiMode,
     this.generatedAIs = const [],
@@ -53,6 +55,7 @@ class CircleModel {
       description: data['description'] ?? '',
       category: data['category'] ?? 'その他',
       ownerId: data['ownerId'] ?? '',
+      subOwnerId: data['subOwnerId'],
       memberIds: List<String>.from(data['memberIds'] ?? []),
       aiMode: CircleAIMode.values.firstWhere(
         (e) => e.name == (data['aiMode'] ?? 'mix'),
@@ -79,6 +82,7 @@ class CircleModel {
       'description': description,
       'category': category,
       'ownerId': ownerId,
+      'subOwnerId': subOwnerId,
       'memberIds': memberIds,
       'aiMode': aiMode.name,
       'generatedAIs': generatedAIs,
@@ -104,6 +108,7 @@ class CircleModel {
     String? description,
     String? category,
     String? ownerId,
+    String? subOwnerId,
     List<String>? memberIds,
     CircleAIMode? aiMode,
     List<Map<String, dynamic>>? generatedAIs,
@@ -125,6 +130,7 @@ class CircleModel {
       description: description ?? this.description,
       category: category ?? this.category,
       ownerId: ownerId ?? this.ownerId,
+      subOwnerId: subOwnerId ?? this.subOwnerId,
       memberIds: memberIds ?? this.memberIds,
       aiMode: aiMode ?? this.aiMode,
       generatedAIs: generatedAIs ?? this.generatedAIs,

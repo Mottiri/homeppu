@@ -21,6 +21,18 @@ service cloud.firestore {
     function isAdmin() {
       return request.auth != null && request.auth.token.admin == true;
     }
+
+    // サークルの副オーナーチェック
+    function isCircleSubOwner(circleId) {
+      return exists(/databases/$(database)/documents/circles/$(circleId)) &&
+             get(/databases/$(database)/documents/circles/$(circleId)).data.subOwnerId == request.auth.uid;
+    }
+
+    // サークルのオーナーまたは副オーナーチェック
+    function isCircleOwnerOrSubOwner(circleId) {
+      let circleData = get(/databases/$(database)/documents/circles/$(circleId)).data;
+      return circleData.ownerId == request.auth.uid || circleData.subOwnerId == request.auth.uid;
+    }
     
     // ユーザーコレクション
     match /users/{userId} {
@@ -88,15 +100,15 @@ service cloud.firestore {
       // 作成: クライアントからの直接作成を禁止（Cloud Functions経由のみ）
       allow create: if false;
       
-      // 更新: 投稿者のみ（リアクションは誰でも更新可能、サークルオーナーはピン留めも可能、管理者はneedsReview）
+      // 更新: 投稿者のみ（リアクションは誰でも更新可能、サークルオーナー/副オーナーはピン留めも可能、管理者はneedsReview）
       allow update: if isAuthenticated() && (
         isOwner(resource.data.userId) ||
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions', 'commentCount']) ||
-        // サークルオーナーはピン留めフィールドを更新可能
+        // サークルオーナーまたは副オーナーはピン留めフィールドを更新可能
         (resource.data.circleId != null &&
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isPinned', 'isPinnedTop']) &&
          exists(/databases/$(database)/documents/circles/$(resource.data.circleId)) &&
-         get(/databases/$(database)/documents/circles/$(resource.data.circleId)).data.ownerId == request.auth.uid) ||
+         isCircleOwnerOrSubOwner(resource.data.circleId)) ||
         // 管理者は全ての更新が可能
         isAdmin()
       );

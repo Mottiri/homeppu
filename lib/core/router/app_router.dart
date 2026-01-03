@@ -212,6 +212,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             circleId: circleId,
             circleName: extra['circleName'] as String,
             ownerId: extra['ownerId'] as String,
+            subOwnerId: extra['subOwnerId'] as String?,
             memberIds: List<String>.from(extra['memberIds'] as List),
           );
         },
