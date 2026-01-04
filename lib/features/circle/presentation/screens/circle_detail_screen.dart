@@ -659,7 +659,11 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
         final isSubOwner =
             currentUser != null &&
             circleService.isSubOwner(circle, currentUser.uid);
-        final canManagePins = isOwner || isSubOwner;
+        // 管理者チェック
+        final isAdminAsync = ref.watch(isAdminProvider);
+        final isAdmin = isAdminAsync.valueOrNull ?? false;
+        final canManagePins = isOwner || isSubOwner || isAdmin;
+        final canPost = isMember || isAdmin; // 管理者は未参加でも投稿可
 
         // 非公開サークルで非メンバーの場合、申請中かチェック
         if (!circle.isPublic && !isMember && currentUser != null) {
@@ -668,7 +672,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
 
         return Scaffold(
           backgroundColor: Colors.grey[50],
-          floatingActionButton: isMember
+          floatingActionButton: canPost
               ? FloatingActionButton(
                   onPressed: () async {
                     final result = await context.push<bool>(
@@ -720,8 +724,9 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                         child: const Icon(Icons.arrow_back_rounded, size: 20),
                       ),
                     ),
-                    // オーナー/副オーナー用メニュー
-                    actions: (isOwner || (isSubOwner && !circle.isPublic))
+                    // オーナー/副オーナー/管理者用メニュー
+                    actions:
+                        (isOwner || isAdmin || (isSubOwner && !circle.isPublic))
                         ? [
                             Container(
                               margin: const EdgeInsets.only(right: 8),
@@ -758,8 +763,8 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                                   }
                                 },
                                 itemBuilder: (context) => [
-                                  // オーナーのみ編集可能
-                                  if (isOwner)
+                                  // オーナーまたは管理者のみ編集可能
+                                  if (isOwner || isAdmin)
                                     const PopupMenuItem(
                                       value: 'edit',
                                       child: Row(
@@ -774,7 +779,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                                         ],
                                       ),
                                     ),
-                                  // 招待制サークルのみ参加申請を表示（オーナー・副オーナー両方）
+                                  // 招待制サークルのみ参加申請を表示（オーナー・副オーナー・管理者）
                                   if (!circle.isPublic)
                                     const PopupMenuItem(
                                       value: 'requests',
@@ -790,8 +795,8 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                                         ],
                                       ),
                                     ),
-                                  // オーナーのみ削除可能
-                                  if (isOwner)
+                                  // オーナーまたは管理者のみ削除可能
+                                  if (isOwner || isAdmin)
                                     const PopupMenuItem(
                                       value: 'delete',
                                       child: Row(
