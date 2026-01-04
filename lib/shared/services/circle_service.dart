@@ -358,18 +358,68 @@ class CircleService {
     return isOwner(circle, userId) || isSubOwner(circle, userId);
   }
 
-  // 副オーナーを任命（オーナーのみ実行可能）
-  Future<void> setSubOwner(String circleId, String subOwnerId) async {
+  // 副オーナーを任命（オーナーのみ実行可能）+ 通知送信
+  Future<void> setSubOwner(
+    String circleId,
+    String subOwnerId, {
+    required String circleName,
+    required String ownerName,
+    required int ownerAvatarIndex,
+    required String ownerId,
+  }) async {
     await _firestore.collection('circles').doc(circleId).update({
       'subOwnerId': subOwnerId,
     });
+
+    // 任命されたユーザーに通知を送信
+    await _firestore
+        .collection('users')
+        .doc(subOwnerId)
+        .collection('notifications')
+        .add({
+          'type': 'sub_owner_appointed',
+          'senderId': ownerId,
+          'senderName': ownerName,
+          'senderAvatarUrl': ownerAvatarIndex.toString(),
+          'title': '副オーナーに任命されました',
+          'body': '$circleName の副オーナーに任命されました',
+          'circleName': circleName,
+          'circleId': circleId,
+          'isRead': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
   }
 
-  // 副オーナーを解任（オーナーのみ実行可能）
-  Future<void> removeSubOwner(String circleId) async {
+  // 副オーナーを解任（オーナーのみ実行可能）+ 通知送信
+  Future<void> removeSubOwner(
+    String circleId, {
+    required String subOwnerId,
+    required String circleName,
+    required String ownerName,
+    required int ownerAvatarIndex,
+    required String ownerId,
+  }) async {
     await _firestore.collection('circles').doc(circleId).update({
       'subOwnerId': null,
     });
+
+    // 解任されたユーザーに通知を送信
+    await _firestore
+        .collection('users')
+        .doc(subOwnerId)
+        .collection('notifications')
+        .add({
+          'type': 'sub_owner_removed',
+          'senderId': ownerId,
+          'senderName': ownerName,
+          'senderAvatarUrl': ownerAvatarIndex.toString(),
+          'title': '副オーナーから解任されました',
+          'body': '$circleName の副オーナーから解任されました',
+          'circleName': circleName,
+          'circleId': circleId,
+          'isRead': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
   }
 
   // 投稿カウントをインクリメント

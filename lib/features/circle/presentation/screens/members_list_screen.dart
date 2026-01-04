@@ -37,6 +37,18 @@ class MembersListScreen extends ConsumerWidget {
         // リアルタイムのsubOwnerIdを使用
         final currentSubOwnerId = circleSnapshot.data?.subOwnerId ?? subOwnerId;
 
+        // メンバーをソート: オーナー → 副オーナー → その他
+        final sortedMemberIds = List<String>.from(memberIds);
+        sortedMemberIds.sort((a, b) {
+          // オーナーは最上位
+          if (a == ownerId) return -1;
+          if (b == ownerId) return 1;
+          // 副オーナーは2番目
+          if (a == currentSubOwnerId) return -1;
+          if (b == currentSubOwnerId) return 1;
+          return 0;
+        });
+
         return Scaffold(
           backgroundColor: Colors.grey[50],
           appBar: AppBar(
@@ -56,9 +68,9 @@ class MembersListScreen extends ConsumerWidget {
           ),
           body: ListView.builder(
             padding: const EdgeInsets.all(16),
-            itemCount: memberIds.length,
+            itemCount: sortedMemberIds.length,
             itemBuilder: (context, index) {
-              final memberId = memberIds[index];
+              final memberId = sortedMemberIds[index];
               final isOwner = memberId == ownerId;
               final isSubOwner = memberId == currentSubOwnerId;
 
@@ -295,9 +307,25 @@ class MembersListScreen extends ConsumerWidget {
             onPressed: () async {
               Navigator.pop(dialogContext);
               try {
+                // オーナー情報を取得
+                final ownerDoc = await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(ownerId)
+                    .get();
+                final ownerData = ownerDoc.data();
+                final ownerName = ownerData?['displayName'] ?? 'オーナー';
+                final ownerAvatarIndex = ownerData?['avatarIndex'] ?? 0;
+
                 await ref
                     .read(circleServiceProvider)
-                    .setSubOwner(circleId, memberId);
+                    .setSubOwner(
+                      circleId,
+                      memberId,
+                      circleName: circleName,
+                      ownerName: ownerName,
+                      ownerAvatarIndex: ownerAvatarIndex,
+                      ownerId: ownerId,
+                    );
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
@@ -346,7 +374,25 @@ class MembersListScreen extends ConsumerWidget {
             onPressed: () async {
               Navigator.pop(dialogContext);
               try {
-                await ref.read(circleServiceProvider).removeSubOwner(circleId);
+                // オーナー情報を取得
+                final ownerDoc = await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(ownerId)
+                    .get();
+                final ownerData = ownerDoc.data();
+                final ownerName = ownerData?['displayName'] ?? 'オーナー';
+                final ownerAvatarIndex = ownerData?['avatarIndex'] ?? 0;
+
+                await ref
+                    .read(circleServiceProvider)
+                    .removeSubOwner(
+                      circleId,
+                      subOwnerId: memberId,
+                      circleName: circleName,
+                      ownerName: ownerName,
+                      ownerAvatarIndex: ownerAvatarIndex,
+                      ownerId: ownerId,
+                    );
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
