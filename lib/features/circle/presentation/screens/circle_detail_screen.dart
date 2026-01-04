@@ -720,8 +720,8 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                         child: const Icon(Icons.arrow_back_rounded, size: 20),
                       ),
                     ),
-                    // オーナー用メニュー
-                    actions: isOwner
+                    // オーナー/副オーナー用メニュー
+                    actions: (isOwner || (isSubOwner && !circle.isPublic))
                         ? [
                             Container(
                               margin: const EdgeInsets.only(right: 8),
@@ -758,21 +758,23 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                                   }
                                 },
                                 itemBuilder: (context) => [
-                                  const PopupMenuItem(
-                                    value: 'edit',
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          Icons.edit_outlined,
-                                          color: Color(0xFF00ACC1),
-                                          size: 20,
-                                        ),
-                                        SizedBox(width: 8),
-                                        Text('編集'),
-                                      ],
+                                  // オーナーのみ編集可能
+                                  if (isOwner)
+                                    const PopupMenuItem(
+                                      value: 'edit',
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.edit_outlined,
+                                            color: Color(0xFF00ACC1),
+                                            size: 20,
+                                          ),
+                                          SizedBox(width: 8),
+                                          Text('編集'),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                  // 招待制サークルのみ参加申請を表示
+                                  // 招待制サークルのみ参加申請を表示（オーナー・副オーナー両方）
                                   if (!circle.isPublic)
                                     const PopupMenuItem(
                                       value: 'requests',
@@ -788,23 +790,25 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                                         ],
                                       ),
                                     ),
-                                  const PopupMenuItem(
-                                    value: 'delete',
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          Icons.delete_outline,
-                                          color: Colors.red,
-                                          size: 20,
-                                        ),
-                                        SizedBox(width: 8),
-                                        Text(
-                                          'サークルを削除',
-                                          style: TextStyle(color: Colors.red),
-                                        ),
-                                      ],
+                                  // オーナーのみ削除可能
+                                  if (isOwner)
+                                    const PopupMenuItem(
+                                      value: 'delete',
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.delete_outline,
+                                            color: Colors.red,
+                                            size: 20,
+                                          ),
+                                          SizedBox(width: 8),
+                                          Text(
+                                            'サークルを削除',
+                                            style: TextStyle(color: Colors.red),
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
                                 ],
                               ),
                             ),

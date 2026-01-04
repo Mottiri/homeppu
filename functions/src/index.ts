@@ -5200,8 +5200,13 @@ export const approveJoinRequest = onCall(
       if (!circleDoc.exists) {
         throw new HttpsError("not-found", "サークルが見つかりません");
       }
-      if (circleDoc.data()?.ownerId !== userId) {
-        throw new HttpsError("permission-denied", "オーナーのみ承認できます");
+      const circleData = circleDoc.data()!;
+      const circleOwnerId = circleData.ownerId;
+      const circleSubOwnerId = circleData.subOwnerId;
+
+      // オーナーまたは副オーナーのみ承認可能
+      if (userId !== circleOwnerId && userId !== circleSubOwnerId) {
+        throw new HttpsError("permission-denied", "オーナーまたは副オーナーのみ承認できます");
       }
 
       // 申請情報を取得
@@ -5276,13 +5281,18 @@ export const rejectJoinRequest = onCall(
     try {
       const db = admin.firestore();
 
-      // サークル情報を取得してオーナーチェック
+      // サークル情報を取得してオーナー/副オーナーチェック
       const circleDoc = await db.collection("circles").doc(circleId).get();
       if (!circleDoc.exists) {
         throw new HttpsError("not-found", "サークルが見つかりません");
       }
-      if (circleDoc.data()?.ownerId !== userId) {
-        throw new HttpsError("permission-denied", "オーナーのみ拒否できます");
+      const circleData = circleDoc.data()!;
+      const circleOwnerId = circleData.ownerId;
+      const circleSubOwnerId = circleData.subOwnerId;
+
+      // オーナーまたは副オーナーのみ拒否可能
+      if (userId !== circleOwnerId && userId !== circleSubOwnerId) {
+        throw new HttpsError("permission-denied", "オーナーまたは副オーナーのみ拒否できます");
       }
 
       // 申請情報を取得
