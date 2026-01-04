@@ -51,7 +51,9 @@ final isAdminProvider = StreamProvider<bool>((ref) {
       }
 
       // Custom Claimsから管理者フラグを取得
-      final idTokenResult = await user.getIdTokenResult(true); // forceRefresh: true
+      final idTokenResult = await user.getIdTokenResult(
+        true,
+      ); // forceRefresh: true
       final isAdmin = idTokenResult.claims?['admin'] == true;
       yield isAdmin;
     },
@@ -139,6 +141,19 @@ class AuthService {
 
   /// ログアウト
   Future<void> signOut() async {
+    // FCMトークンをクリアしてプッシュ通知を停止
+    final user = _auth.currentUser;
+    if (user != null) {
+      try {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .update({'fcmToken': FieldValue.delete()});
+      } catch (e) {
+        // トークン削除失敗は無視してログアウト続行
+        debugPrint('FCMトークン削除失敗: $e');
+      }
+    }
     await _auth.signOut();
   }
 
