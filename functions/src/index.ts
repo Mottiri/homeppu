@@ -5368,6 +5368,7 @@ export const sendJoinRequest = onCall(
       }
       const circleData = circleDoc.data()!;
       const ownerId = circleData.ownerId;
+      const subOwnerId = circleData.subOwnerId;
       const circleName = circleData.name;
 
       // 既に申請中かチェック
@@ -5395,19 +5396,27 @@ export const sendJoinRequest = onCall(
       const applicantDoc = await db.collection("users").doc(userId).get();
       const applicantName = applicantDoc.data()?.displayName || "ユーザー";
 
-      // アプリ内通知を送信
-      await db.collection("users").doc(ownerId).collection("notifications").add({
-        type: "join_request_received",
-        senderId: userId,
-        senderName: applicantName,
-        senderAvatarUrl: applicantDoc.data()?.avatarIndex?.toString() || "0",
-        title: "参加申請が届きました",
-        body: `${applicantName}さんが${circleName}への参加を申請しました`,
-        circleName: circleName,
-        circleId: circleId,
-        isRead: false,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      // 通知対象者リスト（オーナー + 副オーナー）
+      const notifyTargets = [ownerId];
+      if (subOwnerId && subOwnerId !== ownerId) {
+        notifyTargets.push(subOwnerId);
+      }
+
+      // オーナーと副オーナーにアプリ内通知を送信
+      for (const targetId of notifyTargets) {
+        await db.collection("users").doc(targetId).collection("notifications").add({
+          type: "join_request_received",
+          senderId: userId,
+          senderName: applicantName,
+          senderAvatarUrl: applicantDoc.data()?.avatarIndex?.toString() || "0",
+          title: "参加申請が届きました",
+          body: `${applicantName}さんが${circleName}への参加を申請しました`,
+          circleName: circleName,
+          circleId: circleId,
+          isRead: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
 
       // プッシュ通知はonNotificationCreatedトリガーで自動送信される
 

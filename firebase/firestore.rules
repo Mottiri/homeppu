@@ -186,23 +186,23 @@ service cloud.firestore {
     
     // サークル参加申請コレクション
     match /circleJoinRequests/{requestId} {
-      // 読み取り: サークルオーナーまたは申請者
+      // 読み取り: サークルオーナー、副オーナー、または申請者
       allow read: if isAuthenticated() && (
         resource.data.userId == request.auth.uid ||
-        get(/databases/$(database)/documents/circles/$(resource.data.circleId)).data.ownerId == request.auth.uid
+        isCircleOwnerOrSubOwner(resource.data.circleId)
       );
       
       // 作成: 認証済みユーザー
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       
-      // 更新: サークルオーナーのみ（承認/拒否）
+      // 更新: サークルオーナーまたは副オーナー（承認/拒否）
       allow update: if isAuthenticated() && 
-        get(/databases/$(database)/documents/circles/$(resource.data.circleId)).data.ownerId == request.auth.uid;
+        isCircleOwnerOrSubOwner(resource.data.circleId);
       
-      // 削除: 申請者またはサークルオーナー
+      // 削除: 申請者またはサークルオーナー/副オーナー
       allow delete: if isAuthenticated() && (
         resource.data.userId == request.auth.uid ||
-        get(/databases/$(database)/documents/circles/$(resource.data.circleId)).data.ownerId == request.auth.uid
+        isCircleOwnerOrSubOwner(resource.data.circleId)
       );
     }
     
