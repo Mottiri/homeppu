@@ -6,12 +6,13 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
 import '../../../../shared/services/circle_service.dart';
 import '../../../../shared/providers/auth_provider.dart';
+import '../../../../shared/models/circle_model.dart';
 
 class MembersListScreen extends ConsumerWidget {
   final String circleId;
   final String circleName;
   final String ownerId;
-  final String? subOwnerId;
+  final String? subOwnerId; // 初期値（StreamBuilderで上書きされる）
   final List<String> memberIds;
 
   const MembersListScreen({
@@ -27,63 +28,75 @@ class MembersListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currentUserId = ref.watch(authStateProvider).value?.uid;
     final isCurrentUserOwner = currentUserId == ownerId;
+    final circleService = ref.watch(circleServiceProvider);
 
-    return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('メンバー一覧'),
-            Text(
-              '$circleName (${memberIds.length}人)',
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+    // サークルデータをリアルタイム監視（subOwnerIdの変更を検知）
+    return StreamBuilder<CircleModel?>(
+      stream: circleService.streamCircle(circleId),
+      builder: (context, circleSnapshot) {
+        // リアルタイムのsubOwnerIdを使用
+        final currentSubOwnerId = circleSnapshot.data?.subOwnerId ?? subOwnerId;
+
+        return Scaffold(
+          backgroundColor: Colors.grey[50],
+          appBar: AppBar(
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('メンバー一覧'),
+                Text(
+                  '$circleName (${memberIds.length}人)',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                ),
+              ],
             ),
-          ],
-        ),
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.textPrimary,
-        elevation: 0,
-      ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: memberIds.length,
-        itemBuilder: (context, index) {
-          final memberId = memberIds[index];
-          final isOwner = memberId == ownerId;
-          final isSubOwner = memberId == subOwnerId;
+            backgroundColor: Colors.white,
+            foregroundColor: AppColors.textPrimary,
+            elevation: 0,
+          ),
+          body: ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: memberIds.length,
+            itemBuilder: (context, index) {
+              final memberId = memberIds[index];
+              final isOwner = memberId == ownerId;
+              final isSubOwner = memberId == currentSubOwnerId;
 
-          return FutureBuilder<DocumentSnapshot>(
-            future: FirebaseFirestore.instance
-                .collection('users')
-                .doc(memberId)
-                .get(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
-                return _buildLoadingCard();
-              }
+              return FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(memberId)
+                    .get(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return _buildLoadingCard();
+                  }
 
-              final userData = snapshot.data!.data() as Map<String, dynamic>?;
-              if (userData == null) return const SizedBox.shrink();
+                  final userData =
+                      snapshot.data!.data() as Map<String, dynamic>?;
+                  if (userData == null) return const SizedBox.shrink();
 
-              final displayName = userData['displayName'] ?? 'ユーザー';
-              final avatarIndex = userData['avatarIndex'] ?? 0;
+                  final displayName = userData['displayName'] ?? 'ユーザー';
+                  final avatarIndex = userData['avatarIndex'] ?? 0;
 
-              return _buildMemberCard(
-                context,
-                ref,
-                memberId: memberId,
-                displayName: displayName,
-                avatarIndex: avatarIndex,
-                isOwner: isOwner,
-                isSubOwner: isSubOwner,
-                canAppoint: isCurrentUserOwner && !isOwner && !isSubOwner,
-                canRemoveSubOwner: isCurrentUserOwner && isSubOwner,
+                  return _buildMemberCard(
+                    context,
+                    ref,
+                    memberId: memberId,
+                    displayName: displayName,
+                    avatarIndex: avatarIndex,
+                    isOwner: isOwner,
+                    isSubOwner: isSubOwner,
+                    canAppoint: isCurrentUserOwner && !isOwner && !isSubOwner,
+                    canRemoveSubOwner: isCurrentUserOwner && isSubOwner,
+                    hasExistingSubOwner: currentSubOwnerId != null,
+                  );
+                },
               );
             },
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -129,6 +142,7 @@ class MembersListScreen extends ConsumerWidget {
     required bool isSubOwner,
     required bool canAppoint,
     required bool canRemoveSubOwner,
+    required bool hasExistingSubOwner,
   }) {
     return GestureDetector(
       onTap: () => context.push('/profile/$memberId'),
@@ -233,7 +247,8 @@ class MembersListScreen extends ConsumerWidget {
                 ],
               ),
             ),
-            if (canAppoint)
+            // 任命ボタン（既に副オーナーがいる場合は表示しない）
+            if (canAppoint && !hasExistingSubOwner)
               IconButton(
                 icon: Icon(Icons.star_outline, color: Colors.blue[600]),
                 tooltip: '副オーナーに任命',
@@ -266,34 +281,40 @@ class MembersListScreen extends ConsumerWidget {
   ) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('副オーナーに任命'),
         content: Text(
           '$displayName さんを副オーナーに任命しますか？\n\n副オーナーはピン留めや参加承認などの権限を持ちます。',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('キャンセル'),
           ),
           FilledButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               try {
                 await ref
                     .read(circleServiceProvider)
                     .setSubOwner(circleId, memberId);
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('$displayName さんを副オーナーに任命しました')),
+                    SnackBar(
+                      content: Text('$displayName さんを副オーナーに任命しました'),
+                      backgroundColor: Colors.green,
+                    ),
                   );
-                  Navigator.pop(context); // メンバー一覧を閉じて更新を反映
+                  // Navigator.pop()は呼ばない - StreamBuilderで自動更新される
                 }
               } catch (e) {
                 if (context.mounted) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(const SnackBar(content: Text('任命に失敗しました')));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('任命に失敗しました'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
                 }
               }
             },
@@ -312,31 +333,37 @@ class MembersListScreen extends ConsumerWidget {
   ) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('副オーナーを解任'),
         content: Text('$displayName さんの副オーナー権限を解除しますか？'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('キャンセル'),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               try {
                 await ref.read(circleServiceProvider).removeSubOwner(circleId);
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('$displayName さんの副オーナー権限を解除しました')),
+                    SnackBar(
+                      content: Text('$displayName さんの副オーナー権限を解除しました'),
+                      backgroundColor: Colors.orange,
+                    ),
                   );
-                  Navigator.pop(context); // メンバー一覧を閉じて更新を反映
+                  // Navigator.pop()は呼ばない - StreamBuilderで自動更新される
                 }
               } catch (e) {
                 if (context.mounted) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(const SnackBar(content: Text('解任に失敗しました')));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('解任に失敗しました'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
                 }
               }
             },
