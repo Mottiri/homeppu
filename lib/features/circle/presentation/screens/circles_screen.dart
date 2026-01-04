@@ -555,6 +555,8 @@ class _CircleCard extends ConsumerWidget {
     // CircleServiceのカテゴリアイコンを使用
     final icon = CircleService.categoryIcons[circle.category] ?? '⭐';
     final isOwner = currentUserId != null && circle.ownerId == currentUserId;
+    final isSubOwner =
+        currentUserId != null && circle.subOwnerId == currentUserId;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -618,8 +620,8 @@ class _CircleCard extends ConsumerWidget {
                               ),
                             ),
                     ),
-                    // オーナーの場合は申請バッジを表示
-                    if (isOwner)
+                    // オーナーまたは副オーナーの場合は申請バッジを表示
+                    if (isOwner || isSubOwner)
                       StreamBuilder<List<Map<String, dynamic>>>(
                         stream: ref
                             .watch(circleServiceProvider)
