@@ -123,7 +123,29 @@ sequenceDiagram
 - FCMトークンの取得・保存
 - フォアグラウンドメッセージ処理
 - ローカル通知表示
-- 通知タップ時のナビゲーション
+- 通知タップ時のナビゲーション（Callback方式）
+
+#### 通知タップ時のナビゲーション
+
+`NotificationPayload`クラスでペイロードを管理し、`main.dart`でコールバックを登録して遷移処理を行う。
+
+| 通知タイプ | 遷移先 | 必要なデータ |
+|-----------|--------|-------------|
+| `comment` | 投稿詳細 | `postId` |
+| `reaction` | 投稿詳細 | `postId` |
+| `join_request_received` | 参加申請画面 | `circleId` |
+| `join_request_approved` | サークル詳細 | `circleId` |
+| `join_request_rejected` | サークル一覧 | - |
+| `circle_deleted` | サークル一覧 | - |
+| `task_reminder` | タスク画面（該当日付） | `taskId`, `scheduledAt` |
+| `task_scheduled` | タスク画面（該当日付） | `taskId`, `scheduledAt` |
+| `inquiry_reply` | 問い合わせ詳細 | `inquiryId` |
+| `inquiry_status_changed` | 問い合わせ詳細 | `inquiryId` |
+| `inquiry_received` | 管理者問い合わせ詳細 | `inquiryId` |
+| `inquiry_user_reply` | 管理者問い合わせ詳細 | `inquiryId` |
+| `admin_report` | 通報詳細 | `contentId` or `reportId` |
+| `post_deleted` | 通知画面 | - |
+| `post_hidden` | 投稿詳細 | `postId` |
 
 ### 通知画面 (`notifications_screen.dart`)
 - **表示形式**: 本文のみ表示（タイトルは使用しない）

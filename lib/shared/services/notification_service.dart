@@ -1,8 +1,78 @@
+import 'dart:convert';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
+/// 通知タップ時のペイロード
+class NotificationPayload {
+  final String type;
+  final String? postId;
+  final String? circleId;
+  final String? taskId;
+  final String? inquiryId;
+  final String? reportId;
+  final String? contentId;
+  final String? scheduledAt;
+
+  NotificationPayload({
+    required this.type,
+    this.postId,
+    this.circleId,
+    this.taskId,
+    this.inquiryId,
+    this.reportId,
+    this.contentId,
+    this.scheduledAt,
+  });
+
+  factory NotificationPayload.fromJson(Map<String, dynamic> json) {
+    return NotificationPayload(
+      type: json['type'] as String? ?? 'system',
+      postId: json['postId'] as String?,
+      circleId: json['circleId'] as String?,
+      taskId: json['taskId'] as String?,
+      inquiryId: json['inquiryId'] as String?,
+      reportId: json['reportId'] as String?,
+      contentId: json['contentId'] as String?,
+      scheduledAt: json['scheduledAt'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'type': type,
+      if (postId != null) 'postId': postId,
+      if (circleId != null) 'circleId': circleId,
+      if (taskId != null) 'taskId': taskId,
+      if (inquiryId != null) 'inquiryId': inquiryId,
+      if (reportId != null) 'reportId': reportId,
+      if (contentId != null) 'contentId': contentId,
+      if (scheduledAt != null) 'scheduledAt': scheduledAt,
+    };
+  }
+
+  String encode() => jsonEncode(toJson());
+
+  static NotificationPayload? decode(String? payload) {
+    if (payload == null || payload.isEmpty) return null;
+    try {
+      // JSON形式かどうかを確認
+      if (payload.startsWith('{')) {
+        return NotificationPayload.fromJson(jsonDecode(payload));
+      }
+      // 旧形式（postIdのみ）への互換性対応
+      return NotificationPayload(type: 'comment', postId: payload);
+    } catch (e) {
+      debugPrint('Failed to decode payload: $e');
+      return null;
+    }
+  }
+}
+
+/// 通知タップ時のコールバック型
+typedef NotificationTapCallback = void Function(NotificationPayload payload);
 
 /// プッシュ通知サービス
 class NotificationService {
@@ -15,6 +85,12 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
 
   bool _isInitialized = false;
+  NotificationTapCallback? _onNotificationTap;
+
+  /// 通知タップ時のコールバックを登録
+  void setNotificationTapCallback(NotificationTapCallback callback) {
+    _onNotificationTap = callback;
+  }
 
   /// 初期化
   Future<void> initialize() async {
@@ -68,6 +144,15 @@ class NotificationService {
     // バックグラウンドからアプリを開いた時
     FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationOpen);
 
+    // アプリが終了状態から起動された場合の通知を確認
+    final initialMessage = await _messaging.getInitialMessage();
+    if (initialMessage != null) {
+      // 少し遅延させてルーターの準備を待つ
+      Future.delayed(const Duration(milliseconds: 500), () {
+        _handleNotificationOpen(initialMessage);
+      });
+    }
+
     _isInitialized = true;
   }
 
@@ -102,11 +187,23 @@ class NotificationService {
     final notification = message.notification;
     if (notification == null) return;
 
+    // ペイロードを作成
+    final payload = NotificationPayload(
+      type: message.data['type'] as String? ?? 'system',
+      postId: message.data['postId'] as String?,
+      circleId: message.data['circleId'] as String?,
+      taskId: message.data['taskId'] as String?,
+      inquiryId: message.data['inquiryId'] as String?,
+      reportId: message.data['reportId'] as String?,
+      contentId: message.data['contentId'] as String?,
+      scheduledAt: message.data['scheduledAt'] as String?,
+    );
+
     // ローカル通知として表示
     await _showLocalNotification(
       title: notification.title ?? '',
       body: notification.body ?? '',
-      payload: message.data['postId'] ?? '',
+      payload: payload.encode(),
     );
   }
 
@@ -145,22 +242,31 @@ class NotificationService {
     );
   }
 
-  /// 通知タップ時の処理
+  /// 通知タップ時の処理（ローカル通知用）
   void _onNotificationTapped(NotificationResponse response) {
-    final payload = response.payload;
-    if (payload != null && payload.isNotEmpty) {
-      // TODO: 投稿詳細画面に遷移
-      debugPrint('通知タップ: postId=$payload');
+    final payload = NotificationPayload.decode(response.payload);
+    if (payload != null) {
+      debugPrint('通知タップ: type=${payload.type}, postId=${payload.postId}');
+      _onNotificationTap?.call(payload);
     }
   }
 
-  /// バックグラウンドから開いた時の処理
+  /// バックグラウンドから開いた時の処理（FCM通知用）
   void _handleNotificationOpen(RemoteMessage message) {
-    final postId = message.data['postId'];
-    if (postId != null) {
-      // TODO: 投稿詳細画面に遷移
-      debugPrint('通知から起動: postId=$postId');
-    }
+    debugPrint('通知から起動: data=${message.data}');
+
+    final payload = NotificationPayload(
+      type: message.data['type'] as String? ?? 'system',
+      postId: message.data['postId'] as String?,
+      circleId: message.data['circleId'] as String?,
+      taskId: message.data['taskId'] as String?,
+      inquiryId: message.data['inquiryId'] as String?,
+      reportId: message.data['reportId'] as String?,
+      contentId: message.data['contentId'] as String?,
+      scheduledAt: message.data['scheduledAt'] as String?,
+    );
+
+    _onNotificationTap?.call(payload);
   }
 
   /// FCMトークンをクリア（ログアウト時）

@@ -11,7 +11,11 @@ class CategoryService {
 
   // カテゴリ一覧取得
   Future<List<CategoryModel>> getCategories() async {
-    if (_userId == null) return [];
+    debugPrint('[CategoryService] getCategories called, userId=$_userId');
+    if (_userId == null) {
+      debugPrint('[CategoryService] userId is null, returning empty list');
+      return [];
+    }
 
     try {
       final snapshot = await _firestore
@@ -21,18 +25,36 @@ class CategoryService {
           .orderBy('order')
           .get();
 
-      return snapshot.docs
+      debugPrint(
+        '[CategoryService] Got ${snapshot.docs.length} categories from Firestore',
+      );
+
+      final categories = snapshot.docs
           .map((doc) => CategoryModel.fromFirestore(doc))
           .toList();
+
+      for (final cat in categories) {
+        debugPrint(
+          '[CategoryService] Category: ${cat.name} (id=${cat.id}, order=${cat.order})',
+        );
+      }
+
+      return categories;
     } catch (e) {
-      debugPrint('Error fetching categories: $e');
+      debugPrint('[CategoryService] Error fetching categories: $e');
       return [];
     }
   }
 
   // カテゴリ追加
   Future<CategoryModel?> addCategory(String name) async {
-    if (_userId == null) return null;
+    debugPrint(
+      '[CategoryService] addCategory called, name=$name, userId=$_userId',
+    );
+    if (_userId == null) {
+      debugPrint('[CategoryService] userId is null, returning null');
+      return null;
+    }
 
     try {
       // 現在の最大orderを取得して、末尾に追加
@@ -48,6 +70,7 @@ class CategoryService {
       if (snapshot.docs.isNotEmpty) {
         nextOrder = (snapshot.docs.first.data()['order'] as int) + 1;
       }
+      debugPrint('[CategoryService] Next order: $nextOrder');
 
       final newCategoryRef = _firestore
           .collection('users')
@@ -64,9 +87,12 @@ class CategoryService {
       );
 
       await newCategoryRef.set(category.toMap());
+      debugPrint(
+        '[CategoryService] Category created successfully: ${category.id}',
+      );
       return category;
     } catch (e) {
-      debugPrint('Error adding category: $e');
+      debugPrint('[CategoryService] Error adding category: $e');
       return null;
     }
   }

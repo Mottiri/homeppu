@@ -53,6 +53,14 @@ service cloud.firestore {
       allow update: if isAuthenticated() && isOwner(userId) && 
         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['virtue', 'isBanned', 'banStatus', 'banHistory', 'permanentBanScheduledDeletionAt', 'warningCount', 'isAI', 'createdAt']);
 
+      // カテゴリサブコレクション
+      match /categories/{categoryId} {
+        allow read: if isAuthenticated() && isOwner(userId);
+        allow create: if isAuthenticated() && isOwner(userId);
+        allow update: if isAuthenticated() && isOwner(userId);
+        allow delete: if isAuthenticated() && isOwner(userId);
+      }
+
       // 通知サブコレクション
       match /notifications/{notificationId} {
          allow read: if isAuthenticated() && isOwner(userId);
