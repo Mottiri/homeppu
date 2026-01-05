@@ -565,7 +565,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       ),
                     ),
                   ),
-                ),
+                ).animate().fadeIn(duration: 400.ms).slideY(
+                      begin: 0.1,
+                      end: 0,
+                      duration: 400.ms,
+                      curve: Curves.easeOut,
+                    ),
 
                 const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
@@ -1746,6 +1751,45 @@ class _FollowingUserItem extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// 強化されたプロフィールカード
+class _EnhancedProfileCard extends StatelessWidget {
+  final Widget child;
+
+  const _EnhancedProfileCard({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        gradient: AppColors.cardGradient,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(
+          color: AppColors.primary.withValues(alpha: 0.08),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.12),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+            spreadRadius: 2,
+          ),
+          BoxShadow(
+            color: AppColors.secondary.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: child,
+      ),
     );
   }
 }

@@ -1,6 +1,7 @@
 // ignore_for_file: use_build_context_synchronously
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../tasks/presentation/widgets/add_task_bottom_sheet.dart';
@@ -356,8 +357,8 @@ class _MainShellState extends ConsumerState<MainShell>
   }
 }
 
-/// ナビゲーションアイテム
-class _NavItem extends StatelessWidget {
+/// ナビゲーションアイテム - 強化版
+class _NavItem extends StatefulWidget {
   final IconData icon;
   final IconData activeIcon;
   final String label;
@@ -373,27 +374,94 @@ class _NavItem extends StatelessWidget {
   });
 
   @override
+  State<_NavItem> createState() => _NavItemState();
+}
+
+class _NavItemState extends State<_NavItem> with SingleTickerProviderStateMixin {
+  bool _isPressed = false;
+
+  @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: widget.onTap,
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) => setState(() => _isPressed = false),
+      onTapCancel: () => setState(() => _isPressed = false),
       behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 56,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        width: 64,
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          color: widget.isActive
+              ? AppColors.primary.withValues(alpha: 0.1)
+              : Colors.transparent,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              isActive ? activeIcon : icon,
-              color: isActive ? AppColors.primary : AppColors.textHint,
-              size: 26,
+            // アイコンとインジケーターのスタック
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                // アクティブ時のグロー効果
+                if (widget.isActive)
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.3),
+                          blurRadius: 12,
+                          spreadRadius: 0,
+                        ),
+                      ],
+                    ),
+                  ),
+                // アイコン
+                AnimatedScale(
+                  scale: _isPressed ? 0.85 : (widget.isActive ? 1.1 : 1.0),
+                  duration: const Duration(milliseconds: 150),
+                  child: Icon(
+                    widget.isActive ? widget.activeIcon : widget.icon,
+                    color: widget.isActive ? AppColors.primary : AppColors.textHint,
+                    size: 26,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 4),
-            Text(
-              label,
+            // ラベル
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 150),
               style: TextStyle(
-                fontSize: 10,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                color: isActive ? AppColors.primary : AppColors.textHint,
+                fontSize: widget.isActive ? 11 : 10,
+                fontWeight: widget.isActive ? FontWeight.w700 : FontWeight.w500,
+                color: widget.isActive ? AppColors.primary : AppColors.textHint,
+              ),
+              child: Text(widget.label),
+            ),
+            // アクティブインジケーター（ドット）
+            const SizedBox(height: 2),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: widget.isActive ? 6 : 0,
+              height: widget.isActive ? 6 : 0,
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                shape: BoxShape.circle,
+                boxShadow: widget.isActive
+                    ? [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.5),
+                          blurRadius: 6,
+                          spreadRadius: 1,
+                        ),
+                      ]
+                    : [],
               ),
             ),
           ],
