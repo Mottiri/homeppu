@@ -222,10 +222,24 @@ class CircleService {
 
   // サークル退会
   Future<void> leaveCircle(String circleId, String userId) async {
-    await _firestore.collection('circles').doc(circleId).update({
+    // まずサークル情報を取得して副オーナーかどうか確認
+    final circleDoc = await _firestore
+        .collection('circles')
+        .doc(circleId)
+        .get();
+    final circleData = circleDoc.data();
+
+    final updateData = <String, dynamic>{
       'memberIds': FieldValue.arrayRemove([userId]),
       'memberCount': FieldValue.increment(-1),
-    });
+    };
+
+    // 副オーナーが退会する場合はsubOwnerIdをクリア
+    if (circleData?['subOwnerId'] == userId) {
+      updateData['subOwnerId'] = null;
+    }
+
+    await _firestore.collection('circles').doc(circleId).update(updateData);
   }
 
   // ユーザーが参加しているサークル一覧

@@ -3465,13 +3465,21 @@ async function sendPushNotification(
     }
 
     // 3. FCM送信
+    // dataにはtype, postId等を含める（クライアントの通知タップ時ナビゲーション用）
+    const fcmData: { [key: string]: string } = {
+      ...data,
+    };
+    if (options?.type) {
+      fcmData.type = options.type;
+    }
+
     const message = {
       token: fcmToken,
       notification: {
         title,
         body,
       },
-      data: data || {},
+      data: fcmData,
       android: {
         priority: "high" as const,
         notification: {
