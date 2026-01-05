@@ -375,6 +375,50 @@ service cloud.firestore {
       }
     }
 
+    // BAN異議申し立てチャットコレクション
+    match /ban_appeals/{appealId} {
+      // 読み取り: 管理者または該当ユーザー
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.bannedUserId == request.auth.uid
+      );
+      
+      // 作成: 該当ユーザー（BANされていても作成可能）
+      allow create: if isAuthenticated() && 
+        request.resource.data.bannedUserId == request.auth.uid;
+      
+      // 更新: 管理者または該当ユーザー（メッセージ追加）
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.bannedUserId == request.auth.uid
+      );
+      
+      // 削除: 管理者のみ
+      allow delete: if isAdmin();
+    }
+
+    // banAppealsコレクション（別名）
+    match /banAppeals/{appealId} {
+      // 読み取り: 管理者または該当ユーザー
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.bannedUserId == request.auth.uid
+      );
+      
+      // 作成: 該当ユーザー（BANされていても作成可能）
+      allow create: if isAuthenticated() && 
+        request.resource.data.bannedUserId == request.auth.uid;
+      
+      // 更新: 管理者または該当ユーザー（メッセージ追加）
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.bannedUserId == request.auth.uid
+      );
+      
+      // 削除: 管理者のみ
+      allow delete: if isAdmin();
+    }
+
     // 通報コレクション
     match /reports/{reportId} {
       // 管理者のみ読み取り可能

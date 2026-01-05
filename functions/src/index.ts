@@ -8313,6 +8313,24 @@ export const unbanUser = onCall(
 
     await batch.commit();
 
+    // banAppealsの削除（該当ユーザーのチャット履歴を削除）
+    try {
+      const appealsSnapshot = await db.collection("banAppeals")
+        .where("bannedUserId", "==", userId)
+        .get();
+
+      if (!appealsSnapshot.empty) {
+        const deleteBatch = db.batch();
+        appealsSnapshot.docs.forEach(doc => {
+          deleteBatch.delete(doc.ref);
+        });
+        await deleteBatch.commit();
+        console.log(`Deleted ${appealsSnapshot.size} ban appeal(s) for user ${userId}`);
+      }
+    } catch (e) {
+      console.warn(`Failed to delete ban appeals for ${userId}:`, e);
+    }
+
     // Auth有効化
     try {
       await admin.auth().updateUser(userId, { disabled: false });

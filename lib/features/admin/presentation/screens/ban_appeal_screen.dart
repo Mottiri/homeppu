@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 import '../../../../core/constants/app_colors.dart';
@@ -116,6 +117,55 @@ class _BanAppealScreenState extends ConsumerState<BanAppealScreen> {
     }
   }
 
+  // 対応完了確認ダイアログ
+  void _showDeleteConfirmDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('対応完了'),
+        content: const Text('このチャット履歴を削除しますか？\n削除後は復元できません。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('キャンセル'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _deleteAppeal();
+            },
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('削除'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // チャット履歴を削除
+  Future<void> _deleteAppeal() async {
+    if (_currentAppealId == null) return;
+    try {
+      await FirebaseFirestore.instance
+          .collection('banAppeals')
+          .doc(_currentAppealId)
+          .delete();
+
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('チャット履歴を削除しました')));
+        context.pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('削除エラー: $e')));
+      }
+    }
+  }
+
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
@@ -190,6 +240,22 @@ class _BanAppealScreenState extends ConsumerState<BanAppealScreen> {
       appBar: AppBar(
         title: const Text('サポートへの問い合わせ'),
         automaticallyImplyLeading: widget.appealId != null, // 管理者モードなら戻れる
+        actions: _isAdminMode && widget.targetUserId != null
+            ? [
+                IconButton(
+                  icon: const Icon(Icons.person),
+                  tooltip: 'ユーザープロフィールを見る',
+                  onPressed: () {
+                    context.push('/profile/${widget.targetUserId}');
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.check_circle_outline),
+                  tooltip: '対応完了（チャット削除）',
+                  onPressed: () => _showDeleteConfirmDialog(context),
+                ),
+              ]
+            : null,
       ),
       body: userAsync.when(
         data: (user) {
