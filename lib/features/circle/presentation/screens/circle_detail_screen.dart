@@ -217,7 +217,17 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
       try {
         final circleService = ref.read(circleServiceProvider);
         await circleService.leaveCircle(widget.circleId, userId);
+
         if (mounted) {
+          // 状態をリセット
+          setState(() {
+            _hasPendingRequest = false;
+            _hasCheckedPending = false; // 再度チェックさせるためにfalseに
+          });
+
+          // 最新の状態を確認（招待制の場合など）
+          _checkPendingRequest(userId);
+
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(const SnackBar(content: Text('サークルを退会しました')));

@@ -45,7 +45,7 @@ class _AdminMenuBottomSheetState extends ConsumerState<AdminMenuBottomSheet>
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: MediaQuery.of(context).size.height * 0.6,
+      height: MediaQuery.of(context).size.height * 0.7,
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -252,9 +252,11 @@ class _AdminMenuBottomSheetState extends ConsumerState<AdminMenuBottomSheet>
 
   // サポートタブ
   Widget _buildSupportTab() {
-    return Padding(
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           StreamBuilder<int>(
             stream: _getPendingInquiriesCount(),
@@ -274,6 +276,24 @@ class _AdminMenuBottomSheetState extends ConsumerState<AdminMenuBottomSheet>
             },
           ),
           const SizedBox(height: 12),
+          StreamBuilder<int>(
+            stream: _getPendingBanAppealsCount(),
+            builder: (context, snapshot) {
+              final count = snapshot.data ?? 0;
+              return _buildMenuButton(
+                icon: Icons.block,
+                label: 'BANユーザー管理',
+                subtitle: count > 0 ? '$count件の対応待ち' : '対応待ちなし',
+                color: Colors.orange,
+                badge: count,
+                onTap: () {
+                  Navigator.pop(context);
+                  context.push('/admin/ban-users');
+                },
+              );
+            },
+          ),
+          const SizedBox(height: 12),
           _buildMenuButton(
             icon: Icons.rate_review,
             label: '要審査投稿レビュー',
@@ -287,6 +307,14 @@ class _AdminMenuBottomSheetState extends ConsumerState<AdminMenuBottomSheet>
         ],
       ),
     );
+  }
+
+  Stream<int> _getPendingBanAppealsCount() {
+    return _firestore
+        .collection('banAppeals')
+        .where('status', isEqualTo: 'open')
+        .snapshots()
+        .map((snapshot) => snapshot.size);
   }
 
   // 通報タブ

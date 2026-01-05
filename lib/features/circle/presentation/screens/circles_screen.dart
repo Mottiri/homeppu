@@ -557,6 +557,9 @@ class _CircleCard extends ConsumerWidget {
     final isOwner = currentUserId != null && circle.ownerId == currentUserId;
     final isSubOwner =
         currentUserId != null && circle.subOwnerId == currentUserId;
+    // 管理者チェック
+    final isAdminAsync = ref.watch(isAdminProvider);
+    final isAdmin = isAdminAsync.valueOrNull ?? false;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -620,8 +623,8 @@ class _CircleCard extends ConsumerWidget {
                               ),
                             ),
                     ),
-                    // オーナーまたは副オーナーの場合は申請バッジを表示
-                    if (isOwner || isSubOwner)
+                    // オーナー、副オーナー、または管理者の場合は申請バッジを表示
+                    if (isOwner || isSubOwner || isAdmin)
                       StreamBuilder<List<Map<String, dynamic>>>(
                         stream: ref
                             .watch(circleServiceProvider)

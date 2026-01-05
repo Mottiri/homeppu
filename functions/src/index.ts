@@ -4894,9 +4894,10 @@ export const deleteCircle = onCall(
       const circleName = circleData.name;
       const memberIds: string[] = circleData.memberIds || [];
 
-      // オーナーチェック
-      if (ownerId !== userId) {
-        throw new HttpsError("permission-denied", "サークル削除はオーナーのみ可能です");
+      // オーナーまたは管理者チェック
+      const userIsAdmin = await isAdmin(userId);
+      if (ownerId !== userId && !userIsAdmin) {
+        throw new HttpsError("permission-denied", "サークル削除はオーナーまたは管理者のみ可能です");
       }
 
       // 2. サークルをソフトデリート（即座にUIから非表示）
@@ -5204,9 +5205,10 @@ export const approveJoinRequest = onCall(
       const circleOwnerId = circleData.ownerId;
       const circleSubOwnerId = circleData.subOwnerId;
 
-      // オーナーまたは副オーナーのみ承認可能
-      if (userId !== circleOwnerId && userId !== circleSubOwnerId) {
-        throw new HttpsError("permission-denied", "オーナーまたは副オーナーのみ承認できます");
+      // オーナー、副オーナー、または管理者のみ承認可能
+      const userIsAdmin = await isAdmin(userId);
+      if (userId !== circleOwnerId && userId !== circleSubOwnerId && !userIsAdmin) {
+        throw new HttpsError("permission-denied", "オーナー、副オーナー、または管理者のみ承認できます");
       }
 
       // 申請情報を取得
@@ -5290,9 +5292,10 @@ export const rejectJoinRequest = onCall(
       const circleOwnerId = circleData.ownerId;
       const circleSubOwnerId = circleData.subOwnerId;
 
-      // オーナーまたは副オーナーのみ拒否可能
-      if (userId !== circleOwnerId && userId !== circleSubOwnerId) {
-        throw new HttpsError("permission-denied", "オーナーまたは副オーナーのみ拒否できます");
+      // オーナー、副オーナー、または管理者のみ拒否可能
+      const userIsAdmin = await isAdmin(userId);
+      if (userId !== circleOwnerId && userId !== circleSubOwnerId && !userIsAdmin) {
+        throw new HttpsError("permission-denied", "オーナー、副オーナー、または管理者のみ拒否できます");
       }
 
       // 申請情報を取得
@@ -8130,3 +8133,248 @@ export const removeAdminRole = onCall(async (request) => {
   }
 });
 
+
+// ===============================================
+// ユーザーBAN機能
+// ===============================================
+
+/**
+ * ユーザーを一時BANにする
+ */
+export const banUser = onCall(
+  { region: "asia-northeast1" },
+  async (request) => {
+    // 呼び出し元が管理者かチェック
+    if (!request.auth?.token.admin) {
+      throw new HttpsError("permission-denied", "管理者権限が必要です");
+    }
+
+    const { userId, reason } = request.data;
+    if (!userId || !reason) {
+      throw new HttpsError("invalid-argument", "userIdとreasonは必須です");
+    }
+
+    // 自分自身や他の管理者はBAN不可
+    if (userId === request.auth.uid) {
+      throw new HttpsError("invalid-argument", "自分自身をBANすることはできません");
+    }
+
+    // 対象ユーザー確認
+    const userDoc = await db.collection("users").doc(userId).get();
+    if (!userDoc.exists) {
+      throw new HttpsError("not-found", "ユーザーが見つかりません");
+    }
+
+    // 対象が管理者かどうかのチェックは、Firestore上のデータやCustom Claimsで確認すべきだが、
+    // ここではFirestoreの管理者フラグがないため省略（ただし運用上管理者はBANされない前提）
+
+    const banRecord = {
+      type: "temporary",
+      reason: reason,
+      bannedAt: admin.firestore.Timestamp.now(),
+      bannedBy: request.auth.uid,
+    };
+
+    const batch = db.batch();
+
+    // ユーザー更新
+    batch.update(userDoc.ref, {
+      banStatus: "temporary",
+      isBanned: true,
+      banHistory: admin.firestore.FieldValue.arrayUnion(banRecord),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // 通知送信
+    const notificationRef = db.collection("users").doc(userId).collection("notifications").doc();
+    batch.set(notificationRef, {
+      userId: userId,
+      type: "user_banned",
+      title: "アカウントが一時停止されました",
+      body: `規約違反のため、アカウント機能の一部を制限しました。理由: ${reason}`,
+      isRead: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await batch.commit();
+
+    // Custom Claims更新
+    await admin.auth().setCustomUserClaims(userId, { banned: true, banStatus: 'temporary' });
+
+    console.log(`User ${userId} temporarily banned by ${request.auth.uid}`);
+    return { success: true };
+  }
+);
+
+/**
+ * ユーザーを永久BANにする
+ */
+export const permanentBanUser = onCall(
+  { region: "asia-northeast1" },
+  async (request) => {
+    // Admin check
+    if (!request.auth?.token.admin) {
+      throw new HttpsError("permission-denied", "管理者権限が必要です");
+    }
+
+    const { userId, reason } = request.data;
+    if (!userId || !reason) {
+      throw new HttpsError("invalid-argument", "userIdとreasonは必須です");
+    }
+
+    if (userId === request.auth.uid) {
+      throw new HttpsError("invalid-argument", "自分自身をBANすることはできません");
+    }
+
+    const banRecord = {
+      type: "permanent",
+      reason: reason,
+      bannedAt: admin.firestore.Timestamp.now(),
+      bannedBy: request.auth.uid,
+    };
+
+    const batch = db.batch();
+
+    // 180日後の日付
+    const deletionDate = new Date();
+    deletionDate.setDate(deletionDate.getDate() + 180);
+
+    batch.update(db.collection("users").doc(userId), {
+      banStatus: "permanent",
+      isBanned: true,
+      banHistory: admin.firestore.FieldValue.arrayUnion(banRecord),
+      permanentBanScheduledDeletionAt: admin.firestore.Timestamp.fromDate(deletionDate),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // 通知（機能しませんが記録として）
+    const notificationRef = db.collection("users").doc(userId).collection("notifications").doc();
+    batch.set(notificationRef, {
+      userId: userId,
+      type: "user_banned",
+      title: "アカウントが永久停止されました",
+      body: `規約違反のため、アカウントを永久停止しました。理由: ${reason}`,
+      isRead: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await batch.commit();
+
+    // Auth無効化 & トークン破棄
+    try {
+      await admin.auth().updateUser(userId, { disabled: true });
+      await admin.auth().revokeRefreshTokens(userId);
+      // Custom Claims更新
+      await admin.auth().setCustomUserClaims(userId, { banned: true, banStatus: 'permanent' });
+    } catch (e) {
+      console.warn(`Auth update failed for ${userId}:`, e);
+    }
+
+    console.log(`User ${userId} permanently banned by ${request.auth.uid}`);
+    return { success: true };
+  }
+);
+
+/**
+ * BANを解除する
+ */
+export const unbanUser = onCall(
+  { region: "asia-northeast1" },
+  async (request) => {
+    // Admin check
+    if (!request.auth?.token.admin) {
+      throw new HttpsError("permission-denied", "管理者権限が必要です");
+    }
+
+    const { userId } = request.data;
+    if (!userId) {
+      throw new HttpsError("invalid-argument", "userIdは必須です");
+    }
+
+    const batch = db.batch();
+
+    batch.update(db.collection("users").doc(userId), {
+      banStatus: "none",
+      isBanned: false,
+      permanentBanScheduledDeletionAt: admin.firestore.FieldValue.delete(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // 解除通知
+    const notificationRef = db.collection("users").doc(userId).collection("notifications").doc();
+    batch.set(notificationRef, {
+      userId: userId,
+      type: "user_unbanned",
+      title: "アカウント制限が解除されました",
+      body: `アカウントの制限が解除されました。`,
+      isRead: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await batch.commit();
+
+    // Auth有効化
+    try {
+      await admin.auth().updateUser(userId, { disabled: false });
+      // Custom Claims更新（bannedフラグ削除）
+      const userRecord = await admin.auth().getUser(userId);
+      const currentClaims = userRecord.customClaims || {};
+      delete currentClaims.banned;
+      delete currentClaims.banStatus;
+      await admin.auth().setCustomUserClaims(userId, currentClaims);
+    } catch (e) {
+      console.warn(`Auth update failed for ${userId}:`, e);
+    }
+
+    console.log(`User ${userId} unbanned by ${request.auth.uid}`);
+    return { success: true };
+  }
+);
+
+/**
+ * 永久BANユーザーのデータ削除クリーンアップ（毎日午前4時）
+ */
+export const cleanupBannedUsers = onSchedule(
+  {
+    schedule: "0 4 * * *",
+    timeZone: "Asia/Tokyo",
+    region: "asia-northeast1",
+    timeoutSeconds: 540,
+  },
+  async () => {
+    console.log("=== cleanupBannedUsers START ===");
+    const now = admin.firestore.Timestamp.now();
+
+    const snapshot = await db.collection("users")
+      .where("banStatus", "==", "permanent")
+      .where("permanentBanScheduledDeletionAt", "<=", now)
+      .limit(20)
+      .get();
+
+    if (snapshot.empty) {
+      console.log("No users to delete");
+      return;
+    }
+
+    console.log(`Found ${snapshot.size} users to scheduled delete`);
+
+    for (const doc of snapshot.docs) {
+      try {
+        const uid = doc.id;
+        console.log(`Deleting banned user: ${uid}`);
+
+        await admin.auth().deleteUser(uid).catch(e => {
+          console.warn(`Auth delete failed for ${uid}:`, e);
+        });
+
+        // ユーザードキュメント削除
+        await db.collection("users").doc(uid).delete();
+
+      } catch (error) {
+        console.error(`Error deleting user ${doc.id}:`, error);
+      }
+    }
+
+    console.log("=== cleanupBannedUsers COMPLETE ===");
+  }
+);

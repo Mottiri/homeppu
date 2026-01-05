@@ -9,6 +9,7 @@ import '../../../../shared/services/category_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../shared/providers/task_screen_provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../../../shared/providers/auth_provider.dart'; // currentUserProvider
 import 'home_screen.dart'; // timelineRefreshProvider
 
 /// メイン画面のシェル（ボトムナビゲーション）
@@ -57,6 +58,22 @@ class _MainShellState extends ConsumerState<MainShell>
   }
 
   void _handleCenterButtonTap(BuildContext context, int currentIndex) async {
+    // BANチェック
+    final currentUser = ref.read(currentUserProvider).valueOrNull;
+    if (currentUser?.isBanned == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            currentUser?.banStatus == 'permanent'
+                ? 'アカウントが停止されています'
+                : 'アカウントが制限されているため、この操作はできません',
+          ),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     if (currentIndex == 2) {
       // タスク画面：タスク作成ボトムシートを表示
       await _showAddTaskSheet(context);
@@ -148,6 +165,17 @@ class _MainShellState extends ConsumerState<MainShell>
 
   @override
   Widget build(BuildContext context) {
+    // 永久BANチェック
+    final currentUser = ref.watch(currentUserProvider).valueOrNull;
+    if (currentUser?.banStatus == 'permanent') {
+      // 描画完了後に遷移
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (GoRouterState.of(context).matchedLocation != '/ban-appeal') {
+          context.go('/ban-appeal');
+        }
+      });
+    }
+
     final currentIndex = _getCurrentIndex(context);
 
     // 画面が変わったときにアニメーション

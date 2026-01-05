@@ -12,9 +12,11 @@ service cloud.firestore {
       return request.auth.uid == userId;
     }
 
-    // BANされていないかチェック
+    // BANされていないかチェック（より厳密に）
     function isNotBanned() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isBanned == false;
+      let userData = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return userData.isBanned == false && 
+             (userData.banStatus == null || userData.banStatus == 'none');
     }
 
     // 管理者チェック（Custom Claims使用）
@@ -49,22 +51,136 @@ service cloud.firestore {
       
       // 更新: 本人のみ（特定フィールドは変更不可）
       allow update: if isAuthenticated() && isOwner(userId) && 
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['virtue', 'isBanned', 'isAI', 'createdAt']);
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['virtue', 'isBanned', 'banStatus', 'banHistory', 'permanentBanScheduledDeletionAt', 'warningCount', 'isAI', 'createdAt']);
 
       // 通知サブコレクション
       match /notifications/{notificationId} {
          allow read: if isAuthenticated() && isOwner(userId);
          allow update: if isAuthenticated() && isOwner(userId); // 既読更新用
          allow delete: if isAuthenticated() && isOwner(userId); // 削除用
-         // 管理者は通知を作成可能、サーバー側も作成可能（Admin SDKはルール無視なのでルール不要だが、クライアントSDKからは必要）
+         // 管理者は通知を作成可能
          allow create: if isAdmin();
       }
-
-      // カテゴリサブコレクション
-      match /categories/{categoryId} {
-         allow read, write: if isAuthenticated() && isOwner(userId);
+    }
+    
+    // BAN異議申し立てコレクション
+    match /banAppeals/{appealId} {
+      // 読み取り: 管理者 または 本人
+      allow read: if isAuthenticated() && (
+        isAdmin() || 
+        resource.data.bannedUserId == request.auth.uid
+      );
+      
+      // 作成: 管理者 または 本人
+      allow create: if isAuthenticated() && (
+        isAdmin() || 
+        request.resource.data.bannedUserId == request.auth.uid
+      );
+      
+      // 更新: 管理者 または 本人
+      allow update: if isAuthenticated() && (
+        isAdmin() || 
+        resource.data.bannedUserId == request.auth.uid
+      );
+    }
+    
+    // 投稿コレクション
+    match /posts/{postId} {
+      // 読み取り: 認証済みユーザー（非表示フラグを考慮すべきだが、クライアント側フィルタリングも併用）
+      // BANされていても読み取りは許可（一時BANユーザーは別途クライアント側で制限）
+      // ただし永久BANの場合はログアウトさせるので考慮不要
+      allow read: if isAuthenticated();
+      
+      // 作成: 認証済み かつ BANされていない
+      // クライアントからの直接作成は禁止 (Cloud Functions経由) だが、
+      // 管理者機能などで直接書き込む場合に備えてルールは定義しておく
+      allow create: if false; 
+      
+      // 更新: 投稿者本人（BANされていない）または管理者、サークルオーナー（ピン留め等）
+      // ここでは簡易的に本人のみ＋BANチェック。ピン留めは別途考慮が必要だが、
+      // togglePinなどはCloud Functions経由か、またはフィールド制限が必要。
+      // togglePinはCircleServiceでupdateを使っているので、ここで許可が必要。
+      allow update: if isAuthenticated() && (
+        (resource.data.userId == request.auth.uid && isNotBanned()) ||
+        isAdmin() ||
+        (resource.data.circleId != null && isCircleOwnerOrSubOwner(resource.data.circleId)) // ピン留め用
+      );
+      
+      // 削除: 投稿者本人（BANされていない）または管理者
+      allow delete: if isAuthenticated() && (
+        (resource.data.userId == request.auth.uid && isNotBanned()) ||
+        isAdmin() || 
+        (resource.data.circleId != null && isCircleOwnerOrSubOwner(resource.data.circleId)) // サークルオーナー権限
+      );
+      
+      // リアクションサブコレクション
+      match /reactions/{reactionId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && isNotBanned() && request.resource.data.userId == request.auth.uid;
+        allow delete: if isAuthenticated() && isNotBanned() && resource.data.userId == request.auth.uid;
+      }
+      
+      // コメントサブコレクション
+      match /comments/{commentId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && isNotBanned(); // ※Cloud Functions経由でつくるなら `if false` だが、直接なら `isNotBanned()`
+        allow update: if isAuthenticated() && isNotBanned() && resource.data.userId == request.auth.uid;
+        allow delete: if isAuthenticated() && (
+          (resource.data.userId == request.auth.uid && isNotBanned()) || 
+          isAdmin() ||
+          // サークルオーナーはコメントも消せる？ 設計書要確認 → 「他者投稿削除は管理者のみ」とあるが、コメントは？
+          // 一般的にサークルオーナーは荒らしコメントを消せると便利。
+          // ここでは一旦、本人と管理者のみ許可。
+          false
+        );
       }
     }
+
+    // サークルコレクション
+    match /circles/{circleId} {
+      // 読み取り: 認証済み
+      allow read: if isAuthenticated();
+      
+      // 作成: 認証済み かつ BANされていない
+      allow create: if isAuthenticated() && isNotBanned();
+      
+      // 更新: オーナー または 管理者（BANされていてもオーナー権限は維持？ -> 一時BANなら維持。永久BANならCloud Functionsで剥奪）
+      // 一時BAN中にサークル編集を許可するか？ -> 設計書「サークル不可」とあるので禁止すべき
+      allow update: if isAuthenticated() && (
+        (isOwner(resource.data.ownerId) && isNotBanned()) ||
+        isAdmin()
+      );
+      
+      // 削除: オーナー または 管理者
+      allow delete: if isAuthenticated() && (
+        (isOwner(resource.data.ownerId) && isNotBanned()) ||
+        isAdmin()
+      );
+    }
+    
+    // サークル参加申請コレクション
+    match /circleJoinRequests/{requestId} {
+      // 読み取り: サークルオーナー、副オーナー、管理者、または申請者
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        isCircleOwnerOrSubOwnerOrAdmin(resource.data.circleId)
+      );
+      
+      // 作成: 認証済みユーザー & BANされていない
+      allow create: if isAuthenticated() && isNotBanned() && request.resource.data.userId == request.auth.uid;
+      
+      // 更新: サークルオーナーまたは副オーナーまたは管理者（承認/拒否）
+      // BAN中のオーナー/副オーナーは操作不可にする
+      allow update: if isAuthenticated() && isNotBanned() &&
+        isCircleOwnerOrSubOwnerOrAdmin(resource.data.circleId);
+      
+      // 削除: 申請者またはサークルオーナー/副オーナー/管理者
+      allow delete: if isAuthenticated() && isNotBanned() && (
+        resource.data.userId == request.auth.uid ||
+        isCircleOwnerOrSubOwnerOrAdmin(resource.data.circleId)
+      );
+    }
+
 
     // タスクコレクション
     match /tasks/{taskId} {
@@ -192,23 +308,25 @@ service cloud.firestore {
     
     // サークル参加申請コレクション
     match /circleJoinRequests/{requestId} {
-      // 読み取り: サークルオーナー、副オーナー、または申請者
+      // 読み取り: サークルオーナー、副オーナー、管理者、または申請者
       allow read: if isAuthenticated() && (
         resource.data.userId == request.auth.uid ||
-        isCircleOwnerOrSubOwner(resource.data.circleId)
+        isCircleOwnerOrSubOwnerOrAdmin(resource.data.circleId)
       );
       
       // 作成: 認証済みユーザー
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       
-      // 更新: サークルオーナーまたは副オーナー（承認/拒否）
+      // 更新: 注意! isCircleOwnerOrSubOwnerOrAdmin は circleId を引数に取るが、
+      // ここでは resource.data.circleId を使う必要がある。
+      // サークルオーナーまたは副オーナーまたは管理者（承認/拒否）
       allow update: if isAuthenticated() && 
-        isCircleOwnerOrSubOwner(resource.data.circleId);
+        isCircleOwnerOrSubOwnerOrAdmin(resource.data.circleId);
       
-      // 削除: 申請者またはサークルオーナー/副オーナー
+      // 削除: 申請者またはサークルオーナー/副オーナー/管理者
       allow delete: if isAuthenticated() && (
         resource.data.userId == request.auth.uid ||
-        isCircleOwnerOrSubOwner(resource.data.circleId)
+        isCircleOwnerOrSubOwnerOrAdmin(resource.data.circleId)
       );
     }
     

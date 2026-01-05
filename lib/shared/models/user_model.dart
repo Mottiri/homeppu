@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'ban_record_model.dart';
 
 /// ユーザーモデル
 class UserModel {
@@ -13,6 +14,10 @@ class UserModel {
   final DateTime createdAt;
   final DateTime updatedAt;
   final bool isBanned;
+  final String banStatus; // 'none', 'temporary', 'permanent'
+  final List<BanRecordModel> banHistory;
+  final DateTime? permanentBanScheduledDeletionAt;
+  final int warningCount; // 一時BAN解除後の警告回数
   final int totalPosts;
   final int totalPraises; // 受け取った称賛の数
   final List<String> following; // フォロー中のユーザーID
@@ -41,6 +46,10 @@ class UserModel {
     required this.createdAt,
     required this.updatedAt,
     this.isBanned = false,
+    this.banStatus = 'none',
+    this.banHistory = const [],
+    this.permanentBanScheduledDeletionAt,
+    this.warningCount = 0,
     this.totalPosts = 0,
     this.totalPraises = 0,
     this.following = const [],
@@ -60,6 +69,15 @@ class UserModel {
 
   factory UserModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+
+    // BAN履歴の変換
+    List<BanRecordModel> banHistory = [];
+    if (data['banHistory'] != null) {
+      banHistory = (data['banHistory'] as List)
+          .map((item) => BanRecordModel.fromFirestore(item))
+          .toList();
+    }
+
     return UserModel(
       uid: doc.id,
       email: data['email'] ?? '',
@@ -72,6 +90,11 @@ class UserModel {
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       isBanned: data['isBanned'] ?? false,
+      banStatus: data['banStatus'] ?? 'none',
+      banHistory: banHistory,
+      permanentBanScheduledDeletionAt:
+          (data['permanentBanScheduledDeletionAt'] as Timestamp?)?.toDate(),
+      warningCount: data['warningCount'] ?? 0,
       totalPosts: data['totalPosts'] ?? 0,
       totalPraises: data['totalPraises'] ?? 0,
       following: List<String>.from(data['following'] ?? []),
@@ -106,6 +129,13 @@ class UserModel {
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
       'isBanned': isBanned,
+      'banStatus': banStatus,
+      'banHistory': banHistory.map((e) => e.toFirestore()).toList(),
+      if (permanentBanScheduledDeletionAt != null)
+        'permanentBanScheduledDeletionAt': Timestamp.fromDate(
+          permanentBanScheduledDeletionAt!,
+        ),
+      'warningCount': warningCount,
       'totalPosts': totalPosts,
       'totalPraises': totalPraises,
       'following': following,
@@ -135,6 +165,10 @@ class UserModel {
     DateTime? createdAt,
     DateTime? updatedAt,
     bool? isBanned,
+    String? banStatus,
+    List<BanRecordModel>? banHistory,
+    DateTime? permanentBanScheduledDeletionAt,
+    int? warningCount,
     int? totalPosts,
     int? totalPraises,
     List<String>? following,
@@ -162,6 +196,12 @@ class UserModel {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       isBanned: isBanned ?? this.isBanned,
+      banStatus: banStatus ?? this.banStatus,
+      banHistory: banHistory ?? this.banHistory,
+      permanentBanScheduledDeletionAt:
+          permanentBanScheduledDeletionAt ??
+          this.permanentBanScheduledDeletionAt,
+      warningCount: warningCount ?? this.warningCount,
       totalPosts: totalPosts ?? this.totalPosts,
       totalPraises: totalPraises ?? this.totalPraises,
       following: following ?? this.following,

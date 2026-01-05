@@ -33,6 +33,8 @@ import '../../features/admin/presentation/screens/admin_report_content_screen.da
 import '../../features/settings/presentation/screens/inquiry_list_screen.dart';
 import '../../features/settings/presentation/screens/inquiry_form_screen.dart';
 import '../../features/settings/presentation/screens/inquiry_detail_screen.dart';
+import '../../features/admin/presentation/screens/ban_appeal_screen.dart';
+import '../../features/admin/presentation/screens/admin_ban_users_screen.dart';
 import '../../shared/providers/auth_provider.dart';
 
 /// アプリのルーター設定
@@ -359,6 +361,36 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final inquiryId = state.pathParameters['inquiryId']!;
           return AdminInquiryDetailScreen(inquiryId: inquiryId);
+        },
+      ),
+
+      // 管理者用BANユーザー管理
+      GoRoute(
+        path: '/admin/ban-users',
+        name: 'adminBanUsers',
+        builder: (context, state) => const AdminBanUsersScreen(),
+      ),
+
+      // BAN異議申し立て
+      GoRoute(
+        path: '/ban-appeal',
+        name: 'banAppeal',
+        builder: (context, state) {
+          final extra = state.extra;
+          String? appealId;
+          String? targetUserId;
+
+          if (extra is String) {
+            appealId = extra;
+          } else if (extra is Map<String, dynamic>) {
+            appealId = extra['appealId'] as String?;
+            targetUserId = extra['targetUserId'] as String?;
+          }
+
+          return BanAppealScreen(
+            appealId: appealId,
+            targetUserId: targetUserId,
+          );
         },
       ),
     ],

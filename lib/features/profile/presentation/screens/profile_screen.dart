@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:go_router/go_router.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
@@ -211,19 +212,39 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           style: Theme.of(context).textTheme.headlineMedium,
                         ),
                         const Spacer(),
-                        // 管理者専用メニュー
-                        if (_isOwnProfile && widget.userId == null)
-                          Consumer(
-                            builder: (context, ref, _) {
-                              final isAdmin = ref.watch(isAdminProvider);
-                              return isAdmin.when(
-                                data: (admin) =>
-                                    admin ? const AdminMenuIcon() : const SizedBox.shrink(),
-                                loading: () => const SizedBox.shrink(),
-                                error: (_, _) => const SizedBox.shrink(),
-                              );
-                            },
-                          ),
+                        // 管理者専用メニュー（自分用：管理画面へ / 他人用：BAN操作）
+                        Consumer(
+                          builder: (context, ref, _) {
+                            final isAdminAsync = ref.watch(isAdminProvider);
+                            return isAdminAsync.maybeWhen(
+                              data: (isAdmin) {
+                                if (!isAdmin) return const SizedBox.shrink();
+
+                                // 他人のプロフィールを見ている管理者
+                                if (!_isOwnProfile) {
+                                  return IconButton(
+                                    icon: const Icon(
+                                      Icons.admin_panel_settings,
+                                      color: AppColors.error,
+                                    ),
+                                    onPressed: () =>
+                                        _showUserAdminMenu(context, user),
+                                    tooltip: '管理者メニュー',
+                                  );
+                                }
+
+                                // 自分のプロフィールを見ている管理者
+                                if (_isOwnProfile && widget.userId == null) {
+                                  return const AdminMenuIcon();
+                                }
+
+                                return const SizedBox.shrink();
+                              },
+                              orElse: () => const SizedBox.shrink(),
+                            );
+                          },
+                        ),
+
                         if (_isOwnProfile)
                           IconButton(
                             onPressed: () => context.push('/settings'),
@@ -348,22 +369,135 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                   color: AppColors.error.withValues(alpha: 0.3),
                                 ),
                               ),
-                              child: Row(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Icon(
-                                    Icons.warning_amber_rounded,
-                                    color: AppColors.error,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  const Expanded(
-                                    child: Text(
-                                      'アカウントが制限されています。投稿やコメントができません。',
-                                      style: TextStyle(
+                                  Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.warning_amber_rounded,
                                         color: AppColors.error,
-                                        fontSize: 12,
                                       ),
-                                    ),
+                                      const SizedBox(width: 8),
+                                      const Expanded(
+                                        child: Text(
+                                          'アカウントが制限されています。投稿やコメントができません。',
+                                          style: TextStyle(
+                                            color: AppColors.error,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
+                                  if (_isOwnProfile)
+                                    StreamBuilder<QuerySnapshot>(
+                                      stream: FirebaseFirestore.instance
+                                          .collection('banAppeals')
+                                          .where(
+                                            'bannedUserId',
+                                            isEqualTo: user.uid,
+                                          )
+                                          .where('status', isEqualTo: 'open')
+                                          .limit(1)
+                                          .snapshots(),
+                                      builder: (context, appealSnapshot) {
+                                        int unreadCount = 0;
+                                        if (appealSnapshot.hasData &&
+                                            appealSnapshot
+                                                .data!
+                                                .docs
+                                                .isNotEmpty) {
+                                          final appealData =
+                                              appealSnapshot.data!.docs.first
+                                                      .data()
+                                                  as Map<String, dynamic>;
+                                          final messages =
+                                              appealData['messages']
+                                                  as List<dynamic>? ??
+                                              [];
+                                          // 管理者からのメッセージで readByUser != true のものをカウント
+                                          unreadCount = messages.where((m) {
+                                            final msg =
+                                                m as Map<String, dynamic>;
+                                            return msg['isAdmin'] == true &&
+                                                msg['readByUser'] != true;
+                                          }).length;
+                                        }
+
+                                        return Padding(
+                                          padding: const EdgeInsets.only(
+                                            top: 12,
+                                          ),
+                                          child: SizedBox(
+                                            width: double.infinity,
+                                            child: OutlinedButton(
+                                              onPressed: () =>
+                                                  context.push('/ban-appeal'),
+                                              style: OutlinedButton.styleFrom(
+                                                foregroundColor:
+                                                    AppColors.error,
+                                                side: const BorderSide(
+                                                  color: AppColors.error,
+                                                ),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 16,
+                                                      vertical: 12,
+                                                    ),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  const Icon(
+                                                    Icons.support_agent,
+                                                    size: 20,
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  const Flexible(
+                                                    child: Text(
+                                                      '管理者へ問い合わせる',
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+                                                  ),
+                                                  if (unreadCount > 0) ...[
+                                                    const SizedBox(width: 8),
+                                                    Container(
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 8,
+                                                            vertical: 2,
+                                                          ),
+                                                      decoration: BoxDecoration(
+                                                        color: AppColors.error,
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              12,
+                                                            ),
+                                                      ),
+                                                      child: Text(
+                                                        unreadCount > 99
+                                                            ? '99+'
+                                                            : '$unreadCount',
+                                                        style: const TextStyle(
+                                                          color: Colors.white,
+                                                          fontSize: 12,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
                                 ],
                               ),
                             ),
@@ -431,6 +565,209 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ),
       ),
     );
+  }
+
+  // 管理者メニュー表示
+  void _showUserAdminMenu(BuildContext context, UserModel user) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.info_outline),
+              title: const Text('ユーザー情報'),
+              subtitle: Text('UID: ${user.uid}\nStatus: ${user.banStatus}'),
+            ),
+            const Divider(),
+            if (user.banStatus == 'none' || user.banStatus == 'temporary') ...[
+              if (user.banStatus == 'none')
+                ListTile(
+                  leading: const Icon(Icons.block, color: Colors.orange),
+                  title: const Text('一時BANにする'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showBanDialog(context, user, 'temporary');
+                  },
+                ),
+              ListTile(
+                leading: const Icon(Icons.gavel, color: Colors.red),
+                title: const Text('永久BANにする'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showBanDialog(context, user, 'permanent');
+                },
+              ),
+            ],
+            if (user.banStatus != 'none')
+              ListTile(
+                leading: const Icon(
+                  Icons.settings_backup_restore,
+                  color: Colors.green,
+                ),
+                title: const Text('BANを解除する'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showUnbanDialog(context, user);
+                },
+              ),
+            if (user.isBanned)
+              ListTile(
+                leading: const Icon(Icons.chat_outlined, color: Colors.blue),
+                title: const Text('異議申し立てチャットを確認'),
+                onTap: () {
+                  Navigator.pop(context);
+                  // 管理者としてチャット画面を開く
+                  // FirestoreからappealIdを探す処理は画面側でやるか、あるいはクエリパラメータでuserIdを渡す
+                  // BanAppealScreenは appealId を受け取るが、なければ userId から検索するロジック（_findExistingAppeal）が入っている
+                  // ただし現状の _findExistingAppeal は currentUser を使うため、管理者が見る場合は appealId が必須か、
+                  // もしくは BanAppealScreen に targetUserId 引数を追加する必要がある。
+                  // 現状の実装： appealId があればそれを開く。なければ currentUser (管理者自身) のチャットを探す（これは間違い）。
+
+                  // 管理者が見るには appealId を特定する必要がある。
+                  // ここで特定するのは面倒なので、BanAppealScreen を改修するか、
+                  // とりあえず「ユーザーID指定」で開けるようにルートを修正するか...
+
+                  // 簡易策：BanAppealScreen に targetUserId を渡せるようにし、
+                  // 管理者の場合は targetUserId で検索するように改修する。
+                  // しかしこれは BanAppealScreen の修正も必要。
+
+                  // 管理者として特定のユーザーのチャットを開く
+                  context.push(
+                    '/ban-appeal',
+                    extra: {'targetUserId': user.uid},
+                  );
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // BAN選択ダイアログ
+  void _showBanDialog(BuildContext context, UserModel user, String type) {
+    final reasonController = TextEditingController();
+    final isPermanent = type == 'permanent';
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(isPermanent ? '永久BAN' : '一時BAN'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              isPermanent
+                  ? 'このユーザーを永久に停止します。ログインできなくなります。\n180日後にデータが削除されます。'
+                  : 'このユーザーの機能を制限します。\nプロフィール閲覧と異議申し立てのみ可能になります。',
+              style: const TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: reasonController,
+              decoration: const InputDecoration(
+                labelText: 'BAN理由（必須）',
+                border: OutlineInputBorder(),
+                hintText: '例: 繰り返しの規約違反行為を確認したため',
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final reason = reasonController.text.trim();
+              if (reason.isEmpty) return;
+              Navigator.pop(context);
+              await _executeBanAction(user.uid, type, reason);
+            },
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('実行'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // BAN解除ダイアログ
+  void _showUnbanDialog(BuildContext context, UserModel user) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('BAN解除'),
+        content: const Text('このユーザーの制限を解除しますか？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _executeBanAction(user.uid, 'unban', '');
+            },
+            child: const Text('解除する'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Cloud Functions呼び出し
+  Future<void> _executeBanAction(String uid, String type, String reason) async {
+    setState(() => _isLoading = true);
+
+    try {
+      String functionName;
+      if (type == 'temporary') {
+        functionName = 'banUser';
+      } else if (type == 'permanent') {
+        functionName = 'permanentBanUser';
+      } else {
+        functionName = 'unbanUser';
+      }
+
+      final data = {'userId': uid};
+      if (type != 'unban') {
+        data['reason'] = reason;
+      }
+
+      await FirebaseFunctions.instanceFor(
+        region: 'asia-northeast1',
+      ).httpsCallable(functionName).call(data);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(type == 'unban' ? '制限を解除しました' : 'BAN処理を実行しました'),
+          ),
+        );
+        // 最新状態を再取得
+        _loadUser();
+      }
+    } catch (e) {
+      debugPrint('Error executing ban action: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('エラーが発生しました: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        setState(() => _isLoading = false);
+      }
+    }
   }
 }
 
