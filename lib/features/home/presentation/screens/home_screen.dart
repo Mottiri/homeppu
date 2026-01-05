@@ -5,6 +5,8 @@ import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../shared/widgets/empty_state.dart';
+import '../../../../shared/widgets/loading_state.dart';
 import '../../../../shared/models/post_model.dart';
 import '../../../../shared/models/user_model.dart';
 import '../../../../shared/providers/auth_provider.dart';
@@ -134,28 +136,42 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   ),
                 ),
 
-                // タブバー
+                // タブバー（強化版）
                 SliverPersistentHeader(
                   pinned: true,
-                  delegate: _SliverTabBarDelegate(
+                  delegate: _StyledTabBarDelegate(
                     TabBar(
                       controller: _tabController,
                       labelColor: AppColors.primary,
                       unselectedLabelColor: AppColors.textHint,
-                      indicatorColor: AppColors.primary,
-                      indicatorWeight: 3,
-                      indicatorSize: TabBarIndicatorSize.label,
+                      indicatorColor: Colors.transparent,
+                      dividerColor: Colors.transparent,
                       labelStyle: const TextStyle(
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w700,
                         fontSize: 15,
                       ),
                       unselectedLabelStyle: const TextStyle(
-                        fontWeight: FontWeight.normal,
+                        fontWeight: FontWeight.w500,
                         fontSize: 15,
                       ),
+                      indicator: BoxDecoration(
+                        gradient: AppColors.primaryGradient,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      indicatorPadding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 8,
+                      ),
                       tabs: const [
-                        Tab(text: 'おすすめ'),
-                        Tab(text: 'フォロー中'),
+                        _StyledTab(label: 'おすすめ', icon: Icons.explore_outlined),
+                        _StyledTab(label: 'フォロー中', icon: Icons.people_outline),
                       ],
                     ),
                   ),
@@ -186,17 +202,40 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   }
 }
 
-/// タブバー用のデリゲート
-class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
+/// スタイル付きタブ
+class _StyledTab extends StatelessWidget {
+  final String label;
+  final IconData icon;
+
+  const _StyledTab({required this.label, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tab(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 18),
+          const SizedBox(width: 6),
+          Text(label),
+        ],
+      ),
+    );
+  }
+}
+
+/// タブバー用のデリゲート（強化版）
+class _StyledTabBarDelegate extends SliverPersistentHeaderDelegate {
   final TabBar tabBar;
 
-  _SliverTabBarDelegate(this.tabBar);
+  _StyledTabBarDelegate(this.tabBar);
 
   @override
-  double get minExtent => tabBar.preferredSize.height;
+  double get minExtent => tabBar.preferredSize.height + 16;
 
   @override
-  double get maxExtent => tabBar.preferredSize.height;
+  double get maxExtent => tabBar.preferredSize.height + 16;
 
   @override
   Widget build(
@@ -204,12 +243,37 @@ class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
     double shrinkOffset,
     bool overlapsContent,
   ) {
-    return Container(color: AppColors.background, child: tabBar);
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        // 下にスクロールした時の微細なシャドウ
+        boxShadow: overlapsContent
+            ? [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ]
+            : null,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.surfaceVariant.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: AppColors.primary.withValues(alpha: 0.08),
+            width: 1,
+          ),
+        ),
+        child: tabBar,
+      ),
+    );
   }
 
   @override
-  bool shouldRebuild(_SliverTabBarDelegate oldDelegate) {
-    // タブバーが変わった場合は再構築（新着ドット表示のため）
+  bool shouldRebuild(_StyledTabBarDelegate oldDelegate) {
     return tabBar != oldDelegate.tabBar;
   }
 }
@@ -406,34 +470,11 @@ class _PostsListState extends State<_PostsList> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(color: AppColors.primary),
-            SizedBox(height: 16),
-            Text('みんなの投稿を読み込み中...'),
-          ],
-        ),
-      );
+      return const LoadingStates.posts;
     }
 
     if (_hasError) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('😢', style: TextStyle(fontSize: 48)),
-            const SizedBox(height: 16),
-            Text(
-              AppConstants.friendlyMessages['error_general']!,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(onPressed: _loadPosts, child: const Text('再読み込み')),
-          ],
-        ),
-      );
+      return EmptyStates.error(onRetry: _loadPosts);
     }
 
     if (_posts.isEmpty) {
@@ -442,27 +483,8 @@ class _PostsListState extends State<_PostsList> {
         color: AppColors.primary,
         child: ListView(
           children: [
-            SizedBox(height: MediaQuery.of(context).size.height * 0.3),
-            Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text('✨', style: TextStyle(fontSize: 64)),
-                  const SizedBox(height: 16),
-                  Text(
-                    'まだ投稿がないよ',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '最初の投稿をしてみよう！',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            SizedBox(height: MediaQuery.of(context).size.height * 0.2),
+            EmptyStates.noPosts(),
           ],
         ),
       );
@@ -514,30 +536,6 @@ class _PostsListState extends State<_PostsList> {
 class _EmptyFollowingState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('👥', style: TextStyle(fontSize: 64)),
-            const SizedBox(height: 16),
-            Text(
-              'まだ誰もフォローしていないよ',
-              style: Theme.of(context).textTheme.titleLarge,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '「おすすめ」タブで気になる人を\n見つけてフォローしてみよう！',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
+    return EmptyStates.noFollowing();
   }
 }

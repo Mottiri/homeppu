@@ -4,9 +4,9 @@ import 'package:timeago/timeago.dart' as timeago;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../../../core/constants/app_constants.dart';
-
 import '../../../../core/constants/app_colors.dart';
 import '../../../../shared/models/post_model.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
@@ -198,11 +198,12 @@ class _PostCardState extends State<PostCard> {
     // timeagoの日本語設定
     timeago.setLocaleMessages('ja', timeago.JaMessages());
 
-    return Card(
-      margin: widget.isDetailView
-          ? const EdgeInsets.all(16)
-          : const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      clipBehavior: Clip.hardEdge, // スタンプが枠外に表示されないようにクリップ
+    return _EnhancedPostCard(
+      isDetailView: widget.isDetailView,
+      onTap: widget.isDetailView
+          ? null
+          : () => context.push('/post/${post.id}'),
+      onLongPress: _showReactionOverlay,
       child: Stack(
         children: [
           // 背景リアクション（落書き風）
@@ -213,17 +214,8 @@ class _PostCardState extends State<PostCard> {
             ),
           ),
           // カードコンテンツ
-          InkWell(
-            onTap: widget.isDetailView
-                ? null
-                : () => context.push('/post/${post.id}'),
-            onLongPress: () {
-              // 長押しでリアクションオーバーレイ表示
-              _showReactionOverlay();
-            },
-            borderRadius: BorderRadius.circular(20),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
+          Padding(
+            padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -398,9 +390,126 @@ class _PostCardState extends State<PostCard> {
                 ],
               ),
             ),
-          ),
         ],
       ),
+    );
+  }
+}
+
+/// 強化されたPostCardコンテナ
+/// Frontend Design Skill原則に基づくデザイン
+class _EnhancedPostCard extends StatefulWidget {
+  final Widget child;
+  final bool isDetailView;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+
+  const _EnhancedPostCard({
+    required this.child,
+    this.isDetailView = false,
+    this.onTap,
+    this.onLongPress,
+  });
+
+  @override
+  State<_EnhancedPostCard> createState() => _EnhancedPostCardState();
+}
+
+class _EnhancedPostCardState extends State<_EnhancedPostCard>
+    with SingleTickerProviderStateMixin {
+  bool _isPressed = false;
+  late AnimationController _glowController;
+  late Animation<double> _glowAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _glowController = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
+    _glowAnimation = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _glowController, curve: Curves.easeOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _glowController.dispose();
+    super.dispose();
+  }
+
+  void _onTapDown(TapDownDetails details) {
+    setState(() => _isPressed = true);
+    _glowController.forward();
+  }
+
+  void _onTapUp(TapUpDetails details) {
+    setState(() => _isPressed = false);
+    _glowController.reverse();
+  }
+
+  void _onTapCancel() {
+    setState(() => _isPressed = false);
+    _glowController.reverse();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _glowAnimation,
+      builder: (context, child) {
+        return GestureDetector(
+          onTap: widget.onTap,
+          onLongPress: widget.onLongPress,
+          onTapDown: _onTapDown,
+          onTapUp: _onTapUp,
+          onTapCancel: _onTapCancel,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            margin: widget.isDetailView
+                ? const EdgeInsets.all(16)
+                : const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              // 立体的なグラデーション背景
+              gradient: _isPressed
+                  ? AppColors.cardActiveGradient
+                  : AppColors.cardGradient,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: AppColors.primary.withValues(
+                  alpha: 0.05 + (_glowAnimation.value * 0.1),
+                ),
+                width: 1,
+              ),
+              boxShadow: [
+                // メインシャドウ
+                BoxShadow(
+                  color: AppColors.primary.withValues(
+                    alpha: _isPressed ? 0.2 : 0.12,
+                  ),
+                  blurRadius: _isPressed ? 12 : 20,
+                  offset: Offset(0, _isPressed ? 4 : 8),
+                  spreadRadius: _isPressed ? 0 : 2,
+                ),
+                // セカンダリシャドウ（深みを強調）
+                BoxShadow(
+                  color: AppColors.secondary.withValues(
+                    alpha: _isPressed ? 0.08 : 0.05,
+                  ),
+                  blurRadius: _isPressed ? 6 : 10,
+                  offset: Offset(0, _isPressed ? 2 : 4),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: child,
+            ),
+          ),
+        );
+      },
+      child: widget.child,
     );
   }
 }
