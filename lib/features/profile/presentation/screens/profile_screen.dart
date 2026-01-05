@@ -273,6 +273,65 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             style: Theme.of(context).textTheme.headlineSmall,
                           ),
 
+                          // 管理者のみ: 累計被通報回数
+                          Consumer(
+                            builder: (context, ref, _) {
+                              final isAdmin =
+                                  ref.watch(isAdminProvider).valueOrNull ??
+                                  false;
+                              if (!isAdmin || user.reportCount == 0) {
+                                return const SizedBox.shrink();
+                              }
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: user.reportCount >= 3
+                                        ? AppColors.error.withValues(alpha: 0.1)
+                                        : Colors.orange.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: user.reportCount >= 3
+                                          ? AppColors.error.withValues(
+                                              alpha: 0.3,
+                                            )
+                                          : Colors.orange.withValues(
+                                              alpha: 0.3,
+                                            ),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.flag,
+                                        size: 14,
+                                        color: user.reportCount >= 3
+                                            ? AppColors.error
+                                            : Colors.orange,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        '累計被通報: ${user.reportCount}回',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: user.reportCount >= 3
+                                              ? AppColors.error
+                                              : Colors.orange,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+
                           // フォローボタン（他ユーザーのみ）
                           if (!_isOwnProfile) ...[
                             const SizedBox(height: 16),
