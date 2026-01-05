@@ -1963,6 +1963,14 @@ export const scheduleAIPosts = functionsV1.region("asia-northeast1").runWith({
 }).pubsub.schedule("0 10 * * *").timeZone("Asia/Tokyo").onRun(async () => {
   console.log("=== scheduleAIPosts START ===");
 
+  // ============================================
+  // 一時的にAI自動投稿を無効化 (2026-01-05)
+  // 有効にする場合はこのブロックをコメントアウトしてください
+  // ============================================
+  console.log("=== scheduleAIPosts DISABLED (temporary) ===");
+  return;
+  // ============================================
+
   try {
     const tasksClient = new CloudTasksClient();
     const project = process.env.GCLOUD_PROJECT || PROJECT_ID;

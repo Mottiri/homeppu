@@ -17,7 +17,6 @@ import '../../../../shared/providers/auth_provider.dart';
 import '../widgets/task_detail_sheet.dart';
 import '../widgets/task_card.dart';
 import '../widgets/week_calendar_strip.dart';
-import 'monthly_calendar_screen.dart';
 
 class TasksScreen extends ConsumerStatefulWidget {
   final String? highlightTaskId;
@@ -935,14 +934,9 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
                 IconButton(
                   icon: const Icon(Icons.calendar_month),
                   onPressed: () async {
-                    final selectedDate = await Navigator.push<DateTime>(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => MonthlyCalendarScreen(
-                          initialDate: _selectedDate,
-                          tasks: _taskData,
-                        ),
-                      ),
+                    final selectedDate = await context.push<DateTime>(
+                      '/monthly-calendar',
+                      extra: {'initialDate': _selectedDate, 'tasks': _taskData},
                     );
 
                     if (selectedDate != null && mounted) {

@@ -35,6 +35,8 @@ import '../../features/settings/presentation/screens/inquiry_form_screen.dart';
 import '../../features/settings/presentation/screens/inquiry_detail_screen.dart';
 import '../../features/admin/presentation/screens/ban_appeal_screen.dart';
 import '../../features/admin/presentation/screens/admin_ban_users_screen.dart';
+import '../../features/tasks/presentation/screens/monthly_calendar_screen.dart';
+import '../../shared/models/task_model.dart';
 import '../../shared/providers/auth_provider.dart';
 
 /// アプリのルーター設定
@@ -391,6 +393,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             appealId: appealId,
             targetUserId: targetUserId,
           );
+        },
+      ),
+
+      // 月間カレンダー（ShellRoute外でボトムナビを非表示）
+      GoRoute(
+        path: '/monthly-calendar',
+        name: 'monthlyCalendar',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>;
+          final initialDate = extra['initialDate'] as DateTime;
+          final tasks = extra['tasks'] as Map<DateTime, List<TaskModel>>;
+          return MonthlyCalendarScreen(initialDate: initialDate, tasks: tasks);
         },
       ),
     ],
