@@ -2,17 +2,18 @@
 
 ## 1. 概要 (Overview)
 
-「ほめっぷ」のコア機能である投稿機能の設計仕様です。
-本アプリは**「世界一優しいSNS」**をコンセプトとしており、投稿機能においても**徹底したポジティブ維持（ネガティブ排除）**を最優先事項として設計されています。
+「ほめっぷ」のコア機能である投稿機能の設計仕様書です。
+本アプリは**「世界一優しいSNS」**をコンセプトとしており、投稿機能においても**徹底したポジティブ維持（ネガティブ排除）**と**AIによる即時フィードバック**を最優先事項として設計されています。
 
 ## 2. コンセプトと方針 (Concept & Policy)
 
 ### 2.1 ポジティブ・ファースト
 - **基本方針**: ユーザーが安心して利用できるよう、攻撃的・暴力的・過度にネガティブな発言をシステムレベルで排除します。
-- **Fail-Open（UX優先）**: AIモデレーションでエラーが発生した場合、**「投稿を許可する」**方針を取ります。ただし、NGワードは静的チェックで対応済みのため、安全性は確保しています。
+- **Fail-Open（テキスト）**: AIモデレーションでエラーが発生した場合、テキスト投稿は**「許可」**します（UX優先）。
+- **Fail-Closed（メディア）**: 画像/動画のモデレーションでエラーが発生した場合、メディアのアップロードは**「拒否」**します（安全性優先）。
 
 ### 2.2 投稿モード
-ユーザーは投稿時に以下のモードを選択できます（現在の実装ではユーザー設定に依存）。
+ユーザーは投稿時に以下のモードを選択します。
 - **AIモード**: AIキャラクターのみが反応するモード。
 - **mixモード**: AIと人間両方が反応できるモード。
 - **人間モード**: 人間のみが反応できるモード。
@@ -21,159 +22,123 @@
 
 ## 3. アーキテクチャ (Architecture)
 
-### 3.1 投稿フロー
-セキュリティとモデレーションを強制するため、**クライアントからFirestoreへの直接書き込みを禁止**しています。
+### 3.1 投稿作成フロー
+セキュリティとモデレーションを強制するため、クライアントからFirestoreへの直接書き込みを禁止し、**Cloud Functions (`onCall`) 経由でのみ**作成可能です。
 
-1. **Client**: `createPostWithModeration` (Cloud Functions) を呼び出す。
-2. **Cloud Functions**:
-    - **Step 0**: 静的NGワードチェック（即時ブロック）
-    - **Step 1**: AIテキストモデレーション（Gemini）
-    - **Step 2**: メディアモデレーション（画像/動画の解析）
-    - **Step 3**: レートリミットチェック（連投防止）
-    - **Step 4**: Firestoreへの書き込み (`posts` コレクション)
-3. **Firestore**: 投稿データが作成される。
-4. **Trigger**: `onPostCreated` が発火し、AIによるリアクション/コメント生成プロセスが開始される。
+1. **Client**: `ModerationService` が `createPostWithModeration` を呼び出す。
+2. **Cloud Functions (`createPostWithModeration`)**:
+    - **Step 1: 認証 & BANチェック**: 未ログインまたはBAN中ユーザーは拒否。
+    - **Step 2: 静的NGワードチェック**: `NG_WORDS` に一致した場合、即時エラー（`invalid-argument`）& 徳ポイント減少。
+    - **Step 3: AIテキストモデレーション**: Gemini 2.0 Flash で `isNegative` 判定。
+        - `isNegative: true` (confidence >= 0.7) → エラー返却 & 徳ポイント減少。
+        - `0.5 <= confidence < 0.7` → `needsReview` フラグを立てて投稿許可（管理者へ通知）。
+    - **Step 4: メディアモデレーション** (ある場合): Geminiで画像/動画を分析。
+        - 不適切判定 → Storageからファイルを削除しエラー返却 & 徳ポイント減少。
+    - **Step 5: レートリミット**: 1分間に5投稿まで。
+    - **Step 6: Firestore書き込み**: `posts` コレクションに作成。
+    - **Step 7: メタデータ更新**: Storage上のメディアファイルのmetadataに `postId` を紐付け。
 
-### 3.2 セキュリティルール (`firestore.rules`)
-```javascript
-match /posts/{postId} {
-  // 作成: クライアントからの直接作成を禁止（Cloud Functions経由のみ）
-  allow create: if false;
-  
-  // 読み取り: 認証済みユーザーのみ
-  allow read: if isAuthenticated();
-}
-```
+3. **Firestore Trigger (`onPostCreated`)**: `posts/{postId}` 作成を検知。
+    - **AIコメント生成**:
+        - 人間モード以外の場合、AIキャラクターを選定。
+        - サークル投稿の場合はサークル設定（`generatedAIs`）に従う。
+        - Cloud Tasks に生成タスクを積む（`generateAICommentV1` / `generateAIReactionV1`）。
+
+### 3.2 投稿削除フロー
+クライアントまたは管理者による削除操作は、Firestoreドキュメントの削除によって行われます。関連データはサーバーサイドでカスケード削除されます。
+
+1. **Client**: `PostService.deletePost` (または管理者画面) から `posts/{postId}` を削除。
+2. **Firestore Trigger (`onPostDeleted`)**:
+    - **コメント削除**: `comments` コレクションから該当 `postId` を一括削除。
+    - **リアクション削除**: `reactions` コレクションから該当 `postId` を一括削除。
+    - **通知削除**: **投稿者本人**の `notifications` コレクションから該当 `postId` の通知を一括削除。
+        - *Note: 第三者への通知削除は未実装（現状仕様では通知送付先が投稿者のみのため問題なし）。*
+    - **Storage削除**: 投稿に含まれる画像/動画（サムネイル含む）をStorageから削除。
+    - **カウント更新**: ユーザー (`totalPosts`) およびサークル (`postCount`) の投稿数を減算。
 
 ---
 
 ## 4. モデレーション詳細 (Moderation Logic)
 
-### 4.1 静的NGワードチェック (Static Check)
-AI判定の前に、絶対禁止ワード（`NG_WORDS`）によるフィルタリングを行います。
+### 4.1 静的NGワードチェック
+- **対象**: `kill`, `die`, `violence` などの直球な暴言。
+- **動作**: 検出時即ブロック。AI呼び出しコストを節約。
 
-**NGワードリスト:**
-```
-殺す, 殺し, 死ね, 死にたい, 消えたい, 暴力, レイプ, 自殺
-```
-
-- **動作**: 検出された場合、AIを呼び出さずに**即座にエラー (`invalid-argument`)** を返す
-- **ペナルティ**: 徳ポイント **-30**（通常の2倍）
-
-### 4.2 AIモデレーション (Gemini Analysis)
-Google Gemini 2.0 Flashモデルを使用し、文脈を含めた判定を行います。
-
-**判定カテゴリ:**
-| カテゴリ | 説明 |
-|---------|------|
-| `harassment` | 誹謗中傷、人格攻撃、悪口 |
-| `hate_speech` | 差別、ヘイトスピーチ |
-| `profanity` | 暴言、罵倒、汚い言葉 |
-| `violence` | 暴力的な表現、脅迫 |
-| `self_harm` | 自傷行為の助長 |
-| `spam` | スパム、宣伝 |
-
-**許可される内容:**
-- 個人の感情表現（悲しい、辛い、落ち込んだ）
-- 自分への軽い愚痴（失敗した、うまくいかない）
-- 日常の不満（雨だ〜、電車遅れた）
-- 頑張りや努力の共有
-
-**ブロック条件:** `isNegative: true` かつ `confidence >= 0.7`
-
-**エラーハンドリング (Fail-Open):**
-- AIエラー・JSONパースエラー発生時は**投稿を許可**する（UX優先）
-- NGワードは静的チェックで対応済みのため、安全性は確保
-- エラーは`moderationErrors`コレクションに記録
+### 4.2 AIモデレーション (Gemini)
+- **判定カテゴリ**:
+    - `harassment` (嫌がらせ), `hate_speech` (ヘイト), `profanity` (暴言), `violence` (暴力), `self_harm` (自傷), `spam` (スパム)。
+- **判定基準**:
+    - **Reject**: `isNegative: true` AND `confidence >= 0.7`
+    - **Flag (要審査)**: `isNegative: true` AND `0.5 <= confidence < 0.7`
+        - 投稿は表示されるが、管理者に「要審査」通知が飛ぶ。
+    - **Accept**: 上記以外。
 
 ### 4.3 徳ポイント (Virtue Points)
-
-**設定値:**
-| 項目 | 値 | 説明 |
-|-----|---|------|
-| 初期値 | 100 | 新規ユーザーの初期ポイント |
-| BAN閾値 | 0 | 0以下でBAN |
-| 警告閾値 | 30 | 30以下で警告表示 |
-| NGワード使用 | -30 | 静的NGワード検出時 |
-| AI判定ブロック | -15 | AIがネガティブと判定時 |
-| 通報による減点 | -20 | 3件以上の通報で自動適用 |
-| 称賛獲得 | +5 | リアクション獲得時 |
-| 1日最大獲得 | 50 | 1日に獲得できる最大値 |
+- **NGワード**: -30 pt
+- **AIブロック**: -15 pt
+- **通報による非表示**: -20 pt (※要管理者確認)
 
 ---
 
-## 5. データモデル (Data Model)
+## 5. 通知機能連携 (Notifications)
 
-### PostModel (`posts` collection)
+投稿に関連するアクションは以下の通り通知されます。
 
-| Field | Type | Description |
-|---|---|---|
-| `id` | String | ドキュメントID |
-| `userId` | String | 投稿者ID |
-| `userDisplayName` | String | 投稿者名（スナップショット） |
-| `userAvatarIndex` | int | アイコンID |
-| `content` | String | 投稿本文 |
-| `mediaItems` | List<Map> | 添付メディア（画像/動画） |
-| `postMode` | String | `'ai'` \| `'mix'` \| `'human'` |
-| `circleId` | String? | サークル投稿の場合のサークルID |
-| `createdAt` | Timestamp | 作成日時 |
-| `isVisible` | bool | 表示フラグ（論理削除用） |
-| `reactions` | Map | リアクション集計 `{'love': 0, 'praise': 0...}` |
-| `commentCount` | int | コメント数 |
+### 5.1 コメント通知 (`onCommentCreatedNotify`)
+- **トリガー**: `comments/{commentId}` 作成。
+- **通知先**: **投稿者の** (`post.userId`)。
+    - 自分自身のコメントは通知しない。
+    - 第三者（コメント参加者）への通知機能は現在ありません。
+- **FCM**: プッシュ通知を送信。
 
-### MediaItem Structure
-```dart
-{
-  'url': String,          // Storage URL
-  'type': String,         // 'image' | 'video' | 'file'
-  'fileName': String?,
-  'mimeType': String?,
-  'fileSize': int?,
-  'thumbnailUrl': String? // 動画のサムネイル画像URL
+### 5.2 リアクション通知 (`onReactionAddedNotify`)
+- **トリガー**: `reactions/{reactionId}` 作成。
+- **通知先**: **投稿者の** (`post.userId`)。
+    - 自分自身のリアクションは通知しない。
+- **FCM**: プッシュ通知を送信。
+
+---
+
+## 6. データモデル (Data Model: Reference)
+
+### PostModel (`posts`)
+```typescript
+interface Post {
+  id: string;
+  userId: string;
+  userDisplayName: string;
+  userAvatarIndex: number; // 0-20
+  content: string;
+  mediaItems: MediaItem[]; // { url, type, thumbnailUrl, ... }
+  postMode: 'ai' | 'mix' | 'human';
+  circleId?: string; // サークル投稿の場合
+  createdAt: Timestamp;
+  isVisible: boolean; // falseの場合論理削除/非表示
+  commentCount: number;
+  reactions: {
+    love: number;
+    praise: number;
+    cheer: number;
+    empathy: number;
+    [key: string]: number;
+  };
+  // モデレーション用
+  needsReview?: boolean;
+  needsReviewReason?: string;
+  hiddenAt?: Timestamp; // 通報等による非表示日時
 }
 ```
 
----
-
-## 6. クライアント実装 (Client Implementation)
-
-### 6.1 `CreatePostScreen`
-- **入力**: テキスト (`TextField`), メディア選択 (`MediaService`).
-- **送信**: `ModerationService.createPostWithModeration` を呼び出し。
-- **エラーハンドリング**:
-    - `ModerationException` を捕捉し、AIからの「優しいフィードバック（理由）」をダイアログで表示。
-    - 徳ポイント減少を即時にUIに反映（`ref.invalidate`）。
-
-### 6.2 表示 (`PostCard`)
-- 投稿モードに応じたバッジ表示。
-- リアクションボタン押下時のアニメーション。
-- メディアのプレビュー表示。
-- **コメント数**: `post.commentCount`を直接表示（StreamBuilderによるリアルタイム取得は廃止し、軽量化）。
-
----
-
-## 7. タイムライン更新方式 (Timeline Refresh)
-
-### 7.1 プル更新方式
-コスト削減とパフォーマンス最適化のため、タイムラインには**プル更新方式**を採用しています。
-
-| 画面 | 更新方式 | 無限スクロール |
-|------|----------|----------------|
-| HomeScreen | プルダウンでリロード | ✅ |
-| CircleDetailScreen | プルダウンでリロード | ✅ |
-| ProfileScreen | プルダウンでリロード | ✅ |
-
-### 7.2 新着インジケーター
-リアルタイム更新の代わりに、**新着投稿がある場合のみインジケーター**を表示します。
-
-- **HomeScreen**: タブにドット（・）を表示
-- **CircleDetailScreen**: 「NEW」ラベルを表示
-
-**新着検知ロジック:**
-- 最新1件のみをリアルタイム監視（`limit(1).snapshots()`）
-- IDが変わり、かつローカルリストに存在しない場合のみ「新着あり」と判定
-- 投稿削除によるID変更では新着と判定しない
-
-### 7.3 自分の投稿の即時反映
-- **投稿作成後**: `timelineRefreshProvider`をインクリメントしてタイムラインをリロード
-- **投稿削除後**: ローカルリストから即座に削除（Optimistic UI）
+### CommentModel (`comments`)
+```typescript
+interface Comment {
+  id: string;
+  postId: string;
+  userId: string; // AIの場合はAI ID
+  userDisplayName: string;
+  content: string;
+  isAI: boolean;
+  createdAt: Timestamp;
+  // ...
+}
+```
