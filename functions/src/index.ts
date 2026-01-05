@@ -1494,8 +1494,8 @@ export const onPostCreated = onDocumentCreated(
 
       console.log(`Using ${selectedPersonas.length} circle AIs for comments`);
     } else {
-      // 一般投稿：ランダムに3〜10人のAIを選択
-      const commentCount = Math.floor(Math.random() * 8) + 3;
+      // 一般投稿：ランダムに1〜5人のAIを選択（平均3件）
+      const commentCount = Math.floor(Math.random() * 5) + 1;
       selectedPersonas = [...AI_PERSONAS]
         .sort(() => Math.random() - 0.5)
         .slice(0, commentCount);
@@ -1586,9 +1586,9 @@ export const onPostCreated = onDocumentCreated(
     // 先行インクリメントは削除（実際のコメント数のみ表示するため）
 
     // ===========================================
-    // 2. AIリアクションの大量投下 (5〜15件、平均10件)
+    // 2. AIリアクションの大量投下 (5〜10件、最大10件)
     // ===========================================
-    const reactionCount = Math.floor(Math.random() * 11) + 5; // 5〜15
+    const reactionCount = Math.floor(Math.random() * 6) + 5; // 5〜10
     console.log(`Scheduling ${reactionCount} reactions (burst)...`);
 
     const POSITIVE_REACTIONS = ["love", "praise", "cheer", "sparkles", "clap", "thumbsup", "smile", "flower", "fire", "nice"];
