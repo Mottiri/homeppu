@@ -631,8 +631,28 @@ iOS 17でクラッシュします
 |--------|------|
 | `banUser` | ユーザーを一時BANにする |
 | `permanentBanUser` | ユーザーを永久BANにする |
-| `unbanUser` | BANを解除する |
+| `unbanUser` | BANを解除する（banAppealsも自動削除） |
 | `cleanupBannedUsers` | 半年経過した永久BANユーザーのデータ削除（スケジュール実行） |
+
+### 8.7.1 banAppeals削除タイミング
+
+| トリガー | 処理 |
+|---------|------|
+| BAN解除時（`unbanUser`） | 該当ユーザーのbanAppealsを自動削除 |
+| 管理者が対応完了ボタン押下 | クライアント側でbanAppealsを削除 |
+
+### 8.7.2 Firestoreルール
+
+```
+match /banAppeals/{appealId} {
+  // 読み取り・更新: 管理者または該当ユーザー
+  allow read, update: if isAdmin() || resource.data.bannedUserId == request.auth.uid;
+  // 作成: 該当ユーザー（BANされていても可能）
+  allow create: if request.resource.data.bannedUserId == request.auth.uid;
+  // 削除: 管理者のみ
+  allow delete: if isAdmin();
+}
+```
 
 ### 8.8 通知タイプ
 
