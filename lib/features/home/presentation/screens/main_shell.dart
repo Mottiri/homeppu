@@ -236,7 +236,14 @@ class _MainShellState extends ConsumerState<MainShell>
                   activeIcon: Icons.home_rounded,
                   label: 'ホーム',
                   isActive: currentIndex == 0,
-                  onTap: () => context.go('/home'),
+                  onTap: () {
+                    if (currentIndex == 0) {
+                      // 既にホーム画面の場合はスクロールトップ
+                      ref.read(homeScrollToTopProvider.notifier).state++;
+                    } else {
+                      context.go('/home');
+                    }
+                  },
                 ),
 
                 // サークル

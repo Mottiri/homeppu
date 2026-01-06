@@ -15,6 +15,9 @@ import 'package:go_router/go_router.dart';
 /// タイムラインリフレッシュ用のProvider（投稿作成後にインクリメント）
 final timelineRefreshProvider = StateProvider<int>((ref) => 0);
 
+/// ホーム画面のスクロールトップを要求するProvider
+final homeScrollToTopProvider = StateProvider<int>((ref) => 0);
+
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -25,6 +28,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -35,6 +39,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   @override
   void dispose() {
     _tabController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -43,14 +48,47 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final currentUser = ref.watch(currentUserProvider);
     final refreshKey = ref.watch(timelineRefreshProvider); // リフレッシュキーを取得
 
+    // ホームボタンタップでスクロールトップを監視
+    ref.listen<int>(homeScrollToTopProvider, (previous, next) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+
+    // ユーザーのヘッダー色を取得（設定されていればその色、なければデフォルト）
+    final user = currentUser.valueOrNull;
+    final primaryColor = user?.headerPrimaryColor != null
+        ? Color(user!.headerPrimaryColor!)
+        : AppColors.primary;
+    final secondaryColor = user?.headerSecondaryColor != null
+        ? Color(user!.headerSecondaryColor!)
+        : AppColors.secondary;
+
+    // ユーザーの色でグラデーションを作成（パステルカラー）
+    final userGradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        primaryColor.withValues(alpha: 0.25),
+        secondaryColor.withValues(alpha: 0.15),
+        const Color(0xFFFDF8F3), // warmGradientの上部色
+      ],
+      stops: const [0.0, 0.5, 1.0],
+    );
+
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          // 放射状グラデーション背景で深みを演出
-          gradient: AppColors.heroGradient,
+        decoration: BoxDecoration(
+          // ユーザーのヘッダー色に基づいたグラデーション背景
+          gradient: userGradient,
         ),
         child: SafeArea(
           child: NestedScrollView(
+            controller: _scrollController,
             headerSliverBuilder: (context, innerBoxIsScrolled) {
               return [
                 // ヘッダー（ロゴ中央 + 通知アイコン右）
@@ -62,10 +100,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       children: [
                         // ロゴ（中央）- 繊細なアニメーション
                         Image.asset(
-                          'assets/icons/logo.png',
-                          width: 72,
-                          height: 72,
-                        )
+                              'assets/icons/logo.png',
+                              width: 72,
+                              height: 72,
+                            )
                             .animate(
                               onPlay: (controller) => controller.repeat(),
                             )
@@ -136,7 +174,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
                 // タブバー
                 SliverPersistentHeader(
-                  pinned: true,
+                  pinned: false,
                   delegate: _SliverTabBarDelegate(
                     TabBar(
                       controller: _tabController,
@@ -204,7 +242,7 @@ class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
     double shrinkOffset,
     bool overlapsContent,
   ) {
-    return Container(color: AppColors.background, child: tabBar);
+    return Container(color: Colors.transparent, child: tabBar);
   }
 
   @override
