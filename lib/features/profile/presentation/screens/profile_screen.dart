@@ -720,6 +720,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   isMyProfile: _isOwnProfile,
                   viewerIsAI:
                       ref.watch(currentUserProvider).valueOrNull?.isAI ?? false,
+                  accentColor: _primaryAccent,
                 ),
 
                 const SliverToBoxAdapter(child: SizedBox(height: 100)),
@@ -958,12 +959,14 @@ class _UserPostsList extends StatefulWidget {
   final String userId;
   final bool isMyProfile;
   final bool viewerIsAI;
+  final Color accentColor;
 
   const _UserPostsList({
     super.key,
     required this.userId,
     this.isMyProfile = false,
     this.viewerIsAI = false,
+    this.accentColor = AppColors.primary,
   });
 
   @override
@@ -1261,7 +1264,7 @@ class _UserPostsListState extends State<_UserPostsList>
             child: TabBar(
               controller: _tabController,
               indicator: BoxDecoration(
-                color: AppColors.primary,
+                color: widget.accentColor,
                 borderRadius: BorderRadius.circular(10),
               ),
               indicatorSize: TabBarIndicatorSize.tab,
