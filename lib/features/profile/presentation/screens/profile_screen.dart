@@ -13,7 +13,6 @@ import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/services/follow_service.dart';
 import '../../../../shared/services/post_service.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
-import '../../../../shared/widgets/virtue_indicator.dart';
 import '../../../admin/presentation/widgets/admin_menu_bottom_sheet.dart';
 import '../../../home/presentation/widgets/reaction_background.dart';
 
@@ -36,10 +35,63 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   final _followService = FollowService();
   final _userPostsListKey = GlobalKey<_UserPostsListState>();
 
+  // ヘッダー画像とカラーパレット
+  late int _headerImageIndex;
+  late Color _primaryAccent;
+  late Color _secondaryAccent;
+
+  // ヘッダー画像のパスリスト（6種類）
+  static const List<String> _headerImages = [
+    'assets/images/headers/header_wave_1.png',
+    'assets/images/headers/header_wave_2.png',
+    'assets/images/headers/header_wave_3.png',
+    'assets/images/headers/header_wave_4.png',
+    'assets/images/headers/header_wave_5.png',
+    'assets/images/headers/header_wave_6.png',
+  ];
+
+  // 各ヘッダー画像に対応するカラーパレット [primaryAccent, secondaryAccent]
+  static const List<List<Color>> _headerColorPalettes = [
+    [Color(0xFF7DD3C0), Color(0xFFE8A87C)], // 1: ティール＆コーラル
+    [Color(0xFF9B7EDE), Color(0xFFE890A0)], // 2: パープル＆ピンク
+    [Color(0xFF6CB4EE), Color(0xFFFFB366)], // 3: ブルー＆オレンジ
+    [Color(0xFF7EC889), Color(0xFFF9D56E)], // 4: グリーン＆イエロー
+    [Color(0xFFE8A0BF), Color(0xFFB392AC)], // 5: ピンク＆パープル
+    [Color(0xFF70B8C4), Color(0xFFD4A574)], // 6: スカイブルー＆サンド
+  ];
+
   @override
   void initState() {
     super.initState();
+    _generateHeaderAndColors();
     _loadUser();
+  }
+
+  // ヘッダー画像とカラーパレットを生成（ユーザーIDで固定）
+  void _generateHeaderAndColors() {
+    // ユーザーIDまたは現在時刻からシードを生成
+    final seedBase =
+        widget.userId?.hashCode ?? DateTime.now().millisecondsSinceEpoch;
+    _headerImageIndex = seedBase.abs() % _headerImages.length;
+    _primaryAccent = _headerColorPalettes[_headerImageIndex][0];
+    _secondaryAccent = _headerColorPalettes[_headerImageIndex][1];
+  }
+
+  // ユーザーの抽出された色を適用（あれば）
+  void _applyUserColors(UserModel user) {
+    // ユーザーが選択したデフォルト画像インデックスがあればそれを使用
+    if (user.headerImageUrl == null && user.headerImageIndex != null) {
+      _headerImageIndex = user.headerImageIndex!;
+      _primaryAccent = _headerColorPalettes[_headerImageIndex][0];
+      _secondaryAccent = _headerColorPalettes[_headerImageIndex][1];
+    }
+    // カスタム画像から抽出した色があればそれを使用
+    if (user.headerPrimaryColor != null) {
+      _primaryAccent = Color(user.headerPrimaryColor!);
+    }
+    if (user.headerSecondaryColor != null) {
+      _secondaryAccent = Color(user.headerSecondaryColor!);
+    }
   }
 
   Future<void> _loadUser() async {
@@ -50,6 +102,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     if (widget.userId == null || widget.userId == currentUser?.uid) {
       // 自分のプロフィール
+      if (currentUser != null) {
+        _applyUserColors(currentUser);
+      }
       setState(() {
         _targetUser = currentUser;
         _isOwnProfile = true;
@@ -74,8 +129,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             widget.userId!,
           );
 
+          final user = UserModel.fromFirestore(doc);
+          _applyUserColors(user);
+
           setState(() {
-            _targetUser = UserModel.fromFirestore(doc);
+            _targetUser = user;
             _isOwnProfile = false;
             _isFollowing = isFollowing;
             _isLoading = false;
@@ -129,7 +187,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     if (_isOwnProfile) {
       final currentUser = ref.watch(currentUserProvider);
       return currentUser.when(
-        data: (user) => _buildProfile(user),
+        data: (user) {
+          if (user != null) {
+            // 色を再適用
+            _applyUserColors(user);
+          }
+          return _buildProfile(user);
+        },
         loading: () => _buildLoading(),
         error: (e, _) => _buildError(),
       );
@@ -202,12 +266,39 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     clipBehavior: Clip.none,
                     children: [
                       // ヘッダー画像
-                      Container(
-                        height: 150,
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          gradient: AppColors.heroGradient,
-                        ),
+                      Consumer(
+                        builder: (context, ref, _) {
+                          // 自分のプロフィールの場合はRiverpodから最新のユーザー情報を取得
+                          final displayUser = _isOwnProfile
+                              ? ref.watch(currentUserProvider).valueOrNull
+                              : _targetUser;
+                          final headerUrl = displayUser?.headerImageUrl;
+
+                          return ClipRect(
+                            child: SizedBox(
+                              width: double.infinity,
+                              height: 180,
+                              child: headerUrl != null
+                                  ? Image.network(
+                                      headerUrl,
+                                      fit: BoxFit.cover,
+                                      errorBuilder:
+                                          (
+                                            context,
+                                            error,
+                                            stackTrace,
+                                          ) => Image.asset(
+                                            _headerImages[_headerImageIndex],
+                                            fit: BoxFit.cover,
+                                          ),
+                                    )
+                                  : Image.asset(
+                                      _headerImages[_headerImageIndex],
+                                      fit: BoxFit.cover,
+                                    ),
+                            ),
+                          );
+                        },
                       ),
                       // 戻るボタン（他ユーザー閲覧時）
                       if (!_isOwnProfile)
@@ -277,27 +368,39 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           ],
                         ),
                       ),
-                      // アバター（中央配置、ヘッダー下部に重なる）
+                      // アバター（中央配置、グラデーション枠 + グロー効果）
                       Positioned(
-                        bottom: -50,
+                        bottom: -55,
                         left: 0,
                         right: 0,
                         child: Center(
                           child: Container(
+                            padding: const EdgeInsets.all(5),
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 4),
+                              gradient: LinearGradient(
+                                colors: [_primaryAccent, _secondaryAccent],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.2),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 4),
+                                  color: _primaryAccent.withValues(alpha: 0.4),
+                                  blurRadius: 20,
+                                  spreadRadius: 5,
                                 ),
                               ],
                             ),
-                            child: AvatarWidget(
-                              avatarIndex: user.avatarIndex,
-                              size: 100,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white,
+                              ),
+                              child: AvatarWidget(
+                                avatarIndex: user.avatarIndex,
+                                size: 100,
+                              ),
                             ),
                           ),
                         ),
@@ -334,22 +437,38 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   ),
                 ),
 
-                // 統計情報（ラベルが上、数字が下）
+                // 統計情報（シンプルな区切り線のみ）
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(32, 20, 32, 0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _buildProfileStat('投稿', '${user.totalPosts}'),
-                        _buildProfileStat('称賛', '${user.totalPraises}'),
-                        _buildProfileStat('徳', '${user.virtue}'),
-                      ],
+                    padding: const EdgeInsets.fromLTRB(40, 24, 40, 0),
+                    child: IntrinsicHeight(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          Expanded(
+                            child: _buildProfileStat(
+                              '投稿',
+                              '${user.totalPosts}',
+                            ),
+                          ),
+                          Container(width: 1, color: Colors.grey.shade300),
+                          Expanded(
+                            child: _buildProfileStat(
+                              '称賛',
+                              '${user.totalPraises}',
+                            ),
+                          ),
+                          Container(width: 1, color: Colors.grey.shade300),
+                          Expanded(
+                            child: _buildProfileStat('徳', '${user.virtue}'),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
 
-                // フォローボタン（グラデーション）+ メッセージボタン
+                // フォローボタン（ヘッダーカラー）+ メッセージボタン
                 if (!_isOwnProfile)
                   SliverToBoxAdapter(
                     child: Padding(
@@ -361,16 +480,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               decoration: BoxDecoration(
                                 gradient: _isFollowing
                                     ? null
-                                    : const LinearGradient(
+                                    : LinearGradient(
                                         colors: [
-                                          Color(0xFF8B5CF6),
-                                          Color(0xFF7C3AED),
+                                          _primaryAccent,
+                                          _secondaryAccent,
                                         ],
                                         begin: Alignment.centerLeft,
                                         end: Alignment.centerRight,
                                       ),
                                 color: _isFollowing
-                                    ? AppColors.surfaceVariant
+                                    ? Colors.grey.shade200
                                     : null,
                                 borderRadius: BorderRadius.circular(28),
                               ),
@@ -414,8 +533,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           // メッセージボタン
                           Container(
                             decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFF8B5CF6), Color(0xFF7C3AED)],
+                              gradient: LinearGradient(
+                                colors: [_primaryAccent, _secondaryAccent],
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                               ),
@@ -1649,38 +1768,6 @@ class _ProfilePostCardState extends State<_ProfilePostCard> {
     }
 
     return icons;
-  }
-}
-
-class _StatItem extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color? color;
-
-  const _StatItem({
-    required this.label,
-    required this.value,
-    required this.icon,
-    this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Icon(icon, color: color ?? AppColors.primary, size: 24),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: color ?? AppColors.textPrimary,
-          ),
-        ),
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
-      ],
-    );
   }
 }
 

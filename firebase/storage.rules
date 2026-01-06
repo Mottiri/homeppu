@@ -51,6 +51,19 @@ service firebase.storage {
           || request.resource.contentType.matches('application/zip');
     }
     
+    // ユーザーヘッダー画像
+    match /headers/{fileName} {
+      allow read: if isAuthenticated();
+      // ファイル名がユーザーIDで始まる場合のみ書き込み可能
+      allow write: if isAuthenticated() 
+                   && fileName.matches(request.auth.uid + '.*')
+                   && isValidImageSize() 
+                   && isImage();
+      // 本人のみ削除可能
+      allow delete: if isAuthenticated() 
+                    && fileName.matches(request.auth.uid + '.*');
+    }
+
     // ユーザープロフィール画像
     match /users/{userId}/profile/{fileName} {
       allow read: if isAuthenticated();

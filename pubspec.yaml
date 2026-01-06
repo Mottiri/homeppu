@@ -53,6 +53,7 @@ dependencies:
   path: ^1.9.0
   path_provider: ^2.1.5
   confetti: ^0.8.0
+  palette_generator: ^0.3.3+4
 
 
 dev_dependencies:
@@ -89,6 +90,7 @@ flutter:
   
   assets:
     - assets/images/
+    - assets/images/headers/
     - assets/icons/
     - assets/avatars/
     - assets/reactions/

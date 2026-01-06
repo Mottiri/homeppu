@@ -33,6 +33,10 @@ class UserModel {
   final String? fcmToken; // プッシュ通知用トークン
   final Map<String, bool> notificationSettings; // 通知設定
   final Map<String, bool> autoPostSettings; // 自動投稿設定
+  final String? headerImageUrl; // ヘッダー画像URL
+  final int? headerImageIndex; // デフォルトヘッダー画像のインデックス（0-5）
+  final int? headerPrimaryColor; // ヘッダー画像から抽出したメイン色（ARGB int）
+  final int? headerSecondaryColor; // ヘッダー画像から抽出したサブ色（ARGB int）
 
   UserModel({
     required this.uid,
@@ -65,6 +69,10 @@ class UserModel {
     this.fcmToken,
     this.notificationSettings = const {'comments': true, 'reactions': true},
     this.autoPostSettings = const {'milestones': true, 'goals': true},
+    this.headerImageUrl,
+    this.headerImageIndex,
+    this.headerPrimaryColor,
+    this.headerSecondaryColor,
   });
 
   factory UserModel.fromFirestore(DocumentSnapshot doc) {
@@ -114,6 +122,10 @@ class UserModel {
       autoPostSettings: Map<String, bool>.from(
         data['autoPostSettings'] ?? {'milestones': true, 'goals': true},
       ),
+      headerImageUrl: data['headerImageUrl'],
+      headerImageIndex: data['headerImageIndex'],
+      headerPrimaryColor: data['headerPrimaryColor'],
+      headerSecondaryColor: data['headerSecondaryColor'],
     );
   }
 
@@ -150,6 +162,11 @@ class UserModel {
         'lastNameChangeAt': Timestamp.fromDate(lastNameChangeAt!),
       'notificationSettings': notificationSettings,
       'autoPostSettings': autoPostSettings,
+      if (headerImageUrl != null) 'headerImageUrl': headerImageUrl,
+      if (headerImageIndex != null) 'headerImageIndex': headerImageIndex,
+      if (headerPrimaryColor != null) 'headerPrimaryColor': headerPrimaryColor,
+      if (headerSecondaryColor != null)
+        'headerSecondaryColor': headerSecondaryColor,
     };
   }
 
@@ -183,6 +200,10 @@ class UserModel {
     String? fcmToken,
     Map<String, bool>? notificationSettings,
     Map<String, bool>? autoPostSettings,
+    String? headerImageUrl,
+    int? headerImageIndex,
+    int? headerPrimaryColor,
+    int? headerSecondaryColor,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -216,6 +237,10 @@ class UserModel {
       fcmToken: fcmToken ?? this.fcmToken,
       notificationSettings: notificationSettings ?? this.notificationSettings,
       autoPostSettings: autoPostSettings ?? this.autoPostSettings,
+      headerImageUrl: headerImageUrl ?? this.headerImageUrl,
+      headerImageIndex: headerImageIndex ?? this.headerImageIndex,
+      headerPrimaryColor: headerPrimaryColor ?? this.headerPrimaryColor,
+      headerSecondaryColor: headerSecondaryColor ?? this.headerSecondaryColor,
     );
   }
 }
