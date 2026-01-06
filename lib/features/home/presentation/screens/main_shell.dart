@@ -10,7 +10,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../shared/providers/task_screen_provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../../shared/providers/auth_provider.dart'; // currentUserProvider
-import 'home_screen.dart'; // timelineRefreshProvider
+import 'home_screen.dart'; // timelineRefreshProvider, homeScrollToTopProvider
+import '../../../circle/presentation/screens/circles_screen.dart'; // circleScrollToTopProvider
 
 /// メイン画面のシェル（ボトムナビゲーション）
 class MainShell extends ConsumerStatefulWidget {
@@ -252,7 +253,14 @@ class _MainShellState extends ConsumerState<MainShell>
                   activeIcon: Icons.groups_rounded,
                   label: 'サークル',
                   isActive: currentIndex == 1,
-                  onTap: () => context.go('/circles'),
+                  onTap: () {
+                    if (currentIndex == 1) {
+                      // 既にサークル画面の場合はスクロールトップ
+                      ref.read(circleScrollToTopProvider.notifier).state++;
+                    } else {
+                      context.go('/circles');
+                    }
+                  },
                 ),
 
                 // 中央ボタン（投稿/タスク作成/サークル作成）
