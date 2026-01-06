@@ -14,7 +14,6 @@ import '../../../../shared/services/moderation_service.dart';
 import '../../../../shared/services/nsfw_detector_service.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
 import '../../../../shared/widgets/report_dialog.dart';
-import '../../../../shared/widgets/virtue_indicator.dart';
 
 /// 投稿作成画面
 class CreatePostScreen extends ConsumerStatefulWidget {
@@ -316,216 +315,247 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     final remainingChars =
         AppConstants.maxPostLength - _contentController.text.length;
 
+    // ユーザーのヘッダー色を取得
+    final primaryColor = user?.headerPrimaryColor != null
+        ? Color(user!.headerPrimaryColor!)
+        : AppColors.primary;
+    final secondaryColor = user?.headerSecondaryColor != null
+        ? Color(user!.headerSecondaryColor!)
+        : AppColors.secondary;
+
+    // ユーザーの色でグラデーションを作成
+    final userGradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        primaryColor.withValues(alpha: 0.25),
+        secondaryColor.withValues(alpha: 0.15),
+        const Color(0xFFFDF8F3),
+      ],
+      stops: const [0.0, 0.5, 1.0],
+    );
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.circleId != null ? 'サークルに投稿' : '新しい投稿'),
-        leading: IconButton(
-          onPressed: () => context.pop(),
-          icon: const Icon(Icons.close_rounded),
-        ),
-        actions: [
-          // 徳ポイントバッジ
-          const Padding(
-            padding: EdgeInsets.only(right: 8),
-            child: Center(child: VirtueBadge()),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: ElevatedButton(
-              onPressed:
-                  (_contentController.text.trim().isEmpty &&
-                          _selectedMedia.isEmpty) ||
-                      _isLoading
-                  ? null
-                  : _createPost,
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-              ),
-              child: _isLoading
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Text('投稿する'),
-            ),
-          ),
-        ],
-      ),
       body: Container(
-        decoration: const BoxDecoration(gradient: AppColors.warmGradient),
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        decoration: BoxDecoration(gradient: userGradient),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // ヘッダー（閉じるボタン + タイトル + 投稿ボタン）
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+                child: Row(
                   children: [
-                    // ユーザー情報
-                    if (user != null)
-                      Row(
-                        children: [
-                          AvatarWidget(avatarIndex: user.avatarIndex, size: 48),
-                          const SizedBox(width: 12),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                user.displayName,
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              if (widget.circleId != null)
-                                Text(
-                                  'サークルへの投稿',
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(
-                                        color: AppColors.primary,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                ),
-                            ],
-                          ),
-                        ],
-                      ),
-
-                    const SizedBox(height: 20),
-
-                    // 投稿入力
-                    TextField(
-                      controller: _contentController,
-                      autofocus: true, // 画面表示時に自動フォーカス
-                      maxLines: null,
-                      minLines: 6,
-                      maxLength: AppConstants.maxPostLength,
-                      decoration: const InputDecoration(
-                        hintText: '今日あったこと、がんばったこと、\n何でも投稿してみよう✨',
-                        border: InputBorder.none,
-                        fillColor: Colors.transparent,
-                        counterText: '',
-                      ),
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodyLarge?.copyWith(height: 1.6),
-                      onChanged: (value) => setState(() {}),
+                    IconButton(
+                      onPressed: () => context.pop(),
+                      icon: const Icon(Icons.close_rounded),
                     ),
-
-                    // アップロード進捗
-                    if (_isUploading) ...[
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Column(
-                          children: [
-                            Row(
-                              children: [
-                                const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: AppColors.primary,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  'アップロード中... ${(_uploadProgress * 100).toInt()}%',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: LinearProgressIndicator(
-                                value: _uploadProgress,
-                                backgroundColor: Colors.white,
-                                color: AppColors.primary,
+                    const Spacer(),
+                    Text(
+                      widget.circleId != null ? 'サークルに投稿' : '新しい投稿',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const Spacer(),
+                    ElevatedButton(
+                      onPressed:
+                          (_contentController.text.trim().isEmpty &&
+                                  _selectedMedia.isEmpty) ||
+                              _isLoading
+                          ? null
+                          : _createPost,
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                      ),
+                      child: _isLoading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
                               ),
+                            )
+                          : const Text('投稿する'),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ユーザー情報
+                      if (user != null)
+                        Row(
+                          children: [
+                            AvatarWidget(
+                              avatarIndex: user.avatarIndex,
+                              size: 48,
+                            ),
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  user.displayName,
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium,
+                                ),
+                                if (widget.circleId != null)
+                                  Text(
+                                    'サークルへの投稿',
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: AppColors.primary,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                  ),
+                              ],
                             ),
                           ],
                         ),
-                      ),
-                    ],
 
-                    // 選択されたメディアのプレビュー
-                    if (_selectedMedia.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        height: 120,
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: _selectedMedia.length,
-                          itemBuilder: (context, index) {
-                            final media = _selectedMedia[index];
-                            return _MediaPreview(
-                              media: media,
-                              onRemove: () => _removeMedia(index),
-                            );
-                          },
+                      const SizedBox(height: 20),
+
+                      // 投稿入力
+                      TextField(
+                        controller: _contentController,
+                        autofocus: true, // 画面表示時に自動フォーカス
+                        maxLines: null,
+                        minLines: 6,
+                        maxLength: AppConstants.maxPostLength,
+                        decoration: const InputDecoration(
+                          hintText: '今日あったこと、がんばったこと、\n何でも投稿してみよう✨',
+                          border: InputBorder.none,
+                          fillColor: Colors.transparent,
+                          counterText: '',
+                        ),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodyLarge?.copyWith(height: 1.6),
+                        onChanged: (value) => setState(() {}),
+                      ),
+
+                      // アップロード進捗
+                      if (_isUploading) ...[
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            children: [
+                              Row(
+                                children: [
+                                  const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    'アップロード中... ${(_uploadProgress * 100).toInt()}%',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: LinearProgressIndicator(
+                                  value: _uploadProgress,
+                                  backgroundColor: Colors.white,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      // 選択されたメディアのプレビュー
+                      if (_selectedMedia.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          height: 120,
+                          child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: _selectedMedia.length,
+                            itemBuilder: (context, index) {
+                              final media = _selectedMedia[index];
+                              return _MediaPreview(
+                                media: media,
+                                onRemove: () => _removeMedia(index),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+
+              // ボトムバー
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, -2),
+                    ),
+                  ],
+                ),
+                child: SafeArea(
+                  child: Row(
+                    children: [
+                      // メディア追加ボタン
+                      IconButton(
+                        onPressed: _isLoading ? null : _showMediaPicker,
+                        icon: Badge(
+                          isLabelVisible: _selectedMedia.isNotEmpty,
+                          label: Text('${_selectedMedia.length}'),
+                          child: const Icon(Icons.attach_file),
+                        ),
+                        color: _selectedMedia.isNotEmpty
+                            ? AppColors.primary
+                            : AppColors.textSecondary,
+                      ),
+                      const Spacer(),
+                      // 文字数
+                      Text(
+                        '$remainingChars',
+                        style: TextStyle(
+                          color: remainingChars < 50
+                              ? AppColors.warning
+                              : AppColors.textHint,
+                          fontWeight: remainingChars < 50
+                              ? FontWeight.bold
+                              : FontWeight.normal,
                         ),
                       ),
                     ],
-                  ],
-                ),
-              ),
-            ),
-
-            // ボトムバー
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, -2),
                   ),
-                ],
-              ),
-              child: SafeArea(
-                child: Row(
-                  children: [
-                    // メディア追加ボタン
-                    IconButton(
-                      onPressed: _isLoading ? null : _showMediaPicker,
-                      icon: Badge(
-                        isLabelVisible: _selectedMedia.isNotEmpty,
-                        label: Text('${_selectedMedia.length}'),
-                        child: const Icon(Icons.attach_file),
-                      ),
-                      color: _selectedMedia.isNotEmpty
-                          ? AppColors.primary
-                          : AppColors.textSecondary,
-                    ),
-                    const Spacer(),
-                    // 文字数
-                    Text(
-                      '$remainingChars',
-                      style: TextStyle(
-                        color: remainingChars < 50
-                            ? AppColors.warning
-                            : AppColors.textHint,
-                        fontWeight: remainingChars < 50
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                      ),
-                    ),
-                  ],
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

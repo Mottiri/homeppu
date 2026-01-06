@@ -113,229 +113,260 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
   Widget build(BuildContext context) {
     timeago.setLocaleMessages('ja', timeago.JaMessages());
 
+    // ユーザーのヘッダー色を取得
+    final currentUser = ref.watch(currentUserProvider).valueOrNull;
+    final primaryColor = currentUser?.headerPrimaryColor != null
+        ? Color(currentUser!.headerPrimaryColor!)
+        : AppColors.primary;
+    final secondaryColor = currentUser?.headerSecondaryColor != null
+        ? Color(currentUser!.headerSecondaryColor!)
+        : AppColors.secondary;
+
+    // ユーザーの色でグラデーションを作成
+    final userGradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        primaryColor.withValues(alpha: 0.25),
+        secondaryColor.withValues(alpha: 0.15),
+        const Color(0xFFFDF8F3),
+      ],
+      stops: const [0.0, 0.5, 1.0],
+    );
+
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          onPressed: () => context.pop(),
-          icon: const Icon(Icons.arrow_back_rounded),
-        ),
-        title: const Text('投稿'),
-      ),
       body: Container(
-        decoration: const BoxDecoration(gradient: AppColors.warmGradient),
-        child: Column(
-          children: [
-            Expanded(
-              child: StreamBuilder<DocumentSnapshot>(
-                stream: _postStream,
-                builder: (context, postSnapshot) {
-                  if (postSnapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(
-                      child: CircularProgressIndicator(
-                        color: AppColors.primary,
-                      ),
-                    );
-                  }
-
-                  if (!postSnapshot.hasData || !postSnapshot.data!.exists) {
-                    // 投稿が存在しない場合、トーストを表示して戻る
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('この投稿は削除されました'),
-                            backgroundColor: Colors.orange,
-                          ),
-                        );
-                        context.pop();
-                      }
-                    });
-                    return const Center(
-                      child: CircularProgressIndicator(
-                        color: AppColors.primary,
-                      ),
-                    );
-                  }
-
-                  final post = PostModel.fromFirestore(postSnapshot.data!);
-
-                  // 非表示の投稿（削除済み）の場合、トーストを表示して戻る
-                  if (!post.isVisible) {
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('この投稿は削除されました'),
-                            backgroundColor: Colors.orange,
-                          ),
-                        );
-                        context.pop();
-                      }
-                    });
-                    return const Center(
-                      child: CircularProgressIndicator(
-                        color: AppColors.primary,
-                      ),
-                    );
-                  }
-
-                  return CustomScrollView(
-                    slivers: [
-                      // 投稿本体（PostCardウィジェットを再利用）
-                      SliverToBoxAdapter(
-                        child: PostCard(post: post, isDetailView: true),
-                      ),
-
-                      // コメントヘッダー
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 8,
-                          ),
-                          child: Text(
-                            'コメント',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
+        decoration: BoxDecoration(gradient: userGradient),
+        child: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: StreamBuilder<DocumentSnapshot>(
+                  stream: _postStream,
+                  builder: (context, postSnapshot) {
+                    if (postSnapshot.connectionState ==
+                        ConnectionState.waiting) {
+                      return const Center(
+                        child: CircularProgressIndicator(
+                          color: AppColors.primary,
                         ),
-                      ),
+                      );
+                    }
 
-                      // コメントリスト
-                      StreamBuilder<QuerySnapshot>(
-                        stream: _commentsStream,
-                        builder: (context, commentSnapshot) {
-                          if (!commentSnapshot.hasData) {
-                            return const SliverToBoxAdapter(
-                              child: Center(
-                                child: Padding(
-                                  padding: EdgeInsets.all(20),
-                                  child: CircularProgressIndicator(
-                                    color: AppColors.primary,
-                                  ),
-                                ),
-                              ),
-                            );
-                          }
-
-                          final comments = commentSnapshot.data!.docs
-                              .map((doc) => CommentModel.fromFirestore(doc))
-                              .where((c) => c.isVisibleNow)
-                              .toList();
-
-                          if (comments.isEmpty) {
-                            return SliverToBoxAdapter(
-                              child: Padding(
-                                padding: const EdgeInsets.all(40),
-                                child: Center(
-                                  child: Column(
-                                    children: [
-                                      const Text(
-                                        '💬',
-                                        style: TextStyle(fontSize: 40),
-                                      ),
-                                      const SizedBox(height: 12),
-                                      Text(
-                                        'まだコメントがないよ',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium
-                                            ?.copyWith(
-                                              color: AppColors.textSecondary,
-                                            ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        '最初のコメントを送ってみよう！',
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.bodySmall,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          }
-
-                          return SliverList(
-                            delegate: SliverChildBuilderDelegate((
-                              context,
-                              index,
-                            ) {
-                              final comment = comments[index];
-                              return _CommentTile(comment: comment);
-                            }, childCount: comments.length),
-                          );
-                        },
-                      ),
-
-                      // スペーサー
-                      const SliverToBoxAdapter(child: SizedBox(height: 100)),
-                    ],
-                  );
-                },
-              ),
-            ),
-
-            // コメント入力エリア
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, -2),
-                  ),
-                ],
-              ),
-              child: SafeArea(
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _commentController,
-                        maxLines: null,
-                        maxLength: AppConstants.maxCommentLength,
-                        decoration: InputDecoration(
-                          hintText: '温かいコメントを送ろう☺️',
-                          counterText: '',
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                        ),
-                        onChanged: (_) => setState(() {}),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      onPressed:
-                          _commentController.text.trim().isEmpty || _isSending
-                          ? null
-                          : _sendComment,
-                      icon: _isSending
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: AppColors.primary,
-                              ),
-                            )
-                          : Icon(
-                              Icons.send_rounded,
-                              color: _commentController.text.trim().isEmpty
-                                  ? AppColors.textHint
-                                  : AppColors.primary,
+                    if (!postSnapshot.hasData || !postSnapshot.data!.exists) {
+                      // 投稿が存在しない場合、トーストを表示して戻る
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('この投稿は削除されました'),
+                              backgroundColor: Colors.orange,
                             ),
+                          );
+                          context.pop();
+                        }
+                      });
+                      return const Center(
+                        child: CircularProgressIndicator(
+                          color: AppColors.primary,
+                        ),
+                      );
+                    }
+
+                    final post = PostModel.fromFirestore(postSnapshot.data!);
+
+                    // 非表示の投稿（削除済み）の場合、トーストを表示して戻る
+                    if (!post.isVisible) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('この投稿は削除されました'),
+                              backgroundColor: Colors.orange,
+                            ),
+                          );
+                          context.pop();
+                        }
+                      });
+                      return const Center(
+                        child: CircularProgressIndicator(
+                          color: AppColors.primary,
+                        ),
+                      );
+                    }
+
+                    return CustomScrollView(
+                      slivers: [
+                        // 戻るボタン（スクロールで非表示）
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+                            child: Row(
+                              children: [
+                                IconButton(
+                                  onPressed: () => context.pop(),
+                                  icon: const Icon(Icons.arrow_back_rounded),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        // 投稿本体（PostCardウィジェットを再利用）
+                        SliverToBoxAdapter(
+                          child: PostCard(post: post, isDetailView: true),
+                        ),
+
+                        // コメントヘッダー
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 8,
+                            ),
+                            child: Text(
+                              'コメント',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                          ),
+                        ),
+
+                        // コメントリスト
+                        StreamBuilder<QuerySnapshot>(
+                          stream: _commentsStream,
+                          builder: (context, commentSnapshot) {
+                            if (!commentSnapshot.hasData) {
+                              return const SliverToBoxAdapter(
+                                child: Center(
+                                  child: Padding(
+                                    padding: EdgeInsets.all(20),
+                                    child: CircularProgressIndicator(
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+
+                            final comments = commentSnapshot.data!.docs
+                                .map((doc) => CommentModel.fromFirestore(doc))
+                                .where((c) => c.isVisibleNow)
+                                .toList();
+
+                            if (comments.isEmpty) {
+                              return SliverToBoxAdapter(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(40),
+                                  child: Center(
+                                    child: Column(
+                                      children: [
+                                        const Text(
+                                          '💬',
+                                          style: TextStyle(fontSize: 40),
+                                        ),
+                                        const SizedBox(height: 12),
+                                        Text(
+                                          'まだコメントがないよ',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(
+                                                color: AppColors.textSecondary,
+                                              ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          '最初のコメントを送ってみよう！',
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.bodySmall,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+
+                            return SliverList(
+                              delegate: SliverChildBuilderDelegate((
+                                context,
+                                index,
+                              ) {
+                                final comment = comments[index];
+                                return _CommentTile(comment: comment);
+                              }, childCount: comments.length),
+                            );
+                          },
+                        ),
+
+                        // スペーサー
+                        const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                      ],
+                    );
+                  },
+                ),
+              ),
+
+              // コメント入力エリア
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, -2),
                     ),
                   ],
                 ),
+                child: SafeArea(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _commentController,
+                          maxLines: null,
+                          maxLength: AppConstants.maxCommentLength,
+                          decoration: InputDecoration(
+                            hintText: '温かいコメントを送ろう☺️',
+                            counterText: '',
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                          ),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        onPressed:
+                            _commentController.text.trim().isEmpty || _isSending
+                            ? null
+                            : _sendComment,
+                        icon: _isSending
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.primary,
+                                ),
+                              )
+                            : Icon(
+                                Icons.send_rounded,
+                                color: _commentController.text.trim().isEmpty
+                                    ? AppColors.textHint
+                                    : AppColors.primary,
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
