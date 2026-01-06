@@ -300,6 +300,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           );
                         },
                       ),
+                      // 角丸の白い背景（コンテンツエリア上部）
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        child: Container(
+                          height: 30,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFFDF8F3), // warmGradientの上部色
+                            borderRadius: BorderRadius.only(
+                              topLeft: Radius.circular(30),
+                              topRight: Radius.circular(30),
+                            ),
+                          ),
+                        ),
+                      ),
                       // 戻るボタン（他ユーザー閲覧時）
                       if (!_isOwnProfile)
                         Positioned(
@@ -437,32 +453,49 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   ),
                 ),
 
-                // 統計情報（シンプルな区切り線のみ）
+                // 統計情報（パステルカラー背景）
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(40, 24, 40, 0),
-                    child: IntrinsicHeight(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          Expanded(
-                            child: _buildProfileStat(
-                              '投稿',
-                              '${user.totalPosts}',
+                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 16,
+                        horizontal: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            _primaryAccent.withValues(alpha: 0.15),
+                            _secondaryAccent.withValues(alpha: 0.1),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: IntrinsicHeight(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            Expanded(
+                              child: _buildProfileStat(
+                                '投稿',
+                                '${user.totalPosts}',
+                              ),
                             ),
-                          ),
-                          Container(width: 1, color: Colors.grey.shade300),
-                          Expanded(
-                            child: _buildProfileStat(
-                              '称賛',
-                              '${user.totalPraises}',
+                            Container(width: 1, color: Colors.grey.shade300),
+                            Expanded(
+                              child: _buildProfileStat(
+                                '称賛',
+                                '${user.totalPraises}',
+                              ),
                             ),
-                          ),
-                          Container(width: 1, color: Colors.grey.shade300),
-                          Expanded(
-                            child: _buildProfileStat('徳', '${user.virtue}'),
-                          ),
-                        ],
+                            Container(width: 1, color: Colors.grey.shade300),
+                            Expanded(
+                              child: _buildProfileStat('徳', '${user.virtue}'),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
