@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -65,7 +66,12 @@ class _InquiryFormScreenState extends ConsumerState<InquiryFormScreen> {
       // 画像をアップロード
       if (_selectedImage != null) {
         final mediaService = MediaService();
-        imageUrl = await mediaService.uploadInquiryImage(_selectedImage!);
+        final userId = FirebaseAuth.instance.currentUser?.uid;
+        if (userId == null) throw Exception('ログインが必要です');
+        imageUrl = await mediaService.uploadInquiryImage(
+          _selectedImage!,
+          userId: userId,
+        );
       }
 
       // 問い合わせを作成

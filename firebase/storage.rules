@@ -146,10 +146,13 @@ service firebase.storage {
       allow delete: if isAuthenticated() && request.auth.uid == userId;
     }
 
-    // 問い合わせ添付画像
-    match /inquiries/{fileName} {
-      allow read: if isAuthenticated();
+    // 問い合わせ添付画像（ユーザーIDごとに分離）
+    match /inquiries/{userId}/{fileName} {
+      // 本人または管理者のみ読み取り可能
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      // 本人のみ書き込み可能
       allow write: if isAuthenticated()
+                   && request.auth.uid == userId
                    && isValidProfileSize()  // 5MB limit
                    && isImage();
       // 管理者のみ削除可能

@@ -356,7 +356,7 @@ class MediaService {
   }
 
   /// 問い合わせ画像をアップロード
-  Future<String> uploadInquiryImage(File file) async {
+  Future<String> uploadInquiryImage(File file, {required String userId}) async {
     final fileSize = await file.length();
 
     // サイズチェック (5MB)
@@ -367,7 +367,7 @@ class MediaService {
     // ファイル名を生成
     final extension = path.extension(file.path).toLowerCase();
     final uniqueFileName = '${_uuid.v4()}$extension';
-    final storagePath = 'inquiries/$uniqueFileName';
+    final storagePath = 'inquiries/$userId/$uniqueFileName';
 
     // アップロード
     final ref = _storage.ref().child(storagePath);

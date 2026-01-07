@@ -827,11 +827,21 @@ ios/Runner/GoogleService-Info*.plist
 - **変更ファイル**: `functions/src/index.ts`
 - **リスク軽減**: 不正なAPIコスト消費、データ汚染・破壊を防止
 
+#### ✅ #2: 問い合わせ添付画像の閲覧制限
+- **修正内容**: 
+  - Storageパスを `/inquiries/{fileName}` → `/inquiries/{userId}/{fileName}` に変更
+  - 本人または管理者のみ閲覧可能に
+- **変更ファイル**: 
+  - `firebase/storage.rules`
+  - `lib/shared/services/media_service.dart`
+  - `lib/features/settings/presentation/screens/inquiry_form_screen.dart`
+  - `lib/features/settings/presentation/screens/inquiry_detail_screen.dart`
+- **リスク軽減**: 他ユーザーの問い合わせ添付画像の閲覧を防止
+
 ---
 
 **残りの対応項目**（未対応）:
 - #1: Firestoreルールの重複定義
-- #2: 問い合わせ添付画像の閲覧制限
 - #3: namePartsコレクションのルール未定義
 - #4: ハードコードされた管理者シークレット
 - #8, #9: Storage削除権限の見直し
