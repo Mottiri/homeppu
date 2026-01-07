@@ -8412,3 +8412,153 @@ export const cleanupBannedUsers = onSchedule(
     console.log("=== cleanupBannedUsers COMPLETE ===");
   }
 );
+
+// ===============================================
+// サークル定期クリーンアップ（ゴースト・放置サークル検出）
+// ===============================================
+const GHOST_THRESHOLD_DAYS = 365; // 人間投稿なしの日数
+const EMPTY_THRESHOLD_DAYS = 30;  // 投稿0サークルの猶予日数
+const DELETE_GRACE_DAYS = 7;      // 通知から削除までの猶予
+
+/**
+ * ゴーストサークル・放置サークルを検出し、オーナーに警告通知
+ * 通知から7日経過後に自動削除
+ */
+export const checkGhostCircles = onSchedule(
+  {
+    schedule: "30 3 * * *", // 毎日午前3時30分 JST
+    timeZone: "Asia/Tokyo",
+    region: "asia-northeast1",
+    timeoutSeconds: 540,
+    memory: "512MiB",
+  },
+  async () => {
+    console.log("=== checkGhostCircles START ===");
+    const now = Date.now();
+    const ghostThreshold = new Date(now - GHOST_THRESHOLD_DAYS * 24 * 60 * 60 * 1000);
+    const emptyThreshold = new Date(now - EMPTY_THRESHOLD_DAYS * 24 * 60 * 60 * 1000);
+    const deleteThreshold = new Date(now - DELETE_GRACE_DAYS * 24 * 60 * 60 * 1000);
+
+    let notifiedCount = 0;
+    let deletedCount = 0;
+
+    try {
+      // 削除済みでないサークルを取得
+      const circlesSnapshot = await db.collection("circles")
+        .where("isDeleted", "!=", true)
+        .get();
+
+      console.log(`Checking ${circlesSnapshot.size} circles...`);
+
+      for (const circleDoc of circlesSnapshot.docs) {
+        const circleId = circleDoc.id;
+        const circleData = circleDoc.data();
+        const circleName = circleData.name || "サークル";
+        const ownerId = circleData.ownerId;
+        const createdAt = circleData.createdAt?.toDate?.() || new Date();
+        const lastHumanPostAt = circleData.lastHumanPostAt?.toDate?.();
+        const ghostWarningNotifiedAt = circleData.ghostWarningNotifiedAt?.toDate?.();
+
+        // 判定: ゴーストサークル or 放置サークル
+        let isGhost = false;
+        let isEmpty = false;
+
+        if (lastHumanPostAt && lastHumanPostAt < ghostThreshold) {
+          isGhost = true;
+        }
+        // 放置サークル: 人間の投稿が1個もない + 作成から30日経過
+        if (!lastHumanPostAt && createdAt < emptyThreshold) {
+          isEmpty = true;
+        }
+
+        if (!isGhost && !isEmpty) {
+          continue; // 対象外
+        }
+
+        const warningType = isGhost ? "ゴースト" : "放置";
+        console.log(`Found ${warningType} circle: ${circleName} (${circleId})`);
+
+        if (!ghostWarningNotifiedAt) {
+          // 未通知 → オーナーに警告通知を送信
+          const ownerDoc = await db.collection("users").doc(ownerId).get();
+          if (!ownerDoc.exists) {
+            console.log(`Owner ${ownerId} not found, skipping notification`);
+            continue;
+          }
+
+          const reasonText = isGhost
+            ? "1年以上人間の投稿がない"
+            : "作成から1ヶ月以上経過しても投稿がない";
+
+          await db.collection("users").doc(ownerId).collection("notifications").add({
+            type: "circle_ghost_warning",
+            title: "⚠️ サークル削除予定のお知らせ",
+            body: `「${circleName}」は${reasonText}ため、1週間後に自動削除されます。継続する場合は投稿してください。`,
+            circleId,
+            circleName,
+            isRead: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+
+          await circleDoc.ref.update({
+            ghostWarningNotifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+
+          console.log(`Sent warning notification to owner of ${circleName}`);
+          notifiedCount++;
+
+        } else if (ghostWarningNotifiedAt < deleteThreshold) {
+          // 通知から7日経過 → 削除実行
+          console.log(`Deleting ghost circle: ${circleName} (notified at ${ghostWarningNotifiedAt.toISOString()})`);
+
+          // ソフトデリートマーク
+          await circleDoc.ref.update({
+            isDeleted: true,
+            deletedAt: admin.firestore.FieldValue.serverTimestamp(),
+            deletedBy: "system_ghost_cleanup",
+            deleteReason: isGhost ? "1年以上人間の投稿がないため自動削除" : "投稿がなく放置されていたため自動削除",
+          });
+
+          // Cloud Tasksでバックグラウンド削除をスケジュール
+          const project = process.env.GCLOUD_PROJECT || PROJECT_ID;
+          const tasksClient = new CloudTasksClient();
+          const queuePath = tasksClient.queuePath(project, LOCATION, "circle-cleanup");
+          const targetUrl = `https://${LOCATION}-${project}.cloudfunctions.net/cleanupDeletedCircle`;
+
+          await tasksClient.createTask({
+            parent: queuePath,
+            task: {
+              httpRequest: {
+                httpMethod: "POST" as const,
+                url: targetUrl,
+                body: Buffer.from(JSON.stringify({ circleId, circleName })).toString("base64"),
+                headers: { "Content-Type": "application/json" },
+                oidcToken: { serviceAccountEmail: `${project}@appspot.gserviceaccount.com` },
+              },
+              scheduleTime: { seconds: Math.floor(Date.now() / 1000) + 5 },
+            },
+          });
+
+          // オーナーに削除完了通知
+          await db.collection("users").doc(ownerId).collection("notifications").add({
+            type: "circle_ghost_deleted",
+            title: "🗑️ サークルが削除されました",
+            body: `「${circleName}」は活動がなかったため、自動削除されました。`,
+            circleName,
+            isRead: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+
+          console.log(`Scheduled cleanup for ${circleName}`);
+          deletedCount++;
+        } else {
+          console.log(`Circle ${circleName} is waiting for deletion (notified ${Math.floor((now - ghostWarningNotifiedAt.getTime()) / (24 * 60 * 60 * 1000))} days ago)`);
+        }
+      }
+
+      console.log(`=== checkGhostCircles COMPLETE: notified=${notifiedCount}, deleted=${deletedCount} ===`);
+    } catch (error) {
+      console.error("=== checkGhostCircles ERROR:", error);
+    }
+  }
+);
