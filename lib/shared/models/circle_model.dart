@@ -16,6 +16,7 @@ class CircleModel {
   final int maxMembers;
   final DateTime createdAt;
   final DateTime? recentActivity;
+  final DateTime? lastHumanPostAt; // 人間ユーザーの最終投稿日時
   final String goal;
   final String? coverImageUrl;
   final String? iconImageUrl;
@@ -38,6 +39,7 @@ class CircleModel {
     this.maxMembers = 20,
     required this.createdAt,
     this.recentActivity,
+    this.lastHumanPostAt,
     required this.goal,
     this.coverImageUrl,
     this.iconImageUrl,
@@ -66,6 +68,7 @@ class CircleModel {
       maxMembers: data['maxMembers'] ?? 20,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       recentActivity: (data['recentActivity'] as Timestamp?)?.toDate(),
+      lastHumanPostAt: (data['lastHumanPostAt'] as Timestamp?)?.toDate(),
       goal: data['goal'] ?? '',
       coverImageUrl: data['coverImageUrl'],
       iconImageUrl: data['iconImageUrl'],
@@ -92,6 +95,9 @@ class CircleModel {
       'recentActivity': recentActivity != null
           ? Timestamp.fromDate(recentActivity!)
           : null,
+      'lastHumanPostAt': lastHumanPostAt != null
+          ? Timestamp.fromDate(lastHumanPostAt!)
+          : null,
       'goal': goal,
       'coverImageUrl': coverImageUrl,
       'iconImageUrl': iconImageUrl,
@@ -116,6 +122,7 @@ class CircleModel {
     int? maxMembers,
     DateTime? createdAt,
     DateTime? recentActivity,
+    DateTime? lastHumanPostAt,
     String? goal,
     String? coverImageUrl,
     String? iconImageUrl,
@@ -138,6 +145,7 @@ class CircleModel {
       maxMembers: maxMembers ?? this.maxMembers,
       createdAt: createdAt ?? this.createdAt,
       recentActivity: recentActivity ?? this.recentActivity,
+      lastHumanPostAt: lastHumanPostAt ?? this.lastHumanPostAt,
       goal: goal ?? this.goal,
       coverImageUrl: coverImageUrl ?? this.coverImageUrl,
       iconImageUrl: iconImageUrl ?? this.iconImageUrl,

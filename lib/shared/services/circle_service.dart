@@ -436,10 +436,14 @@ class CircleService {
         });
   }
 
-  // 投稿カウントをインクリメント
+  // 投稿カウントをインクリメント（人間ユーザーの投稿時）
+  // recentActivityとlastHumanPostAtも同時に更新
   Future<void> incrementPostCount(String circleId) async {
+    final now = DateTime.now();
     await _firestore.collection('circles').doc(circleId).update({
       'postCount': FieldValue.increment(1),
+      'recentActivity': Timestamp.fromDate(now),
+      'lastHumanPostAt': Timestamp.fromDate(now),
     });
   }
 

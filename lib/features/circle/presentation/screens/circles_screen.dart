@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:timeago/timeago.dart' as timeago;
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../shared/models/circle_model.dart';
@@ -34,6 +35,10 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   String? _error;
   DocumentSnapshot? _lastDocument;
   final ScrollController _scrollController = ScrollController();
+
+  // 並び順・フィルター用の状態
+  _SortOption _selectedSort = _SortOption.newest;
+  final Set<_FilterOption> _selectedFilters = {};
 
   @override
   void initState() {
@@ -140,6 +145,8 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   @override
   Widget build(BuildContext context) {
     final currentUser = ref.watch(currentUserProvider).valueOrNull;
+    final isAdminAsync = ref.watch(isAdminProvider);
+    final isAdmin = isAdminAsync.valueOrNull ?? false;
 
     // サークルボタンタップでスクロールトップを監視
     ref.listen<int>(circleScrollToTopProvider, (previous, next) {
@@ -259,6 +266,24 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
                 ),
 
                 const SliverToBoxAdapter(child: SizedBox(height: 12)),
+
+                // 並び順・フィルター選択
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        // 並び順ドロップダウン
+                        _buildSortDropdown(isAdmin),
+                        const SizedBox(width: 8),
+                        // フィルタードロップダウン
+                        _buildFilterDropdown(),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SliverToBoxAdapter(child: SizedBox(height: 8)),
 
                 // カテゴリチップ
                 SliverToBoxAdapter(
@@ -457,6 +482,44 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
           .toList();
     }
 
+    // フィルター適用
+    if (_selectedFilters.contains(_FilterOption.hasSpace)) {
+      filteredCircles = filteredCircles
+          .where((c) => c.memberCount < c.maxMembers)
+          .toList();
+    }
+    if (_selectedFilters.contains(_FilterOption.hasPosts)) {
+      filteredCircles = filteredCircles.where((c) => c.postCount > 0).toList();
+    }
+
+    // 並び順適用
+    switch (_selectedSort) {
+      case _SortOption.newest:
+        filteredCircles.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        break;
+      case _SortOption.active:
+        filteredCircles.sort((a, b) {
+          final aActivity = a.recentActivity ?? DateTime(1970);
+          final bActivity = b.recentActivity ?? DateTime(1970);
+          return bActivity.compareTo(aActivity);
+        });
+        break;
+      case _SortOption.popular:
+        filteredCircles.sort((a, b) => b.memberCount.compareTo(a.memberCount));
+        break;
+      case _SortOption.postCount:
+        filteredCircles.sort((a, b) => b.postCount.compareTo(a.postCount));
+        break;
+      case _SortOption.humanPostOldest:
+        // 人間投稿が古い順（ゴーストサークル発見用）
+        filteredCircles.sort((a, b) {
+          final aDate = a.lastHumanPostAt ?? DateTime(1970);
+          final bDate = b.lastHumanPostAt ?? DateTime(1970);
+          return aDate.compareTo(bDate); // 古い方が先
+        });
+        break;
+    }
+
     if (filteredCircles.isEmpty) {
       return SliverFillRemaining(
         hasScrollBody: false,
@@ -548,6 +611,159 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  /// 並び順ドロップダウン
+  Widget _buildSortDropdown(bool isAdmin) {
+    // 管理者のみhumanPostOldestを表示
+    final options = isAdmin
+        ? _SortOption.values
+        : _SortOption.values
+              .where((o) => o != _SortOption.humanPostOldest)
+              .toList();
+
+    return PopupMenuButton<_SortOption>(
+      initialValue: _selectedSort,
+      onSelected: (value) {
+        setState(() => _selectedSort = value);
+        _loadCircles();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey[300]!),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(_selectedSort.icon, size: 14, color: AppColors.primary),
+            const SizedBox(width: 4),
+            Text(
+              _selectedSort.label,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[700],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(width: 2),
+            Icon(Icons.arrow_drop_down, size: 16, color: Colors.grey[600]),
+          ],
+        ),
+      ),
+      itemBuilder: (context) => options.map((option) {
+        return PopupMenuItem<_SortOption>(
+          value: option,
+          child: Row(
+            children: [
+              Icon(
+                option.icon,
+                size: 18,
+                color: _selectedSort == option
+                    ? AppColors.primary
+                    : Colors.grey[600],
+              ),
+              const SizedBox(width: 8),
+              Text(
+                option.label,
+                style: TextStyle(
+                  color: _selectedSort == option
+                      ? AppColors.primary
+                      : Colors.grey[800],
+                  fontWeight: _selectedSort == option
+                      ? FontWeight.bold
+                      : FontWeight.normal,
+                ),
+              ),
+              if (_selectedSort == option) ...[
+                const Spacer(),
+                Icon(Icons.check, size: 18, color: AppColors.primary),
+              ],
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  /// フィルタードロップダウン
+  Widget _buildFilterDropdown() {
+    final hasActiveFilter = _selectedFilters.isNotEmpty;
+
+    return PopupMenuButton<_FilterOption>(
+      onSelected: (value) {
+        setState(() {
+          if (_selectedFilters.contains(value)) {
+            _selectedFilters.remove(value);
+          } else {
+            _selectedFilters.add(value);
+          }
+        });
+        _loadCircles();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: hasActiveFilter
+              ? AppColors.primary.withValues(alpha: 0.1)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: hasActiveFilter ? AppColors.primary : Colors.grey[300]!,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.filter_list,
+              size: 14,
+              color: hasActiveFilter ? AppColors.primary : Colors.grey[600],
+            ),
+            const SizedBox(width: 4),
+            Text(
+              hasActiveFilter ? 'フィルター(${_selectedFilters.length})' : 'フィルター',
+              style: TextStyle(
+                fontSize: 12,
+                color: hasActiveFilter ? AppColors.primary : Colors.grey[700],
+                fontWeight: hasActiveFilter ? FontWeight.w600 : FontWeight.w500,
+              ),
+            ),
+            const SizedBox(width: 2),
+            Icon(
+              Icons.arrow_drop_down,
+              size: 16,
+              color: hasActiveFilter ? AppColors.primary : Colors.grey[600],
+            ),
+          ],
+        ),
+      ),
+      itemBuilder: (context) => _FilterOption.values.map((option) {
+        final isSelected = _selectedFilters.contains(option);
+        return PopupMenuItem<_FilterOption>(
+          value: option,
+          child: Row(
+            children: [
+              Icon(
+                isSelected ? Icons.check_box : Icons.check_box_outline_blank,
+                size: 18,
+                color: isSelected ? AppColors.primary : Colors.grey[600],
+              ),
+              const SizedBox(width: 8),
+              Text(
+                option.label,
+                style: TextStyle(
+                  color: isSelected ? AppColors.primary : Colors.grey[800],
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 }
@@ -730,6 +946,11 @@ class _CircleCard extends ConsumerWidget {
                             Icons.article_outlined,
                             '${circle.postCount}件',
                           ),
+                          // 最終アクティビティ表示
+                          _buildActivityChip(circle.recentActivity),
+                          // 管理者向け：人間の最終投稿日時（フィールドから直接取得）
+                          if (isAdmin)
+                            _buildHumanActivityChip(circle.lastHumanPostAt),
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 8,
@@ -804,4 +1025,140 @@ class _CircleCard extends ConsumerWidget {
       ],
     );
   }
+
+  Widget _buildActivityChip(DateTime? recentActivity) {
+    // timeagoの日本語設定
+    timeago.setLocaleMessages('ja', timeago.JaMessages());
+
+    if (recentActivity == null) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.schedule, size: 14, color: Colors.grey[400]),
+          const SizedBox(width: 4),
+          Text(
+            'まだ投稿なし',
+            style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+          ),
+        ],
+      );
+    }
+
+    final now = DateTime.now();
+    final difference = now.difference(recentActivity);
+
+    // 7日以内ならアクティブ表示（緑）、それ以外はグレー
+    final isActive = difference.inDays <= 7;
+    final color = isActive ? Colors.green : Colors.grey[500];
+    final icon = isActive ? Icons.local_fire_department : Icons.schedule;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 4),
+        Text(
+          '${timeago.format(recentActivity, locale: 'ja')}に投稿あり',
+          style: TextStyle(
+            fontSize: 12,
+            color: color,
+            fontWeight: isActive ? FontWeight.w500 : FontWeight.normal,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 管理者向け：人間ユーザーの最終投稿日時チップ
+  Widget _buildHumanActivityChip(DateTime? lastHumanPostDate) {
+    // timeagoの日本語設定
+    timeago.setLocaleMessages('ja', timeago.JaMessages());
+
+    if (lastHumanPostDate == null) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: Colors.blue.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.person_off, size: 12, color: Colors.blue[400]),
+            const SizedBox(width: 3),
+            Text(
+              '人間投稿なし',
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.blue[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final now = DateTime.now();
+    final difference = now.difference(lastHumanPostDate);
+
+    // 7日以内なら緑背景、それ以外は青背景（警告として）
+    final isActive = difference.inDays <= 7;
+    final bgColor = isActive
+        ? Colors.green.withValues(alpha: 0.1)
+        : Colors.blue.withValues(alpha: 0.15);
+    final borderColor = isActive
+        ? Colors.green.withValues(alpha: 0.3)
+        : Colors.blue.withValues(alpha: 0.4);
+    final textColor = isActive ? Colors.green[700] : Colors.blue[700];
+    final iconColor = isActive ? Colors.green[600] : Colors.blue[600];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.person, size: 12, color: iconColor),
+          const SizedBox(width: 3),
+          Text(
+            '人間: ${timeago.format(lastHumanPostDate, locale: 'ja')}',
+            style: TextStyle(
+              fontSize: 10,
+              color: textColor,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 並び順オプション
+enum _SortOption {
+  newest('新着順', Icons.schedule),
+  active('アクティブ順', Icons.local_fire_department),
+  popular('人気順', Icons.people),
+  postCount('投稿数順', Icons.article),
+  humanPostOldest('人間投稿古い順', Icons.person_off); // 管理者のみ
+
+  final String label;
+  final IconData icon;
+  const _SortOption(this.label, this.icon);
+}
+
+/// フィルターオプション
+enum _FilterOption {
+  hasSpace('空きあり', Icons.person_add),
+  hasPosts('投稿あり', Icons.article);
+
+  final String label;
+  final IconData icon;
+  const _FilterOption(this.label, this.icon);
 }
