@@ -53,3 +53,7 @@ functions/lib/
 # Environment variables
 .env
 .env.local
+
+# Firebase config files (security)
+android/app/google-services*.json
+ios/Runner/GoogleService-Info*.plist

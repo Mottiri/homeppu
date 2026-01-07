@@ -790,3 +790,56 @@ ios/Runner/GoogleService-Info*.plist
 
 *本レポートは自動セキュリティ監査ツールによる分析結果をもとに作成されました。*
 
+---
+
+## 修正履歴
+
+### 2026-01-07 セキュリティ修正（即対応項目）
+
+以下の問題を修正しました：
+
+#### ✅ #12 + #20: `.gitignore`の更新
+- **修正内容**: Firebase設定ファイルを`.gitignore`に追加
+- **変更ファイル**: `.gitignore`
+- **追加内容**:
+  ```
+  android/app/google-services*.json
+  ios/Runner/GoogleService-Info*.plist
+  ```
+
+#### ✅ #7: `deleteAllAIUsers`に管理者チェック追加
+- **修正内容**: ログインチェックに加え、管理者権限チェック（`isAdmin()`）を追加
+- **変更ファイル**: `functions/src/index.ts`
+- **リスク軽減**: 一般ユーザーによるAI全データ削除を防止
+
+#### ✅ #5: `initializeNameParts`に認証チェック追加
+- **修正内容**: 認証チェック + 管理者権限チェックを追加
+- **変更ファイル**: `functions/src/index.ts`
+
+#### ✅ #6: 管理者用Cloud Functionsに認証チェック追加
+以下の全関数に認証 + 管理者権限チェックを追加：
+- `initializeAIAccounts`
+- `generateAIPosts`
+- `cleanupOrphanedCircleAIs`
+- `triggerCircleAIPosts`
+- `triggerEvolveCircleAIs`
+
+- **変更ファイル**: `functions/src/index.ts`
+- **リスク軽減**: 不正なAPIコスト消費、データ汚染・破壊を防止
+
+---
+
+**残りの対応項目**（未対応）:
+- #1: Firestoreルールの重複定義
+- #2: 問い合わせ添付画像の閲覧制限
+- #3: namePartsコレクションのルール未定義
+- #4: ハードコードされた管理者シークレット
+- #8, #9: Storage削除権限の見直し
+- #10: メールアドレス公開の検討
+- #11: スプレッドシートID移行
+- #13: banAppeals重複コレクションの整理
+- #15: onRequest関数の認証強化
+- #16: createPostWithRateLimitの入力バリデーション
+- #17: App Checkの有効化検討
+- #18: 内部コレクションのルール明示化
+- #19: デバッグログの本番環境無効化

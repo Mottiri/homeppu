@@ -1782,7 +1782,16 @@ bioのテキストのみを出力してください。他の説明は不要で�
  */
 export const initializeAIAccounts = onCall(
   { region: "asia-northeast1", secrets: [geminiApiKey], timeoutSeconds: 300 },
-  async () => {
+  async (request) => {
+    // セキュリティ: 管理者権限チェック
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+    const userIsAdmin = await isAdmin(request.auth.uid);
+    if (!userIsAdmin) {
+      throw new HttpsError("permission-denied", "管理者権限が必要です");
+    }
+
     const apiKey = geminiApiKey.value();
     if (!apiKey) {
       return { success: false, message: "GEMINI_API_KEY is not set" };
@@ -1899,7 +1908,16 @@ export const initializeAIAccounts = onCall(
  */
 export const generateAIPosts = onCall(
   { region: "asia-northeast1" },
-  async () => {
+  async (request) => {
+    // セキュリティ: 管理者権限チェック
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+    const userIsAdmin = await isAdmin(request.auth.uid);
+    if (!userIsAdmin) {
+      throw new HttpsError("permission-denied", "管理者権限が必要です");
+    }
+
     const tasksClient = new CloudTasksClient();
     const project = process.env.GCLOUD_PROJECT;
     const queue = "generate-ai-posts";
@@ -3210,7 +3228,16 @@ export const onTaskUpdated = onDocumentUpdated("tasks/{taskId}", async (event) =
  */
 export const initializeNameParts = onCall(
   { region: "asia-northeast1" },
-  async () => {
+  async (request) => {
+    // セキュリティ: 管理者権限チェック
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+    const userIsAdmin = await isAdmin(request.auth.uid);
+    if (!userIsAdmin) {
+      throw new HttpsError("permission-denied", "管理者権限が必要です");
+    }
+
     const batch = db.batch();
     let prefixCount = 0;
     let suffixCount = 0;
@@ -4201,9 +4228,15 @@ export const deleteAllAIUsers = functionsV1.region("asia-northeast1").runWith({
   timeoutSeconds: 540, // 処理が重くなる可能性があるので長めに
   memory: "1GB"
 }).https.onCall(async (data, context) => {
-  // 簡易セキュリティ: ログイン必須
+  // セキュリティ: ログイン必須
   if (!context.auth) {
     throw new functionsV1.https.HttpsError("unauthenticated", "ログインが必要です");
+  }
+
+  // セキュリティ: 管理者権限チェック
+  const userIsAdmin = await isAdmin(context.auth.uid);
+  if (!userIsAdmin) {
+    throw new functionsV1.https.HttpsError("permission-denied", "管理者権限が必要です");
   }
 
   try {
@@ -4292,7 +4325,16 @@ export const deleteAllAIUsers = functionsV1.region("asia-northeast1").runWith({
  */
 export const cleanupOrphanedCircleAIs = onCall(
   { region: "asia-northeast1", timeoutSeconds: 300 },
-  async () => {
+  async (request) => {
+    // セキュリティ: 管理者権限チェック
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+    const userIsAdmin = await isAdmin(request.auth.uid);
+    if (!userIsAdmin) {
+      throw new HttpsError("permission-denied", "管理者権限が必要です");
+    }
+
     console.log("=== cleanupOrphanedCircleAIs START ===");
 
     // circle_ai_で始まるユーザーを全て取得
@@ -6055,7 +6097,16 @@ export const executeCircleAIPost = functionsV1.region("asia-northeast1").runWith
  */
 export const triggerCircleAIPosts = onCall(
   { region: "asia-northeast1", secrets: [geminiApiKey], timeoutSeconds: 300 },
-  async () => {
+  async (request) => {
+    // セキュリティ: 管理者権限チェック
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+    const userIsAdmin = await isAdmin(request.auth.uid);
+    if (!userIsAdmin) {
+      throw new HttpsError("permission-denied", "管理者権限が必要です");
+    }
+
     console.log("=== triggerCircleAIPosts (manual - optimized) START ===");
 
     const apiKey = geminiApiKey.value();
@@ -6292,7 +6343,16 @@ export const evolveCircleAIs = functionsV1.region("asia-northeast1").runWith({
  */
 export const triggerEvolveCircleAIs = onCall(
   { region: "asia-northeast1", timeoutSeconds: 120 },
-  async () => {
+  async (request) => {
+    // セキュリティ: 管理者権限チェック
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+    const userIsAdmin = await isAdmin(request.auth.uid);
+    if (!userIsAdmin) {
+      throw new HttpsError("permission-denied", "管理者権限が必要です");
+    }
+
     console.log("=== triggerEvolveCircleAIs (manual) START ===");
 
     try {
