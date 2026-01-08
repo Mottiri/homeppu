@@ -133,6 +133,19 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
   Future<void> _handleJoin(CircleModel circle, String userId) async {
     if (_isJoining) return;
 
+    // BANユーザーチェック
+    final currentUser = ref.read(currentUserProvider).valueOrNull;
+    if (currentUser?.isBanned == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('アカウントが制限されているため、この操作はできません'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
     // ルールがある場合は同意ダイアログを表示
     if (circle.rules != null && circle.rules!.isNotEmpty) {
       final agreed = await _showRulesConsentDialog(circle.rules!);
