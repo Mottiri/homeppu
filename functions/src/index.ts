@@ -3382,29 +3382,6 @@ export const updateUserName = onCall(
       throw new HttpsError("permission-denied", "アンロックしていないパーツは使用できません");
     }
 
-    // 名前変更回数チェック（月1回まで）
-    const lastNameChange = userData.lastNameChangeAt?.toDate();
-    const now = new Date();
-
-    if (lastNameChange) {
-      const lastChangeMonth = lastNameChange.getMonth();
-      const lastChangeYear = lastNameChange.getFullYear();
-      const currentMonth = now.getMonth();
-      const currentYear = now.getFullYear();
-
-      // 同じ月に既に変更している場合（初回設定は除く）
-      if (
-        userData.namePrefix && // 既に名前が設定されている場合のみチェック
-        lastChangeYear === currentYear &&
-        lastChangeMonth === currentMonth
-      ) {
-        throw new HttpsError(
-          "resource-exhausted",
-          "名前の変更は月1回までです。来月まで待ってね！"
-        );
-      }
-    }
-
     // 新しい表示名を生成
     const newDisplayName = `${prefixData.text}${suffixData.text} `;
 
