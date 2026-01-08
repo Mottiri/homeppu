@@ -2207,7 +2207,7 @@ export const createPostWithModeration = onCall(
       console.log("ERROR: User is banned");
       throw new HttpsError(
         "permission-denied",
-        "申し訳ありませんが、現在投稿できません。運営にお問い合わせください。"
+        "アカウントが制限されているため、現在この機能は使用できません。マイページ画面から管理者へお問い合わせください。"
       );
     }
     console.log("STEP 1: User check passed");
@@ -3979,7 +3979,7 @@ export const createCommentWithModeration = onCall(
     if (userDoc.exists && userDoc.data()?.isBanned) {
       throw new HttpsError(
         "permission-denied",
-        "申し訳ありませんが、現在コメントできません。"
+        "アカウントが制限されているため、現在この機能は使用できません。マイページ画面から管理者へお問い合わせください。"
       );
     }
 
