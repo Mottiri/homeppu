@@ -689,7 +689,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                       Icons.support_agent,
                                       size: 20,
                                     ),
-                                    label: const Text('管理者へ問い合わせる'),
+                                    label: const Text('運営へ問い合わせる'),
                                     style: OutlinedButton.styleFrom(
                                       foregroundColor: AppColors.error,
                                       side: const BorderSide(

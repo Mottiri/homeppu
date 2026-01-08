@@ -488,7 +488,7 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
                         Divider(height: 1, color: Colors.grey[200]),
                         _buildRadioTile(
                           title: '招待制',
-                          subtitle: '参加には管理者の承認が必要です',
+                          subtitle: '参加にはオーナーの承認が必要です',
                           value: false,
                           groupValue: _isPublic,
                           onChanged: (val) => setState(() => _isPublic = val!),

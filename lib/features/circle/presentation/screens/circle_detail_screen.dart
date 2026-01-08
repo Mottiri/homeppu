@@ -158,7 +158,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('参加申請'),
-            content: const Text('このサークルは招待制です。\n管理者に参加申請を送信しますか？'),
+            content: const Text('このサークルは招待制です。\nオーナーに参加申請を送信しますか？'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),

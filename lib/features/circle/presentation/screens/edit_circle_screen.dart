@@ -514,7 +514,7 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen> {
                     ),
                     _buildRadioTile(
                       title: '招待制',
-                      subtitle: '管理者の承認が必要です',
+                      subtitle: 'オーナーの承認が必要です',
                       value: false,
                       groupValue: _isPublic,
                       onChanged: (value) => setState(() => _isPublic = value!),
