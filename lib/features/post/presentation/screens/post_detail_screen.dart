@@ -321,48 +321,84 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                   ],
                 ),
                 child: SafeArea(
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _commentController,
-                          maxLines: null,
-                          maxLength: AppConstants.maxCommentLength,
-                          decoration: InputDecoration(
-                            hintText: '温かいコメントを送ろう☺️',
-                            counterText: '',
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
+                  child: currentUser?.isBanned == true
+                      // BANユーザー向けメッセージ
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
                           ),
-                          onChanged: (_) => setState(() {}),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        onPressed:
-                            _commentController.text.trim().isEmpty || _isSending
-                            ? null
-                            : _sendComment,
-                        icon: _isSending
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: AppColors.primary,
-                                ),
-                              )
-                            : Icon(
-                                Icons.send_rounded,
-                                color: _commentController.text.trim().isEmpty
-                                    ? AppColors.textHint
-                                    : AppColors.primary,
+                          decoration: BoxDecoration(
+                            color: AppColors.error.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.block,
+                                color: AppColors.error.withValues(alpha: 0.7),
+                                size: 20,
                               ),
-                      ),
-                    ],
-                  ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'アカウント制限中のため、コメントできません',
+                                  style: TextStyle(
+                                    color: AppColors.error.withValues(
+                                      alpha: 0.8,
+                                    ),
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      // 通常のコメント入力欄
+                      : Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _commentController,
+                                maxLines: null,
+                                maxLength: AppConstants.maxCommentLength,
+                                decoration: InputDecoration(
+                                  hintText: '温かいコメントを送ろう☺️',
+                                  counterText: '',
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
+                                ),
+                                onChanged: (_) => setState(() {}),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              onPressed:
+                                  _commentController.text.trim().isEmpty ||
+                                      _isSending
+                                  ? null
+                                  : _sendComment,
+                              icon: _isSending
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: AppColors.primary,
+                                      ),
+                                    )
+                                  : Icon(
+                                      Icons.send_rounded,
+                                      color:
+                                          _commentController.text.trim().isEmpty
+                                          ? AppColors.textHint
+                                          : AppColors.primary,
+                                    ),
+                            ),
+                          ],
+                        ),
                 ),
               ),
             ],
