@@ -685,6 +685,18 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
           floatingActionButton: canPost
               ? FloatingActionButton(
                   onPressed: () async {
+                    // BANユーザーチェック
+                    if (currentUser?.isBanned == true) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('アカウントが制限されているため、この操作はできません'),
+                          backgroundColor: Colors.red,
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                      return;
+                    }
+
                     final result = await context.push<bool>(
                       '/create-post',
                       extra: {'circleId': widget.circleId},
