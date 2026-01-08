@@ -4136,66 +4136,73 @@ export const generateAIReactionV1 = functionsV1.region("asia-northeast1").https.
   }
 });
 
-
 /**
- * 管理用: 全ユーザーのフォローリストを掃除する (v1)
+ * 管理用: 全ユーザーのフォローリストを掃除する
  * 存在しないユーザーIDをフォローリストから削除し、カウントを整合させます。
  */
-export const cleanUpUserFollows = functionsV1.region("asia-northeast1").https.onRequest(async (request, response) => {
-  const key = request.query.key;
-  if (key !== "admin_secret_homeppu_2025") {
-    response.status(403).send("Forbidden");
-    return;
-  }
-
-  try {
-    const usersSnapshot = await db.collection("users").get();
-    let updatedCount = 0;
-
-    for (const userDoc of usersSnapshot.docs) {
-      const userData = userDoc.data();
-      const following = userData.following || [];
-
-      if (following.length === 0) continue;
-
-      // フォロー中のIDが本当に存在するかチェック
-      const validFollowing: string[] = [];
-      const invalidFollowing: string[] = [];
-
-      for (const followedId of following) {
-        // 簡易チェック: IDにスペースが含まれていたら不正なので削除
-        if (followedId.trim() !== followedId) {
-          invalidFollowing.push(followedId);
-          continue;
-        }
-
-        // Firestore確認 (コストかかるが確実)
-        const followedUserDoc = await db.collection("users").doc(followedId).get();
-        if (followedUserDoc.exists) {
-          validFollowing.push(followedId);
-        } else {
-          invalidFollowing.push(followedId);
-        }
-      }
-
-      // 変更がある場合のみ更新
-      if (invalidFollowing.length > 0) {
-        await userDoc.ref.update({
-          following: validFollowing,
-          followingCount: validFollowing.length
-        });
-        updatedCount++;
-        console.log(`Cleaned up user ${userDoc.id}: Removed ${invalidFollowing.length} invalid follows.`);
-      }
+export const cleanUpUserFollows = onCall(
+  { region: "asia-northeast1", timeoutSeconds: 540 },
+  async (request) => {
+    // 認証チェック
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "ログインが必要です");
+    }
+    // 管理者チェック
+    const userIsAdmin = await isAdmin(request.auth.uid);
+    if (!userIsAdmin) {
+      throw new HttpsError("permission-denied", "管理者権限が必要です");
     }
 
-    response.status(200).send(`Cleanup complete. Updated ${updatedCount} users.`);
+    try {
+      const usersSnapshot = await db.collection("users").get();
+      let updatedCount = 0;
 
-  } catch (error) {
-    console.error("Error cleaning up follows:", error);
-    response.status(500).send("Internal Server Error");
+      for (const userDoc of usersSnapshot.docs) {
+        const userData = userDoc.data();
+        const following = userData.following || [];
+
+        if (following.length === 0) continue;
+
+        // フォロー中のIDが本当に存在するかチェック
+        const validFollowing: string[] = [];
+        const invalidFollowing: string[] = [];
+
+        for (const followedId of following) {
+          // 簡易チェック: IDにスペースが含まれていたら不正なので削除
+          if (followedId.trim() !== followedId) {
+            invalidFollowing.push(followedId);
+            continue;
+          }
+
+          // Firestore確認 (コストかかるが確実)
+          const followedUserDoc = await db.collection("users").doc(followedId).get();
+          if (followedUserDoc.exists) {
+            validFollowing.push(followedId);
+          } else {
+            invalidFollowing.push(followedId);
+          }
+        }
+
+        // 変更がある場合のみ更新
+        if (invalidFollowing.length > 0) {
+          await userDoc.ref.update({
+            following: validFollowing,
+            followingCount: validFollowing.length
+          });
+          updatedCount++;
+          console.log(`Cleaned up user ${userDoc.id}: Removed ${invalidFollowing.length} invalid follows.`);
+        }
+      }
+
+      console.log(`cleanUpUserFollows completed by admin ${request.auth.uid}. Updated ${updatedCount} users.`);
+      return { success: true, updatedCount, message: `${updatedCount}件のユーザーを更新しました` };
+
+    } catch (error) {
+      console.error("Error cleaning up follows:", error);
+      throw new HttpsError("internal", "処理中にエラーが発生しました");
+    }
   }
-});
+);
 
 /**
  * 管理用: 全てのAIユーザーを削除する (v1)
