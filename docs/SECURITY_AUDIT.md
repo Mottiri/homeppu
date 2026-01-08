@@ -847,10 +847,24 @@ ios/Runner/GoogleService-Info*.plist
 - **変更ファイル**: `firebase/firestore.rules`
 - **リスク軽減**: ルールの意図しない上書きを防止、BAN中ユーザーの操作を制限
 
+### 2026-01-08 セキュリティ修正（追加対応）
+
+#### ✅ #3: namePartsコレクションのルール追加
+- **修正内容**: 
+  - 認証済みユーザーは読み取り可能（名前生成に必要）
+  - 書き込みはCloud Functionsのみ（クライアントからは不可）
+- **変更ファイル**: `firebase/firestore.rules`
+- **追加ルール**:
+  ```javascript
+  match /nameParts/{partId} {
+    allow read: if isAuthenticated();
+    allow write: if false;
+  }
+  ```
+
 ---
 
 **残りの対応項目**（未対応）:
-- #3: namePartsコレクションのルール未定義
 - #4: ハードコードされた管理者シークレット
 - #8, #9: Storage削除権限の見直し
 - #10: メールアドレス公開の検討
@@ -861,3 +875,4 @@ ios/Runner/GoogleService-Info*.plist
 - #17: App Checkの有効化検討
 - #18: 内部コレクションのルール明示化
 - #19: デバッグログの本番環境無効化
+

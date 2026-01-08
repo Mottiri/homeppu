@@ -93,6 +93,14 @@ service cloud.firestore {
       );
     }
     
+    // 名前パーツマスタコレクション
+    // 読み取り: 認証済みユーザー（名前生成に必要）
+    // 書き込み: Cloud Functionsのみ（クライアントからは不可）
+    match /nameParts/{partId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
 
 
     // タスクコレクション
