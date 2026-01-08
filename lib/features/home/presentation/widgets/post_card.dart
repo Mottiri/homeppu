@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
 import '../../../../core/constants/app_constants.dart';
@@ -98,6 +99,27 @@ class _PostCardState extends State<PostCard> {
 
   /// LINEスタイルのリアクションオーバーレイを表示
   Future<void> _showReactionOverlay() async {
+    // BANユーザーチェック
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+      if (userDoc.exists && userDoc.data()?['isBanned'] == true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('アカウントが制限されているため、この操作はできません'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
+    }
+
     // 自分の投稿にはリアクションできない
     if (isMyPost) {
       ScaffoldMessenger.of(context).showSnackBar(
