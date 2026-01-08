@@ -843,6 +843,7 @@ ios/Runner/GoogleService-Info*.plist
   - 1回目の定義（posts/circles/circleJoinRequests）を削除（約100行）
   - 2回目の定義に `isNotBanned()` チェックを追加
   - ルールを単一定義に統合
+- **追補**: `posts` の `reactions` / `commentCount` フィールド更新にも `isNotBanned()` を適用し、BAN中ユーザーによる改ざんを防止
 - **変更ファイル**: `firebase/firestore.rules`
 - **リスク軽減**: ルールの意図しない上書きを防止、BAN中ユーザーの操作を制限
 

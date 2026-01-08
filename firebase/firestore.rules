@@ -137,7 +137,9 @@ service cloud.firestore {
       // 更新: 投稿者のみ（リアクションは誰でも更新可能、サークルオーナー/副オーナーはピン留めも可能、管理者はneedsReview）
       allow update: if isAuthenticated() && (
         (isOwner(resource.data.userId) && isNotBanned()) ||
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions', 'commentCount']) ||
+        // リアクション・コメント数の更新はBANされていないユーザーのみ
+        (isNotBanned() &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions', 'commentCount'])) ||
         // サークルオーナーまたは副オーナーはピン留めフィールドを更新可能
         (resource.data.circleId != null &&
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isPinned', 'isPinnedTop']) &&
