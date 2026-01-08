@@ -111,13 +111,9 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
       }
     } catch (e) {
       if (mounted) {
-        String errorMessage = '名前の変更に失敗しました';
-        if (e.toString().contains('月1回まで')) {
-          errorMessage = '名前の変更は月1回までです。来月まで待ってね！';
-        }
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(errorMessage)));
+        ).showSnackBar(const SnackBar(content: Text('名前の変更に失敗しました')));
       }
     } finally {
       if (mounted) {
@@ -182,25 +178,6 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
                         style: const TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // 注意事項
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  color: Colors.amber.withValues(alpha: 0.2),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.info_outline, size: 18, color: Colors.amber),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          '名前の変更は月1回までです',
-                          style: TextStyle(fontSize: 13),
                         ),
                       ),
                     ],
@@ -381,4 +358,3 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
     );
   }
 }
-
