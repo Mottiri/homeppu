@@ -838,10 +838,17 @@ ios/Runner/GoogleService-Info*.plist
   - `lib/features/settings/presentation/screens/inquiry_detail_screen.dart`
 - **リスク軽減**: 他ユーザーの問い合わせ添付画像の閲覧を防止
 
+#### ✅ #1: Firestoreルールの重複定義
+- **修正内容**: 
+  - 1回目の定義（posts/circles/circleJoinRequests）を削除（約100行）
+  - 2回目の定義に `isNotBanned()` チェックを追加
+  - ルールを単一定義に統合
+- **変更ファイル**: `firebase/firestore.rules`
+- **リスク軽減**: ルールの意図しない上書きを防止、BAN中ユーザーの操作を制限
+
 ---
 
 **残りの対応項目**（未対応）:
-- #1: Firestoreルールの重複定義
 - #3: namePartsコレクションのルール未定義
 - #4: ハードコードされた管理者シークレット
 - #8, #9: Storage削除権限の見直し
