@@ -1,0 +1,54 @@
+﻿
+functions\src\index.ts:182:          
+fcmToken: admin.firestore.FieldValue.
+delete(),
+functions\src\index.ts:217:    await 
+admin.storage().bucket().file(storage
+Path).delete();
+functions\src\index.ts:2470:         
+         await admin.storage().bucket
+().file(storagePath).delete();
+functions\src\index.ts:4383:      awa
+it userRef.delete();
+functions\src\index.ts:5210:        a
+wait file.delete().catch((e) => conso
+le.error(`Storage delete failed: ${fi
+le.name}`, e));
+functions\src\index.ts:5236:         
+ await aiUserRef.delete().catch(() =>
+ { });
+functions\src\index.ts:5242:      awa
+it circleDoc.ref.delete();
+functions\src\index.ts:6632:         
+ await file.delete();
+functions\src\index.ts:6664:         
+   await file.delete();
+functions\src\index.ts:6697:         
+   await file.delete();
+functions\src\index.ts:6767:         
+         await bucket.file(filePath).
+delete().catch(() => { });
+functions\src\index.ts:6812:         
+ await commentDoc.ref.delete();
+functions\src\index.ts:6847:         
+ await reactionDoc.ref.delete();
+functions\src\index.ts:6866:      awa
+it doc.ref.delete();
+functions\src\index.ts:6880:      awa
+it doc.ref.delete();
+functions\src\index.ts:7660:        u
+pdateData.resolvedAt = admin.firestor
+e.FieldValue.delete();
+functions\src\index.ts:7884:         
+   await admin.storage().bucket().fil
+e(filePath).delete();
+functions\src\index.ts:7894:    await
+ inquiryRef.delete();
+functions\src\index.ts:8380:      per
+manentBanScheduledDeletionAt: admin.f
+irestore.FieldValue.delete(),
+functions\src\index.ts:8470:        a
+wait db.collection("users").doc(uid).
+delete();
+
+

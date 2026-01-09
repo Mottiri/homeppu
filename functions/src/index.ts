@@ -7872,21 +7872,10 @@ async function deleteInquiryWithArchive(
     console.log(`Deleted ${messagesSnapshot.size} messages for inquiry ${inquiryId}`);
 
     // 6. Storage画像を削除（存在する場合）
-    // 画像URLからファイルパスを抽出して削除
     for (const msgDoc of messagesSnapshot.docs) {
       const msg = msgDoc.data();
       if (msg.imageUrl) {
-        try {
-          // URLからファイルパスを抽出
-          const urlMatch = msg.imageUrl.match(/inquiries%2F([^?]+)/);
-          if (urlMatch) {
-            const filePath = `inquiries/${decodeURIComponent(urlMatch[1])}`;
-            await admin.storage().bucket().file(filePath).delete();
-            console.log(`Deleted storage file: ${filePath}`);
-          }
-        } catch (storageError) {
-          console.error(`Error deleting storage file for inquiry ${inquiryId}:`, storageError);
-        }
+        await deleteStorageFileFromUrl(msg.imageUrl);
       }
     }
 
