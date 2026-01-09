@@ -274,8 +274,17 @@ class _NotificationTile extends ConsumerWidget {
 
         // 遷移先を決定
         if (notification.inquiryId != null && context.mounted) {
-          // サポート通知は問い合わせ詳細画面へ
-          context.push('/inquiry/${notification.inquiryId}');
+          // 管理者向け通知は管理者用画面へ
+          final adminInquiryTypes = [
+            NotificationType.inquiryReceived,
+            NotificationType.inquiryUserReply,
+          ];
+          if (adminInquiryTypes.contains(notification.type)) {
+            context.push('/admin/inquiry/${notification.inquiryId}');
+          } else {
+            // ユーザー向け通知はユーザー用画面へ
+            context.push('/inquiry/${notification.inquiryId}');
+          }
         } else if (notification.postId != null && context.mounted) {
           context.push('/post/${notification.postId}');
         } else if (notification.circleId != null && context.mounted) {
