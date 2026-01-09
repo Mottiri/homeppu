@@ -1,9 +1,9 @@
 # セキュリティ監査レポート
 
-**作成日**: 2026年1月7日  
-**最終更新**: 2026年1月7日（再調査完了）  
-**対象**: homeppu プロジェクト  
-**監査範囲**: Firestore/Storage セキュリティルール、Cloud Functions、クライアントコード
+**作成日**: 2026年1月7日
+**最終更新**: 2026年1月9日（全体調査完了）
+**対象**: homeppu プロジェクト
+**監査範囲**: Firestore/Storage セキュリティルール、Cloud Functions、クライアントコード、設計書整合性
 
 ---
 
@@ -11,8 +11,8 @@
 
 本レポートは、homeppuプロジェクトのセキュリティ監査結果をまとめたものです。発見された問題を重大度別に分類し、推奨される修正方針を記載しています。
 
-**発見された問題数**: 20件
-- 重大: 4件
+**発見された問題数**: 21件
+- 重大: 5件
 - 高: 4件
 - 中: 4件
 - 低: 6件
@@ -44,6 +44,7 @@
 | 18 | **情報** | 一部コレクションの明示的ルール未定義 | `firebase/firestore.rules` |
 | 19 | **低** | デバッグログにAIプロンプト情報が出力 | `functions/src/index.ts` |
 | 20 | **低** | google-services_BU.jsonバックアップファイル | `android/app/` |
+| 21 | **重大** | AIモードサークルの一覧表示制限が未実装 | `firebase/firestore.rules` |
 
 ---
 
@@ -712,10 +713,82 @@ ios/Runner/GoogleService-Info*.plist
 
 ---
 
+### 21. 【重大】AIモードサークルの一覧表示制限が未実装
+
+**ファイル**: `firebase/firestore.rules` 行208-236
+
+**問題内容**:
+設計書（`docs/design/implementation_plan.md`）では、AIモードサークル（`aiMode: "aiOnly"`）は作成者のみ表示すべきと規定されていますが、Firestoreルールでは全認証ユーザーが読み取り可能になっています。
+
+**現在のルール**:
+```javascript
+match /circles/{circleId} {
+  // 読み取り: 認証済みユーザーは誰でも（クライアント側でフィルタリング）
+  allow read: if isAuthenticated();  // ← 問題
+  // ...
+}
+```
+
+**クライアント側の実装** (`lib/shared/services/circle_service.dart:60-64`):
+```dart
+// クライアント側でフィルター（セキュリティ的に不十分）
+.where((c) => c.aiMode != CircleAIMode.aiOnly || c.ownerId == userId)
+```
+
+**リスク**:
+- **プライバシー侵害**: AIモードサークルは個人の練習用空間として設計されており、他人に見られることは想定されていない
+- **セキュリティルール違反**: クライアント側フィルターのみではFirestore REST API経由でのアクセスを防げない
+- **設計違反**: 設計書の要件「AIモードサークルは作成者のみ一覧表示」を満たしていない
+
+**攻撃シナリオ**:
+```bash
+# Firestore REST API経由でアクセス可能
+curl -X GET \
+  'https://firestore.googleapis.com/v1/projects/positive-sns/databases/(default)/documents/circles' \
+  -H 'Authorization: Bearer <ユーザーの認証トークン>'
+
+# レスポンス: 全サークル（AIモード含む）が返される
+# → 他人の個人的な目標・練習内容が露出
+```
+
+**推奨対応**:
+Firestoreルールにサーバー側保護を追加する。
+
+```javascript
+match /circles/{circleId} {
+  // 修正: AIモードサークルは作成者のみ読み取り可能
+  allow read: if isAuthenticated() && (
+    resource.data.aiMode != "aiOnly" ||
+    resource.data.ownerId == request.auth.uid ||
+    isAdmin()
+  );
+
+  // 他のルールは変更なし
+  allow create: if isAuthenticated() && (isNotBanned() || isAdmin());
+  allow update: if isAuthenticated() && (
+    (isOwner(resource.data.ownerId) && isNotBanned()) ||
+    isAdmin() ||
+    // ... 以下略
+  );
+  allow delete: if isAuthenticated() && (
+    (isOwner(resource.data.ownerId) && isNotBanned()) ||
+    isAdmin()
+  );
+}
+```
+
+**影響範囲**:
+- **修正箇所**: `firebase/firestore.rules` の1行のみ
+- **クライアント側**: 変更不要（既存フィルターはそのまま）
+- **テスト**: AIモードサークルの閲覧権限テストが必要
+
+---
+
 ## 修正優先度
 
 | 優先度 | 対応項目 |
 |--------|----------|
+| **最優先** | #21 AIモードサークルの一覧表示制限（設計違反） |
 | **最優先** | #2 問い合わせ添付画像の閲覧制限 |
 | **最優先** | #7 deleteAllAIUsersに管理者チェック追加 |
 | **最優先** | #1 Firestoreルール重複の解消 |
@@ -877,6 +950,37 @@ ios/Runner/GoogleService-Info*.plist
 
 ---
 
+### 2026-01-09 セキュリティ監査（全体調査）
+
+#### 🔍 新規発見: #21 AIモードサークルの一覧表示制限が未実装
+- **発見経緯**: 設計書（`implementation_plan.md`）との整合性確認中に発見
+- **問題内容**:
+  - AIモードサークル（`aiMode: "aiOnly"`）は作成者のみ表示すべき（設計書要件）
+  - Firestoreルールでは全認証ユーザーが読み取り可能
+  - クライアント側フィルターのみで保護（セキュリティ的に不十分）
+- **影響**:
+  - Firestore REST API経由で他人のAIサークルにアクセス可能
+  - 個人の練習用サークル（目標・悩み等）が露出する可能性
+- **対応状況**: 未対応（ドキュメント追記のみ）
+- **推奨対応**: Firestoreルール210行目を修正
+  ```javascript
+  allow read: if isAuthenticated() && (
+    resource.data.aiMode != "aiOnly" ||
+    resource.data.ownerId == request.auth.uid ||
+    isAdmin()
+  );
+  ```
+
+#### ✅ 検証済み: #22 サークル削除時のメンバー通知
+- **調査結果**: 既に実装済み（`functions/src/index.ts:4955-4986`）
+- **実装内容**:
+  - 削除理由あり/なしの両方に対応
+  - 全メンバーに通知送信（AIメンバーを除外）
+  - プッシュ通知 + アプリ内通知の両方対応
+- **結論**: 問題なし（誤検知）
+
+---
+
 **残りの対応項目**（未対応）:
 - #8, #9: Storage削除権限の見直し
 - #10: メールアドレス公開の検討
@@ -887,4 +991,38 @@ ios/Runner/GoogleService-Info*.plist
 - #17: App Checkの有効化検討
 - #18: 内部コレクションのルール明示化
 - #19: デバッグログの本番環境無効化
+- **#21: AIモードサークルの一覧表示制限（新規）**
+
+#### ✅ #8 + #9: Storage削除権限の見直し（2026-01-09）
+- **問題内容**:
+  - #8: 後方互換パス（`/posts/{postId}/{fileName}`）で認証済みなら誰でもファイル削除可能
+  - #9: サークル画像（`/circles/{circleId}/...`）も同様
+- **修正内容**:
+  1. **Storage Security Rules変更**:
+     - 後方互換パス: `allow delete: if isAdmin();` に変更（クライアント削除禁止）
+     - サークル画像: `allow delete: if isAdmin();` に変更（クライアント削除禁止）
+  2. **自動削除機能の実装・強化**:
+     - 共通ヘルパー関数 `deleteStorageFileFromUrl(url)` を新規作成
+     - `onCircleUpdated`: 画像URL変更時に古い画像を自動削除するロジック追加
+     - `onPostDeleted`: ヘルパー関数を使用するようリファクタリング
+     - `cleanupDeletedCircle`: ヘルパー関数を使用するようリファクタリング
+- **変更ファイル**:
+  - `firebase/storage.rules`
+  - `functions/src/index.ts`
+- **セキュリティ向上**:
+  - 悪意あるユーザーによる他者ファイル削除が不可能に
+  - 画像の自動クリーンアップでStorageのゴミデータ蓄積を防止
+
+---
+
+**残りの対応項目**（未対応）:
+- #10: メールアドレス公開の検討
+- #11: スプレッドシートID移行
+- #13: banAppeals重複コレクションの整理
+- #15: onRequest関数の認証強化
+- #16: createPostWithRateLimitの入力バリデーション
+- #17: App Checkの有効化検討
+- #18: 内部コレクションのルール明示化
+- #19: デバッグログの本番環境無効化
+- **#21: AIモードサークルの一覧表示制限（新規）**
 

@@ -123,8 +123,8 @@ service firebase.storage {
       allow write: if isAuthenticated() 
                    && isValidImageSize() 
                    && isImage();
-      // 後方互換性パスは認証済みなら削除可能
-      allow delete: if isAuthenticated();
+      // 削除はCloud Functionsで自動処理、クライアントからは管理者のみ
+      allow delete: if isAdmin();
     }
     
     // サークル画像（アイコン・ヘッダー）
@@ -133,8 +133,8 @@ service firebase.storage {
       allow write: if isAuthenticated() 
                    && isValidProfileSize() 
                    && isImage();
-      // 認証済みなら削除可能（オーナーチェックはCloud Functionsで）
-      allow delete: if isAuthenticated();
+      // 削除はCloud Functionsで自動処理、クライアントからは管理者のみ
+      allow delete: if isAdmin();
     }
     // タスク添付ファイル (画像・ファイル)
     match /task_attachments/{userId}/{taskId}/{fileName} {

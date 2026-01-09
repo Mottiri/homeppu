@@ -188,6 +188,42 @@ async function sendPushOnly(
 }
 
 // ===============================================
+// Storage ファイル削除ヘルパー
+// ===============================================
+
+/**
+ * Firebase Storage URLからファイルを削除
+ * @param url Firebase Storage のダウンロードURL
+ * @returns 削除成功時はtrue、失敗時はfalse
+ */
+async function deleteStorageFileFromUrl(url: string): Promise<boolean> {
+  if (!url || !url.includes("firebasestorage.googleapis.com")) {
+    return false;
+  }
+
+  try {
+    const urlObj = new URL(url);
+    const pathSegments = urlObj.pathname.split("/o/");
+    if (pathSegments.length < 2) {
+      console.warn(`Could not extract path from URL: ${url}`);
+      return false;
+    }
+
+    // クエリパラメータを除去してデコード
+    const encodedPath = pathSegments[1].split("?")[0];
+    const storagePath = decodeURIComponent(encodedPath);
+
+    console.log(`Deleting storage file: ${storagePath}`);
+    await admin.storage().bucket().file(storagePath).delete();
+    console.log(`Successfully deleted: ${storagePath}`);
+    return true;
+  } catch (error) {
+    console.warn(`Failed to delete storage file (${url}):`, error);
+    return false;
+  }
+}
+
+// ===============================================
 // Google Sheets 書き込みヘルパー
 // ===============================================
 
@@ -5090,19 +5126,19 @@ export const cleanupDeletedCircle = functionsV1.region("asia-northeast1").runWit
         const reactions = await db.collection("reactions").where("postId", "==", postId).get();
         reactions.docs.forEach((r) => deleteRefs.push(r.ref));
 
-        // メディア削除
+        // メディア削除（ヘルパー関数を使用）
         const mediaItems = postData.mediaItems || [];
         for (const media of mediaItems) {
-          if (media.url && media.url.includes("firebasestorage.googleapis.com")) {
-            const urlParts = media.url.split("/o/")[1];
-            if (urlParts) {
-              const filePath = decodeURIComponent(urlParts.split("?")[0]);
-              mediaDeletePromises.push(
-                admin.storage().bucket().file(filePath).delete()
-                  .then(() => { })
-                  .catch((e) => console.error(`Storage delete failed: ${filePath}`, e))
-              );
-            }
+          if (media.url) {
+            mediaDeletePromises.push(
+              deleteStorageFileFromUrl(media.url).then(() => { })
+            );
+          }
+          // サムネイルも削除
+          if (media.thumbnailUrl) {
+            mediaDeletePromises.push(
+              deleteStorageFileFromUrl(media.thumbnailUrl).then(() => { })
+            );
           }
         }
 
@@ -5668,7 +5704,20 @@ export const onCircleUpdated = onDocumentUpdated(
     console.log(`=== onCircleUpdated START: ${circleId} ===`);
 
     try {
-      // 通知すべき変更を検出
+      // ===== 画像変更時の古い画像削除 =====
+      // アイコン画像が変更された場合、古い画像を削除
+      if (beforeData.iconImageUrl && beforeData.iconImageUrl !== afterData.iconImageUrl) {
+        console.log(`Icon image changed, deleting old: ${beforeData.iconImageUrl}`);
+        await deleteStorageFileFromUrl(beforeData.iconImageUrl);
+      }
+
+      // カバー画像が変更された場合、古い画像を削除
+      if (beforeData.coverImageUrl && beforeData.coverImageUrl !== afterData.coverImageUrl) {
+        console.log(`Cover image changed, deleting old: ${beforeData.coverImageUrl}`);
+        await deleteStorageFileFromUrl(beforeData.coverImageUrl);
+      }
+
+      // ===== 通知すべき変更を検出 =====
       const changes: string[] = [];
 
       // 変更された項目をチェック
@@ -8025,46 +8074,18 @@ export const onPostDeleted = onDocumentDeleted("posts/{postId}", async (event) =
       console.log(`Deleted ${commentsSnap.size} comments, ${reactionsSnap.size} reactions.`);
     }
 
-    // 5. Storage削除
-    const bucket = admin.storage().bucket();
+    // 5. Storage削除（ヘルパー関数を使用）
     const mediaItems = postData.mediaItems;
     if (Array.isArray(mediaItems) && mediaItems.length > 0) {
       console.log(`Attempting to delete ${mediaItems.length} media items...`);
       for (const item of mediaItems) {
+        // メディア本体を削除
         if (item.url) {
-          try {
-            // URLからパスを抽出
-            // 形式: https://firebasestorage.googleapis.com/v0/b/[bucket]/o/[path]?alt=...
-            const urlObj = new URL(item.url);
-            const pathSegments = urlObj.pathname.split("/o/");
-            if (pathSegments.length >= 2) {
-              const encodedPath = pathSegments[1];
-              const storagePath = decodeURIComponent(encodedPath);
-
-              console.log(`Deleting storage file: ${storagePath}`);
-              await bucket.file(storagePath).delete();
-
-              // 動画の場合、サムネイルも削除
-              if (item.thumbnailUrl) {
-                try {
-                  const thumbUrlObj = new URL(item.thumbnailUrl);
-                  const thumbPathSegments = thumbUrlObj.pathname.split("/o/");
-                  if (thumbPathSegments.length >= 2) {
-                    const thumbPath = decodeURIComponent(thumbPathSegments[1]);
-                    console.log(`Deleting thumbnail file: ${thumbPath}`);
-                    await bucket.file(thumbPath).delete();
-                  }
-                } catch (e) {
-                  console.warn(`Failed to delete thumbnail (${item.thumbnailUrl}):`, e);
-                }
-              }
-
-            } else {
-              console.warn(`Could not extract path from URL: ${item.url}`);
-            }
-          } catch (e) {
-            console.warn(`Failed to delete media (${item.url}):`, e);
-          }
+          await deleteStorageFileFromUrl(item.url);
+        }
+        // 動画の場合、サムネイルも削除
+        if (item.thumbnailUrl) {
+          await deleteStorageFileFromUrl(item.thumbnailUrl);
         }
       }
     }
