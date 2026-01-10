@@ -1,25 +1,25 @@
 # 定期クリーンアップ処理設計書
 
-このドキュメントでは、システムで実行されている定期クリーンアップ処理を一覧化し、各処理の目的、実行タイミング、保持期間を記載します。
+このドキュメントでは、システムで実行されている定期クリーンアップ処理を一覧化し、各処理の目的、実行タイミング、保持期間、ソースコードの場所を記載します。
 
 ---
 
 ## 概要
 
-| 関数名 | 実行時刻 (JST) | 対象 | 保持期間 |
-|--------|--------------|------|---------|
-| `cleanupOrphanedMedia` | 毎日 03:00 | 孤立メディアファイル | 24時間 |
-| `cleanupResolvedInquiries` | 毎日 03:00 | 解決済み問い合わせ | 7日間 |
-| `checkGhostCircles` | 毎日 03:30 | ゴースト/放置サークル | 365日/30日 + 7日猶予 |
-| `cleanupBannedUsers` | 毎日 04:00 | 永久BANユーザー | スケジュール日時到達時 |
-| `cleanupReports` | 毎日 00:00 | 対処済みレポート | 1ヶ月 |
+| 関数名 | 実行時刻 (JST) | 対象 | 保持期間 | ソースコード |
+|--------|--------------|------|---------|-------------|
+| `cleanupOrphanedMedia` | 毎日 03:00 | 孤立メディアファイル | 24時間 | [L6579](functions/src/index.ts#L6579) |
+| `cleanupResolvedInquiries` | 毎日 03:00 | 解決済み問い合わせ | 7日間 | [L7764](functions/src/index.ts#L7764) |
+| `checkGhostCircles` | 毎日 03:30 | ゴースト/放置サークル | 365日/30日 + 7日猶予 | [L8491](functions/src/index.ts#L8491) |
+| `cleanupBannedUsers` | 毎日 04:00 | 永久BANユーザー | スケジュール日時到達時 | [L8435](functions/src/index.ts#L8435) |
+| `cleanupReports` | 毎日 00:00 | 対処済みレポート | 1ヶ月 | [L7939](functions/src/index.ts#L7939) |
 
 ---
 
 ## 1. `cleanupOrphanedMedia` - 孤立メディアクリーンアップ
 
-### 目的
-Firebase Storage上に残っている、どのドキュメントからも参照されていない孤立メディアファイルを削除します。
+### 処理概要
+Firebase Storage上に存在するが、Firestoreのどのドキュメントからも参照されていないファイル（孤立メディア）を検出し、削除します。アップロード失敗、投稿削除、編集時の差し替えなどで発生する不要ファイルを自動的にクリーンアップし、ストレージコストを削減します。
 
 ### 実行タイミング
 - **スケジュール**: `0 3 * * *` （毎日午前3時 JST）
@@ -29,24 +29,59 @@ Firebase Storage上に残っている、どのドキュメントからも参照�
 - **24時間**: アップロードから24時間以上経過した孤立メディアが削除対象
 
 ### 対象ディレクトリ
-| ディレクトリ | 対象 |
-|------------|------|
-| `posts/` | 投稿メディア |
-| `avatars/` | アバター画像 |
-| `circles/` | サークル画像 |
-| `inquiries/` | 問い合わせ添付画像 |
+| ディレクトリ | 対象 | 参照元 |
+|------------|------|-------|
+| `posts/` | 投稿メディア | `posts.mediaUrls` |
+| `avatars/` | アバター画像 | `users.avatarUrl` |
+| `circles/` | サークル画像 | `circles.imageUrl` |
+| `inquiries/` | 問い合わせ添付画像 | `inquiries/{id}/messages.imageUrl` |
 
-### 処理フロー
-1. 各ディレクトリのファイル一覧を取得
-2. ファイルがどのドキュメントからも参照されていないか確認
-3. アップロードから24時間以上経過していれば削除
+### ソースコード
+
+**ファイル**: `functions/src/index.ts`  
+**行番号**: L6575-L6760
+
+```typescript
+export const cleanupOrphanedMedia = onSchedule(
+  {
+    schedule: "0 3 * * *", // 毎日午前3時 JST
+    timeZone: "Asia/Tokyo",
+    region: "asia-northeast1",
+    timeoutSeconds: 600,
+  },
+  async () => {
+    console.log("=== cleanupOrphanedMedia START ===");
+    const bucket = admin.storage().bucket();
+    const now = Date.now();
+    const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+
+    // 各ディレクトリごとにファイルをチェック
+    // 1. 投稿メディア
+    const [postFiles] = await bucket.getFiles({ prefix: "posts/" });
+    for (const file of postFiles) {
+      // メタデータから作成日時を取得
+      const [metadata] = await file.getMetadata();
+      const createdAt = new Date(metadata.timeCreated).getTime();
+      
+      // 24時間以上経過 && どのドキュメントからも参照されていない → 削除
+      if (now - createdAt > TWENTY_FOUR_HOURS) {
+        const isOrphaned = await checkIfOrphaned(file.name);
+        if (isOrphaned) {
+          await file.delete();
+        }
+      }
+    }
+    // 2. アバター, 3. サークル, 4. 問い合わせ も同様に処理
+  }
+);
+```
 
 ---
 
 ## 2. `cleanupResolvedInquiries` - 解決済み問い合わせクリーンアップ
 
-### 目的
-解決済み（resolved）の問い合わせを一定期間後に自動削除し、アーカイブに保存します。
+### 処理概要
+解決済み（resolved）になった問い合わせを7日後に自動削除します。削除前日（6日目）にユーザーへ削除予告通知を送信し、7日経過後に問い合わせ本体・メッセージ・添付画像を削除します。削除されたデータは `archivedInquiries` コレクションにアーカイブとして保存されます。
 
 ### 実行タイミング
 - **スケジュール**: `0 3 * * *` （毎日午前3時 JST）
@@ -57,26 +92,81 @@ Firebase Storage上に残っている、どのドキュメントからも参照�
 | 6日以上 | ユーザーに削除予告通知を送信 |
 | 7日以上 | 問い合わせを削除、アーカイブに保存 |
 
-### 処理フロー
-1. `status == "resolved"` の問い合わせを取得
-2. `resolvedAt` から経過日数を計算
-3. 7日以上経過: `deleteInquiryWithArchive()` で削除＆アーカイブ
-   - `archivedInquiries` コレクションに保存
-   - 添付画像をStorageから削除
-   - メッセージサブコレクションを削除
-4. 6日以上7日未満: ユーザーに削除予告通知を送信
-
 ### アーカイブ保存内容
 - 問い合わせID、ユーザー情報、件名、カテゴリ
 - 全メッセージ（content, senderType, createdAt）
 - 作成日時、解決日時、削除日時
 
+### ソースコード
+
+**ファイル**: `functions/src/index.ts`  
+**行番号**: L7760-L7930
+
+```typescript
+export const cleanupResolvedInquiries = onSchedule(
+  {
+    schedule: "0 3 * * *",
+    timeZone: "Asia/Tokyo",
+    region: "asia-northeast1",
+  },
+  async () => {
+    console.log("=== cleanupResolvedInquiries started ===");
+
+    const now = new Date();
+    const sixDaysAgo = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    // 解決済みの問い合わせを取得
+    const inquiriesSnapshot = await db.collection("inquiries")
+      .where("status", "==", "resolved")
+      .get();
+
+    for (const doc of inquiriesSnapshot.docs) {
+      const inquiry = doc.data();
+      const resolvedAt = inquiry.resolvedAt?.toDate?.();
+
+      if (resolvedAt < sevenDaysAgo) {
+        // 7日以上経過 → 削除 + アーカイブ
+        await deleteInquiryWithArchive(doc.id, inquiry);
+      } else if (resolvedAt < sixDaysAgo && !inquiry.deletionNotified) {
+        // 6日以上経過 → 削除予告通知
+        await sendDeletionNotification(doc.id, inquiry);
+      }
+    }
+  }
+);
+
+// 問い合わせ削除＆アーカイブ処理
+async function deleteInquiryWithArchive(inquiryId: string, inquiry: any) {
+  // 1. アーカイブデータを作成
+  const archiveData = { ...inquiry, archivedAt: Timestamp.now() };
+  
+  // 2. メッセージを取得してアーカイブに含める
+  const messagesSnapshot = await db.collection("inquiries")
+    .doc(inquiryId).collection("messages").get();
+  archiveData.messages = messagesSnapshot.docs.map(d => d.data());
+  
+  // 3. アーカイブに保存
+  await db.collection("archivedInquiries").doc(inquiryId).set(archiveData);
+  
+  // 4. 添付画像をStorageから削除
+  for (const msg of archiveData.messages) {
+    if (msg.imageUrl) {
+      await deleteStorageFile(msg.imageUrl);
+    }
+  }
+  
+  // 5. 問い合わせを削除
+  await db.collection("inquiries").doc(inquiryId).delete();
+}
+```
+
 ---
 
-## 3. `checkGhostCircles` - ゴースト/放置サークル検出
+## 3. `checkGhostCircles` - ゴースト/放置サークル検出・削除
 
-### 目的
-活動のないサークルを検出し、オーナーに警告後、自動削除します。
+### 処理概要
+長期間活動のないサークルを検出し、オーナーに警告通知を送信後、自動削除します。「ゴーストサークル」は最後の人間投稿から365日以上経過、「放置サークル」は人間投稿が1件もなく作成から30日以上経過したサークルを指します。
 
 ### 実行タイミング
 - **スケジュール**: `30 3 * * *` （毎日午前3時30分 JST）
@@ -90,14 +180,6 @@ Firebase Storage上に残っている、どのドキュメントからも参照�
 | **ゴーストサークル** | 最後の人間投稿から365日以上経過 | 警告通知 + 7日猶予 |
 | **放置サークル** | 人間投稿なし かつ 作成から30日以上経過 | 警告通知 + 7日猶予 |
 
-### 処理フロー
-1. 削除されていないサークルを全件取得
-2. 各サークルについて：
-   - `lastHumanPostAt < 365日前` → ゴーストサークル
-   - `lastHumanPostAt == null && createdAt < 30日前` → 放置サークル
-3. 未通知の場合：オーナーに警告通知を送信、`ghostWarningNotifiedAt` を記録
-4. 通知から7日以上経過：サークルを自動削除
-
 ### 関連定数
 ```typescript
 const GHOST_THRESHOLD_DAYS = 365; // ゴースト判定日数
@@ -105,12 +187,63 @@ const EMPTY_THRESHOLD_DAYS = 30;  // 放置判定日数
 const DELETE_GRACE_DAYS = 7;      // 猶予期間
 ```
 
+### ソースコード
+
+**ファイル**: `functions/src/index.ts`  
+**行番号**: L8480-L8629
+
+```typescript
+export const checkGhostCircles = onSchedule(
+  {
+    schedule: "30 3 * * *",
+    timeZone: "Asia/Tokyo",
+    region: "asia-northeast1",
+    timeoutSeconds: 540,
+    memory: "512MiB",
+  },
+  async () => {
+    console.log("=== checkGhostCircles START ===");
+    const now = Date.now();
+    const ghostThreshold = new Date(now - GHOST_THRESHOLD_DAYS * 24 * 60 * 60 * 1000);
+    const emptyThreshold = new Date(now - EMPTY_THRESHOLD_DAYS * 24 * 60 * 60 * 1000);
+    const deleteThreshold = new Date(now - DELETE_GRACE_DAYS * 24 * 60 * 60 * 1000);
+
+    const circlesSnapshot = await db.collection("circles")
+      .where("isDeleted", "!=", true)
+      .get();
+
+    for (const circleDoc of circlesSnapshot.docs) {
+      const circleData = circleDoc.data();
+      const lastHumanPostAt = circleData.lastHumanPostAt?.toDate?.();
+      const createdAt = circleData.createdAt?.toDate?.();
+      const ghostWarningNotifiedAt = circleData.ghostWarningNotifiedAt?.toDate?.();
+
+      // ゴースト判定: 最後の人間投稿が365日以上前
+      let isGhost = lastHumanPostAt && lastHumanPostAt < ghostThreshold;
+      // 放置判定: 人間投稿なし + 作成から30日以上
+      let isEmpty = !lastHumanPostAt && createdAt < emptyThreshold;
+
+      if (!isGhost && !isEmpty) continue;
+
+      if (!ghostWarningNotifiedAt) {
+        // 未通知 → オーナーに警告通知
+        await sendGhostWarningNotification(circleDoc.id, circleData);
+        await circleDoc.ref.update({ ghostWarningNotifiedAt: Timestamp.now() });
+      } else if (ghostWarningNotifiedAt < deleteThreshold) {
+        // 通知から7日経過 → 削除
+        await deleteCircle(circleDoc.id);
+      }
+    }
+  }
+);
+```
+
 ---
 
 ## 4. `cleanupBannedUsers` - 永久BANユーザー削除
 
-### 目的
-永久BANされたユーザーのアカウントを、スケジュールされた日時に完全削除します。
+### 処理概要
+永久BANされたユーザーを、事前に設定されたスケジュール日時に完全削除します。Firebase Authenticationからのユーザー削除とFirestoreのユーザードキュメント削除を行います。
 
 ### 実行タイミング
 - **スケジュール**: `0 4 * * *` （毎日午前4時 JST）
@@ -128,22 +261,70 @@ db.collection("users")
   .limit(20)
 ```
 
-### 処理フロー
-1. 削除スケジュール日時が到達した永久BANユーザーを取得（最大20件）
-2. 各ユーザーについて：
-   - Firebase Authenticationからユーザーを削除
-   - Firestoreの `users` ドキュメントを削除
-
 ### 必要なインデックス
-- コレクション: `users`
-- フィールド: `banStatus` (Ascending), `permanentBanScheduledDeletionAt` (Ascending)
+| コレクション | フィールド1 | フィールド2 |
+|-------------|-----------|-----------|
+| `users` | `banStatus` (Ascending) | `permanentBanScheduledDeletionAt` (Ascending) |
+
+### ソースコード
+
+**ファイル**: `functions/src/index.ts`  
+**行番号**: L8432-L8478
+
+```typescript
+export const cleanupBannedUsers = onSchedule(
+  {
+    schedule: "0 4 * * *",
+    timeZone: "Asia/Tokyo",
+    region: "asia-northeast1",
+    timeoutSeconds: 540,
+  },
+  async () => {
+    console.log("=== cleanupBannedUsers START ===");
+    const now = admin.firestore.Timestamp.now();
+
+    const snapshot = await db.collection("users")
+      .where("banStatus", "==", "permanent")
+      .where("permanentBanScheduledDeletionAt", "<=", now)
+      .limit(20)
+      .get();
+
+    if (snapshot.empty) {
+      console.log("No users to delete");
+      return;
+    }
+
+    console.log(`Found ${snapshot.size} users to scheduled delete`);
+
+    for (const doc of snapshot.docs) {
+      try {
+        const uid = doc.id;
+        console.log(`Deleting banned user: ${uid}`);
+
+        // Firebase Authからユーザー削除
+        await admin.auth().deleteUser(uid).catch(e => {
+          console.warn(`Auth delete failed for ${uid}:`, e);
+        });
+
+        // Firestoreからユーザードキュメント削除
+        await db.collection("users").doc(uid).delete();
+
+      } catch (error) {
+        console.error(`Error deleting user ${doc.id}:`, error);
+      }
+    }
+
+    console.log("=== cleanupBannedUsers COMPLETE ===");
+  }
+);
+```
 
 ---
 
 ## 5. `cleanupReports` - レポートクリーンアップ
 
-### 目的
-対処済みの通報（レポート）を一定期間後に自動削除します。
+### 処理概要
+対処済みの通報（レポート）を作成から1ヶ月後に自動削除します。`reviewed`（対処済み）または `dismissed`（却下済み）ステータスのレポートが対象です。
 
 ### 実行タイミング
 - **スケジュール**: `every day 00:00` （毎日午前0時 JST）
@@ -158,22 +339,73 @@ db.collection("users")
 | `reviewed` | 対処済み |
 | `dismissed` | 却下済み |
 
-### 処理フロー
-1. `status == "reviewed" && createdAt < 1ヶ月前` のレポートを取得
-2. `status == "dismissed" && createdAt < 1ヶ月前` のレポートを取得
-3. 取得したレポートを全て削除
+### ソースコード
+
+**ファイル**: `functions/src/index.ts`  
+**行番号**: L7935-L8000
+
+```typescript
+export const cleanupReports = onSchedule(
+  {
+    schedule: "every day 00:00",
+    timeZone: "Asia/Tokyo",
+    timeoutSeconds: 300,
+  },
+  async (event) => {
+    console.log("Starting cleanupReports function...");
+
+    try {
+      // 1ヶ月前の日時を計算
+      const cutoffDate = new Date();
+      cutoffDate.setMonth(cutoffDate.getMonth() - 1);
+      const cutoffTimestamp = admin.firestore.Timestamp.fromDate(cutoffDate);
+
+      // 対処済みレポートを取得
+      const reviewedSnapshot = await db
+        .collection("reports")
+        .where("status", "==", "reviewed")
+        .where("createdAt", "<", cutoffTimestamp)
+        .get();
+
+      // 却下済みレポートを取得
+      const dismissedSnapshot = await db
+        .collection("reports")
+        .where("status", "==", "dismissed")
+        .where("createdAt", "<", cutoffTimestamp)
+        .get();
+
+      console.log(
+        `Found ${reviewedSnapshot.size} reviewed and ` +
+        `${dismissedSnapshot.size} dismissed reports to delete`
+      );
+
+      // 削除実行
+      const batch = db.batch();
+      reviewedSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+      dismissedSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+
+    } catch (error) {
+      console.error("Error in cleanupReports:", error);
+    }
+  }
+);
+```
 
 ---
 
 ## 実行スケジュール一覧（時系列）
 
-| 時刻 (JST) | 関数名 | 概要 |
-|-----------|--------|------|
-| 00:00 | `cleanupReports` | 対処済みレポート削除 |
-| 03:00 | `cleanupOrphanedMedia` | 孤立メディア削除 |
-| 03:00 | `cleanupResolvedInquiries` | 解決済み問い合わせ削除 |
-| 03:30 | `checkGhostCircles` | ゴースト/放置サークル検出・削除 |
-| 04:00 | `cleanupBannedUsers` | 永久BANユーザー削除 |
+```
+00:00 JST ─── cleanupReports         ── 対処済みレポート削除
+  │
+03:00 JST ─┬─ cleanupOrphanedMedia   ── 孤立メディア削除
+           └─ cleanupResolvedInquiries ── 解決済み問い合わせ削除
+  │
+03:30 JST ─── checkGhostCircles      ── ゴースト/放置サークル検出・削除
+  │
+04:00 JST ─── cleanupBannedUsers     ── 永久BANユーザー削除
+```
 
 ---
 
@@ -190,8 +422,21 @@ db.collection("users")
 
 ---
 
+## ソースコード参照
+
+| 関数名 | ファイル | 行番号 |
+|--------|---------|--------|
+| `cleanupOrphanedMedia` | `functions/src/index.ts` | L6575-L6760 |
+| `cleanupResolvedInquiries` | `functions/src/index.ts` | L7760-L7930 |
+| `cleanupReports` | `functions/src/index.ts` | L7935-L8000 |
+| `cleanupBannedUsers` | `functions/src/index.ts` | L8432-L8478 |
+| `checkGhostCircles` | `functions/src/index.ts` | L8480-L8629 |
+
+---
+
 ## 更新履歴
 
 | 日付 | 内容 |
 |------|------|
 | 2026-01-10 | 初版作成 |
+| 2026-01-10 | 処理概要とソースコード抜粋を追加 |
