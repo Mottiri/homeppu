@@ -220,6 +220,23 @@ class InquiryService {
     });
   }
 
+  /// 閲覧中フラグを設定（ユーザー側）
+  Future<void> setUserViewing(String inquiryId, bool viewing) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    await _firestore.collection('inquiries').doc(inquiryId).update({
+      'userViewing': viewing,
+    });
+  }
+
+  /// 閲覧中フラグを設定（管理者側）
+  Future<void> setAdminViewing(String inquiryId, bool viewing) async {
+    await _firestore.collection('inquiries').doc(inquiryId).update({
+      'adminViewing': viewing,
+    });
+  }
+
   /// 未読の問い合わせ数を取得
   Stream<int> getUnreadCount() {
     final userId = _auth.currentUser?.uid;

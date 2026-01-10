@@ -9,6 +9,7 @@ import 'package:timeago/timeago.dart' as timeago;
 import '../../../../core/constants/app_colors.dart';
 import '../../../../shared/services/inquiry_service.dart';
 import '../../../../shared/services/media_service.dart';
+import '../../../../shared/widgets/full_screen_image_viewer.dart';
 
 /// 問い合わせ詳細画面
 class InquiryDetailScreen extends ConsumerStatefulWidget {
@@ -32,12 +33,15 @@ class _InquiryDetailScreenState extends ConsumerState<InquiryDetailScreen> {
   @override
   void initState() {
     super.initState();
-    // 未読をクリア
+    // 未読をクリア & 閲覧中フラグを設定
     _inquiryService.markAsRead(widget.inquiryId);
+    _inquiryService.setUserViewing(widget.inquiryId, true);
   }
 
   @override
   void dispose() {
+    // 閲覧中フラグを解除
+    _inquiryService.setUserViewing(widget.inquiryId, false);
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -394,12 +398,22 @@ class _MessageBubble extends StatelessWidget {
                       if (message.imageUrl != null)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 8),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.network(
+                          child: GestureDetector(
+                            onTap: () => FullScreenImageViewer.show(
+                              context,
                               message.imageUrl!,
-                              width: 200,
-                              fit: BoxFit.cover,
+                              heroTag: 'inquiry_image_${message.id}',
+                            ),
+                            child: Hero(
+                              tag: 'inquiry_image_${message.id}',
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  message.imageUrl!,
+                                  width: 200,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
                             ),
                           ),
                         ),

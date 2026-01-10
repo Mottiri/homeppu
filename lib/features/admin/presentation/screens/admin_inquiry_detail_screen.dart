@@ -5,6 +5,7 @@ import 'package:timeago/timeago.dart' as timeago;
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../shared/services/inquiry_service.dart';
+import '../../../../shared/widgets/full_screen_image_viewer.dart';
 
 /// 管理者用問い合わせ詳細画面
 class AdminInquiryDetailScreen extends ConsumerStatefulWidget {
@@ -28,12 +29,15 @@ class _AdminInquiryDetailScreenState
   @override
   void initState() {
     super.initState();
-    // 管理者の未読をクリア
+    // 管理者の未読をクリア & 閲覧中フラグを設定
     _inquiryService.markAsReadByAdmin(widget.inquiryId);
+    _inquiryService.setAdminViewing(widget.inquiryId, true);
   }
 
   @override
   void dispose() {
+    // 閲覧中フラグを解除
+    _inquiryService.setAdminViewing(widget.inquiryId, false);
     _replyController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -547,12 +551,22 @@ class _MessageBubble extends StatelessWidget {
                       if (message.imageUrl != null)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 8),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.network(
+                          child: GestureDetector(
+                            onTap: () => FullScreenImageViewer.show(
+                              context,
                               message.imageUrl!,
-                              width: 200,
-                              fit: BoxFit.cover,
+                              heroTag: 'admin_inquiry_image_${message.id}',
+                            ),
+                            child: Hero(
+                              tag: 'admin_inquiry_image_${message.id}',
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  message.imageUrl!,
+                                  width: 200,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
                             ),
                           ),
                         ),

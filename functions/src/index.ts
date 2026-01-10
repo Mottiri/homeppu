@@ -7491,21 +7491,26 @@ export const sendInquiryMessage = onCall(
         updatedAt: now,
       });
 
-      // 管理者に通知を送信
-      for (const adminUid of adminUids) {
-        const notifyBody = `${userDisplayName}さんが「${inquiryData.subject}」に返信しました`;
-        await db.collection("users").doc(adminUid).collection("notifications").add({
-          type: "inquiry_user_reply",
-          title: "問い合わせに返信",
-          body: notifyBody,
-          senderId: userId,
-          senderName: userDisplayName,
-          senderAvatarUrl: String(userAvatarIndex),
-          inquiryId,
-          isRead: false,
-          createdAt: now,
-        });
-        // プッシュ通知はonNotificationCreatedが自動送信
+      // 管理者が閲覧中でない場合のみ通知を送信
+      if (!inquiryData.adminViewing) {
+        // 管理者に通知を送信
+        for (const adminUid of adminUids) {
+          const notifyBody = `${userDisplayName}さんが「${inquiryData.subject}」に返信しました`;
+          await db.collection("users").doc(adminUid).collection("notifications").add({
+            type: "inquiry_user_reply",
+            title: "問い合わせに返信",
+            body: notifyBody,
+            senderId: userId,
+            senderName: userDisplayName,
+            senderAvatarUrl: String(userAvatarIndex),
+            inquiryId,
+            isRead: false,
+            createdAt: now,
+          });
+          // プッシュ通知はonNotificationCreatedが自動送信
+        }
+      } else {
+        console.log(`Admin is viewing inquiry ${inquiryId}, skipping notification`);
       }
 
       console.log(`Added message to inquiry: ${inquiryId}`);
@@ -7573,18 +7578,23 @@ export const sendInquiryReply = onCall(
         updatedAt: now,
       });
 
-      // ユーザーに通知を送信
-      const targetUserId = inquiryData.userId;
-      const notifyBody = `「${inquiryData.subject}」に運営チームから返信があります`;
-      await db.collection("users").doc(targetUserId).collection("notifications").add({
-        type: "inquiry_reply",
-        title: "問い合わせに返信がありました",
-        body: notifyBody,
-        inquiryId,
-        isRead: false,
-        createdAt: now,
-      });
-      // プッシュ通知はonNotificationCreatedが自動送信
+      // ユーザーが閲覧中でない場合のみ通知を送信
+      if (!inquiryData.userViewing) {
+        // ユーザーに通知を送信
+        const targetUserId = inquiryData.userId;
+        const notifyBody = `「${inquiryData.subject}」に運営チームから返信があります`;
+        await db.collection("users").doc(targetUserId).collection("notifications").add({
+          type: "inquiry_reply",
+          title: "問い合わせに返信がありました",
+          body: notifyBody,
+          inquiryId,
+          isRead: false,
+          createdAt: now,
+        });
+        // プッシュ通知はonNotificationCreatedが自動送信
+      } else {
+        console.log(`User is viewing inquiry ${inquiryId}, skipping notification`);
+      }
 
       console.log(`Sent reply to inquiry: ${inquiryId}`);
 
