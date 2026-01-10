@@ -537,6 +537,35 @@ mixin InfiniteScrollMixin<T extends StatefulWidget> on State<T> {
 
 ### Phase B: 共通Widgetの作成
 
+#### 既存の共通Widget（実装済み）
+
+以下のWidgetは既に共通化されています：
+
+| Widget | 場所 | 機能 |
+|--------|------|------|
+| `FullScreenImageViewer` | `lib/shared/widgets/full_screen_image_viewer.dart` | 画像フルスクリーン表示 |
+
+**FullScreenImageViewer の使用例**:
+
+```dart
+// 静的メソッドで簡単に呼び出し
+FullScreenImageViewer.show(
+  context,
+  imageUrl,
+  heroTag: 'image_$index',  // オプション: Hero アニメーション
+);
+```
+
+**特徴**:
+- ピンチズーム対応（InteractiveViewer: 0.5x〜4.0x）
+- Hero アニメーション対応
+- ローディング表示（プログレス付き）
+- エラー表示（アイコン）
+- タップまたは閉じるボタンで終了
+- フェードトランジション
+
+---
+
 #### B-1: ローディングオーバーレイ
 
 ```dart

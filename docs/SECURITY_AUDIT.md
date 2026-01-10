@@ -1,7 +1,7 @@
 # セキュリティ監査レポート
 
 **作成日**: 2026年1月7日
-**最終更新**: 2026年1月9日（全体調査完了）
+**最終更新**: 2026年1月10日（問い合わせ関連セキュリティテスト実施）
 **対象**: homeppu プロジェクト
 **監査範囲**: Firestore/Storage セキュリティルール、Cloud Functions、クライアントコード、設計書整合性
 
@@ -1026,3 +1026,38 @@ match /circles/{circleId} {
 - #19: デバッグログの本番環境無効化
 - **#21: AIモードサークルの一覧表示制限（新規）**
 
+---
+
+### 2026-01-10 セキュリティ確認・テスト
+
+#### ✅ #2関連: 問い合わせ添付画像のセキュリティテスト実施
+- **テスト内容**: 
+  - 問い合わせ自動クリーンアップ（`cleanupResolvedInquiries`）がStorageの画像を正しく削除するか確認
+  - 結果: 正常に動作（解決から7日経過で問い合わせ本体・メッセージ・添付画像を削除、アーカイブに保存）
+- **関連ドキュメント**: `docs/design/cleanup_processing_design.md` に処理詳細を追加
+
+#### ✅ Firestoreセキュリティルールの追加修正
+- **問題発見**: 
+  - 問い合わせチャットの「閲覧中」通知抑制機能実装時、`userViewing`フィールドの更新が`PERMISSION_DENIED`エラー
+  - 原因: `inquiries`コレクションの更新ルールが`hasUnreadReply`のみ許可していた
+- **修正内容**: 
+  - `userViewing`フィールドもユーザーが更新可能に
+- **変更ファイル**: `firebase/firestore.rules` 行286-291
+- **修正後のルール**:
+  ```javascript
+  allow update: if isAuthenticated() && (
+    // 本人は hasUnreadReply と userViewing のみ更新可能
+    isOwner(resource.data.userId) && 
+    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hasUnreadReply', 'userViewing'])
+  ) || (
+    // 管理者は全フィールド更新可能
+    isAdmin()
+  );
+  ```
+- **関連ドキュメント**: `docs/KNOWN_ISSUES.md` に問題と解決を記録済み
+
+#### 📝 ドキュメント整備
+- **作成**: `docs/design/cleanup_processing_design.md`
+  - 全5つの定期クリーンアップ処理を網羅
+  - 検出ロジック、削除方法、保持期間を詳細記載
+  - ソースコード参照（行番号）を記載
