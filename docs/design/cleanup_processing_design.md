@@ -1,6 +1,6 @@
 # 定期クリーンアップ処理設計書
 
-このドキュメントでは、システムで実行されている定期クリーンアップ処理を一覧化し、各処理の目的、実行タイミング、保持期間、ソースコードの場所を記載します。
+このドキュメントでは、システムで実行されている定期クリーンアップ処理を一覧化し、各処理の目的、実行タイミング、保持期間、検出・削除ロジックを記載します。
 
 ---
 
@@ -28,126 +28,113 @@ Firebase Storage上に存在するが、Firestoreのどのドキュメントか�
 ### 保持期間
 - **24時間**: アップロードから24時間以上経過した孤立メディアが削除対象
 
-### 対象ディレクトリと検出ロジック
+### 対象と検出・削除ロジック
 
-この処理では**4種類の対象**があり、それぞれ異なる検出方法を使用しています。
+この処理では**4種類の対象**を処理します。
 
-#### 1. 投稿メディア (`posts/`)
+---
 
-**検出方法**: アップロード時にメタデータに埋め込んだ `postId` を使用
+#### 1-1. 投稿メディア (`posts/`)
 
-| 状態 | 判定 | 説明 |
-|------|------|------|
-| `postId = "PENDING"` | 孤立 | 投稿前に離脱したケース |
-| 投稿ドキュメントが存在しない | 孤立 | 投稿が削除された |
+##### 検出方法
+メディアをアップロードする際、ファイルのメタデータに `postId` を埋め込んでいます。クリーンアップ処理では、このメタデータを読み取り、以下の条件で孤立を判定します：
+
+1. **`postId` が `"PENDING"`**: 投稿が完了する前にユーザーが離脱したケース
+2. **`postId` に対応する投稿ドキュメントが存在しない**: 投稿が削除されたケース
+
+##### 削除方法
+孤立と判定されたファイルは、`file.delete()` でStorage から直接削除します。関連するFirestoreデータ（投稿ドキュメント等）は既に存在しないため、追加の削除処理は不要です。
 
 ```typescript
-// メタデータからpostIdを取得
-const customMetadata = metadata.metadata || {};
-const postId = customMetadata.postId ? String(customMetadata.postId) : null;
-
 if (postId === "PENDING") {
-  // 投稿前に離脱したケース → 孤立
-  shouldDelete = true;
+  shouldDelete = true;  // 投稿前に離脱
 } else {
-  // 投稿が存在するか確認
   const postDoc = await db.collection("posts").doc(postId).get();
   if (!postDoc.exists) {
-    // 投稿が削除された → 孤立
-    shouldDelete = true;
+    shouldDelete = true;  // 投稿が削除済み
   }
 }
+if (shouldDelete) await file.delete();
 ```
 
-#### 2. サークル画像 (`circles/`)
+---
 
-**検出方法**: ファイルパスから `circleId` を抽出し、存在確認
+#### 1-2. サークル画像 (`circles/`)
 
-| パス形式 | 抽出対象 |
-|---------|---------|
-| `circles/{circleId}/icon/{fileName}` | `circleId` = pathParts[1] |
+##### 検出方法
+サークル画像は `circles/{circleId}/icon/{fileName}` というパス構造でStorageに保存されています。ファイルパスを `/` で分割し、2番目の要素として `circleId` を抽出します。その後、Firestoreの `circles` コレクションに該当のドキュメントが存在するか確認します。
+
+##### 削除方法
+サークルドキュメントが存在しない場合、画像ファイルを `file.delete()` で削除します。
 
 ```typescript
-// パスからcircleIdを抽出: circles/{circleId}/icon/{fileName}
 const pathParts = file.name.split("/");
 const circleId = pathParts[1];
-
-// サークルが存在するか確認
 const circleDoc = await db.collection("circles").doc(circleId).get();
-if (!circleDoc.exists) {
-  // サークルが削除された → 孤立
-  shouldDelete = true;
-}
+if (!circleDoc.exists) await file.delete();
 ```
 
-#### 3. タスク添付ファイル (`task_attachments/`)
+---
 
-**検出方法**: ファイルパスから `taskId` を抽出し、存在確認
+#### 1-3. タスク添付ファイル (`task_attachments/`)
 
-| パス形式 | 抽出対象 |
-|---------|---------|
-| `task_attachments/{userId}/{taskId}/{fileName}` | `taskId` = pathParts[2] |
+##### 検出方法
+タスク添付ファイルは `task_attachments/{userId}/{taskId}/{fileName}` というパス構造です。ファイルパスを分割し、3番目の要素として `taskId` を抽出します。Firestoreの `tasks` コレクションに該当のドキュメントが存在するか確認します。
+
+##### 削除方法
+タスクドキュメントが存在しない場合、添付ファイルを削除します。
 
 ```typescript
-// パスからtaskIdを抽出: task_attachments/{userId}/{taskId}/{fileName}
 const pathParts = file.name.split("/");
 const taskId = pathParts[2];
-
 const taskDoc = await db.collection("tasks").doc(taskId).get();
-if (!taskDoc.exists) {
-  // タスクが削除された → 孤立
-  shouldDelete = true;
-}
+if (!taskDoc.exists) await file.delete();
 ```
 
-#### 4. 孤立サークル投稿（Firestoreデータ）
+---
 
-**検出方法**: 投稿の `circleId` が指すサークルが存在するか確認
+#### 1-4. 孤立サークル投稿（Firestoreデータ）
 
-> **注意**: この処理は Storage ではなく Firestore のデータを対象としています
+##### 検出方法
+Firestoreの `posts` コレクションから `circleId` フィールドが設定されている投稿（サークル投稿）を取得します。各投稿の `circleId` に対応するサークルがFirestoreに存在するか確認します。
+
+> **注意**: この処理はStorageではなくFirestoreのデータを対象としています。
+
+##### 削除方法
+サークルが存在しない場合、以下の関連データを全て削除します：
+
+1. **コメント**: `comments` コレクションから `postId` が一致するドキュメントを削除
+2. **リアクション**: `reactions` コレクションから `postId` が一致するドキュメントを削除
+3. **投稿本体**: 投稿ドキュメントを削除
+4. **メディアファイル**: 投稿に含まれる `mediaItems` のURLからStorageファイルを削除
 
 ```typescript
-// サークル投稿を取得
-const circlePostsSnapshot = await db.collection("posts")
-  .where("circleId", "!=", null)
-  .limit(500)
-  .get();
+// バッチ削除で効率化
+const batch = db.batch();
+comments.docs.forEach(c => batch.delete(c.ref));
+reactions.docs.forEach(r => batch.delete(r.ref));
+batch.delete(postDoc.ref);
+await batch.commit();
 
-// サークルの存在を確認するためのキャッシュ
-const circleExistsCache: Map<string, boolean> = new Map();
-
-for (const postDoc of circlePostsSnapshot.docs) {
-  const circleId = postDoc.data().circleId;
-  
-  // キャッシュを確認（同じサークルへの複数クエリを防止）
-  let circleExists = circleExistsCache.get(circleId);
-  if (circleExists === undefined) {
-    const circleDoc = await db.collection("circles").doc(circleId).get();
-    circleExists = circleDoc.exists;
-    circleExistsCache.set(circleId, circleExists);
-  }
-
-  if (!circleExists) {
-    // サークルが削除された → 投稿も削除
-    // コメント、リアクション、メディアも一緒に削除
-  }
+// メディアファイルも削除
+for (const item of postData.mediaItems) {
+  await deleteStorageFile(item.url);
 }
 ```
 
 ### 検出ロジックまとめ
 
-| 対象 | 検出方法 | 孤立条件 |
-|------|---------|---------|
-| 投稿メディア | メタデータの `postId` | `PENDING` or 投稿が存在しない |
-| サークル画像 | パスから `circleId` 抽出 | サークルが存在しない |
-| タスク添付 | パスから `taskId` 抽出 | タスクが存在しない |
-| サークル投稿 | Firestoreの `circleId` | サークルが存在しない |
+| 対象 | 検出方法 | 孤立条件 | 削除対象 |
+|------|---------|---------|---------|
+| 投稿メディア | メタデータの `postId` | `PENDING` or 投稿が存在しない | Storageファイルのみ |
+| サークル画像 | パスから `circleId` 抽出 | サークルが存在しない | Storageファイルのみ |
+| タスク添付 | パスから `taskId` 抽出 | タスクが存在しない | Storageファイルのみ |
+| サークル投稿 | Firestoreの `circleId` | サークルが存在しない | Firestore + Storage |
 
 ### ソースコード
 
 **ファイル**: `functions/src/index.ts`  
 **行番号**: L6575-L6780
-
 
 ---
 
@@ -160,79 +147,68 @@ for (const postDoc of circlePostsSnapshot.docs) {
 - **スケジュール**: `0 3 * * *` （毎日午前3時 JST）
 
 ### 保持期間
+
 | 経過日数 | アクション |
 |---------|-----------|
 | 6日以上 | ユーザーに削除予告通知を送信 |
 | 7日以上 | 問い合わせを削除、アーカイブに保存 |
 
+### 検出方法
+
+Firestoreの `inquiries` コレクションから `status == "resolved"` の問い合わせを全件取得します。各問い合わせの `resolvedAt`（解決日時）フィールドから経過日数を計算し、6日以上または7日以上経過しているかを判定します。
+
+```typescript
+const inquiriesSnapshot = await db.collection("inquiries")
+  .where("status", "==", "resolved")
+  .get();
+
+for (const doc of inquiriesSnapshot.docs) {
+  const resolvedAt = doc.data().resolvedAt?.toDate();
+  // resolvedAtから経過日数を計算して判定
+}
+```
+
+### 削除方法
+
+7日以上経過した問い合わせは、以下の手順で削除とアーカイブを行います：
+
+1. **アーカイブデータ作成**: 問い合わせの全フィールドをコピー
+2. **メッセージ取得**: サブコレクション `messages` から全メッセージを取得し、アーカイブデータに含める
+3. **アーカイブ保存**: `archivedInquiries` コレクションに保存（同じIDを使用）
+4. **添付画像削除**: メッセージ内の `imageUrl` からStorageのパスを抽出し、ファイルを削除
+5. **メッセージ削除**: サブコレクションの全ドキュメントを削除
+6. **問い合わせ削除**: 問い合わせドキュメント本体を削除
+
+```typescript
+// 1-3. アーカイブ保存
+const archiveData = { ...inquiry, archivedAt: Timestamp.now() };
+archiveData.messages = messagesSnapshot.docs.map(d => d.data());
+await db.collection("archivedInquiries").doc(inquiryId).set(archiveData);
+
+// 4. 添付画像削除
+for (const msg of archiveData.messages) {
+  if (msg.imageUrl) await deleteStorageFile(msg.imageUrl);
+}
+
+// 5-6. Firestoreから削除
+for (const msgDoc of messagesSnapshot.docs) {
+  await msgDoc.ref.delete();
+}
+await db.collection("inquiries").doc(inquiryId).delete();
+```
+
 ### アーカイブ保存内容
-- 問い合わせID、ユーザー情報、件名、カテゴリ
-- 全メッセージ（content, senderType, createdAt）
-- 作成日時、解決日時、削除日時
+
+| フィールド | 説明 |
+|-----------|------|
+| 問い合わせ全フィールド | userId, subject, category, status など |
+| messages | 全メッセージの配列（content, senderType, createdAt） |
+| archivedAt | アーカイブ日時（削除実行時） |
 
 ### ソースコード
 
 **ファイル**: `functions/src/index.ts`  
 **行番号**: L7760-L7930
-
-```typescript
-export const cleanupResolvedInquiries = onSchedule(
-  {
-    schedule: "0 3 * * *",
-    timeZone: "Asia/Tokyo",
-    region: "asia-northeast1",
-  },
-  async () => {
-    console.log("=== cleanupResolvedInquiries started ===");
-
-    const now = new Date();
-    const sixDaysAgo = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-
-    // 解決済みの問い合わせを取得
-    const inquiriesSnapshot = await db.collection("inquiries")
-      .where("status", "==", "resolved")
-      .get();
-
-    for (const doc of inquiriesSnapshot.docs) {
-      const inquiry = doc.data();
-      const resolvedAt = inquiry.resolvedAt?.toDate?.();
-
-      if (resolvedAt < sevenDaysAgo) {
-        // 7日以上経過 → 削除 + アーカイブ
-        await deleteInquiryWithArchive(doc.id, inquiry);
-      } else if (resolvedAt < sixDaysAgo && !inquiry.deletionNotified) {
-        // 6日以上経過 → 削除予告通知
-        await sendDeletionNotification(doc.id, inquiry);
-      }
-    }
-  }
-);
-
-// 問い合わせ削除＆アーカイブ処理
-async function deleteInquiryWithArchive(inquiryId: string, inquiry: any) {
-  // 1. アーカイブデータを作成
-  const archiveData = { ...inquiry, archivedAt: Timestamp.now() };
-  
-  // 2. メッセージを取得してアーカイブに含める
-  const messagesSnapshot = await db.collection("inquiries")
-    .doc(inquiryId).collection("messages").get();
-  archiveData.messages = messagesSnapshot.docs.map(d => d.data());
-  
-  // 3. アーカイブに保存
-  await db.collection("archivedInquiries").doc(inquiryId).set(archiveData);
-  
-  // 4. 添付画像をStorageから削除
-  for (const msg of archiveData.messages) {
-    if (msg.imageUrl) {
-      await deleteStorageFile(msg.imageUrl);
-    }
-  }
-  
-  // 5. 問い合わせを削除
-  await db.collection("inquiries").doc(inquiryId).delete();
-}
-```
 
 ---
 
@@ -248,68 +224,74 @@ async function deleteInquiryWithArchive(inquiryId: string, inquiry: any) {
 
 ### 保持期間・判定基準
 
-| サークル種別 | 条件 | 削除までの期間 |
+| サークル種別 | 条件 | 削除までの流れ |
 |------------|------|--------------|
-| **ゴーストサークル** | 最後の人間投稿から365日以上経過 | 警告通知 + 7日猶予 |
-| **放置サークル** | 人間投稿なし かつ 作成から30日以上経過 | 警告通知 + 7日猶予 |
+| **ゴーストサークル** | 最後の人間投稿から365日以上経過 | 警告通知 → 7日猶予 → 削除 |
+| **放置サークル** | 人間投稿なし かつ 作成から30日以上経過 | 警告通知 → 7日猶予 → 削除 |
 
 ### 関連定数
+
 ```typescript
 const GHOST_THRESHOLD_DAYS = 365; // ゴースト判定日数
 const EMPTY_THRESHOLD_DAYS = 30;  // 放置判定日数
 const DELETE_GRACE_DAYS = 7;      // 猶予期間
 ```
 
+### 検出方法
+
+Firestoreの `circles` コレクションから `isDeleted != true` のサークルを全件取得します。各サークルについて、以下のフィールドを確認して判定します：
+
+1. **`lastHumanPostAt`**: 最後の人間による投稿日時（AIの投稿は含まない）
+2. **`createdAt`**: サークル作成日時
+3. **`ghostWarningNotifiedAt`**: 警告通知を送信した日時
+
+**ゴーストサークル判定**:
+```typescript
+// 人間投稿があり、かつ365日以上前
+const isGhost = lastHumanPostAt && lastHumanPostAt < ghostThreshold;
+```
+
+**放置サークル判定**:
+```typescript
+// 人間投稿が一度もなく、作成から30日以上経過
+const isEmpty = !lastHumanPostAt && createdAt < emptyThreshold;
+```
+
+### 削除方法
+
+ゴースト/放置と判定されたサークルは、2段階で処理されます：
+
+#### ステップ1: 警告通知（未通知の場合）
+
+オーナーに「サークルが7日後に削除される」旨の通知を送信し、`ghostWarningNotifiedAt` に現在日時を記録します。
+
+```typescript
+if (!ghostWarningNotifiedAt) {
+  await sendGhostWarningNotification(circleId, circleData);
+  await circleDoc.ref.update({ ghostWarningNotifiedAt: Timestamp.now() });
+}
+```
+
+#### ステップ2: 削除（通知から7日経過後）
+
+警告通知から7日以上経過した場合、サークルを完全削除します。削除処理では以下を実行：
+
+1. **サークル投稿を削除**: `posts` コレクションから `circleId` が一致する投稿を全て削除
+2. **各投稿のコメント・リアクション削除**: 投稿に紐づく関連データを削除
+3. **メディアファイル削除**: 投稿に含まれるメディアをStorageから削除
+4. **サークルドキュメント削除**: `circles` コレクションからサークル本体を削除
+5. **サークル画像削除**: サークルアイコンをStorageから削除
+
+```typescript
+if (ghostWarningNotifiedAt < deleteThreshold) {
+  await deleteCircle(circleId);  // 上記の全削除処理を実行
+}
+```
+
 ### ソースコード
 
 **ファイル**: `functions/src/index.ts`  
 **行番号**: L8480-L8629
-
-```typescript
-export const checkGhostCircles = onSchedule(
-  {
-    schedule: "30 3 * * *",
-    timeZone: "Asia/Tokyo",
-    region: "asia-northeast1",
-    timeoutSeconds: 540,
-    memory: "512MiB",
-  },
-  async () => {
-    console.log("=== checkGhostCircles START ===");
-    const now = Date.now();
-    const ghostThreshold = new Date(now - GHOST_THRESHOLD_DAYS * 24 * 60 * 60 * 1000);
-    const emptyThreshold = new Date(now - EMPTY_THRESHOLD_DAYS * 24 * 60 * 60 * 1000);
-    const deleteThreshold = new Date(now - DELETE_GRACE_DAYS * 24 * 60 * 60 * 1000);
-
-    const circlesSnapshot = await db.collection("circles")
-      .where("isDeleted", "!=", true)
-      .get();
-
-    for (const circleDoc of circlesSnapshot.docs) {
-      const circleData = circleDoc.data();
-      const lastHumanPostAt = circleData.lastHumanPostAt?.toDate?.();
-      const createdAt = circleData.createdAt?.toDate?.();
-      const ghostWarningNotifiedAt = circleData.ghostWarningNotifiedAt?.toDate?.();
-
-      // ゴースト判定: 最後の人間投稿が365日以上前
-      let isGhost = lastHumanPostAt && lastHumanPostAt < ghostThreshold;
-      // 放置判定: 人間投稿なし + 作成から30日以上
-      let isEmpty = !lastHumanPostAt && createdAt < emptyThreshold;
-
-      if (!isGhost && !isEmpty) continue;
-
-      if (!ghostWarningNotifiedAt) {
-        // 未通知 → オーナーに警告通知
-        await sendGhostWarningNotification(circleDoc.id, circleData);
-        await circleDoc.ref.update({ ghostWarningNotifiedAt: Timestamp.now() });
-      } else if (ghostWarningNotifiedAt < deleteThreshold) {
-        // 通知から7日経過 → 削除
-        await deleteCircle(circleDoc.id);
-      }
-    }
-  }
-);
-```
 
 ---
 
@@ -324,73 +306,54 @@ export const checkGhostCircles = onSchedule(
 
 ### 保持期間
 - **可変**: `permanentBanScheduledDeletionAt` フィールドに設定された日時
-- 通常、永久BAN時点から一定期間（例: 30日）後に設定される
+- 通常、永久BAN執行時点から一定期間（例: 30日）後に設定される
 
-### 対象クエリ条件
+### 検出方法
+
+Firestoreの `users` コレクションに対して、以下の複合クエリを実行します：
+
+1. **`banStatus == "permanent"`**: 永久BANステータスのユーザー
+2. **`permanentBanScheduledDeletionAt <= 現在日時`**: 削除予定日時が到達したユーザー
+
+一度の実行で最大20件を処理し、大量のユーザーがいる場合は複数日に分けて削除します。
+
 ```typescript
-db.collection("users")
+const snapshot = await db.collection("users")
   .where("banStatus", "==", "permanent")
   .where("permanentBanScheduledDeletionAt", "<=", now)
   .limit(20)
+  .get();
 ```
 
+### 削除方法
+
+各ユーザーについて、以下の順序で削除を実行します：
+
+1. **Firebase Authentication削除**: `admin.auth().deleteUser(uid)` でAuthからユーザーを削除（ログイン不可になる）
+2. **Firestoreドキュメント削除**: `users` コレクションからユーザードキュメントを削除
+
+```typescript
+// 1. Auth削除（失敗しても続行）
+await admin.auth().deleteUser(uid).catch(e => {
+  console.warn(`Auth delete failed for ${uid}:`, e);
+});
+
+// 2. Firestore削除
+await db.collection("users").doc(uid).delete();
+```
+
+> **注意**: ユーザーの投稿やコメントなどの関連データは、この処理では削除されません。それらは別途 `cleanupOrphanedMedia` などで孤立データとして処理されます。
+
 ### 必要なインデックス
+
 | コレクション | フィールド1 | フィールド2 |
-|-------------|-----------|-----------|
+|-------------|-----------|-----------| 
 | `users` | `banStatus` (Ascending) | `permanentBanScheduledDeletionAt` (Ascending) |
 
 ### ソースコード
 
 **ファイル**: `functions/src/index.ts`  
 **行番号**: L8432-L8478
-
-```typescript
-export const cleanupBannedUsers = onSchedule(
-  {
-    schedule: "0 4 * * *",
-    timeZone: "Asia/Tokyo",
-    region: "asia-northeast1",
-    timeoutSeconds: 540,
-  },
-  async () => {
-    console.log("=== cleanupBannedUsers START ===");
-    const now = admin.firestore.Timestamp.now();
-
-    const snapshot = await db.collection("users")
-      .where("banStatus", "==", "permanent")
-      .where("permanentBanScheduledDeletionAt", "<=", now)
-      .limit(20)
-      .get();
-
-    if (snapshot.empty) {
-      console.log("No users to delete");
-      return;
-    }
-
-    console.log(`Found ${snapshot.size} users to scheduled delete`);
-
-    for (const doc of snapshot.docs) {
-      try {
-        const uid = doc.id;
-        console.log(`Deleting banned user: ${uid}`);
-
-        // Firebase Authからユーザー削除
-        await admin.auth().deleteUser(uid).catch(e => {
-          console.warn(`Auth delete failed for ${uid}:`, e);
-        });
-
-        // Firestoreからユーザードキュメント削除
-        await db.collection("users").doc(uid).delete();
-
-      } catch (error) {
-        console.error(`Error deleting user ${doc.id}:`, error);
-      }
-    }
-
-    console.log("=== cleanupBannedUsers COMPLETE ===");
-  }
-);
-```
 
 ---
 
@@ -407,63 +370,52 @@ export const cleanupBannedUsers = onSchedule(
 - **1ヶ月**: 対処済み（reviewed/dismissed）かつ作成から1ヶ月以上経過
 
 ### 対象ステータス
+
 | ステータス | 説明 |
 |-----------|------|
-| `reviewed` | 対処済み |
-| `dismissed` | 却下済み |
+| `reviewed` | 管理者が対処済みとしたレポート |
+| `dismissed` | 管理者が却下（問題なし）としたレポート |
+
+> **注意**: `pending`（未対処）のレポートは削除対象外です。
+
+### 検出方法
+
+Firestoreの `reports` コレクションに対して、2つのクエリを実行します：
+
+1. **`status == "reviewed"` かつ `createdAt < 1ヶ月前`**
+2. **`status == "dismissed"` かつ `createdAt < 1ヶ月前`**
+
+```typescript
+const cutoffDate = new Date();
+cutoffDate.setMonth(cutoffDate.getMonth() - 1);
+const cutoffTimestamp = Timestamp.fromDate(cutoffDate);
+
+const reviewedSnapshot = await db.collection("reports")
+  .where("status", "==", "reviewed")
+  .where("createdAt", "<", cutoffTimestamp)
+  .get();
+
+const dismissedSnapshot = await db.collection("reports")
+  .where("status", "==", "dismissed")
+  .where("createdAt", "<", cutoffTimestamp)
+  .get();
+```
+
+### 削除方法
+
+取得した全てのレポートをバッチ処理で一括削除します。レポートには関連データ（添付ファイル等）がないため、ドキュメントの削除のみで完了します。
+
+```typescript
+const batch = db.batch();
+reviewedSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+dismissedSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+await batch.commit();
+```
 
 ### ソースコード
 
 **ファイル**: `functions/src/index.ts`  
 **行番号**: L7935-L8000
-
-```typescript
-export const cleanupReports = onSchedule(
-  {
-    schedule: "every day 00:00",
-    timeZone: "Asia/Tokyo",
-    timeoutSeconds: 300,
-  },
-  async (event) => {
-    console.log("Starting cleanupReports function...");
-
-    try {
-      // 1ヶ月前の日時を計算
-      const cutoffDate = new Date();
-      cutoffDate.setMonth(cutoffDate.getMonth() - 1);
-      const cutoffTimestamp = admin.firestore.Timestamp.fromDate(cutoffDate);
-
-      // 対処済みレポートを取得
-      const reviewedSnapshot = await db
-        .collection("reports")
-        .where("status", "==", "reviewed")
-        .where("createdAt", "<", cutoffTimestamp)
-        .get();
-
-      // 却下済みレポートを取得
-      const dismissedSnapshot = await db
-        .collection("reports")
-        .where("status", "==", "dismissed")
-        .where("createdAt", "<", cutoffTimestamp)
-        .get();
-
-      console.log(
-        `Found ${reviewedSnapshot.size} reviewed and ` +
-        `${dismissedSnapshot.size} dismissed reports to delete`
-      );
-
-      // 削除実行
-      const batch = db.batch();
-      reviewedSnapshot.docs.forEach(doc => batch.delete(doc.ref));
-      dismissedSnapshot.docs.forEach(doc => batch.delete(doc.ref));
-      await batch.commit();
-
-    } catch (error) {
-      console.error("Error in cleanupReports:", error);
-    }
-  }
-);
-```
 
 ---
 
@@ -484,14 +436,14 @@ export const cleanupReports = onSchedule(
 
 ## 保持期間まとめ
 
-| 対象 | 保持期間 | 備考 |
-|------|---------|------|
-| 孤立メディア | 24時間 | アップロード後、参照なし |
-| 解決済み問い合わせ | 7日間 | 解決後から起算 |
-| ゴーストサークル | 365日 + 7日猶予 | 最後の人間投稿から起算 |
-| 放置サークル | 30日 + 7日猶予 | サークル作成から起算 |
-| 永久BANユーザー | スケジュール日時 | BAN時に設定された日時 |
-| 対処済みレポート | 1ヶ月 | レポート作成から起算 |
+| 対象 | 保持期間 | 起算点 | 削除対象 |
+|------|---------|-------|---------|
+| 孤立メディア | 24時間 | アップロード日時 | Storage + 関連Firestore |
+| 解決済み問い合わせ | 7日間 | 解決日時 | Firestore + Storage（アーカイブ保存） |
+| ゴーストサークル | 365日 + 7日猶予 | 最後の人間投稿日時 | サークル全体 + 投稿 + メディア |
+| 放置サークル | 30日 + 7日猶予 | サークル作成日時 | サークル全体 + 投稿 + メディア |
+| 永久BANユーザー | スケジュール日時 | BAN時に設定 | Auth + ユーザードキュメント |
+| 対処済みレポート | 1ヶ月 | レポート作成日時 | レポートドキュメントのみ |
 
 ---
 
@@ -499,7 +451,7 @@ export const cleanupReports = onSchedule(
 
 | 関数名 | ファイル | 行番号 |
 |--------|---------|--------|
-| `cleanupOrphanedMedia` | `functions/src/index.ts` | L6575-L6760 |
+| `cleanupOrphanedMedia` | `functions/src/index.ts` | L6575-L6780 |
 | `cleanupResolvedInquiries` | `functions/src/index.ts` | L7760-L7930 |
 | `cleanupReports` | `functions/src/index.ts` | L7935-L8000 |
 | `cleanupBannedUsers` | `functions/src/index.ts` | L8432-L8478 |
@@ -513,3 +465,4 @@ export const cleanupReports = onSchedule(
 |------|------|
 | 2026-01-10 | 初版作成 |
 | 2026-01-10 | 処理概要とソースコード抜粋を追加 |
+| 2026-01-10 | 検出・削除ロジックの詳細説明を追加 |
