@@ -183,6 +183,297 @@ export * from "./helpers/admin";
 
 ---
 
+## 重複パターンの共通化
+
+### 発見された重複パターン
+
+| パターン | 出現回数 | 共通化優先度 |
+|---------|---------|-------------|
+| 認証チェック（`!request.auth`） | 29箇所 | 高 |
+| HttpsError スロー | 60箇所以上 | 高 |
+| 管理者権限チェック（`isAdmin`呼び出し） | 16箇所 | 高 |
+| 通知作成（`notifications.add`） | 17箇所 | 高 |
+| Cloud Tasks 作成 | 16箇所 | 中 |
+| console.log/error/warn | 386箇所 | 低（整理対象）|
+| Firestore FieldValue操作 | 102箇所 | - |
+
+---
+
+### 共通化計画
+
+#### 1. エラーメッセージ定数化（優先度：高）
+
+**現状**: 同じエラーメッセージがハードコードで散在
+
+```typescript
+// 現状（60箇所以上で類似）
+throw new HttpsError("unauthenticated", "ログインが必要です");
+throw new HttpsError("permission-denied", "管理者権限が必要です");
+throw new HttpsError("not-found", "ユーザーが見つかりません");
+```
+
+**共通化後**:
+
+```typescript
+// helpers/errors.ts
+export const ErrorMessages = {
+  // 認証
+  UNAUTHENTICATED: "ログインが必要です",
+  ADMIN_REQUIRED: "管理者権限が必要です",
+
+  // バリデーション
+  INVALID_ARGUMENT: "必要な情報が不足しています",
+  SELF_ACTION_NOT_ALLOWED: (action: string) => `自分自身を${action}することはできません`,
+
+  // リソース
+  USER_NOT_FOUND: "ユーザーが見つかりません",
+  POST_NOT_FOUND: "投稿が見つかりません",
+  CIRCLE_NOT_FOUND: "サークルが見つかりません",
+  TASK_NOT_FOUND: "タスクが見つかりません",
+
+  // 重複
+  ALREADY_EXISTS: (item: string) => `既に${item}しています`,
+  ALREADY_REPORTED: "既にこの内容を通報しています",
+  ALREADY_FOLLOWING: "既にフォローしています",
+
+  // システム
+  INTERNAL_ERROR: "システムエラーが発生しました。しばらくしてから再度お試しください。",
+} as const;
+
+// 使用例
+throw new HttpsError("unauthenticated", ErrorMessages.UNAUTHENTICATED);
+throw new HttpsError("not-found", ErrorMessages.USER_NOT_FOUND);
+```
+
+---
+
+#### 2. 認証ヘルパー関数（優先度：高）
+
+**現状**: 各関数で同じ認証チェックを繰り返し
+
+```typescript
+// 現状（29箇所で同じパターン）
+if (!request.auth) {
+  throw new HttpsError("unauthenticated", "ログインが必要です");
+}
+const userId = request.auth.uid;
+
+// 管理者チェック（16箇所）
+const userIsAdmin = await isAdmin(request.auth.uid);
+if (!userIsAdmin) {
+  throw new HttpsError("permission-denied", "管理者権限が必要です");
+}
+```
+
+**共通化後**:
+
+```typescript
+// helpers/auth.ts
+import { HttpsError, CallableRequest } from "firebase-functions/v2/https";
+import { ErrorMessages } from "./errors";
+
+/**
+ * 認証済みユーザーのUIDを取得（未認証ならエラー）
+ */
+export function requireAuth(request: CallableRequest): string {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", ErrorMessages.UNAUTHENTICATED);
+  }
+  return request.auth.uid;
+}
+
+/**
+ * 管理者権限を要求（未認証または非管理者ならエラー）
+ */
+export async function requireAdmin(request: CallableRequest): Promise<string> {
+  const uid = requireAuth(request);
+  const adminStatus = await isAdmin(uid);
+  if (!adminStatus) {
+    throw new HttpsError("permission-denied", ErrorMessages.ADMIN_REQUIRED);
+  }
+  return uid;
+}
+
+// 使用例（Before: 5行 → After: 1行）
+export const followUser = onCall(async (request) => {
+  const userId = requireAuth(request);  // これだけ！
+  // ...
+});
+
+export const deleteAllAIUsers = onCall(async (request) => {
+  const adminId = await requireAdmin(request);  // これだけ！
+  // ...
+});
+```
+
+---
+
+#### 3. 通知ヘルパー関数（優先度：高）
+
+**現状**: 通知作成が17箇所で類似パターン
+
+```typescript
+// 現状
+await db.collection("users").doc(userId).collection("notifications").add({
+  type: "task_reminder",
+  title: "タスクのお知らせ",
+  body: "タスクの期限が近づいています",
+  isRead: false,
+  createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  taskId: taskId,
+});
+```
+
+**共通化後**:
+
+```typescript
+// helpers/notification.ts
+interface NotificationOptions {
+  userId: string;
+  type: string;
+  title: string;
+  body: string;
+  data?: Record<string, unknown>;
+}
+
+/**
+ * ユーザーに通知を作成
+ */
+export async function createNotification(options: NotificationOptions): Promise<string> {
+  const { userId, type, title, body, data = {} } = options;
+
+  const notificationRef = await db
+    .collection("users")
+    .doc(userId)
+    .collection("notifications")
+    .add({
+      type,
+      title,
+      body,
+      isRead: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...data,
+    });
+
+  console.log(`Notification created: ${type} for user ${userId}`);
+  return notificationRef.id;
+}
+
+/**
+ * 複数ユーザーに通知を一括作成
+ */
+export async function createNotificationsForUsers(
+  userIds: string[],
+  options: Omit<NotificationOptions, "userId">
+): Promise<void> {
+  const batch = db.batch();
+
+  for (const userId of userIds) {
+    const ref = db.collection("users").doc(userId).collection("notifications").doc();
+    batch.set(ref, {
+      ...options,
+      isRead: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  }
+
+  await batch.commit();
+  console.log(`Notifications created for ${userIds.length} users`);
+}
+
+// 使用例
+await createNotification({
+  userId: targetUserId,
+  type: "task_reminder",
+  title: "タスクのお知らせ",
+  body: "タスクの期限が近づいています",
+  data: { taskId },
+});
+
+// 管理者全員に通知
+const adminUids = await getAdminUids();
+await createNotificationsForUsers(adminUids, {
+  type: "admin_report",
+  title: "新規通報を受信",
+  body: notifyBody,
+  data: { reportId },
+});
+```
+
+---
+
+#### 4. Cloud Tasks ヘルパー（優先度：中）
+
+**現状**: 16箇所でCloud Tasksを作成
+
+```typescript
+// helpers/cloud-tasks.ts
+interface TaskOptions {
+  queue: string;
+  url: string;
+  payload: Record<string, unknown>;
+  scheduleTime?: Date;
+}
+
+export async function scheduleTask(options: TaskOptions): Promise<string> {
+  const tasksClient = new CloudTasksClient();
+  const project = process.env.GCLOUD_PROJECT || PROJECT_ID;
+  const parent = tasksClient.queuePath(project, LOCATION, options.queue);
+
+  const task = {
+    httpRequest: {
+      httpMethod: "POST" as const,
+      url: options.url,
+      body: Buffer.from(JSON.stringify(options.payload)).toString("base64"),
+      headers: { "Content-Type": "application/json" },
+      oidcToken: {
+        serviceAccountEmail: `${project}@appspot.gserviceaccount.com`,
+      },
+    },
+    ...(options.scheduleTime && {
+      scheduleTime: {
+        seconds: Math.floor(options.scheduleTime.getTime() / 1000),
+      },
+    }),
+  };
+
+  const [response] = await tasksClient.createTask({ parent, task });
+  console.log(`Task scheduled: ${response.name}`);
+  return response.name || "";
+}
+```
+
+---
+
+### 共通化による効果
+
+| パターン | Before（行数）| After（行数）| 削減率 |
+|---------|-------------|------------|--------|
+| 認証チェック | 145行（29×5行）| 29行（29×1行）| 80% |
+| エラースロー | 60行 | 60行（メッセージ一元管理）| - |
+| 通知作成 | 170行（17×10行）| 51行（17×3行）| 70% |
+| Cloud Tasks | 160行（16×10行）| 48行（16×3行）| 70% |
+| **合計** | **約535行** | **約188行** | **65%** |
+
+---
+
+### 推奨する共通化ファイル
+
+```
+functions/src/
+├── helpers/
+│   ├── admin.ts        # isAdmin, getAdminUids（既存を移動）
+│   ├── auth.ts         # requireAuth, requireAdmin【新規】
+│   ├── errors.ts       # ErrorMessages【新規】
+│   ├── notification.ts # createNotification【新規】
+│   ├── storage.ts      # deleteStorageFileFromUrl（既存を移動）
+│   ├── cloud-tasks.ts  # scheduleTask【新規】
+│   └── index.ts        # 再エクスポート
+└── ...
+```
+
+---
+
 ## 分割しやすさランキング
 
 | 順位 | ファイル | 理由 |
