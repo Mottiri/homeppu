@@ -1,0 +1,507 @@
+# index.ts 分割リファクタリング計画
+
+## 現状分析
+
+| 項目 | 値 |
+|------|-----|
+| 総行数 | 8,628行 |
+| ファイルサイズ | 308KB |
+| export数 | 64関数 |
+| セクション数 | 約30 |
+
+### 問題点
+- ファイルが大きすぎてエディタが重い
+- マージコンフリクトが発生しやすい
+- 単体テストが書きにくい
+- どこに何があるか把握しづらい
+
+---
+
+## 提案するファイル構成
+
+```
+functions/src/
+├── index.ts                    # 再エクスポートのみ（約50行）
+├── config/
+│   ├── constants.ts            # 定数（PROJECT_ID, LOCATION, QUEUE_NAME等）
+│   └── secrets.ts              # Secret定義（geminiApiKey, openaiApiKey等）
+├── types/
+│   └── index.ts                # 型定義（MediaItem, ModerationResult等）
+├── helpers/
+│   ├── admin.ts                # isAdmin, getAdminUids
+│   ├── notification.ts         # sendPushOnly
+│   ├── storage.ts              # deleteStorageFileFromUrl
+│   ├── sheets.ts               # appendInquiryToSpreadsheet
+│   └── virtue.ts               # VIRTUE_CONFIG, penalizeUser
+├── ai/
+│   ├── provider.ts             # 既存（AIProviderFactory）
+│   ├── personas.ts             # AI_PERSONAS, generateAIPersona, 名前パーツ
+│   └── moderation.ts           # moderateImage, moderateVideo, moderateMedia
+├── triggers/
+│   ├── posts.ts                # onPostCreated, onPostDeleted
+│   ├── notifications.ts        # onNotificationCreated, onNotificationCreatedPush
+│   ├── reactions.ts            # onReactionCreated, onCommentCreatedNotify
+│   ├── tasks.ts                # onTaskUpdated, scheduleTaskReminders*
+│   └── circles.ts              # onCircleCreated, onCircleUpdated
+├── callable/
+│   ├── posts.ts                # createPostWithModeration, createPostWithRateLimit
+│   ├── comments.ts             # createCommentWithModeration, addUserReaction
+│   ├── users.ts                # followUser, unfollowUser, getFollowStatus, getVirtue*
+│   ├── tasks.ts                # createTask, getTasks
+│   ├── names.ts                # initializeNameParts, getNameParts, updateUserName
+│   ├── reports.ts              # reportContent
+│   ├── inquiries.ts            # createInquiry, sendInquiryReply, markInquiryViewed等
+│   ├── circles.ts              # deleteCircle, approveJoinRequest, sendJoinRequest等
+│   ├── admin.ts                # grantAdminRole, removeAdminRole, banUser等
+│   └── ai.ts                   # initializeAIAccounts, generateAIPosts, triggerCircleAIPosts
+├── scheduled/
+│   ├── ai-posts.ts             # scheduleAIPosts
+│   ├── reminders.ts            # executeTaskReminder, executeGoalReminder
+│   ├── cleanup.ts              # cleanupReports, cleanupOrphanedMedia, cleanupBannedUsers
+│   └── circles.ts              # checkGhostCircles, evolveCircleAIs
+├── http/
+│   ├── ai-generation.ts        # executeAIPostGeneration, generateAICommentV1等
+│   ├── circle-cleanup.ts       # cleanupDeletedCircle
+│   └── image-moderation.ts     # moderateImageCallable
+└── circle-ai/
+    ├── generator.ts            # generateCircleAIPersona
+    ├── posts.ts                # generateCircleAIPosts, executeCircleAIPost
+    └── evolution.ts            # evolveCircleAIs, triggerEvolveCircleAIs
+```
+
+---
+
+## 分割優先度（Phase分け）
+
+### Phase 1: 共有ヘルパー抽出（低リスク・高効果）
+
+| ファイル | 抽出対象 | 行数 | 依存箇所 |
+|---------|---------|------|----------|
+| `helpers/admin.ts` | isAdmin, getAdminUids | 35行 | 16箇所 |
+| `helpers/notification.ts` | sendPushOnly | 80行 | 1箇所 |
+| `helpers/storage.ts` | deleteStorageFileFromUrl | 25行 | 6箇所 |
+| `types/index.ts` | MediaItem, ModerationResult等 | 35行 | 全体 |
+
+**効果**: 共有コードを1箇所に集約、テスト可能に
+
+---
+
+### Phase 2: AIキャラクター定義分離（中リスク・高効果）
+
+| ファイル | 抽出対象 | 行数 | 依存箇所 |
+|---------|---------|------|----------|
+| `ai/personas.ts` | OCCUPATIONS, PERSONALITIES, BIO_TEMPLATES, AI_PERSONAS等 | 700行 | 15箇所 |
+
+**効果**: 最も行数が多い定数群を分離、index.tsが大幅に軽量化
+
+---
+
+### Phase 3: 独立性の高い機能を分離（低リスク）
+
+| ファイル | 抽出対象 | 行数 | 理由 |
+|---------|---------|------|------|
+| `callable/inquiries.ts` | createInquiry, sendInquiryReply等 | 580行 | 完全に独立 |
+| `callable/tasks.ts` | createTask, getTasks | 320行 | ほぼ独立 |
+| `callable/names.ts` | initializeNameParts, getNameParts等 | 185行 | 完全に独立 |
+| `callable/reports.ts` | reportContent | 130行 | ほぼ独立 |
+
+**効果**: 個別機能を独立ファイルに、テスト・保守が容易に
+
+---
+
+### Phase 4: サークル関連を分離（中リスク）
+
+| ファイル | 抽出対象 | 行数 |
+|---------|---------|------|
+| `callable/circles.ts` | deleteCircle, approveJoinRequest等 | 580行 |
+| `triggers/circles.ts` | onCircleCreated, onCircleUpdated | 210行 |
+| `circle-ai/generator.ts` | generateCircleAIPersona | 80行 |
+| `circle-ai/posts.ts` | generateCircleAIPosts, executeCircleAIPost | 320行 |
+| `scheduled/circles.ts` | checkGhostCircles, evolveCircleAIs | 280行 |
+
+**効果**: サークル機能を1ディレクトリに集約
+
+---
+
+### Phase 5: 投稿・コメント・リアクション（中リスク）
+
+| ファイル | 抽出対象 | 行数 |
+|---------|---------|------|
+| `triggers/posts.ts` | onPostCreated, onPostDeleted | 500行 |
+| `callable/posts.ts` | createPostWithModeration等 | 450行 |
+| `callable/comments.ts` | createCommentWithModeration, addUserReaction | 180行 |
+| `triggers/reactions.ts` | onReactionCreated, onReactionAddedNotify | 120行 |
+
+---
+
+### Phase 6: 管理者・ユーザー管理（低リスク）
+
+| ファイル | 抽出対象 | 行数 |
+|---------|---------|------|
+| `callable/admin.ts` | grantAdminRole, removeAdminRole, banUser等 | 280行 |
+| `callable/users.ts` | followUser, unfollowUser, getVirtue*, cleanUpUserFollows | 350行 |
+
+---
+
+### Phase 7: スケジュール・HTTP関数（低リスク）
+
+| ファイル | 抽出対象 | 行数 |
+|---------|---------|------|
+| `scheduled/ai-posts.ts` | scheduleAIPosts | 120行 |
+| `scheduled/cleanup.ts` | cleanupReports, cleanupOrphanedMedia等 | 380行 |
+| `scheduled/reminders.ts` | executeTaskReminder, executeGoalReminder等 | 450行 |
+| `http/ai-generation.ts` | executeAIPostGeneration, generateAICommentV1等 | 350行 |
+
+---
+
+## 分割作業時の注意点
+
+### 1. import/export の整理
+```typescript
+// 新ファイル（例: helpers/admin.ts）
+import * as admin from "firebase-admin";
+export async function isAdmin(uid: string): Promise<boolean> { ... }
+export async function getAdminUids(): Promise<string[]> { ... }
+
+// index.ts
+export { isAdmin, getAdminUids } from "./helpers/admin";
+// または
+export * from "./helpers/admin";
+```
+
+### 2. Secret の扱い
+- `defineSecret` は index.ts に残す（関数定義時に必要）
+- ヘルパー関数には引数で渡す
+
+### 3. db インスタンス
+- 各ファイルで `admin.firestore()` を呼ぶ
+- または `config/firebase.ts` で初期化してexport
+
+### 4. テスト
+- 各Phaseの完了後に `npm run build` と動作確認
+- デプロイ前に全関数のスモークテスト
+
+---
+
+## 分割しやすさランキング
+
+| 順位 | ファイル | 理由 |
+|-----|---------|------|
+| 1 | `callable/inquiries.ts` | 外部依存なし、完全独立 |
+| 2 | `callable/names.ts` | 外部依存なし、完全独立 |
+| 3 | `callable/reports.ts` | isAdminのみ依存、ほぼ独立 |
+| 4 | `helpers/admin.ts` | 依存なし、多くの箇所で使用 |
+| 5 | `helpers/storage.ts` | 依存なし |
+| 6 | `types/index.ts` | 型定義のみ |
+| 7 | `ai/personas.ts` | 行数最大、定数のみ |
+| 8 | `callable/tasks.ts` | isAdminのみ依存 |
+| 9 | `callable/users.ts` | isAdmin, VIRTUE_CONFIG依存 |
+| 10 | `triggers/reactions.ts` | db依存のみ |
+
+---
+
+## 推奨作業順序
+
+1. **helpers/admin.ts** を作成（isAdmin, getAdminUids）
+2. **helpers/storage.ts** を作成（deleteStorageFileFromUrl）
+3. **types/index.ts** を作成（MediaItem等の型）
+4. **callable/inquiries.ts** を作成（問い合わせ全体）
+5. **callable/names.ts** を作成（名前パーツ全体）
+6. **ai/personas.ts** を作成（AIキャラ定義）
+7. 動作確認・デプロイテスト
+8. 残りを順次分離
+
+---
+
+## 期待される効果
+
+| 項目 | Before | After（予想）|
+|------|--------|-------------|
+| index.ts行数 | 8,628行 | 約100行（再エクスポートのみ）|
+| 平均ファイル行数 | - | 200-400行 |
+| ビルド時間 | - | 変化なし |
+| 開発効率 | 低 | 高（検索・ナビゲーション改善）|
+| テスト容易性 | 低 | 高（単体テスト可能）|
+| マージコンフリクト | 高 | 低（ファイル分散）|
+
+---
+
+## 実機テスト計画
+
+### テスト前提条件
+
+- テスト用アカウント（一般ユーザー）を用意
+- テスト用アカウント（管理者権限付き）を用意
+- デバッグビルドのアプリを使用
+- Firebase Console でログを確認できる状態にしておく
+
+---
+
+### Phase 1 完了後のテスト（ヘルパー抽出）
+
+#### T1-1: 管理者権限チェック（isAdmin, getAdminUids）
+
+| # | テスト項目 | 手順 | 期待結果 |
+|---|-----------|------|----------|
+| 1 | 管理者機能へのアクセス | 管理者アカウントでログイン → 管理画面を開く | 管理画面が表示される |
+| 2 | 一般ユーザーの制限 | 一般アカウントでログイン → 管理機能のあるボタンをタップ | エラーまたは権限不足メッセージ |
+| 3 | 問い合わせ通知 | 一般ユーザーで問い合わせを送信 | 管理者全員に通知が届く |
+
+#### T1-2: Storage削除（deleteStorageFileFromUrl）
+
+| # | テスト項目 | 手順 | 期待結果 |
+|---|-----------|------|----------|
+| 1 | 投稿削除時の画像削除 | 画像付き投稿を作成 → 投稿を削除 | Storageから画像も削除される（Console確認）|
+| 2 | サークルアイコン更新 | サークルアイコンを変更 | 旧アイコンがStorageから削除される |
+
+---
+
+### Phase 2 完了後のテスト（AIキャラ定義分離）
+
+#### T2-1: AIキャラクター動作
+
+| # | テスト項目 | 手順 | 期待結果 |
+|---|-----------|------|----------|
+| 1 | AIコメント生成 | 投稿を作成（AIモード） | 数秒〜1分後にAIからコメントが付く |
+| 2 | AIプロフィール表示 | AIユーザーのプロフィールを開く | 名前・bio・アバターが正常表示 |
+| 3 | AIリアクション | 投稿を作成 → しばらく待つ | AIからリアクションが付く |
+
+#### T2-2: サークルAI
+
+| # | テスト項目 | 手順 | 期待結果 |
+|---|-----------|------|----------|
+| 1 | サークルAI生成 | 新規サークルを作成 | 3体のAIメンバーが自動生成される |
+| 2 | サークルAIプロフィール | サークルAIのプロフィールを開く | 正常に表示される |
+
+---
+
+### Phase 3 完了後のテスト（独立機能分離）
+
+#### T3-1: 問い合わせ機能（inquiries）
+
+| # | テスト項目 | 手順 | 期待結果 |
+|---|-----------|------|----------|
+| 1 | 問い合わせ作成 | 設定 → 問い合わせ → 新規作成 → 送信 | 問い合わせが作成される |
+| 2 | 画像付き問い合わせ | 問い合わせ作成時に画像を添付 → 送信 | 画像付きで送信される |
+| 3 | 管理者返信 | 管理者で問い合わせに返信 | ユーザーに通知が届く |
+| 4 | ユーザー返信 | ユーザーで返信 | 管理者に通知が届く |
+| 5 | 問い合わせ解決 | 管理者が「解決」ボタンをタップ | ステータスが「解決済み」に変わる |
+| 6 | 問い合わせ削除 | 問い合わせを削除 | 一覧から消える、添付画像もStorage削除 |
+
+#### T3-2: タスク機能（tasks）
+
+| # | テスト項目 | 手順 | 期待結果 |
+|---|-----------|------|----------|
+| 1 | タスク作成 | タスク画面 → 新規タスク → 保存 | タスクが一覧に表示される |
+| 2 | タスク編集 | タスクをタップ → 内容変更 → 保存 | 変更が反映される |
+| 3 | タスク完了 | タスクのチェックボックスをタップ | 完了状態になる |
+| 4 | リマインダー設定 | タスクにリマインダーを設定 | 設定時刻に通知が届く |
+
+#### T3-3: 名前パーツ機能（names）
+
+| # | テスト項目 | 手順 | 期待結果 |
+|---|-----------|------|----------|
+| 1 | 名前変更 | プロフィール編集 → 名前変更 | 新しい名前が反映される |
+| 2 | 名前パーツ取得 | 名前編集画面を開く | 利用可能なパーツ一覧が表示される |
+
+#### T3-4: 通報機能（reports）
+
+| # | テスト項目 | 手順 | 期待結果 |
+|---|-----------|------|----------|
+| 1 | 投稿を通報 | 投稿のメニュー → 通報 → 理由選択 → 送信 | 通報完了メッセージ |
+| 2 | 重複通報防止 | 同じ投稿を再度通報 | 「既に通報済み」エラー |
+| 3 | 通報多数で非表示 | 5アカウントから同じ投稿を通報 | 投稿が非表示になる |
+
+---
+
+### Phase 4 完了後のテスト（サークル関連）
+
+#### T4-1: サークル基本操作
+
+| # | テスト項目 | 手順 | 期待結果 |
+|---|-----------|------|----------|
+| 1 | サークル作成 | サークル → 新規作成 → 情報入力 → 作成 | サークルが作成される、AI3体生成 |
+| 2 | サークル編集 | サークル設定 → 情報編集 → 保存 | 変更が反映される |
+| 3 | サークル削除 | サークル設定 → 削除 | サークルが削除される |
+| 4 | アイコン/カバー変更 | サークル設定 → 画像変更 | 新画像が反映、旧画像がStorage削除 |
+
+#### T4-2: サークル参加
+
+| # | テスト項目 | 手順 | 期待結果 |
+|---|-----------|------|----------|
+| 1 | 参加申請 | 非メンバーでサークル詳細 → 参加申請 | 申請が送信される |
+| 2 | 申請承認 | オーナーで申請一覧 → 承認 | 申請者がメンバーになる |
+| 3 | 申請却下 | オーナーで申請一覧 → 却下 | 申請が削除される |
+
+#### T4-3: サークルAI投稿
+
+| # | テスト項目 | 手順 | 期待結果 |
+|---|-----------|------|----------|
+| 1 | サークルAIコメント | サークル内で投稿 | サークルAIからコメントが付く |
+| 2 | サークルAI投稿（管理者） | 管理画面 → サークルAI投稿トリガー | サークルAIが投稿を作成 |
+
+---
+
+### Phase 5 完了後のテスト（投稿・コメント・リアクション）
+
+#### T5-1: 投稿機能
+
+| # | テスト項目 | 手順 | 期待結果 |
+|---|-----------|------|----------|
+| 1 | テキスト投稿 | 投稿作成 → テキスト入力 → 投稿 | 投稿がタイムラインに表示 |
+| 2 | 画像付き投稿 | 投稿作成 → 画像添付 → 投稿 | 画像付きで投稿される |
+| 3 | 動画付き投稿 | 投稿作成 → 動画添付 → 投稿 | 動画付きで投稿される |
+| 4 | NGワード検出 | 禁止ワードを含む投稿を試みる | 投稿がブロックされる |
+| 5 | 不適切画像検出 | 不適切な画像を添付して投稿 | モデレーションでブロック |
+| 6 | 投稿削除 | 自分の投稿 → 削除 | 投稿が削除、画像もStorage削除 |
+
+#### T5-2: コメント機能
+
+| # | テスト項目 | 手順 | 期待結果 |
+|---|-----------|------|----------|
+| 1 | コメント投稿 | 投稿詳細 → コメント入力 → 送信 | コメントが表示される |
+| 2 | コメント通知 | 他ユーザーの投稿にコメント | 投稿者に通知が届く |
+| 3 | NGワード検出 | 禁止ワードを含むコメント | ブロックされる |
+
+#### T5-3: リアクション機能
+
+| # | テスト項目 | 手順 | 期待結果 |
+|---|-----------|------|----------|
+| 1 | リアクション追加 | 投稿のリアクションボタンをタップ | リアクションが追加される |
+| 2 | リアクション通知 | 他ユーザーの投稿にリアクション | 投稿者に通知が届く |
+| 3 | totalPraises更新 | リアクションを受ける | ユーザーのtotalPraisesが増加 |
+
+---
+
+### Phase 6 完了後のテスト（管理者・ユーザー管理）
+
+#### T6-1: フォロー機能
+
+| # | テスト項目 | 手順 | 期待結果 |
+|---|-----------|------|----------|
+| 1 | フォロー | ユーザープロフィール → フォロー | フォロー状態になる |
+| 2 | フォロー解除 | フォロー中のユーザー → フォロー解除 | フォロー解除される |
+| 3 | フォロー状態確認 | プロフィール画面を開く | 正しいフォロー状態が表示 |
+
+#### T6-2: 徳システム
+
+| # | テスト項目 | 手順 | 期待結果 |
+|---|-----------|------|----------|
+| 1 | 徳ポイント確認 | プロフィール → 徳ステータス | 現在の徳ポイントが表示 |
+| 2 | 徳履歴確認 | 徳履歴画面を開く | 履歴一覧が表示される |
+
+#### T6-3: 管理者機能
+
+| # | テスト項目 | 手順 | 期待結果 |
+|---|-----------|------|----------|
+| 1 | 管理者権限付与 | 管理画面 → ユーザー → 管理者権限付与 | 権限が付与される |
+| 2 | 管理者権限削除 | 管理画面 → ユーザー → 管理者権限削除 | 権限が削除される |
+| 3 | ユーザーBAN | 管理画面 → ユーザー → BAN | BANされる、通知が届く |
+| 4 | BAN解除 | 管理画面 → BANユーザー → 解除 | BAN解除される |
+
+---
+
+### Phase 7 完了後のテスト（スケジュール・HTTP関数）
+
+#### T7-1: リマインダー
+
+| # | テスト項目 | 手順 | 期待結果 |
+|---|-----------|------|----------|
+| 1 | タスクリマインダー | リマインダー付きタスクを作成 | 設定時刻に通知が届く |
+| 2 | 目標リマインダー | リマインダー付き目標を作成 | 設定時刻に通知が届く |
+
+#### T7-2: 定期クリーンアップ（Firebase Console確認）
+
+| # | テスト項目 | 確認方法 | 期待結果 |
+|---|-----------|----------|----------|
+| 1 | cleanupReports | Consoleでログ確認 | 古いレポートが削除される |
+| 2 | cleanupOrphanedMedia | Consoleでログ確認 | 孤立メディアが削除される |
+| 3 | checkGhostCircles | Consoleでログ確認 | ゴーストサークル検出・通知 |
+
+---
+
+## 全体テストチェックリスト
+
+分割完了後、以下を順番に確認してください。
+
+### 基本動作確認
+
+- [ ] アプリが起動する
+- [ ] ログイン/ログアウトができる
+- [ ] タイムラインが表示される
+- [ ] プッシュ通知が届く
+
+### 投稿関連
+
+- [ ] テキスト投稿ができる
+- [ ] 画像付き投稿ができる
+- [ ] 投稿削除ができる
+- [ ] AIコメントが付く
+- [ ] AIリアクションが付く
+- [ ] モデレーションが動作する
+
+### サークル関連
+
+- [ ] サークル作成ができる
+- [ ] サークルAIが生成される
+- [ ] サークルへの参加申請ができる
+- [ ] サークル内投稿にAIコメントが付く
+- [ ] サークル削除ができる
+
+### ユーザー関連
+
+- [ ] フォロー/フォロー解除ができる
+- [ ] 名前変更ができる
+- [ ] プロフィール編集ができる
+- [ ] 通報ができる
+
+### タスク・目標関連
+
+- [ ] タスク作成・編集・完了ができる
+- [ ] タスクリマインダーが届く
+- [ ] 目標リマインダーが届く
+
+### 問い合わせ関連
+
+- [ ] 問い合わせ作成ができる
+- [ ] 管理者返信ができる
+- [ ] 問い合わせ解決ができる
+
+### 管理者機能（管理者アカウントで確認）
+
+- [ ] 管理画面にアクセスできる
+- [ ] ユーザーBAN/解除ができる
+- [ ] 管理者権限付与/削除ができる
+
+---
+
+## トラブルシューティング
+
+### デプロイ後に関数が動かない場合
+
+1. Firebase Console → Functions → ログを確認
+2. エラーメッセージを確認
+3. よくある原因:
+   - import パスの誤り
+   - export の漏れ
+   - Secret が関数に紐付いていない
+
+### 特定の機能だけ動かない場合
+
+1. その機能に関連する関数を特定
+2. Firebase Console でその関数のログを確認
+3. 分割前のコードと比較してimport/exportを確認
+
+### ロールバック手順
+
+1. `git revert` で分割前の状態に戻す
+2. `firebase deploy --only functions` で再デプロイ
+3. 動作確認後、問題点を修正して再度分割
+
+---
+
+## 備考
+
+- Firebase Functions では、すべてのexportが `index.ts` から見える必要がある
+- 分割後も `index.ts` で再エクスポートすれば既存の呼び出しに影響なし
+- Cloud Functions のデプロイ名は export 名で決まるため、リネーム不要

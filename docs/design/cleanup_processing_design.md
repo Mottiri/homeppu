@@ -28,53 +28,126 @@ Firebase Storage上に存在するが、Firestoreのどのドキュメントか�
 ### 保持期間
 - **24時間**: アップロードから24時間以上経過した孤立メディアが削除対象
 
-### 対象ディレクトリ
-| ディレクトリ | 対象 | 参照元 |
-|------------|------|-------|
-| `posts/` | 投稿メディア | `posts.mediaUrls` |
-| `avatars/` | アバター画像 | `users.avatarUrl` |
-| `circles/` | サークル画像 | `circles.imageUrl` |
-| `inquiries/` | 問い合わせ添付画像 | `inquiries/{id}/messages.imageUrl` |
+### 対象ディレクトリと検出ロジック
+
+この処理では**4種類の対象**があり、それぞれ異なる検出方法を使用しています。
+
+#### 1. 投稿メディア (`posts/`)
+
+**検出方法**: アップロード時にメタデータに埋め込んだ `postId` を使用
+
+| 状態 | 判定 | 説明 |
+|------|------|------|
+| `postId = "PENDING"` | 孤立 | 投稿前に離脱したケース |
+| 投稿ドキュメントが存在しない | 孤立 | 投稿が削除された |
+
+```typescript
+// メタデータからpostIdを取得
+const customMetadata = metadata.metadata || {};
+const postId = customMetadata.postId ? String(customMetadata.postId) : null;
+
+if (postId === "PENDING") {
+  // 投稿前に離脱したケース → 孤立
+  shouldDelete = true;
+} else {
+  // 投稿が存在するか確認
+  const postDoc = await db.collection("posts").doc(postId).get();
+  if (!postDoc.exists) {
+    // 投稿が削除された → 孤立
+    shouldDelete = true;
+  }
+}
+```
+
+#### 2. サークル画像 (`circles/`)
+
+**検出方法**: ファイルパスから `circleId` を抽出し、存在確認
+
+| パス形式 | 抽出対象 |
+|---------|---------|
+| `circles/{circleId}/icon/{fileName}` | `circleId` = pathParts[1] |
+
+```typescript
+// パスからcircleIdを抽出: circles/{circleId}/icon/{fileName}
+const pathParts = file.name.split("/");
+const circleId = pathParts[1];
+
+// サークルが存在するか確認
+const circleDoc = await db.collection("circles").doc(circleId).get();
+if (!circleDoc.exists) {
+  // サークルが削除された → 孤立
+  shouldDelete = true;
+}
+```
+
+#### 3. タスク添付ファイル (`task_attachments/`)
+
+**検出方法**: ファイルパスから `taskId` を抽出し、存在確認
+
+| パス形式 | 抽出対象 |
+|---------|---------|
+| `task_attachments/{userId}/{taskId}/{fileName}` | `taskId` = pathParts[2] |
+
+```typescript
+// パスからtaskIdを抽出: task_attachments/{userId}/{taskId}/{fileName}
+const pathParts = file.name.split("/");
+const taskId = pathParts[2];
+
+const taskDoc = await db.collection("tasks").doc(taskId).get();
+if (!taskDoc.exists) {
+  // タスクが削除された → 孤立
+  shouldDelete = true;
+}
+```
+
+#### 4. 孤立サークル投稿（Firestoreデータ）
+
+**検出方法**: 投稿の `circleId` が指すサークルが存在するか確認
+
+> **注意**: この処理は Storage ではなく Firestore のデータを対象としています
+
+```typescript
+// サークル投稿を取得
+const circlePostsSnapshot = await db.collection("posts")
+  .where("circleId", "!=", null)
+  .limit(500)
+  .get();
+
+// サークルの存在を確認するためのキャッシュ
+const circleExistsCache: Map<string, boolean> = new Map();
+
+for (const postDoc of circlePostsSnapshot.docs) {
+  const circleId = postDoc.data().circleId;
+  
+  // キャッシュを確認（同じサークルへの複数クエリを防止）
+  let circleExists = circleExistsCache.get(circleId);
+  if (circleExists === undefined) {
+    const circleDoc = await db.collection("circles").doc(circleId).get();
+    circleExists = circleDoc.exists;
+    circleExistsCache.set(circleId, circleExists);
+  }
+
+  if (!circleExists) {
+    // サークルが削除された → 投稿も削除
+    // コメント、リアクション、メディアも一緒に削除
+  }
+}
+```
+
+### 検出ロジックまとめ
+
+| 対象 | 検出方法 | 孤立条件 |
+|------|---------|---------|
+| 投稿メディア | メタデータの `postId` | `PENDING` or 投稿が存在しない |
+| サークル画像 | パスから `circleId` 抽出 | サークルが存在しない |
+| タスク添付 | パスから `taskId` 抽出 | タスクが存在しない |
+| サークル投稿 | Firestoreの `circleId` | サークルが存在しない |
 
 ### ソースコード
 
 **ファイル**: `functions/src/index.ts`  
-**行番号**: L6575-L6760
+**行番号**: L6575-L6780
 
-```typescript
-export const cleanupOrphanedMedia = onSchedule(
-  {
-    schedule: "0 3 * * *", // 毎日午前3時 JST
-    timeZone: "Asia/Tokyo",
-    region: "asia-northeast1",
-    timeoutSeconds: 600,
-  },
-  async () => {
-    console.log("=== cleanupOrphanedMedia START ===");
-    const bucket = admin.storage().bucket();
-    const now = Date.now();
-    const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
-
-    // 各ディレクトリごとにファイルをチェック
-    // 1. 投稿メディア
-    const [postFiles] = await bucket.getFiles({ prefix: "posts/" });
-    for (const file of postFiles) {
-      // メタデータから作成日時を取得
-      const [metadata] = await file.getMetadata();
-      const createdAt = new Date(metadata.timeCreated).getTime();
-      
-      // 24時間以上経過 && どのドキュメントからも参照されていない → 削除
-      if (now - createdAt > TWENTY_FOUR_HOURS) {
-        const isOrphaned = await checkIfOrphaned(file.name);
-        if (isOrphaned) {
-          await file.delete();
-        }
-      }
-    }
-    // 2. アバター, 3. サークル, 4. 問い合わせ も同様に処理
-  }
-);
-```
 
 ---
 
