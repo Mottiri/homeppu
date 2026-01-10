@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
 
 /// 問い合わせカテゴリ
 enum InquiryCategory {
@@ -224,22 +223,11 @@ class InquiryService {
   /// 閲覧中フラグを設定（ユーザー側）
   Future<void> setUserViewing(String inquiryId, bool viewing) async {
     final user = _auth.currentUser;
-    if (user == null) {
-      debugPrint('[InquiryService] setUserViewing: user is null, skipping');
-      return;
-    }
+    if (user == null) return;
 
-    debugPrint(
-      '[InquiryService] setUserViewing: inquiryId=$inquiryId, viewing=$viewing',
-    );
-    try {
-      await _firestore.collection('inquiries').doc(inquiryId).update({
-        'userViewing': viewing,
-      });
-      debugPrint('[InquiryService] setUserViewing: success');
-    } catch (e) {
-      debugPrint('[InquiryService] setUserViewing: error=$e');
-    }
+    await _firestore.collection('inquiries').doc(inquiryId).update({
+      'userViewing': viewing,
+    });
   }
 
   /// 閲覧中フラグを設定（管理者側）
