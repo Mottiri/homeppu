@@ -207,8 +207,12 @@ service cloud.firestore {
 
     // サークルコレクション
     match /circles/{circleId} {
-      // 読み取り: 認証済みユーザーは誰でも（クライアント側でフィルタリング）
-      allow read: if isAuthenticated();
+      // 読み取り: AIモードサークルは作成者のみ、それ以外は認証済みユーザー誰でも
+      allow read: if isAuthenticated() && (
+        resource.data.aiMode != "aiOnly" ||
+        resource.data.ownerId == request.auth.uid ||
+        isAdmin()
+      );
       
       // 作成: 認証済みでBANされていないユーザー（管理者はBANチェックスキップ）
       allow create: if isAuthenticated() && (isNotBanned() || isAdmin());
