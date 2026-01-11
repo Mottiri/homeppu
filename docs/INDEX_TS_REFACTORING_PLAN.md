@@ -468,9 +468,72 @@ functions/src/
 │   ├── notification.ts # createNotification【新規】
 │   ├── storage.ts      # deleteStorageFileFromUrl（既存を移動）
 │   ├── cloud-tasks.ts  # scheduleTask【新規】
+│   ├── cloud-tasks-auth.ts # verifyCloudTasksRequest【新規・セキュリティ#15】
 │   └── index.ts        # 再エクスポート
 └── ...
 ```
+
+### Cloud TasksリクエストのOIDC認証（セキュリティ#15対応）
+
+現在6つの `onRequest` 関数で認証ヘッダーの存在チェックのみ行っていますが、
+トークンの正当性を検証する共通ヘルパーを作成します。
+
+**対象関数**:
+- `generateAICommentV1`
+- `generateAIReactionV1`
+- `executeAIPostGeneration`
+- `executeTaskReminder`
+- `cleanupDeletedCircle`
+- `executeCircleAIPost`
+
+**ヘルパー関数設計**:
+
+```typescript
+// helpers/cloud-tasks-auth.ts
+import { OAuth2Client } from "google-auth-library";
+import * as functionsV1 from "firebase-functions/v1";
+import { PROJECT_ID } from "../config/constants";
+
+const authClient = new OAuth2Client();
+
+/**
+ * Cloud Tasksからのリクエストを検証
+ * OIDCトークンを検証し、正当なリクエストかどうかを判定
+ */
+export async function verifyCloudTasksRequest(
+  request: functionsV1.https.Request,
+  functionName: string
+): Promise<boolean> {
+  const authHeader = request.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return false;
+  }
+
+  const token = authHeader.split("Bearer ")[1];
+  try {
+    await authClient.verifyIdToken({
+      idToken: token,
+      audience: `https://asia-northeast1-${PROJECT_ID}.cloudfunctions.net/${functionName}`,
+    });
+    return true;
+  } catch (error) {
+    console.error("Token verification failed:", error);
+    return false;
+  }
+}
+```
+
+**使用例**:
+
+```typescript
+// 各onRequest関数内
+if (!await verifyCloudTasksRequest(request, "generateAICommentV1")) {
+  response.status(403).send("Unauthorized");
+  return;
+}
+```
+
+**依存関係**: `google-auth-library`
 
 ---
 
@@ -514,6 +577,40 @@ functions/src/
 | 開発効率 | 低 | 高（検索・ナビゲーション改善）|
 | テスト容易性 | 低 | 高（単体テスト可能）|
 | マージコンフリクト | 高 | 低（ファイル分散）|
+
+---
+
+## 投稿作成関数の責務分離（推奨）
+
+### 現状の問題
+
+| 関数 | 用途 | 問題点 |
+|------|------|--------|
+| `createPostWithModeration` | 通常投稿 | レート制限なし |
+| `createPostWithRateLimit` | タスク達成自動投稿 | 命名が汎用的、AIServiceに配置 |
+
+### 推奨改善
+
+| 現状 | 改善後 | 理由 |
+|------|--------|------|
+| `createPostWithRateLimit` | `createSystemPost` | 用途を明確化（システム自動投稿） |
+| `AIService` に配置 | `callable/posts.ts` に配置 | AI関連ではないため |
+| `createPostWithModeration` にレート制限なし | レート制限を追加 | スパム対策 |
+
+### 詳細
+
+1. **`createPostWithRateLimit` → `createSystemPost` に改名**
+   - タスク達成・目標達成などシステム自動投稿専用
+   - モデレーション不要（内容が固定）
+   - レート制限も不要（発火タイミングが制御されている）
+
+2. **`createPostWithModeration` にレート制限を追加**
+   - ユーザーが連打でスパム投稿するのを防止
+   - 推奨：1分間に3投稿まで
+
+3. **責務の分離を維持**
+   - 1関数に統合せず、用途別に関数を分ける
+   - テスト容易性・変更影響範囲の最小化
 
 ---
 

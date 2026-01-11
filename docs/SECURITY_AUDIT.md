@@ -1086,12 +1086,119 @@ match /circles/{circleId} {
 
 ---
 
+### #15: onRequest関数の認証強化（対応設計）
+
+#### 問題の詳細
+
+以下の6つの `onRequest` 関数は、Cloud Tasksからの呼び出しを想定していますが、**認証ヘッダーの存在チェックのみ**で、トークンの正当性を検証していません。
+
+| 関数名 | 行番号 | 用途 |
+|--------|--------|------|
+| `generateAICommentV1` | 3663 | AIコメント生成 |
+| `generateAIReactionV1` | 4114 | AIリアクション生成 |
+| `executeAIPostGeneration` | 4406 | AI投稿生成 |
+| `executeTaskReminder` | 4851 | タスクリマインダー通知 |
+| `cleanupDeletedCircle` | 5068 | サークル削除クリーンアップ |
+| `executeCircleAIPost` | 6032 | サークルAI投稿 |
+
+#### 現在の認証チェック（問題あり）
+
+```typescript
+const authHeader = request.headers["authorization"];
+if (!authHeader) {
+  response.status(403).send("Unauthorized");
+  return;
+}
+// ↑ ヘッダーの「存在」のみ確認、トークンの検証なし
+```
+
+#### リスク
+
+- URLを知っていれば任意のAuthorizationヘッダーで呼び出し可能
+- 偽のリマインダー通知、AIコメント/投稿の偽装が可能
+- サークルデータの不正削除が可能
+
+#### 推奨対応：OIDCトークン検証
+
+**1. 共通ヘルパー関数を追加**
+
+```typescript
+// index.ts の上部に追加
+import { OAuth2Client } from "google-auth-library";
+
+const authClient = new OAuth2Client();
+
+/**
+ * Cloud Tasksからのリクエストを検証
+ * OIDCトークンを検証し、正当なリクエストかどうかを判定
+ */
+async function verifyCloudTasksRequest(
+  request: functionsV1.https.Request,
+  functionName: string
+): Promise<boolean> {
+  const authHeader = request.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return false;
+  }
+
+  const token = authHeader.split("Bearer ")[1];
+  try {
+    await authClient.verifyIdToken({
+      idToken: token,
+      audience: `https://asia-northeast1-${PROJECT_ID}.cloudfunctions.net/${functionName}`,
+    });
+    return true;
+  } catch (error) {
+    console.error("Token verification failed:", error);
+    return false;
+  }
+}
+```
+
+**2. 各関数の認証チェックを置換**
+
+```typescript
+// Before（現状）
+const authHeader = request.headers["authorization"];
+if (!authHeader) {
+  response.status(403).send("Unauthorized");
+  return;
+}
+
+// After（修正後）
+if (!await verifyCloudTasksRequest(request, "関数名")) {
+  response.status(403).send("Unauthorized");
+  return;
+}
+```
+
+#### 変更箇所一覧
+
+| 関数名 | 変更内容 |
+|--------|---------|
+| `generateAICommentV1` | 認証チェックを `verifyCloudTasksRequest(request, "generateAICommentV1")` に置換 |
+| `generateAIReactionV1` | 同上 |
+| `executeAIPostGeneration` | 同上 |
+| `executeTaskReminder` | 同上 |
+| `cleanupDeletedCircle` | 同上 |
+| `executeCircleAIPost` | 同上 |
+
+#### 依存関係
+
+- `google-auth-library` パッケージが必要（確認が必要）
+
+#### 対応ステータス
+
+- **ステータス**: 設計完了、実装待ち
+- **優先度**: 中（URLが漏洩しなければ実害は低いが、防御的対策として推奨）
+
+---
+
 **残りの対応項目**（未対応）:
 - #10: メールアドレス公開の検討
 - #11: スプレッドシートID移行
 - #13: banAppeals重複コレクションの整理
-- #15: onRequest関数の認証強化
-- #16: createPostWithRateLimitの入力バリデーション
+- #16: createPostWithRateLimitの入力バリデーション（リファクタリング時に対応）
 - #17: App Checkの有効化検討
 - #18: 内部コレクションのルール明示化
 - #19: デバッグログの本番環境無効化
