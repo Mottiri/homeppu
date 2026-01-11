@@ -492,48 +492,142 @@ functions/src/
 // helpers/cloud-tasks-auth.ts
 import { OAuth2Client } from "google-auth-library";
 import * as functionsV1 from "firebase-functions/v1";
-import { PROJECT_ID } from "../config/constants";
+import { PROJECT_ID, LOCATION } from "../config/constants";
 
 const authClient = new OAuth2Client();
+
+// エミュレータ判定
+const IS_EMULATOR = process.env.FUNCTIONS_EMULATOR === "true";
+
+// Cloud Tasksで使用しているサービスアカウント
+const CLOUD_TASKS_SERVICE_ACCOUNT = `cloud-tasks-sa@${PROJECT_ID}.iam.gserviceaccount.com`;
 
 /**
  * Cloud Tasksからのリクエストを検証
  * OIDCトークンを検証し、正当なリクエストかどうかを判定
+ * 
+ * 検証項目:
+ * 1. Bearer トークンの存在
+ * 2. トークンの署名検証（Google発行であること）
+ * 3. audience（呼び出し先関数URL）の一致
+ * 4. 発行元サービスアカウントの検証
  */
 export async function verifyCloudTasksRequest(
   request: functionsV1.https.Request,
   functionName: string
 ): Promise<boolean> {
+  // エミュレータでは認証スキップ（開発時のみ）
+  if (IS_EMULATOR) {
+    console.log(`[DEV] Skipping Cloud Tasks auth for ${functionName} in emulator`);
+    return true;
+  }
+
   const authHeader = request.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    console.error(`Missing or invalid Authorization header for ${functionName}`);
     return false;
   }
 
   const token = authHeader.split("Bearer ")[1];
   try {
-    await authClient.verifyIdToken({
+    // OIDCトークンを検証（署名 + audience）
+    const ticket = await authClient.verifyIdToken({
       idToken: token,
-      audience: `https://asia-northeast1-${PROJECT_ID}.cloudfunctions.net/${functionName}`,
+      audience: `https://${LOCATION}-${PROJECT_ID}.cloudfunctions.net/${functionName}`,
     });
+
+    // 発行元サービスアカウントを検証
+    const payload = ticket.getPayload();
+    if (payload?.email !== CLOUD_TASKS_SERVICE_ACCOUNT) {
+      console.error(`Unexpected service account for ${functionName}: ${payload?.email}`);
+      return false;
+    }
+
     return true;
   } catch (error) {
-    console.error("Token verification failed:", error);
+    console.error(`Token verification failed for ${functionName}:`,
+      error instanceof Error ? error.message : "Unknown error"
+    );
     return false;
   }
 }
 ```
 
+> **注意**: 現在のCloud Tasksタスク作成コード（index.ts 行1651付近）では  
+> `cloud-tasks-sa@${project}.iam.gserviceaccount.com` がサービスアカウントとして使用されています。  
+> このサービスアカウントを検証することで、正当なCloud Tasksからのリクエストのみを許可します。
+
+
 **使用例**:
 
 ```typescript
 // 各onRequest関数内
-if (!await verifyCloudTasksRequest(request, "generateAICommentV1")) {
+if (!await verifyCloudTasksRequest(request, CLOUD_TASK_FUNCTIONS.generateAICommentV1)) {
   response.status(403).send("Unauthorized");
   return;
 }
 ```
 
 **依存関係**: `google-auth-library`
+
+### リスクと注意点（#15統合時）
+
+#### 1. 依存関係リスク
+
+| リスク | 詳細 | 対策 |
+|--------|------|------|
+| `google-auth-library` 未導入 | パッケージが未インストールの可能性 | `package.json` を確認し、必要なら追加 |
+
+#### 2. 設定ミスリスク
+
+| リスク | 詳細 | 対策 |
+|--------|------|------|
+| **PROJECT_ID の参照** | `config/constants.ts` からのインポートが必要 | 分割時にインポートパスを確認 |
+| **関数名の不一致** | 呼び出し時に関数名を文字列で渡すため、タイポの可能性 | 関数名を定数化（下記参照） |
+| **リージョン固定** | `asia-northeast1` がハードコードされている | 定数 `LOCATION` を使用 |
+
+**関数名の定数化（推奨）**:
+
+```typescript
+// config/constants.ts に追加
+export const CLOUD_TASK_FUNCTIONS = {
+  generateAICommentV1: "generateAICommentV1",
+  generateAIReactionV1: "generateAIReactionV1",
+  executeAIPostGeneration: "executeAIPostGeneration",
+  executeTaskReminder: "executeTaskReminder",
+  cleanupDeletedCircle: "cleanupDeletedCircle",
+  executeCircleAIPost: "executeCircleAIPost",
+} as const;
+
+// 使用例
+if (!await verifyCloudTasksRequest(request, CLOUD_TASK_FUNCTIONS.generateAICommentV1)) {
+  // ...
+}
+```
+
+#### 3. 運用リスク
+
+| リスク | 影響 | 発生条件 |
+|--------|------|----------|
+| **正当なリクエスト拒否** | Cloud Tasksからの処理が全て失敗 | audience URLが不正確な場合 |
+| **ロールバック困難** | 認証強化後に問題発覚すると切り戻しが必要 | テスト不足の場合 |
+| **ローカル開発不可** | エミュレータではOIDCトークンが発行されない | 開発時のみ認証スキップが必要 |
+
+#### 4. 推奨する導入手順
+
+1. **依存関係確認**: `google-auth-library` がインストール済みか確認
+2. **段階的導入**: 1関数ずつ適用（全6関数を一度に変更しない）
+3. **本番テスト**: Cloud Tasksからの実リクエストでテスト（エミュレータでは検証不可）
+4. **ログ監視**: デプロイ後はCloud Functionsのログを監視
+
+#### 5. テスト計画
+
+| テスト項目 | 方法 | 期待結果 |
+|-----------|------|----------|
+| 正当なCloud Tasksリクエスト | 本番環境でタスクをトリガー | 正常に処理される |
+| 不正なトークン | curlで偽トークンを送信 | 403エラー |
+| トークンなし | curlでヘッダーなしリクエスト | 403エラー |
+| audience不一致 | 別関数のURLでトークン生成 | 403エラー |
 
 ---
 
