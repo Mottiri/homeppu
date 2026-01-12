@@ -1,7 +1,7 @@
 # セキュリティ監査レポート
 
 **作成日**: 2026年1月7日
-**最終更新**: 2026年1月11日（#21 AIモードサークル制限対応）
+**最終更新**: 2026年1月12日（#15 Cloud Tasks OIDC認証対応完了）
 **対象**: homeppu プロジェクト
 **監査範囲**: Firestore/Storage セキュリティルール、Cloud Functions、クライアントコード、設計書整合性
 
@@ -38,7 +38,7 @@
 | 12 | **中** | google-services.jsonが.gitignoreに未登録 | `.gitignore`, `android/app/` |
 | 13 | **低** | banAppealsとban_appealsの重複コレクション | `firebase/firestore.rules` |
 | 14 | **情報** | Firebase設定のクライアントサイド露出 | `lib/firebase_options.dart` |
-| 15 | **中** | onRequest関数の認証が不十分 | `functions/src/index.ts` |
+| 15 | ~~**中**~~ | ~~onRequest関数の認証が不十分~~ ✅ 完了 | `functions/src/index.ts` |
 | 16 | **高** | createPostWithRateLimitの入力バリデーション不足 | `functions/src/index.ts` |
 | 17 | **低** | App Checkが無効になっている関数あり | `functions/src/index.ts` |
 | 18 | **情報** | 一部コレクションの明示的ルール未定義 | `firebase/firestore.rules` |
@@ -799,7 +799,7 @@ match /circles/{circleId} {
 | **高** | #16 createPostWithRateLimitの入力バリデーション |
 | **中** | #8, #9 Storage削除権限の見直し |
 | **中** | #12 google-services.jsonを.gitignoreに追加 |
-| **中** | #15 onRequest関数の認証強化 |
+| ~~**中**~~ | ~~#15 onRequest関数の認証強化~~ ✅ 完了 |
 | **低** | #10 メールアドレス公開の検討 |
 | **低** | #11 スプレッドシートID移行（任意） |
 | **低** | #13 banAppeals重複コレクションの整理 |
@@ -1189,12 +1189,12 @@ if (!await verifyCloudTasksRequest(request, "関数名")) {
 
 #### 対応ステータス
 
-- **ステータス**: **リファクタリング後に対応予定**
-- **優先度**: 中（URLが漏洩しなければ実害は低いが、防御的対策として推奨）
+- **ステータス**: ✅ **完了**（2026-01-12）
+- **解決方法**: 動的インポート（`await import()`）を使用し、ファイル分割なしで対応
 
-#### 2026-01-12 対応試行と教訓
+#### 2026-01-12 対応履歴
 
-**試行内容**:
+**初回試行（失敗）**:
 - `helpers/cloud-tasks-auth.ts` を作成し、OIDC認証ヘルパーを実装
 - `config/constants.ts` を作成し、定数を分離
 - index.ts に上記をインポートし、6つの関数に認証を適用
@@ -1204,14 +1204,29 @@ if (!await verifyCloudTasksRequest(request, "関数名")) {
 - メモリ256MB制限の関数（`onCircleUpdated`, `moderateImageCallable`）でメモリ不足が発生
 - デプロイエラー: `Container Healthcheck failed`
 
-**教訓**:
-- index.ts が巨大（8,600行）で全関数が同一ファイルを共有しているため、1つのインポートが全関数に影響
-- 解決策: **Cloud Tasks関数を別ファイルに分離してから認証を適用**する必要がある
+**解決策（動的インポート）**:
+- 各Cloud Tasks関数内で `await import("./helpers/cloud-tasks-auth")` を使用
+- 関数実行時にのみライブラリがロードされるため、他の関数に影響しない
+- ファイル分割なしで安全に認証を適用可能
 
-**次のステップ**:
-1. index.ts のリファクタリング（ファイル分割）を実施
-2. Cloud Tasks関数を `http/cloud-tasks.ts` に分離
-3. 分離後に OIDC 認証を適用
+**追加対応**:
+- サービスアカウントを `cloud-tasks-sa@${project}.iam.gserviceaccount.com` に統一
+- 認証失敗時のデバッグログを追加（トークンのaud, email, 期待値を出力）
+
+**実装済みコード**:
+```typescript
+// 各Cloud Tasks関数の冒頭
+const { verifyCloudTasksRequest } = await import("./helpers/cloud-tasks-auth");
+if (!await verifyCloudTasksRequest(request, "関数名")) {
+  response.status(403).send("Unauthorized");
+  return;
+}
+```
+
+**変更ファイル**:
+- `functions/src/helpers/cloud-tasks-auth.ts` - OIDC認証ヘルパー
+- `functions/src/config/constants.ts` - 関数名定数
+- `functions/src/index.ts` - 6つのCloud Tasks関数に認証適用
 
 ---
 
@@ -1223,3 +1238,29 @@ if (!await verifyCloudTasksRequest(request, "関数名")) {
 - #17: App Checkの有効化検討
 - #18: 内部コレクションのルール明示化
 - #19: デバッグログの本番環境無効化
+
+---
+
+### 2026-01-12 セキュリティ修正
+
+#### ✅ #15: onRequest関数（Cloud Tasks）のOIDC認証強化
+- **問題内容**:
+  - 6つのCloud Tasks関数が認証ヘッダーの存在チェックのみで、トークンの正当性を検証していなかった
+  - 任意のAuthorizationヘッダーで呼び出し可能な状態
+- **修正内容**:
+  - `helpers/cloud-tasks-auth.ts` にOIDC認証ヘルパーを実装
+  - `google-auth-library` を使用してトークンを検証
+  - **動的インポート**で他の関数への影響を回避
+  - サービスアカウントを `cloud-tasks-sa@` に統一
+- **対象関数**:
+  - `generateAICommentV1`
+  - `generateAIReactionV1`
+  - `executeAIPostGeneration`
+  - `executeTaskReminder`
+  - `cleanupDeletedCircle`
+  - `executeCircleAIPost`
+- **変更ファイル**:
+  - `functions/src/helpers/cloud-tasks-auth.ts`（新規）
+  - `functions/src/config/constants.ts`（新規）
+  - `functions/src/index.ts`
+- **テスト結果**: 全関数で正常動作を確認
