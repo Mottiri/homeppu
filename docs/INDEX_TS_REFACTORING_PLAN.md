@@ -1,13 +1,41 @@
 # index.ts 分割リファクタリング計画
 
+## 進捗サマリー
+
+| フェーズ | ステータス | 完了日 |
+|---------|-----------|--------|
+| Phase 1: 共有ヘルパー抽出 | ✅ 完了 | 2026-01-12 |
+| Phase 2: AIペルソナ定義分離 | ✅ 完了 | 2026-01-12 |
+| Phase 3: 独立機能分離 | 未着手 | - |
+| Phase 4: サークル関連 | 未着手 | - |
+| Phase 5: 投稿・コメント | 未着手 | - |
+| Phase 6: 管理者・ユーザー | 未着手 | - |
+| Phase 7: スケジュール・HTTP | 未着手 | - |
+
 ## 現状分析
 
-| 項目 | 値 |
-|------|-----|
-| 総行数 | 8,628行 |
-| ファイルサイズ | 308KB |
-| export数 | 64関数 |
-| セクション数 | 約30 |
+| 項目 | 初期値 | 現在値 | 削減 |
+|------|--------|--------|------|
+| 総行数 | 8,628行 | 約7,800行 | -828行 |
+| ファイルサイズ | 308KB | - | - |
+| export数 | 64関数 | 64関数 | - |
+
+### 作成済みファイル（Phase 1-2）
+
+```
+functions/src/
+├── ai/
+│   └── personas.ts          ✅ 約700行（AIペルソナ定義）
+├── config/
+│   ├── constants.ts         ✅ プロジェクト定数
+│   └── secrets.ts           ✅ シークレット定義
+├── helpers/
+│   ├── admin.ts             ✅ isAdmin, getAdminUids
+│   ├── cloud-tasks-auth.ts  ✅ OIDC認証検証（デバッグログ付き）
+│   └── storage.ts           ✅ deleteStorageFileFromUrl
+└── types/
+    └── index.ts             ✅ モデレーション関連型定義
+```
 
 ### 問題点
 - ファイルが大きすぎてエディタが重い
@@ -101,24 +129,32 @@ functions/src/
 
 ## 分割優先度（Phase分け）
 
-### Phase 1: 共有ヘルパー抽出（低リスク・高効果）
+### Phase 1: 共有ヘルパー抽出（低リスク・高効果）✅ 完了
 
-| ファイル | 抽出対象 | 行数 | 依存箇所 |
+| ファイル | 抽出対象 | 行数 | ステータス |
 |---------|---------|------|----------|
-| `helpers/admin.ts` | isAdmin, getAdminUids | 35行 | 16箇所 |
-| `helpers/notification.ts` | sendPushOnly | 80行 | 1箇所 |
-| `helpers/storage.ts` | deleteStorageFileFromUrl | 25行 | 6箇所 |
-| `types/index.ts` | MediaItem, ModerationResult等 | 35行 | 全体 |
+| `helpers/admin.ts` | isAdmin, getAdminUids | 35行 | ✅ 完了 |
+| `helpers/storage.ts` | deleteStorageFileFromUrl | 25行 | ✅ 完了 |
+| `helpers/cloud-tasks-auth.ts` | verifyCloudTasksRequest | 85行 | ✅ 完了（セキュリティ#15） |
+| `config/constants.ts` | PROJECT_ID, LOCATION等 | 18行 | ✅ 完了 |
+| `config/secrets.ts` | geminiApiKey等 | 11行 | ✅ 完了 |
+| `types/index.ts` | MediaItem, ModerationResult等 | 40行 | ✅ 完了 |
+| `helpers/notification.ts` | sendPushOnly | 80行 | 未着手 |
 
 **効果**: 共有コードを1箇所に集約、テスト可能に
 
+**追加対応（セキュリティ#15）**:
+- 6つのCloud Tasks関数にOIDC認証を動的インポートで適用
+- サービスアカウントを `cloud-tasks-sa@` に統一
+- 認証失敗時の詳細ログを追加
+
 ---
 
-### Phase 2: AIキャラクター定義分離（中リスク・高効果）
+### Phase 2: AIキャラクター定義分離（中リスク・高効果）✅ 完了
 
-| ファイル | 抽出対象 | 行数 | 依存箇所 |
+| ファイル | 抽出対象 | 行数 | ステータス |
 |---------|---------|------|----------|
-| `ai/personas.ts` | OCCUPATIONS, PERSONALITIES, BIO_TEMPLATES, AI_PERSONAS等 | 700行 | 15箇所 |
+| `ai/personas.ts` | OCCUPATIONS, PERSONALITIES, BIO_TEMPLATES, AI_PERSONAS等 | 700行 | ✅ 完了 |
 
 **効果**: 最も行数が多い定数群を分離、index.tsが大幅に軽量化
 
