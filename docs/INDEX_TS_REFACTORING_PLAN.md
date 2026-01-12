@@ -15,6 +15,34 @@
 - 単体テストが書きにくい
 - どこに何があるか把握しづらい
 
+### 2026-01-12 発覚した問題（教訓）
+
+セキュリティ#15対応（Cloud Tasks OIDC認証）を試行した際に、以下の問題が発生しました。
+
+**試行内容**:
+- `helpers/cloud-tasks-auth.ts` を作成（`google-auth-library` を使用）
+- `config/constants.ts` を作成
+- index.ts でこれらをインポート
+
+**発生した問題**:
+```
+Container Healthcheck failed - onCircleUpdated, moderateImageCallable
+```
+
+**原因**:
+- index.ts のトップレベルで `google-auth-library` をインポート
+- これにより**すべての関数**で初期化時にライブラリがロードされる
+- メモリ256MB制限の関数でメモリ不足が発生
+
+**教訓**:
+| 観点 | 詳細 |
+|------|------|
+| **影響範囲** | index.ts への1つのインポート追加 → 全64関数に影響 |
+| **リスク** | 新しいライブラリ追加でメモリ消費増加 → 一部関数が起動不可に |
+| **解決策** | **ファイル分割を先に行う**ことで、影響範囲を限定する |
+
+**結論**: セキュリティ修正を安全に適用するには、**リファクタリング（ファイル分割）が必須**
+
 ---
 
 ## 提案するファイル構成
@@ -488,6 +516,26 @@ functions/src/
 
 **ヘルパー関数設計**:
 
+### 推奨する共通化ファイル
+
+```typescript
+// config/constants.ts
+import * as dotenv from 'dotenv';
+dotenv.config();
+
+export const PROJECT_ID = process.env.GCLOUD_PROJECT || "positive-sns";
+export const LOCATION = "asia-northeast1";
+
+export const CLOUD_TASK_FUNCTIONS = {
+  generateAICommentV1: "generateAICommentV1",
+  generateAIReactionV1: "generateAIReactionV1",
+  executeAIPostGeneration: "executeAIPostGeneration",
+  executeTaskReminder: "executeTaskReminder",
+  cleanupDeletedCircle: "cleanupDeletedCircle",
+  executeCircleAIPost: "executeCircleAIPost",
+} as const;
+```
+
 ```typescript
 // helpers/cloud-tasks-auth.ts
 import { OAuth2Client } from "google-auth-library";
@@ -499,18 +547,14 @@ const authClient = new OAuth2Client();
 // エミュレータ判定
 const IS_EMULATOR = process.env.FUNCTIONS_EMULATOR === "true";
 
-// Cloud Tasksで使用しているサービスアカウント
-const CLOUD_TASKS_SERVICE_ACCOUNT = `cloud-tasks-sa@${PROJECT_ID}.iam.gserviceaccount.com`;
-
 /**
  * Cloud Tasksからのリクエストを検証
  * OIDCトークンを検証し、正当なリクエストかどうかを判定
- * 
+ *
  * 検証項目:
  * 1. Bearer トークンの存在
  * 2. トークンの署名検証（Google発行であること）
  * 3. audience（呼び出し先関数URL）の一致
- * 4. 発行元サービスアカウントの検証
  */
 export async function verifyCloudTasksRequest(
   request: functionsV1.https.Request,
@@ -518,31 +562,20 @@ export async function verifyCloudTasksRequest(
 ): Promise<boolean> {
   // エミュレータでは認証スキップ（開発時のみ）
   if (IS_EMULATOR) {
-    console.log(`[DEV] Skipping Cloud Tasks auth for ${functionName} in emulator`);
+    console.log(`[DEV] Skipping auth for ${functionName}`);
     return true;
   }
 
   const authHeader = request.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    console.error(`Missing or invalid Authorization header for ${functionName}`);
+  if (!authHeader?.startsWith("Bearer ")) {
     return false;
   }
 
-  const token = authHeader.split("Bearer ")[1];
   try {
-    // OIDCトークンを検証（署名 + audience）
-    const ticket = await authClient.verifyIdToken({
-      idToken: token,
+    await authClient.verifyIdToken({
+      idToken: authHeader.split("Bearer ")[1],
       audience: `https://${LOCATION}-${PROJECT_ID}.cloudfunctions.net/${functionName}`,
     });
-
-    // 発行元サービスアカウントを検証
-    const payload = ticket.getPayload();
-    if (payload?.email !== CLOUD_TASKS_SERVICE_ACCOUNT) {
-      console.error(`Unexpected service account for ${functionName}: ${payload?.email}`);
-      return false;
-    }
-
     return true;
   } catch (error) {
     console.error(`Token verification failed for ${functionName}:`,
@@ -552,11 +585,6 @@ export async function verifyCloudTasksRequest(
   }
 }
 ```
-
-> **注意**: 現在のCloud Tasksタスク作成コード（index.ts 行1651付近）では  
-> `cloud-tasks-sa@${project}.iam.gserviceaccount.com` がサービスアカウントとして使用されています。  
-> このサービスアカウントを検証することで、正当なCloud Tasksからのリクエストのみを許可します。
-
 
 **使用例**:
 
@@ -584,7 +612,7 @@ if (!await verifyCloudTasksRequest(request, CLOUD_TASK_FUNCTIONS.generateAIComme
 |--------|------|------|
 | **PROJECT_ID の参照** | `config/constants.ts` からのインポートが必要 | 分割時にインポートパスを確認 |
 | **関数名の不一致** | 呼び出し時に関数名を文字列で渡すため、タイポの可能性 | 関数名を定数化（下記参照） |
-| **リージョン固定** | `asia-northeast1` がハードコードされている | 定数 `LOCATION` を使用 |
+| ~~リージョン固定~~ | ~~ハードコード~~ | ✅ `LOCATION` 定数で対応済み |
 
 **関数名の定数化（推奨）**:
 

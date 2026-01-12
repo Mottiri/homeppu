@@ -1189,8 +1189,29 @@ if (!await verifyCloudTasksRequest(request, "関数名")) {
 
 #### 対応ステータス
 
-- **ステータス**: 設計完了、実装待ち
+- **ステータス**: **リファクタリング後に対応予定**
 - **優先度**: 中（URLが漏洩しなければ実害は低いが、防御的対策として推奨）
+
+#### 2026-01-12 対応試行と教訓
+
+**試行内容**:
+- `helpers/cloud-tasks-auth.ts` を作成し、OIDC認証ヘルパーを実装
+- `config/constants.ts` を作成し、定数を分離
+- index.ts に上記をインポートし、6つの関数に認証を適用
+
+**発生した問題**:
+- index.ts でのトップレベルインポートにより、**すべての関数**で `google-auth-library` が初期化されるようになった
+- メモリ256MB制限の関数（`onCircleUpdated`, `moderateImageCallable`）でメモリ不足が発生
+- デプロイエラー: `Container Healthcheck failed`
+
+**教訓**:
+- index.ts が巨大（8,600行）で全関数が同一ファイルを共有しているため、1つのインポートが全関数に影響
+- 解決策: **Cloud Tasks関数を別ファイルに分離してから認証を適用**する必要がある
+
+**次のステップ**:
+1. index.ts のリファクタリング（ファイル分割）を実施
+2. Cloud Tasks関数を `http/cloud-tasks.ts` に分離
+3. 分離後に OIDC 認証を適用
 
 ---
 
