@@ -70,6 +70,12 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   }
 
   Future<void> _loadCircles() async {
+    final currentUser = ref.read(currentUserProvider).valueOrNull;
+    if (currentUser == null) {
+      // ログインしていない場合は何もしない（通常ありえない）
+      return;
+    }
+
     setState(() {
       _isLoading = _circles.isEmpty;
       _error = null;
@@ -79,10 +85,11 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
 
     try {
       final circleService = ref.read(circleServiceProvider);
-      final currentUser = ref.read(currentUserProvider).valueOrNull;
+      final isAdmin = ref.read(isAdminProvider).valueOrNull ?? false;
       final result = await circleService.getPublicCirclesPaginated(
         category: _selectedCategory,
-        userId: currentUser?.uid,
+        userId: currentUser.uid,
+        isAdmin: isAdmin,
         limit: 15,
       );
       setState(() {
@@ -91,7 +98,10 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         _hasMore = result.hasMore;
         _isLoading = false;
       });
-    } catch (e) {
+    } catch (e, stackTrace) {
+      // デバッグ用：エラーの詳細をコンソールに出力
+      debugPrint('CirclesScreen._loadCircles エラー: $e');
+      debugPrint('スタックトレース: $stackTrace');
       setState(() {
         _error = e.toString();
         _isLoading = false;
@@ -102,14 +112,18 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   Future<void> _loadMoreCircles() async {
     if (_isLoadingMore || !_hasMore || _lastDocument == null) return;
 
+    final currentUser = ref.read(currentUserProvider).valueOrNull;
+    if (currentUser == null) return;
+
     setState(() => _isLoadingMore = true);
 
     try {
       final circleService = ref.read(circleServiceProvider);
-      final currentUser = ref.read(currentUserProvider).valueOrNull;
+      final isAdmin = ref.read(isAdminProvider).valueOrNull ?? false;
       final result = await circleService.getPublicCirclesPaginated(
         category: _selectedCategory,
-        userId: currentUser?.uid,
+        userId: currentUser.uid,
+        isAdmin: isAdmin,
         lastDocument: _lastDocument,
         limit: 15,
       );
@@ -134,12 +148,29 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     }
 
     setState(() => _isSearching = true);
-    final circleService = ref.read(circleServiceProvider);
-    final results = await circleService.searchCircles(query);
-    setState(() {
-      _searchResults = results;
-      _isSearching = false;
-    });
+    try {
+      final circleService = ref.read(circleServiceProvider);
+      final currentUser = ref.read(currentUserProvider).valueOrNull;
+      final results = await circleService.searchCircles(
+        query,
+        userId: currentUser?.uid ?? '',
+      );
+      setState(() {
+        _searchResults = results;
+        _isSearching = false;
+      });
+    } catch (e) {
+      debugPrint('_performSearch エラー: $e');
+      setState(() {
+        _searchResults = [];
+        _isSearching = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('検索中にエラーが発生しました')));
+      }
+    }
   }
 
   @override
@@ -969,8 +1000,40 @@ class _CircleCard extends ConsumerWidget {
                               ),
                             ),
                           ),
-                          // 招待制バッジ
-                          if (!circle.isPublic)
+                          // AIモードバッジ
+                          if (circle.aiMode == CircleAIMode.aiOnly)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.purple.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.smart_toy_outlined,
+                                    size: 10,
+                                    color: Colors.purple[700],
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    'AIモード',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.purple[700],
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          // 招待制バッジ（非公開かつAIモードではない場合）
+                          if (!circle.isPublic &&
+                              circle.aiMode != CircleAIMode.aiOnly)
                             Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 6,

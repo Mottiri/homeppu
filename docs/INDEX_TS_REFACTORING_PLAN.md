@@ -4,10 +4,10 @@
 
 | フェーズ | ステータス | 完了日 |
 |---------|-----------|--------|
-| Phase 1: 共有ヘルパー抽出 | ✅ 完了 | 2026-01-12 |
-| Phase 2: AIペルソナ定義分離 | ✅ 完了 | 2026-01-12 |
-| Phase 3: 独立機能分離 | 未着手 | - |
-| Phase 4: サークル関連 | 未着手 | - |
+| Phase 1: 共有ヘルパー抽出 | ✅ 完了・テスト済 | 2026-01-12 |
+| Phase 2: AIペルソナ定義分離 | ✅ 完了・テスト済 | 2026-01-12 |
+| Phase 3: 独立機能分離 | ✅ 完了・テスト済 | 2026-01-13 |
+| Phase 4: サークル関連 | ✅ 完了・テスト済 | 2026-01-13 |
 | Phase 5: 投稿・コメント | 未着手 | - |
 | Phase 6: 管理者・ユーザー | 未着手 | - |
 | Phase 7: スケジュール・HTTP | 未着手 | - |
@@ -16,11 +16,11 @@
 
 | 項目 | 初期値 | 現在値 | 削減 |
 |------|--------|--------|------|
-| 総行数 | 8,628行 | 約7,800行 | -828行 |
+| 総行数 | 8,628行 | 約5,246行 | -3,382行 |
 | ファイルサイズ | 308KB | - | - |
 | export数 | 64関数 | 64関数 | - |
 
-### 作成済みファイル（Phase 1-2）
+### 作成済みファイル（Phase 1-4）
 
 ```
 functions/src/
@@ -32,7 +32,22 @@ functions/src/
 ├── helpers/
 │   ├── admin.ts             ✅ isAdmin, getAdminUids
 │   ├── cloud-tasks-auth.ts  ✅ OIDC認証検証（デバッグログ付き）
+│   ├── firebase.ts          ✅ Firebase Admin SDK 共有インスタンス（Phase 3で追加）
+│   ├── spreadsheet.ts       ✅ appendInquiryToSpreadsheet（Phase 3で追加）
 │   └── storage.ts           ✅ deleteStorageFileFromUrl
+├── callable/
+│   ├── names.ts             ✅ 約180行（initializeNameParts, getNameParts, updateUserName）
+│   ├── reports.ts           ✅ 約130行（reportContent）
+│   ├── tasks.ts             ✅ 約210行（createTask, getTasks）
+│   ├── inquiries.ts         ✅ 約400行（createInquiry, sendInquiryMessage, sendInquiryReply, updateInquiryStatus）
+│   └── circles.ts           ✅ 約580行（Phase 4: deleteCircle, cleanupDeletedCircle, approveJoinRequest, rejectJoinRequest, sendJoinRequest）
+├── triggers/
+│   └── circles.ts           ✅ 約230行（Phase 4: onCircleCreated, onCircleUpdated）
+├── circle-ai/
+│   ├── generator.ts         ✅ 約90行（Phase 4: generateCircleAIPersona）
+│   └── posts.ts             ✅ 約420行（Phase 4: generateCircleAIPosts, executeCircleAIPost, triggerCircleAIPosts）
+├── scheduled/
+│   └── circles.ts           ✅ 約290行（Phase 4: checkGhostCircles, evolveCircleAIs, triggerEvolveCircleAIs）
 └── types/
     └── index.ts             ✅ モデレーション関連型定義
 ```
@@ -160,30 +175,150 @@ functions/src/
 
 ---
 
-### Phase 3: 独立性の高い機能を分離（低リスク）
+### Phase 3: 独立性の高い機能を分離（低リスク）✅ 完了
 
-| ファイル | 抽出対象 | 行数 | 理由 |
-|---------|---------|------|------|
-| `callable/inquiries.ts` | createInquiry, sendInquiryReply等 | 580行 | 完全に独立 |
-| `callable/tasks.ts` | createTask, getTasks | 320行 | ほぼ独立 |
-| `callable/names.ts` | initializeNameParts, getNameParts等 | 185行 | 完全に独立 |
-| `callable/reports.ts` | reportContent | 130行 | ほぼ独立 |
+| ファイル | 抽出対象 | 行数 | ステータス |
+|---------|---------|------|----------|
+| `callable/names.ts` | initializeNameParts, getNameParts, updateUserName | 180行 | ✅ 完了 |
+| `callable/reports.ts` | reportContent | 130行 | ✅ 完了 |
+| `callable/tasks.ts` | createTask, getTasks | 210行 | ✅ 完了 |
+| `callable/inquiries.ts` | createInquiry, sendInquiryMessage, sendInquiryReply, updateInquiryStatus | 400行 | ✅ 完了 |
+| `helpers/spreadsheet.ts` | appendInquiryToSpreadsheet | 60行 | ✅ 完了（inquiriesから依存） |
 
-**効果**: 個別機能を独立ファイルに、テスト・保守が容易に
+**効果**: 約920行をindex.tsから分離、個別機能のテスト・保守が容易に
+
+**注意**: cleanupResolvedInquiries（スケジューラー）とそのヘルパー関数（deleteInquiryWithArchive, sendDeletionWarning）はindex.tsに残置
+
+#### Phase 3 テスト結果（2026-01-13 実施）
+
+| 関数 | テスト結果 | ログ確認 |
+|------|-----------|----------|
+| `createInquiry` | ✅ 成功 | `Created inquiry: 0n87mbyNbsBeTvb1yMGK` |
+| `sendInquiryMessage` | ✅ 成功 | `Added message to inquiry: ...` |
+| `sendInquiryReply` | ✅ 成功 | `Sent reply to inquiry: ...` |
+| `updateInquiryStatus` | ✅ 成功 | `Updated inquiry status: ... -> in_progress`, `-> resolved` |
+| `createTask` | ✅ 成功 | インスタンス起動・正常動作確認 |
+| `getTasks` | ✅ 成功 | インスタンス起動・正常動作確認 |
+| `getNameParts` | ✅ 成功 | 正常に呼び出し完了 |
+| `updateUserName` | ✅ 成功 | `User ... changed name to: まったり🐼パンダ` |
+| `reportContent` | ✅ 成功 | `Sent admin notification for report ...` |
+
+**備考**:
+- `helpers/firebase.ts` による共有インスタンスパターンが正常に動作
+- Firebase初期化タイミングの問題は発生せず
+- AppCheckトークン警告は既存の設定（`enforcement is disabled`）によるもので動作に影響なし
 
 ---
 
-### Phase 4: サークル関連を分離（中リスク）
+### Phase 4: サークル関連を分離（中リスク）✅ 完了
 
-| ファイル | 抽出対象 | 行数 |
-|---------|---------|------|
-| `callable/circles.ts` | deleteCircle, approveJoinRequest等 | 580行 |
-| `triggers/circles.ts` | onCircleCreated, onCircleUpdated | 210行 |
-| `circle-ai/generator.ts` | generateCircleAIPersona | 80行 |
-| `circle-ai/posts.ts` | generateCircleAIPosts, executeCircleAIPost | 320行 |
-| `scheduled/circles.ts` | checkGhostCircles, evolveCircleAIs | 280行 |
+| ファイル | 抽出対象 | 行数 | ステータス |
+|---------|---------|------|----------|
+| `callable/circles.ts` | deleteCircle, cleanupDeletedCircle, approveJoinRequest, rejectJoinRequest, sendJoinRequest | 580行 | ✅ 完了 |
+| `triggers/circles.ts` | onCircleCreated, onCircleUpdated | 230行 | ✅ 完了 |
+| `circle-ai/generator.ts` | generateCircleAIPersona | 90行 | ✅ 完了 |
+| `circle-ai/posts.ts` | generateCircleAIPosts, executeCircleAIPost, triggerCircleAIPosts | 420行 | ✅ 完了 |
+| `scheduled/circles.ts` | checkGhostCircles, evolveCircleAIs, triggerEvolveCircleAIs | 290行 | ✅ 完了 |
 
-**効果**: サークル機能を1ディレクトリに集約
+**効果**: サークル機能を1ディレクトリに集約、約1,610行をindex.tsから分離
+
+#### Phase 4 完了時の修正事項
+
+1. **リージョン指定の追加**: Firestoreトリガー（`onCircleCreated`, `onCircleUpdated`）に `region: LOCATION` を追加
+   - 未指定だとFirebaseがus-central1をデフォルトとして認識し、asia-northeast1で動作している既存関数と不一致になる
+
+2. **ハードコードの排除**: `"asia-northeast1"` → `LOCATION` 定数を使用
+   - `config/constants.ts` からインポートして一貫性を維持
+
+#### Phase 4 テスト手順
+
+##### T4-1: サークル作成・AI自動生成（onCircleCreated）
+
+| # | テスト項目 | 手順 | 期待結果 | 結果 |
+|---|-----------|------|----------|------|
+| 1 | サークル作成 | アプリでサークル → 新規作成 → 情報入力 → 作成 | サークルが作成される | |
+| 2 | AI3体生成確認 | 作成したサークルのメンバー一覧を確認 | AI3体が自動追加されている | |
+| 3 | humanOnlyモード | AIモード「人間のみ」でサークル作成 | AIが生成されない | |
+
+**ログ確認**: Firebase Console → Functions → `onCircleCreated` のログ
+```
+=== onCircleCreated: [circleId] ===
+Generated AI 1: [name] ([id])
+Generated AI 2: [name] ([id])
+Generated AI 3: [name] ([id])
+=== onCircleCreated SUCCESS ===
+```
+
+##### T4-2: サークル設定変更通知（onCircleUpdated）
+
+| # | テスト項目 | 手順 | 期待結果 | 結果 |
+|---|-----------|------|----------|------|
+| 1 | 名前変更 | サークル設定 → 名前を変更 → 保存 | メンバーに通知が届く | |
+| 2 | アイコン変更 | サークル設定 → アイコン画像を変更 | 旧画像がStorage削除される | |
+| 3 | 内部更新（通知なし） | メンバー追加など内部的な更新 | 通知が送信されない | |
+
+##### T4-3: サークル参加申請（sendJoinRequest, approveJoinRequest, rejectJoinRequest）
+
+| # | テスト項目 | 手順 | 期待結果 | 結果 |
+|---|-----------|------|----------|------|
+| 1 | 参加申請送信 | 非メンバーでサークル詳細 → 参加申請 | 申請が送信される、オーナーに通知 | |
+| 2 | 申請承認 | オーナーで申請一覧 → 承認 | 申請者がメンバーになる、通知が届く | |
+| 3 | 申請却下 | オーナーで申請一覧 → 却下 | 申請が削除される、通知が届く | |
+| 4 | 重複申請防止 | 同じサークルに再度申請 | エラー「既に申請中です」 | |
+
+##### T4-4: サークル削除（deleteCircle, cleanupDeletedCircle）
+
+| # | テスト項目 | 手順 | 期待結果 | 結果 |
+|---|-----------|------|----------|------|
+| 1 | サークル削除 | オーナーでサークル設定 → 削除 | サークルが非表示になる | |
+| 2 | メンバー通知 | 削除後 | 全メンバーに削除通知が届く | |
+| 3 | バックグラウンド処理 | Cloud Tasks確認 | cleanupDeletedCircleがスケジュールされる | |
+| 4 | 権限チェック | 非オーナーで削除を試みる | エラー「権限がありません」 | |
+
+##### T4-5: サークルAI投稿（generateCircleAIPosts, executeCircleAIPost）
+
+| # | テスト項目 | 手順 | 期待結果 | 結果 |
+|---|-----------|------|----------|------|
+| 1 | 手動トリガー | 管理者で `triggerCircleAIPosts` を実行 | Cloud Tasksにタスクがスケジュールされる | |
+| 2 | AI投稿生成 | タスク実行後 | サークルAIが投稿を作成 | |
+
+**ログ確認**: `generateCircleAIPosts` → `executeCircleAIPost`
+
+##### T4-6: ゴーストサークル検出（checkGhostCircles）
+
+| # | テスト項目 | 確認方法 | 期待結果 | 結果 |
+|---|-----------|----------|----------|------|
+| 1 | 定期実行確認 | Cloud Scheduler確認 | 毎日3:30 JSTに実行予定 | |
+| 2 | ログ確認 | Functions → checkGhostCircles | 正常にサークルをチェック | |
+
+##### T4-7: サークルAI成長（evolveCircleAIs）
+
+| # | テスト項目 | 手順 | 期待結果 | 結果 |
+|---|-----------|------|----------|------|
+| 1 | 手動トリガー | 管理者で `triggerEvolveCircleAIs` を実行 | AIのgrowthLevelが+1される | |
+| 2 | 上限チェック | growthLevel=5のAIで実行 | レベルが上がらない（上限） | |
+
+**ログ確認**: `evolveCircleAIs` または `triggerEvolveCircleAIs`
+
+#### Phase 4 テスト結果（2026-01-13 実施）
+
+| 関数 | テスト結果 | ログ確認 |
+|------|-----------|----------|
+| `onCircleCreated` | ✅ 成功 | サークル作成時にAI 3体を自動生成 |
+| `onCircleUpdated` | ✅ 成功 | サークル情報更新時にAIプロファイル更新 |
+| `sendJoinRequest` | ✅ 成功 | 参加リクエストをFirestoreに記録 |
+| `approveJoinRequest` | ✅ 成功 | 参加承認処理が正常完了 |
+| `rejectJoinRequest` | - 未実行 | 期間中に拒否操作なし |
+| `deleteCircle` | - 未実行 | 期間中に削除操作なし（デプロイは正常） |
+| `cleanupDeletedCircle` | - 未実行 | 削除操作なしのため未トリガー |
+| `generateCircleAIPosts` | ✅ 成功 | 投稿対象サークル選定・タスク追加完了 |
+| `executeCircleAIPost` | ✅ 成功 | Cloud Tasksからトリガー、AI投稿作成成功 |
+| `triggerCircleAIPosts` | ✅ 成功 | 手動トリガーでタスクスケジュール確認 |
+| `checkGhostCircles` | ✅ 成功 | 定期実行正常（該当なし: 0 ghosts found） |
+| `evolveCircleAIs` | ✅ 成功 | 定期実行正常（該当なし: 0 evolved） |
+| `triggerEvolveCircleAIs` | ✅ 成功 | 手動トリガー正常動作 |
+
+**備考**: 過去24時間でSeverity: ERROR以上のログは検出されず。
 
 ---
 
@@ -237,9 +372,47 @@ export * from "./helpers/admin";
 - `defineSecret` は index.ts に残す（関数定義時に必要）
 - ヘルパー関数には引数で渡す
 
-### 3. db インスタンス
-- 各ファイルで `admin.firestore()` を呼ぶ
-- または `config/firebase.ts` で初期化してexport
+### 3. db インスタンス（✅ 実装済み）
+
+**重要**: 分離したモジュールのトップレベルで `admin.firestore()` を直接呼ぶと、`initializeApp()` より先に実行されてエラーになります。
+
+```
+FirebaseAppError: The default Firebase app does not exist.
+Make sure you call initializeApp() before using any of the Firebase services.
+```
+
+**解決策**: `helpers/firebase.ts` で一元管理（推奨・実装済み）
+
+```typescript
+// helpers/firebase.ts
+import * as admin from "firebase-admin";
+
+// 初期化（複数回呼ばれても安全）
+if (admin.apps.length === 0) {
+  admin.initializeApp();
+}
+
+// 共有インスタンスをエクスポート
+export const db = admin.firestore();
+export const auth = admin.auth();
+export const storage = admin.storage();
+export const FieldValue = admin.firestore.FieldValue;
+export const Timestamp = admin.firestore.Timestamp;
+```
+
+```typescript
+// callable/xxx.ts での使用例
+import { db, FieldValue, Timestamp } from "../helpers/firebase";
+
+// そのまま使用可能
+await db.collection("users").doc(userId).get();
+```
+
+**メリット**:
+- 初期化タイミングの問題を完全に解消
+- コードがシンプル（`getDb()` のような遅延実行パターン不要）
+- AI支援コーディングとの相性が良い（標準的なパターン）
+- TypeScriptの型推論が効く
 
 ### 4. テスト
 - 各Phaseの完了後に `npm run build` と動作確認

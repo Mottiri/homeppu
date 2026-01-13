@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/circle_model.dart';
 import '../models/post_model.dart';
@@ -48,20 +49,25 @@ class CircleService {
   }
 
   // サークル一覧を取得（AIモードは作成者のみ表示）
+  // セキュリティルールに合わせてORクエリを使用
   Stream<List<CircleModel>> streamPublicCircles({
     String? category,
-    String? userId,
+    required String userId,
   }) {
-    // シンプルなクエリでデータを取得し、クライアント側でフィルター・ソート
-    return _firestore.collection('circles').snapshots().map((snapshot) {
+    // ORクエリ: 公開サークル(mix/humanOnly) OR 自分が作成したサークル
+    final query = _firestore
+        .collection('circles')
+        .where(
+          Filter.or(
+            Filter('aiMode', whereIn: ['mix', 'humanOnly']),
+            Filter('ownerId', isEqualTo: userId),
+          ),
+        );
+
+    return query.snapshots().map((snapshot) {
       var circles = snapshot.docs
           .map((doc) => CircleModel.fromFirestore(doc))
           .where((c) => !c.isDeleted) // ソフトデリート済みは除外
-          .where(
-            (c) =>
-                c.aiMode != CircleAIMode.aiOnly || // AIモードでない
-                c.ownerId == userId,
-          ) // または自分が作成者
           .toList();
 
       // カテゴリフィルター
@@ -76,19 +82,25 @@ class CircleService {
   }
 
   // サークル一覧を取得（Future版 - プル更新用）
+  // セキュリティルールに合わせてORクエリを使用
   Future<List<CircleModel>> getPublicCircles({
     String? category,
-    String? userId,
+    required String userId,
   }) async {
-    final snapshot = await _firestore.collection('circles').get();
+    // ORクエリ: 公開サークル(mix/humanOnly) OR 自分が作成したサークル
+    final snapshot = await _firestore
+        .collection('circles')
+        .where(
+          Filter.or(
+            Filter('aiMode', whereIn: ['mix', 'humanOnly']),
+            Filter('ownerId', isEqualTo: userId),
+          ),
+        )
+        .get();
+
     var circles = snapshot.docs
         .map((doc) => CircleModel.fromFirestore(doc))
         .where((c) => !c.isDeleted) // ソフトデリート済みは除外
-        .where(
-          (c) =>
-              c.aiMode != CircleAIMode.aiOnly || // AIモードでない
-              c.ownerId == userId,
-        ) // または自分が作成者
         .toList();
 
     // カテゴリフィルター
@@ -102,67 +114,106 @@ class CircleService {
   }
 
   // サークル一覧を取得（ページネーション対応）
+  // セキュリティルールに合わせてORクエリを使用
+  // 管理者の場合は全サークルを取得
   Future<({List<CircleModel> circles, DocumentSnapshot? lastDoc, bool hasMore})>
   getPublicCirclesPaginated({
     String? category,
-    String? userId,
+    required String userId,
+    bool isAdmin = false,
     DocumentSnapshot? lastDocument,
     int limit = 10,
   }) async {
-    Query query = _firestore
-        .collection('circles')
-        .orderBy('createdAt', descending: true)
-        .limit(limit + 1); // 1件多く取得してhasMoreを判定
-
-    if (lastDocument != null) {
-      query = query.startAfterDocument(lastDocument);
-    }
-
-    final snapshot = await query.get();
-
-    // hasMoreの判定（limit+1件取得できたら次がある）
-    final hasMore = snapshot.docs.length > limit;
-    final docs = hasMore ? snapshot.docs.sublist(0, limit) : snapshot.docs;
-
-    var circles = docs
-        .map(
-          (doc) => CircleModel.fromFirestore(
-            doc as DocumentSnapshot<Map<String, dynamic>>,
-          ),
-        )
-        .where((c) => !c.isDeleted) // ソフトデリート済みは除外
-        .where(
-          (c) =>
-              c.aiMode != CircleAIMode.aiOnly || // AIモードでない
-              c.ownerId == userId,
-        ) // または自分が作成者
-        .toList();
-
-    // カテゴリフィルター
-    if (category != null && category != '全て') {
-      circles = circles.where((c) => c.category == category).toList();
-    }
-
-    return (
-      circles: circles,
-      lastDoc: docs.isNotEmpty ? docs.last : null,
-      hasMore: hasMore,
+    debugPrint(
+      'getPublicCirclesPaginated: userId=$userId, isAdmin=$isAdmin, category=$category',
     );
+    try {
+      Query query;
+
+      if (isAdmin) {
+        // 管理者は全サークルを取得
+        query = _firestore
+            .collection('circles')
+            .orderBy('createdAt', descending: true)
+            .limit(limit + 1);
+      } else {
+        // 一般ユーザー: 公開サークル(mix/humanOnly) OR 自分が作成したサークル
+        query = _firestore
+            .collection('circles')
+            .where(
+              Filter.or(
+                Filter('aiMode', whereIn: ['mix', 'humanOnly']),
+                Filter('ownerId', isEqualTo: userId),
+              ),
+            )
+            .orderBy('createdAt', descending: true)
+            .limit(limit + 1);
+      }
+
+      if (lastDocument != null) {
+        query = query.startAfterDocument(lastDocument);
+      }
+
+      debugPrint('getPublicCirclesPaginated: クエリ実行中...');
+      final snapshot = await query.get();
+      debugPrint('getPublicCirclesPaginated: ${snapshot.docs.length}件取得');
+
+      // hasMoreの判定（limit+1件取得できたら次がある）
+      final hasMore = snapshot.docs.length > limit;
+      final docs = hasMore ? snapshot.docs.sublist(0, limit) : snapshot.docs;
+
+      var circles = docs
+          .map(
+            (doc) => CircleModel.fromFirestore(
+              doc as DocumentSnapshot<Map<String, dynamic>>,
+            ),
+          )
+          .where((c) => !c.isDeleted) // ソフトデリート済みは除外
+          .toList();
+
+      // カテゴリフィルター
+      if (category != null && category != '全て') {
+        circles = circles.where((c) => c.category == category).toList();
+      }
+
+      return (
+        circles: circles,
+        lastDoc: docs.isNotEmpty ? docs.last : null,
+        hasMore: hasMore,
+      );
+    } catch (e, stackTrace) {
+      debugPrint('getPublicCirclesPaginated エラー: $e');
+      debugPrint('スタックトレース: $stackTrace');
+      rethrow;
+    }
   }
 
   // サークル検索
-  Future<List<CircleModel>> searchCircles(String query) async {
-    // Firestoreは部分一致検索をサポートしないため、
-    // 名前の前方一致で検索
+  // セキュリティルールに合わせてORクエリを使用
+  Future<List<CircleModel>> searchCircles(
+    String query, {
+    required String userId,
+  }) async {
+    // Firestoreは部分一致検索をサポートしないため、クライアント側でフィルター
+    // ORクエリ: 公開サークル(mix/humanOnly) OR 自分が作成したサークル
     final snapshot = await _firestore
         .collection('circles')
-        .where('isPublic', isEqualTo: true)
-        .where('name', isGreaterThanOrEqualTo: query)
-        .where('name', isLessThanOrEqualTo: '$query\uf8ff')
-        .limit(20)
+        .where(
+          Filter.or(
+            Filter('aiMode', whereIn: ['mix', 'humanOnly']),
+            Filter('ownerId', isEqualTo: userId),
+          ),
+        )
         .get();
 
-    return snapshot.docs.map((doc) => CircleModel.fromFirestore(doc)).toList();
+    // クライアント側で名前フィルター
+    final lowerQuery = query.toLowerCase();
+    return snapshot.docs
+        .map((doc) => CircleModel.fromFirestore(doc))
+        .where((c) => !c.isDeleted)
+        .where((c) => c.name.toLowerCase().contains(lowerQuery))
+        .take(20)
+        .toList();
   }
 
   // サークル詳細を取得
