@@ -6,8 +6,8 @@ import { setGlobalOptions } from "firebase-functions/v2"; // Global Options
 
 import * as admin from "firebase-admin";
 import { GoogleGenerativeAI, Part, GenerativeModel } from "@google/generative-ai";
-import { GoogleAIFileManager } from "@google/generative-ai/server";
-import * as https from "https";
+
+
 import { CloudTasksClient } from "@google-cloud/tasks";
 import { google } from "googleapis";
 
@@ -37,9 +37,7 @@ import {
   getSystemPrompt,
   getCircleSystemPrompt,
 } from "./ai/personas";
-import * as fs from "fs";
-import * as os from "os";
-import * as path from "path";
+
 
 // 分離されたモジュールの再エクスポート
 export { initializeNameParts, getNameParts, updateUserName } from "./callable/names";
