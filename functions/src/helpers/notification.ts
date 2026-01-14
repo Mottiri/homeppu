@@ -90,7 +90,11 @@ export async function sendPushOnly(
 }
 
 /**
- * プッシュ通知を送信（Firestore保存 + FCM送信）
+ * 通知をFirestoreに保存（FCM送信はonNotificationCreatedトリガーが担当）
+ * 
+ * 設計変更: 2026-01-14
+ * - FCM送信を削除（二重通知の原因だったため）
+ * - Firestore保存のみ → onNotificationCreated が自動でFCM送信
  */
 export async function sendPushNotification(
     userId: string,
@@ -105,7 +109,8 @@ export async function sendPushNotification(
     }
 ): Promise<void> {
     try {
-        // 1. Firestoreに通知ドキュメントを保存 (オプション指定時)
+        // Firestoreに通知ドキュメントを保存
+        // FCM送信は onNotificationCreated トリガーが自動的に行う
         if (options) {
             await db.collection("users").doc(userId).collection("notifications").add({
                 userId: userId,
@@ -119,71 +124,13 @@ export async function sendPushNotification(
                 isRead: false,
                 createdAt: FieldValue.serverTimestamp(),
             });
-            console.log(`Notification saved to Firestore for user: ${userId}`);
+            console.log(`Notification saved to Firestore for user: ${userId} (FCM will be sent by onNotificationCreated)`);
+        } else {
+            // optionsがない場合は警告ログを出力（通知が作成されないため）
+            console.warn(`sendPushNotification called without options - notification will NOT be created for user: ${userId}`);
         }
-
-        // 2. FCMトークン取得
-        const userDoc = await db.collection("users").doc(userId).get();
-        if (!userDoc.exists) {
-            console.log(`User not found: ${userId} `);
-            return;
-        }
-
-        const userData = userDoc.data();
-        const fcmToken = userData?.fcmToken;
-
-        if (!fcmToken) {
-            console.log(`No FCM token for user: ${userId} `);
-            return;
-        }
-
-        // 2.5 通知設定の確認
-        if (options && userData?.notificationSettings) {
-            const type = options.type;
-            // 設定キーへのマッピング (comment -> comments, reaction -> reactions)
-            const settingKey = type === "comment" ? "comments" : type === "reaction" ? "reactions" : null;
-
-            if (settingKey && userData.notificationSettings[settingKey] === false) {
-                console.log(`Notification skipped due to user setting: ${type} for user ${userId}`);
-                return;
-            }
-        }
-
-        // 3. FCM送信
-        const fcmData: { [key: string]: string } = {
-            ...data,
-        };
-        if (options?.type) {
-            fcmData.type = options.type;
-        }
-
-        const message = {
-            token: fcmToken,
-            notification: {
-                title,
-                body,
-            },
-            data: fcmData,
-            android: {
-                priority: "high" as const,
-                notification: {
-                    sound: "default",
-                    channelId: "default_channel",
-                },
-            },
-            apns: {
-                payload: {
-                    aps: {
-                        sound: "default",
-                        badge: 1,
-                    },
-                },
-            },
-        };
-
-        await admin.messaging().send(message);
-        console.log(`Push notification sent to ${userId}: ${title} `);
     } catch (error) {
-        console.error(`Failed to send push notification to ${userId}: `, error);
+        console.error(`Failed to save notification for ${userId}: `, error);
     }
 }
+
