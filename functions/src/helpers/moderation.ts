@@ -10,6 +10,10 @@ import * as path from "path";
 import { GoogleGenerativeAI, Part } from "@google/generative-ai";
 import { GoogleAIFileManager } from "@google/generative-ai/server";
 import { MediaModerationResult, MediaItem } from "../types";
+import {
+    IMAGE_MODERATION_PROMPT,
+    VIDEO_MODERATION_PROMPT,
+} from "../ai/prompts/moderation";
 
 /**
  * URLからファイルをダウンロード
@@ -53,21 +57,7 @@ export async function moderateImage(
         const base64Image = imageBuffer.toString("base64");
         console.log(`moderateImage: Downloaded image, size=${imageBuffer.length} bytes`);
 
-        const prompt = `
-この画像がSNSへの投稿として適切かどうか判定してください。
-
-【ブロック対象（isInappropriate: true）】
-- adult: 成人向けコンテンツ、露出の多い画像、性的な内容
-- violence: 暴力的な画像、血液、怪我、残虐な内容、血まみれ
-- hate: ヘイトシンボル、差別的な画像
-- dangerous: 危険な行為、違法行為、武器
-
-上記に該当しない場合は isInappropriate: false としてください。
-
-【回答形式】
-JSON形式のみで回答:
-{"isInappropriate": true/false, "category": "adult"|"violence"|"hate"|"dangerous"|"none", "confidence": 0-1, "reason": "理由"}
-`;
+        const prompt = IMAGE_MODERATION_PROMPT;
 
         const imagePart: Part = {
             inlineData: {
@@ -143,21 +133,7 @@ export async function moderateVideo(
             throw new Error("Video processing failed");
         }
 
-        const prompt = `
-この動画がSNSへの投稿として適切かどうか判定してください。
-
-【ブロック対象（isInappropriate: true）】
-- adult: 成人向けコンテンツ、露出の多い映像、性的な内容
-- violence: 暴力的な映像、血液、怪我、残虐な内容
-- hate: ヘイトシンボル、差別的な内容
-- dangerous: 危険な行為、違法行為、武器
-
-上記に該当しない場合は isInappropriate: false としてください。
-
-【回答形式】
-必ず以下のJSON形式のみで回答してください：
-{"isInappropriate": true/false, "category": "adult"|"violence"|"hate"|"dangerous"|"none", "confidence": 0-1, "reason": "判定理由"}
-`;
+        const prompt = VIDEO_MODERATION_PROMPT;
 
         const videoPart: Part = {
             fileData: {

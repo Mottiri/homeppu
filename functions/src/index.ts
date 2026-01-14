@@ -29,6 +29,11 @@ import {
   getSystemPrompt,
   getCircleSystemPrompt,
 } from "./ai/personas";
+import {
+  getTextModerationPrompt,
+  IMAGE_MODERATION_CALLABLE_PROMPT,
+} from "./ai/prompts/moderation";
+import { getPostGenerationPrompt } from "./ai/prompts/post-generation";
 
 
 // 分離されたモジュールの再エクスポート
@@ -419,27 +424,7 @@ async function moderateText(text: string, postContent: string = ""): Promise<Mod
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-  const prompt = `
-あなたはSNSのコミュニティマネージャーです。以下のテキストが、ポジティブで優しいSNS「ほめっぷ」にふさわしいかどうか（攻撃的、誹謗中傷、不適切でないか）を判定してください。
-文脈として、ユーザーは「投稿内容」に対して「コメント」をしようとしています。
-たとえ一見普通の言葉でも、文脈によって嫌味や攻撃になる場合はネガティブと判定してください。
-特に「死ね」「殺す」「きもい」などの直接的な暴言・攻撃は厳しく判定してください。
-
-【投稿内容】
-"${postContent}"
-
-【コメントしようとしている内容】
-"${text}"
-
-以下のJSON形式のみで回答してください:
-{
-  "isNegative": boolean, // ネガティブ（不適切）ならtrue
-  "category": "harassment" | "hate_speech" | "profanity" | "self_harm" | "spam" | "none",
-  "confidence": number, // 0.0〜1.0 (確信度)
-  "reason": "判定理由（ユーザーに簡潔に伝える用）",
-  "suggestion": "より優しい言い方の提案（もしあれば）"
-}
-`;
+  const prompt = getTextModerationPrompt(text, postContent);
 
   try {
     const result = await model.generateContent(prompt);
@@ -738,29 +723,7 @@ export const executeAIPostGeneration = functionsV1.region(LOCATION).runWith({
     const hours = now.getHours();
 
     // プロンプト生成 (努力・達成・日常の頑張りをテーマに)
-    const prompt = `
-${getSystemPrompt(persona, "みんな")}
-
-【指示】
-あなたは「ホームップ」というSNSのユーザー「${persona.name}」です。
-職業は「${persona.occupation.name}」、性格は「${persona.personality.name}」です。
-
-今の時間帯（${hours}時頃）に合わせた、自然な「つぶやき」を投稿してください。
-テーマは「今日頑張ったこと」「小さな達成」「日常の努力」「ふとした気づき」などです。
-ポジティブで、他のユーザーが見て「頑張ってるな」と思えるような内容にしてください。
-
-【条件】
-- ネガティブな発言禁止
-- 誹謗中傷禁止
-- ハッシュタグ不要
-- 絵文字を適度に使用して人間らしく
-- 文章は短め〜中くらい（30文字〜80文字程度）
-
-【例】
-- 「今日は早起きして朝活できた！気持ちいい✨」
-- 「仕事の資料、期限内に終わった〜！自分へのご褒美にコンビニスイーツ買う🍰」
-- 「今日は疲れたけど、筋トレだけは欠かさずやった💪 えらい！」
-`;
+    const prompt = getPostGenerationPrompt(persona, hours);
 
     const result = await model.generateContent(prompt);
     let content = result.response.text()?.trim();
@@ -1315,30 +1278,7 @@ export const moderateImageCallable = onCall(
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
 
-      const prompt = `
-この画像がSNSへの投稿として適切かどうか判定してください。
-
-【ブロック対象（isInappropriate: true）】
-- adult: 成人向けコンテンツ、露出の多い画像、性的な内容
-- violence: 暴力的な画像、血液、怪我、残虐な内容
-- hate: ヘイトシンボル、差別的な画像
-- dangerous: 危険な行為、違法行為、武器
-
-【許可する内容（isInappropriate: false）】
-- 通常の人物写真（水着でも一般的なものはOK）
-- 風景、食べ物、ペット
-- 趣味の写真
-- 芸術作品（明らかにアダルトでない限り）
-
-【回答形式】
-必ず以下のJSON形式のみで回答してください：
-{
-  "isInappropriate": true または false,
-  "category": "adult" | "violence" | "hate" | "dangerous" | "none",
-  "confidence": 0から1の数値,
-  "reason": "判定理由"
-}
-`;
+      const prompt = IMAGE_MODERATION_CALLABLE_PROMPT;
 
       const imagePart: Part = {
         inlineData: {
