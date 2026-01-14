@@ -1,11 +1,11 @@
 ﻿import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import * as functionsV1 from "firebase-functions/v1";
-import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
 // onSchedule は scheduled/*.ts に移動済み
 import { setGlobalOptions } from "firebase-functions/v2"; // Global Options
 
 import * as admin from "firebase-admin";
-import { GoogleGenerativeAI, Part, GenerativeModel } from "@google/generative-ai";
+import { GoogleGenerativeAI, Part } from "@google/generative-ai";
 
 
 import { CloudTasksClient } from "@google-cloud/tasks";
@@ -14,18 +14,17 @@ import { CloudTasksClient } from "@google-cloud/tasks";
 import { AIProviderFactory } from "./ai/provider";
 import { PROJECT_ID, LOCATION } from "./config/constants";
 import { geminiApiKey, openaiApiKey } from "./config/secrets";
-import { isAdmin } from "./helpers/admin";
+// isAdmin は callable/admin.ts で使用
 // deleteStorageFileFromUrl は scheduled/cleanup.ts で使用
 // appendInquiryToSpreadsheet は callable/inquiries.ts で使用
 import { VIRTUE_CONFIG } from "./helpers/virtue";
 // sendPushOnly は triggers/*.ts で使用
-import { NegativeCategory, ModerationResult, MediaModerationResult } from "./types";
+import { ModerationResult, MediaModerationResult } from "./types";
 import {
   Gender,
   AgeGroup,
   PERSONALITIES,
   PRAISE_STYLES,
-  AIPersona,
   AI_PERSONAS,
   getSystemPrompt,
   getCircleSystemPrompt,
