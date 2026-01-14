@@ -1,7 +1,7 @@
-﻿import { onDocumentCreated, onDocumentUpdated, onDocumentDeleted } from "firebase-functions/v2/firestore";
+﻿import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import * as functionsV1 from "firebase-functions/v1";
 import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
-import { onSchedule } from "firebase-functions/v2/scheduler";
+// onSchedule は scheduled/*.ts に移動済み
 import { setGlobalOptions } from "firebase-functions/v2"; // Global Options
 
 import * as admin from "firebase-admin";
@@ -9,32 +9,23 @@ import { GoogleGenerativeAI, Part, GenerativeModel } from "@google/generative-ai
 
 
 import { CloudTasksClient } from "@google-cloud/tasks";
-import { google } from "googleapis";
+// google (googleapis) は helpers/spreadsheet.ts に移動済み
 
 import { AIProviderFactory } from "./ai/provider";
-import { PROJECT_ID, LOCATION, QUEUE_NAME, SPREADSHEET_ID } from "./config/constants";
-import { geminiApiKey, openaiApiKey, sheetsServiceAccountKey } from "./config/secrets";
-import { isAdmin, getAdminUids } from "./helpers/admin";
-import { deleteStorageFileFromUrl } from "./helpers/storage";
-import { appendInquiryToSpreadsheet } from "./helpers/spreadsheet";
+import { PROJECT_ID, LOCATION } from "./config/constants";
+import { geminiApiKey, openaiApiKey } from "./config/secrets";
+import { isAdmin } from "./helpers/admin";
+// deleteStorageFileFromUrl は scheduled/cleanup.ts で使用
+// appendInquiryToSpreadsheet は callable/inquiries.ts で使用
 import { VIRTUE_CONFIG } from "./helpers/virtue";
-import { sendPushOnly } from "./helpers/notification";
-import { NegativeCategory, ModerationResult, MediaModerationResult, MediaItem } from "./types";
+// sendPushOnly は triggers/*.ts で使用
+import { NegativeCategory, ModerationResult, MediaModerationResult } from "./types";
 import {
   Gender,
   AgeGroup,
-  OCCUPATIONS,
   PERSONALITIES,
   PRAISE_STYLES,
-  AGE_GROUPS,
-  NamePart,
-  PREFIX_PARTS,
-  SUFFIX_PARTS,
   AIPersona,
-  BIO_TEMPLATES,
-  AI_USABLE_PREFIXES,
-  AI_USABLE_SUFFIXES,
-  generateAIPersona,
   AI_PERSONAS,
   getSystemPrompt,
   getCircleSystemPrompt,
