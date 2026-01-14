@@ -32,7 +32,7 @@ export const onPostCreated = onDocumentCreated(
         secrets: [geminiApiKey],
         timeoutSeconds: 120,
         memory: "1GiB",
-        serviceAccount: "cloud-tasks-sa@positive-sns.iam.gserviceaccount.com",
+        serviceAccount: `cloud-tasks-sa@${PROJECT_ID}.iam.gserviceaccount.com`,
     },
     async (event) => {
         const snap = event.data;
