@@ -7,6 +7,7 @@ import { onDocumentCreated } from "firebase-functions/v2/firestore";
 
 import { db } from "../helpers/firebase";
 import { sendPushNotification } from "../helpers/notification";
+import { LOCATION } from "../config/constants";
 
 /**
  * コメント作成時に投稿者へ通知
@@ -14,7 +15,7 @@ import { sendPushNotification } from "../helpers/notification";
 export const onCommentCreatedNotify = onDocumentCreated(
     {
         document: "comments/{commentId}",
-        region: "asia-northeast1",
+        region: LOCATION,
     },
     async (event) => {
         const snap = event.data;
@@ -74,7 +75,7 @@ export const onCommentCreatedNotify = onDocumentCreated(
 export const onReactionAddedNotify = onDocumentCreated(
     {
         document: "reactions/{reactionId}",
-        region: "asia-northeast1",
+        region: LOCATION,
     },
     async (event) => {
         const snap = event.data;

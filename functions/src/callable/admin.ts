@@ -9,12 +9,13 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 
 import { db } from "../helpers/firebase";
 import { isAdmin } from "../helpers/admin";
+import { LOCATION } from "../config/constants";
 
 /**
  * 管理用: 全ユーザーのフォローリストを掃除する
  */
 export const cleanUpUserFollows = onCall(
-    { region: "asia-northeast1", timeoutSeconds: 540 },
+    { region: LOCATION, timeoutSeconds: 540 },
     async (request) => {
         if (!request.auth) {
             throw new HttpsError("unauthenticated", "ログインが必要です");
@@ -74,7 +75,7 @@ export const cleanUpUserFollows = onCall(
 /**
  * 管理用: 全てのAIユーザーを削除する (v1)
  */
-export const deleteAllAIUsers = functionsV1.region("asia-northeast1").runWith({
+export const deleteAllAIUsers = functionsV1.region(LOCATION).runWith({
     timeoutSeconds: 540,
     memory: "1GB"
 }).https.onCall(async (data, context) => {
@@ -164,7 +165,7 @@ export const deleteAllAIUsers = functionsV1.region("asia-northeast1").runWith({
  * 孤児サークルAI（サブコレクションのみ残っている状態）を一括削除
  */
 export const cleanupOrphanedCircleAIs = onCall(
-    { region: "asia-northeast1", timeoutSeconds: 300 },
+    { region: LOCATION, timeoutSeconds: 300 },
     async (request) => {
         if (!request.auth) {
             throw new HttpsError("unauthenticated", "ログインが必要です");
@@ -283,7 +284,7 @@ export const removeAdminRole = onCall(async (request) => {
  * ユーザーを一時BANにする
  */
 export const banUser = onCall(
-    { region: "asia-northeast1" },
+    { region: LOCATION },
     async (request) => {
         if (!request.auth?.token.admin) {
             throw new HttpsError("permission-denied", "管理者権限が必要です");
@@ -342,7 +343,7 @@ export const banUser = onCall(
  * ユーザーを永久BANにする
  */
 export const permanentBanUser = onCall(
-    { region: "asia-northeast1" },
+    { region: LOCATION },
     async (request) => {
         if (!request.auth?.token.admin) {
             throw new HttpsError("permission-denied", "管理者権限が必要です");
@@ -406,7 +407,7 @@ export const permanentBanUser = onCall(
  * BANを解除する
  */
 export const unbanUser = onCall(
-    { region: "asia-northeast1" },
+    { region: LOCATION },
     async (request) => {
         if (!request.auth?.token.admin) {
             throw new HttpsError("permission-denied", "管理者権限が必要です");

@@ -8,6 +8,7 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 
 import { db } from "../helpers/firebase";
 import { deleteStorageFileFromUrl } from "../helpers/storage";
+import { LOCATION } from "../config/constants";
 
 /**
  * 孤立メディアクリーンアップ
@@ -18,7 +19,7 @@ export const cleanupOrphanedMedia = onSchedule(
     {
         schedule: "0 3 * * *", // 毎日午前3時 JST
         timeZone: "Asia/Tokyo",
-        region: "asia-northeast1",
+        region: LOCATION,
         timeoutSeconds: 600, // 10分タイムアウト
     },
     async () => {
@@ -327,7 +328,7 @@ export const cleanupResolvedInquiries = onSchedule(
     {
         schedule: "0 3 * * *", // 毎日午前3時（日本時間）
         timeZone: "Asia/Tokyo",
-        region: "asia-northeast1",
+        region: LOCATION,
     },
     async () => {
         console.log("=== cleanupResolvedInquiries started ===");
@@ -490,7 +491,7 @@ export const cleanupReports = onSchedule(
         schedule: "every day 00:00",
         timeZone: "Asia/Tokyo",
         timeoutSeconds: 300,
-        region: "asia-northeast1",
+        region: LOCATION,
     },
     async () => {
         console.log("Starting cleanupReports function...");
@@ -559,7 +560,7 @@ export const cleanupBannedUsers = onSchedule(
     {
         schedule: "0 4 * * *",
         timeZone: "Asia/Tokyo",
-        region: "asia-northeast1",
+        region: LOCATION,
         timeoutSeconds: 540,
     },
     async () => {

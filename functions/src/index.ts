@@ -81,7 +81,7 @@ admin.initializeApp();
 const db = admin.firestore();
 
 // Set global options for v2 functions
-setGlobalOptions({ region: "asia-northeast1" });
+setGlobalOptions({ region: LOCATION });
 
 // ===============================================
 // ヘルパー関数
@@ -177,7 +177,7 @@ const POST_TEMPLATES_BY_OCCUPATION: Record<string, string[]> = {
  */
 // Imports removed as they are already in scope or invalid
 
-export const generateAICommentV1 = functionsV1.region("asia-northeast1").runWith({
+export const generateAICommentV1 = functionsV1.region(LOCATION).runWith({
   secrets: ["GEMINI_API_KEY", "OPENAI_API_KEY"],
   timeoutSeconds: 60,
 }).https.onRequest(async (request, response) => {
@@ -491,7 +491,7 @@ async function penalizeUser(userId: string, penalty: number, reason: string) {
  */
 export const createCommentWithModeration = onCall(
   {
-    region: "asia-northeast1",
+    region: LOCATION,
     secrets: [geminiApiKey],
   },
   async (request) => {
@@ -631,7 +631,7 @@ export const addUserReaction = onCall(
  * Cloud Tasks から呼び出される AI リアクション生成関数 (v1)
  * 単体リアクション用
  */
-export const generateAIReactionV1 = functionsV1.region("asia-northeast1").https.onRequest(async (request, response) => {
+export const generateAIReactionV1 = functionsV1.region(LOCATION).https.onRequest(async (request, response) => {
   // Cloud Tasks からのリクエストを OIDC トークンで検証（動的インポート）
   const { verifyCloudTasksRequest } = await import("./helpers/cloud-tasks-auth");
   if (!await verifyCloudTasksRequest(request, "generateAIReactionV1")) {
@@ -700,7 +700,7 @@ export const generateAIReactionV1 = functionsV1.region("asia-northeast1").https.
 /**
  * Cloud Tasks から呼び出される AI 投稿生成関数 (Worker)
  */
-export const executeAIPostGeneration = functionsV1.region("asia-northeast1").runWith({
+export const executeAIPostGeneration = functionsV1.region(LOCATION).runWith({
   secrets: ["GEMINI_API_KEY"],
   timeoutSeconds: 300,
   memory: "1GB",
@@ -843,7 +843,7 @@ function calculateReminderTime(
  * タスク作成/更新時にリマインダーをスケジュール
  */
 export const scheduleTaskReminders = onDocumentUpdated(
-  { document: "tasks/{taskId}", region: "asia-northeast1" },
+  { document: "tasks/{taskId}", region: LOCATION },
   async (event) => {
     const taskId = event.params.taskId;
     const beforeData = event.data?.before.data();
@@ -1019,7 +1019,7 @@ export const scheduleTaskReminders = onDocumentUpdated(
  * タスク作成時にリマインダーをスケジュール
  */
 export const scheduleTaskRemindersOnCreate = onDocumentCreated(
-  { document: "tasks/{taskId}", region: "asia-northeast1" },
+  { document: "tasks/{taskId}", region: LOCATION },
   async (event) => {
     const taskId = event.params.taskId;
     const data = event.data?.data();
@@ -1146,7 +1146,7 @@ export const scheduleTaskRemindersOnCreate = onDocumentCreated(
 /**
  * リマインダー通知を実行するCloud Tasks用のHTTPエンドポイント
  */
-export const executeTaskReminder = functionsV1.region("asia-northeast1").runWith({
+export const executeTaskReminder = functionsV1.region(LOCATION).runWith({
   timeoutSeconds: 30,
 }).https.onRequest(async (request, response) => {
   // Cloud Tasks からのリクエストを OIDC トークンで検証（動的インポート）
@@ -1297,7 +1297,7 @@ export const onReactionCreated = onDocumentCreated(
  * Base64エンコードされた画像データを受け取り、不適切かどうか判定
  */
 export const moderateImageCallable = onCall(
-  { secrets: [geminiApiKey], region: "asia-northeast1" },
+  { secrets: [geminiApiKey], region: LOCATION },
   async (request) => {
     const { imageBase64, mimeType = "image/jpeg" } = request.data;
 

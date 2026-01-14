@@ -8,12 +8,13 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 
 import { db } from "../helpers/firebase";
 import { VIRTUE_CONFIG } from "../helpers/virtue";
+import { LOCATION } from "../config/constants";
 
 /**
  * ユーザーをフォローする
  */
 export const followUser = onCall(
-    { region: "asia-northeast1" },
+    { region: LOCATION },
     async (request) => {
         if (!request.auth) {
             throw new HttpsError("unauthenticated", "ログインが必要です");
@@ -64,7 +65,7 @@ export const followUser = onCall(
  * フォローを解除する
  */
 export const unfollowUser = onCall(
-    { region: "asia-northeast1" },
+    { region: LOCATION },
     async (request) => {
         if (!request.auth) {
             throw new HttpsError("unauthenticated", "ログインが必要です");
@@ -105,7 +106,7 @@ export const unfollowUser = onCall(
  * フォロー状態を取得する
  */
 export const getFollowStatus = onCall(
-    { region: "asia-northeast1" },
+    { region: LOCATION },
     async (request) => {
         if (!request.auth) {
             throw new HttpsError("unauthenticated", "ログインが必要です");
@@ -135,7 +136,7 @@ export const getFollowStatus = onCall(
  * 徳ポイント履歴を取得
  */
 export const getVirtueHistory = onCall(
-    { region: "asia-northeast1" },
+    { region: LOCATION },
     async (request) => {
         if (!request.auth) {
             throw new HttpsError("unauthenticated", "ログインが必要です");
@@ -164,7 +165,7 @@ export const getVirtueHistory = onCall(
  * 徳ポイントの現在値と設定を取得
  */
 export const getVirtueStatus = onCall(
-    { region: "asia-northeast1" },
+    { region: LOCATION },
     async (request) => {
         if (!request.auth) {
             throw new HttpsError("unauthenticated", "ログインが必要です");
