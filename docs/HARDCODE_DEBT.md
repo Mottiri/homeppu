@@ -4,38 +4,44 @@
 
 バイブコーディング時の一貫性を保つため、ハードコードを定数に置き換える作業リストです。
 
-## 優先度: 高（リファクタリング時に必須対応）
+## 対応完了
 
-### 1. リージョン設定 `"asia-northeast1"`
+### 1. リージョン設定 ✅ (2026-01-15完了)
 
-| ファイル | 箇所数 | ステータス |
-|---------|--------|-----------|
-| `index.ts` | 38 | Phase 5-7で対応 |
-| `callable/names.ts` | 0 | ✅ 対応済 |
-| `callable/reports.ts` | 0 | ✅ 対応済 |
-| `callable/tasks.ts` | 0 | ✅ 対応済 |
-| `callable/inquiries.ts` | 0 | ✅ 対応済 |
-| `callable/circles.ts` | 0 | ✅ Phase 4で対応済 |
-| `triggers/circles.ts` | 0 | ✅ Phase 4で対応済 |
-| `circle-ai/posts.ts` | 0 | ✅ Phase 4で対応済 |
-| `scheduled/circles.ts` | 0 | ✅ Phase 4で対応済 |
+**全27箇所を `LOCATION` 定数に置換完了**
 
-**対応方法**:
-```typescript
-import { LOCATION } from "../config/constants";
-// region: "asia-northeast1" → region: LOCATION
-```
+| ファイル | 対応状況 |
+|---------|----------|
+| `index.ts` | ✅ 対応済 |
+| `callable/admin.ts` | ✅ 対応済 |
+| `callable/users.ts` | ✅ 対応済 |
+| `scheduled/cleanup.ts` | ✅ 対応済 |
+| `triggers/notifications.ts` | ✅ 対応済 |
+| `triggers/posts.ts` | ✅ 対応済（serviceAccountも定数化）|
+
+### 2. AIプロンプト ✅ (2026-01-15完了)
+
+**`ai/prompts/` ディレクトリに分離完了**
+
+| ファイル | 内容 |
+|---------|------|
+| `prompts/comment.ts` | getSystemPrompt, getCircleSystemPrompt |
+| `prompts/moderation.ts` | 画像/動画/テキストモデレーションプロンプト |
+| `prompts/media-analysis.ts` | 画像/動画分析プロンプト |
+| `prompts/post-generation.ts` | AI投稿生成プロンプト |
+| `prompts/bio-generation.ts` | bio生成プロンプト |
+| `prompts/index.ts` | 統合エクスポート |
 
 ---
 
 ## 優先度: 中（将来的に対応推奨）
 
-### 2. エラーメッセージ（104箇所）
+### 3. エラーメッセージ（50+箇所）
 
 同じエラーメッセージが複数箇所でハードコードされています。
 
 **よく使われるメッセージ**:
-- `"ログインが必要です"` - 約30箇所
+- `"ログインが必要です"` - 約25箇所
 - `"管理者権限が必要です"` - 約16箇所
 - `"ユーザーが見つかりません"` - 約10箇所
 
@@ -50,7 +56,7 @@ export const ErrorMessages = {
 } as const;
 ```
 
-### 3. コレクション名（116箇所）
+### 4. コレクション名（116箇所）
 
 Firestoreコレクション名がハードコードされています。
 
@@ -77,7 +83,7 @@ export const Collections = {
 
 ## 優先度: 低（余裕があれば対応）
 
-### 4. 関数タイムアウト設定（21箇所）
+### 5. 関数タイムアウト設定（21箇所）
 
 ```typescript
 // 現状: バラバラな設定
@@ -95,7 +101,7 @@ export const Timeouts = {
 } as const;
 ```
 
-### 5. メモリ設定（9箇所）
+### 6. メモリ設定（9箇所）
 
 ```typescript
 // 現状
@@ -115,31 +121,24 @@ export const Memory = {
 
 ## 対応ルール
 
-### リファクタリング各Phase完了時
-
-1. 新規作成ファイルでは `LOCATION` 定数を必ず使用
-2. 既存コードからの移植時にハードコードを発見したら定数に置換
-3. Phase完了後、このドキュメントのステータスを更新
-
 ### 新規Cloud Functions作成時
 
-1. `.claude/rules/no_hardcode.md` のルールに従う
-2. `region: LOCATION` を必ず使用
-3. `db` は `helpers/firebase.ts` からインポート
+1. `region: LOCATION` を必ず使用
+2. `db` は `helpers/firebase.ts` からインポート
+3. プロンプトは `ai/prompts/` に追加
+4. エラーメッセージは将来的に定数化予定
 
----
-
-## 即時対応が必要なケース
+### 即時対応が必要なケース
 
 以下の場合は、Phase作業に関係なく即時対応してください：
 
 1. **セキュリティに関わる設定**
-   - サービスアカウントのメールアドレス
+   - サービスアカウントのメールアドレス → `PROJECT_ID` 定数使用
    - 認証関連のURL
 
 2. **環境依存の設定**
-   - プロジェクトID
-   - リージョン（`LOCATION`）
+   - プロジェクトID → `PROJECT_ID`
+   - リージョン → `LOCATION`
 
 3. **頻繁に変更される可能性がある値**
    - 外部APIのエンドポイント
