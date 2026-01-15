@@ -15,6 +15,15 @@ import { db, FieldValue } from "../helpers/firebase";
 import { isAdmin } from "../helpers/admin";
 import { deleteStorageFileFromUrl } from "../helpers/storage";
 import { PROJECT_ID, LOCATION } from "../config/constants";
+import {
+  AUTH_ERRORS,
+  RESOURCE_ERRORS,
+  VALIDATION_ERRORS,
+  PERMISSION_ERRORS,
+  NOTIFICATION_TITLES,
+  LABELS,
+  SUCCESS_MESSAGES,
+} from "../config/messages";
 
 /**
  * サークルを削除
@@ -30,14 +39,14 @@ export const deleteCircle = onCall(
   },
   async (request) => {
     if (!request.auth) {
-      throw new HttpsError("unauthenticated", "認証が必要です");
+      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED_ALT);
     }
 
     const { circleId, reason } = request.data;
     const userId = request.auth.uid;
 
     if (!circleId) {
-      throw new HttpsError("invalid-argument", "circleIdが必要です");
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.CIRCLE_ID_REQUIRED);
     }
 
     console.log(`=== deleteCircle START: circleId=${circleId}, userId=${userId} ===`);
@@ -46,7 +55,7 @@ export const deleteCircle = onCall(
       // 1. サークル情報を取得
       const circleDoc = await db.collection("circles").doc(circleId).get();
       if (!circleDoc.exists) {
-        throw new HttpsError("not-found", "サークルが見つかりません");
+        throw new HttpsError("not-found", RESOURCE_ERRORS.CIRCLE_NOT_FOUND);
       }
 
       const circleData = circleDoc.data()!;
@@ -57,7 +66,7 @@ export const deleteCircle = onCall(
       // オーナーまたは管理者チェック
       const userIsAdmin = await isAdmin(userId);
       if (ownerId !== userId && !userIsAdmin) {
-        throw new HttpsError("permission-denied", "サークル削除はオーナーまたは管理者のみ可能です");
+        throw new HttpsError("permission-denied", PERMISSION_ERRORS.CIRCLE_DELETE_OWNER_ONLY);
       }
 
       // 2. サークルをソフトデリート（即座にUIから非表示）
@@ -72,7 +81,7 @@ export const deleteCircle = onCall(
 
       // 3. メンバーに通知送信（オーナー以外）
       const ownerDoc = await db.collection("users").doc(ownerId).get();
-      const ownerName = ownerDoc.exists ? ownerDoc.data()?.displayName || "オーナー" : "オーナー";
+      const ownerName = ownerDoc.exists ? ownerDoc.data()?.displayName || LABELS.OWNER : LABELS.OWNER;
 
       const notificationMessage = reason && reason.trim()
         ? `${circleName}が削除されました。理由: ${reason}`
@@ -88,7 +97,7 @@ export const deleteCircle = onCall(
               senderId: ownerId,
               senderName: ownerName,
               senderAvatarUrl: ownerDoc.data()?.avatarIndex?.toString() || "0",
-              title: "サークルを削除しました",
+              title: NOTIFICATION_TITLES.CIRCLE_DELETED,
               body: notificationMessage,
               circleName: circleName,
               isRead: false,
@@ -128,7 +137,7 @@ export const deleteCircle = onCall(
       console.log(`Scheduled cleanup task for circle: ${circleId}`);
 
       console.log(`=== deleteCircle SUCCESS: ${circleName} ===`);
-      return { success: true, message: `${circleName}を削除しました` };
+      return { success: true, message: SUCCESS_MESSAGES.itemDeleted(circleName) };
 
     } catch (error) {
       console.error(`=== deleteCircle ERROR:`, error);
@@ -344,18 +353,18 @@ export const approveJoinRequest = onCall(
     const userId = request.auth?.uid;
 
     if (!userId) {
-      throw new HttpsError("unauthenticated", "認証が必要です");
+      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED_ALT);
     }
 
     if (!requestId || !circleId) {
-      throw new HttpsError("invalid-argument", "必要なパラメータがありません");
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.MISSING_PARAMS);
     }
 
     try {
       // サークル情報を取得してオーナーチェック
       const circleDoc = await db.collection("circles").doc(circleId).get();
       if (!circleDoc.exists) {
-        throw new HttpsError("not-found", "サークルが見つかりません");
+        throw new HttpsError("not-found", RESOURCE_ERRORS.CIRCLE_NOT_FOUND);
       }
       const circleData = circleDoc.data()!;
       const circleOwnerId = circleData.ownerId;
@@ -364,13 +373,13 @@ export const approveJoinRequest = onCall(
       // オーナー、副オーナー、または管理者のみ承認可能
       const userIsAdmin = await isAdmin(userId);
       if (userId !== circleOwnerId && userId !== circleSubOwnerId && !userIsAdmin) {
-        throw new HttpsError("permission-denied", "オーナー、副オーナー、または管理者のみ承認できます");
+        throw new HttpsError("permission-denied", PERMISSION_ERRORS.CIRCLE_APPROVE_OWNER_ONLY);
       }
 
       // 申請情報を取得
       const requestDoc = await db.collection("circleJoinRequests").doc(requestId).get();
       if (!requestDoc.exists) {
-        throw new HttpsError("not-found", "申請が見つかりません");
+        throw new HttpsError("not-found", RESOURCE_ERRORS.APPLICATION_NOT_FOUND);
       }
       const requestData = requestDoc.data()!;
       const applicantId = requestData.userId;
@@ -388,7 +397,7 @@ export const approveJoinRequest = onCall(
 
       // 申請者の表示名を取得
       const ownerDoc = await db.collection("users").doc(userId).get();
-      const ownerName = ownerDoc.data()?.displayName || "オーナー";
+      const ownerName = ownerDoc.data()?.displayName || LABELS.OWNER;
 
       // 申請者に通知を送信
       await db.collection("users").doc(applicantId).collection("notifications").add({
@@ -396,8 +405,8 @@ export const approveJoinRequest = onCall(
         senderId: userId,
         senderName: ownerName,
         senderAvatarUrl: ownerDoc.data()?.avatarIndex?.toString() || "0",
-        title: "参加を承認しました",
-        body: `${circleName || "サークル"}への参加が承認されました！`,
+        title: NOTIFICATION_TITLES.JOIN_APPROVED,
+        body: SUCCESS_MESSAGES.joinApproved(circleName),
         circleName: circleName,
         circleId: circleId,
         isRead: false,
@@ -429,18 +438,18 @@ export const rejectJoinRequest = onCall(
     const userId = request.auth?.uid;
 
     if (!userId) {
-      throw new HttpsError("unauthenticated", "認証が必要です");
+      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED_ALT);
     }
 
     if (!requestId || !circleId) {
-      throw new HttpsError("invalid-argument", "必要なパラメータがありません");
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.MISSING_PARAMS);
     }
 
     try {
       // サークル情報を取得してオーナー/副オーナーチェック
       const circleDoc = await db.collection("circles").doc(circleId).get();
       if (!circleDoc.exists) {
-        throw new HttpsError("not-found", "サークルが見つかりません");
+        throw new HttpsError("not-found", RESOURCE_ERRORS.CIRCLE_NOT_FOUND);
       }
       const circleData = circleDoc.data()!;
       const circleOwnerId = circleData.ownerId;
@@ -449,13 +458,13 @@ export const rejectJoinRequest = onCall(
       // オーナー、副オーナー、または管理者のみ拒否可能
       const userIsAdmin = await isAdmin(userId);
       if (userId !== circleOwnerId && userId !== circleSubOwnerId && !userIsAdmin) {
-        throw new HttpsError("permission-denied", "オーナー、副オーナー、または管理者のみ拒否できます");
+        throw new HttpsError("permission-denied", PERMISSION_ERRORS.CIRCLE_REJECT_OWNER_ONLY);
       }
 
       // 申請情報を取得
       const requestDoc = await db.collection("circleJoinRequests").doc(requestId).get();
       if (!requestDoc.exists) {
-        throw new HttpsError("not-found", "申請が見つかりません");
+        throw new HttpsError("not-found", RESOURCE_ERRORS.APPLICATION_NOT_FOUND);
       }
       const requestData = requestDoc.data()!;
       const applicantId = requestData.userId;
@@ -467,7 +476,7 @@ export const rejectJoinRequest = onCall(
 
       // オーナーの表示名を取得
       const ownerDoc = await db.collection("users").doc(userId).get();
-      const ownerName = ownerDoc.data()?.displayName || "オーナー";
+      const ownerName = ownerDoc.data()?.displayName || LABELS.OWNER;
 
       // 申請者に通知を送信
       await db.collection("users").doc(applicantId).collection("notifications").add({
@@ -475,8 +484,8 @@ export const rejectJoinRequest = onCall(
         senderId: userId,
         senderName: ownerName,
         senderAvatarUrl: ownerDoc.data()?.avatarIndex?.toString() || "0",
-        title: "参加申請が拒否されました",
-        body: `${circleName || "サークル"}への参加申請は承認されませんでした`,
+        title: NOTIFICATION_TITLES.JOIN_REJECTED,
+        body: SUCCESS_MESSAGES.joinRejected(circleName),
         circleName: circleName,
         circleId: circleId,
         isRead: false,
@@ -508,18 +517,18 @@ export const sendJoinRequest = onCall(
     const userId = request.auth?.uid;
 
     if (!userId) {
-      throw new HttpsError("unauthenticated", "認証が必要です");
+      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED_ALT);
     }
 
     if (!circleId) {
-      throw new HttpsError("invalid-argument", "サークルIDが必要です");
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.CIRCLE_ID_REQUIRED_ALT);
     }
 
     try {
       // サークル情報を取得
       const circleDoc = await db.collection("circles").doc(circleId).get();
       if (!circleDoc.exists) {
-        throw new HttpsError("not-found", "サークルが見つかりません");
+        throw new HttpsError("not-found", RESOURCE_ERRORS.CIRCLE_NOT_FOUND);
       }
       const circleData = circleDoc.data()!;
       const ownerId = circleData.ownerId;
@@ -536,7 +545,7 @@ export const sendJoinRequest = onCall(
         .get();
 
       if (!existingRequest.empty) {
-        throw new HttpsError("already-exists", "既に申請中です");
+        throw new HttpsError("already-exists", VALIDATION_ERRORS.ALREADY_APPLIED);
       }
 
       // 申請を作成
@@ -549,7 +558,7 @@ export const sendJoinRequest = onCall(
 
       // 申請者の情報を取得
       const applicantDoc = await db.collection("users").doc(userId).get();
-      const applicantName = applicantDoc.data()?.displayName || "ユーザー";
+      const applicantName = applicantDoc.data()?.displayName || LABELS.USER;
 
       // 通知対象者リスト（オーナー + 副オーナー）
       const notifyTargets = [ownerId];
@@ -564,7 +573,7 @@ export const sendJoinRequest = onCall(
           senderId: userId,
           senderName: applicantName,
           senderAvatarUrl: applicantDoc.data()?.avatarIndex?.toString() || "0",
-          title: "参加申請が届きました",
+          title: NOTIFICATION_TITLES.JOIN_REQUEST_RECEIVED,
           body: `${applicantName}さんが${circleName}への参加を申請しました`,
           circleName: circleName,
           circleId: circleId,
