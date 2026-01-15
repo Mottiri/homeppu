@@ -241,7 +241,7 @@ export const sendInquiryReply = onCall(
       const inquiryDoc = await inquiryRef.get();
 
       if (!inquiryDoc.exists) {
-        throw new HttpsError("not-found", "問い合わせが見つかりません");
+        throw new HttpsError("not-found", RESOURCE_ERRORS.INQUIRY_NOT_FOUND);
       }
 
       const inquiryData = inquiryDoc.data()!;
@@ -476,7 +476,7 @@ export const updateInquiryStatus = onCall(
     } catch (error) {
       if (error instanceof HttpsError) throw error;
       console.error("Error updating inquiry status:", error);
-      throw new HttpsError("internal", "ステータスの変更に失敗しました");
+      throw new HttpsError("internal", SYSTEM_ERRORS.STATUS_CHANGE_FAILED);
     }
   }
 );
