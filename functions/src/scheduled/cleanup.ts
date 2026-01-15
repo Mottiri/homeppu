@@ -9,6 +9,7 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { db } from "../helpers/firebase";
 import { deleteStorageFileFromUrl } from "../helpers/storage";
 import { LOCATION } from "../config/constants";
+import { NOTIFICATION_TITLES } from "../config/messages";
 
 /**
  * 孤立メディアクリーンアップ
@@ -469,7 +470,7 @@ async function sendDeletionWarning(
         // アプリ内通知
         await db.collection("users").doc(userId).collection("notifications").add({
             type: "inquiry_deletion_warning",
-            title: "問い合わせ削除予告",
+            title: NOTIFICATION_TITLES.INQUIRY_DELETE_WARNING,
             body: notifyBody,
             inquiryId,
             isRead: false,

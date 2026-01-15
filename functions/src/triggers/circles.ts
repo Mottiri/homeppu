@@ -13,6 +13,7 @@ import { db, FieldValue } from "../helpers/firebase";
 import { deleteStorageFileFromUrl } from "../helpers/storage";
 import { generateCircleAIPersona } from "../circle-ai/generator";
 import { LOCATION } from "../config/constants";
+import { NOTIFICATION_TITLES, LABELS } from "../config/messages";
 
 /**
  * サークル作成時にAI3体を自動生成
@@ -145,28 +146,28 @@ export const onCircleUpdated = onDocumentUpdated(
         changes.push(`名前: ${beforeData.name} → ${afterData.name}`);
       }
       if (beforeData.description !== afterData.description) {
-        changes.push("説明が変更されました");
+        changes.push(LABELS.CHANGE_DESCRIPTION);
       }
       if (beforeData.category !== afterData.category) {
         changes.push(`カテゴリ: ${beforeData.category} → ${afterData.category}`);
       }
       if (beforeData.goal !== afterData.goal) {
-        changes.push("目標が変更されました");
+        changes.push(LABELS.CHANGE_GOAL);
       }
       if (beforeData.rules !== afterData.rules) {
-        changes.push("ルールが変更されました");
+        changes.push(LABELS.CHANGE_RULES);
       }
       if (beforeData.isPublic !== afterData.isPublic) {
-        changes.push(afterData.isPublic ? "公開に変更" : "非公開に変更");
+        changes.push(afterData.isPublic ? LABELS.CHANGE_PUBLIC : LABELS.CHANGE_PRIVATE);
       }
       if (beforeData.isInviteOnly !== afterData.isInviteOnly) {
-        changes.push(afterData.isInviteOnly ? "招待制に変更" : "招待制を解除");
+        changes.push(afterData.isInviteOnly ? LABELS.CHANGE_INVITE_ONLY : LABELS.CHANGE_INVITE_DISABLED);
       }
       if (beforeData.participationMode !== afterData.participationMode) {
         const modeLabels: { [key: string]: string } = {
-          ai: "AIモード",
-          mix: "MIXモード",
-          human: "人間モード",
+          ai: LABELS.MODE_AI,
+          mix: LABELS.MODE_MIX,
+          human: LABELS.MODE_HUMAN,
         };
         const oldMode = modeLabels[beforeData.participationMode] || beforeData.participationMode;
         const newMode = modeLabels[afterData.participationMode] || afterData.participationMode;
@@ -184,7 +185,7 @@ export const onCircleUpdated = onDocumentUpdated(
       // オーナー情報を取得
       const ownerId = afterData.ownerId;
       const ownerDoc = await db.collection("users").doc(ownerId).get();
-      const ownerName = ownerDoc.exists ? ownerDoc.data()?.displayName || "オーナー" : "オーナー";
+      const ownerName = ownerDoc.exists ? ownerDoc.data()?.displayName || LABELS.OWNER : LABELS.OWNER;
       const ownerAvatarIndex = ownerDoc.exists ? ownerDoc.data()?.avatarIndex?.toString() || "0" : "0";
 
       // メンバー一覧を取得（オーナーとAI以外）
@@ -208,7 +209,7 @@ export const onCircleUpdated = onDocumentUpdated(
             senderId: ownerId,
             senderName: ownerName,
             senderAvatarUrl: ownerAvatarIndex,
-            title: "サークルが更新されました",
+            title: NOTIFICATION_TITLES.CIRCLE_UPDATED,
             body: `${circleName}: ${notificationBody}`,
             circleName: circleName,
             circleId: circleId,
