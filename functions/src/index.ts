@@ -34,6 +34,11 @@ import {
   IMAGE_MODERATION_CALLABLE_PROMPT,
 } from "./ai/prompts/moderation";
 import { getPostGenerationPrompt } from "./ai/prompts/post-generation";
+import {
+  AUTH_ERRORS,
+  VALIDATION_ERRORS,
+  LABELS,
+} from "./config/messages";
 
 
 // 分離されたモジュールの再エクスポート
@@ -558,11 +563,11 @@ export const addUserReaction = onCall(
     const userId = request.auth?.uid;
 
     if (!userId) {
-      throw new HttpsError("unauthenticated", "ログインが必要です");
+      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
     }
 
     if (!postId || !reactionType) {
-      throw new HttpsError("invalid-argument", "postIdとreactionTypeが必要です");
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.POST_ID_REACTION_REQUIRED);
     }
 
     const MAX_REACTIONS_PER_USER = 5;
@@ -582,7 +587,7 @@ export const addUserReaction = onCall(
 
     // ユーザー情報を取得
     const userDoc = await db.collection("users").doc(userId).get();
-    const displayName = userDoc.data()?.displayName || "ユーザー";
+    const displayName = userDoc.data()?.displayName || LABELS.USER;
 
     const batch = db.batch();
 

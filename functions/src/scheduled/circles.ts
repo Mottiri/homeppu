@@ -12,6 +12,12 @@ import { CloudTasksClient } from "@google-cloud/tasks";
 import { db, FieldValue } from "../helpers/firebase";
 import { isAdmin } from "../helpers/admin";
 import { PROJECT_ID, LOCATION } from "../config/constants";
+import {
+  AUTH_ERRORS,
+  NOTIFICATION_TITLES,
+  LABELS,
+  SUCCESS_MESSAGES,
+} from "../config/messages";
 
 // サークル定期クリーンアップ定数
 const GHOST_THRESHOLD_DAYS = 365; // 人間投稿なしの日数
@@ -85,12 +91,12 @@ export const checkGhostCircles = onSchedule(
           }
 
           const reasonText = isGhost
-            ? "1年以上人間の投稿がない"
-            : "作成から1ヶ月以上経過しても投稿がない";
+            ? LABELS.WARNING_GHOST
+            : LABELS.WARNING_ABANDONED;
 
           await db.collection("users").doc(ownerId).collection("notifications").add({
             type: "circle_ghost_warning",
-            title: "⚠️ サークル削除予定のお知らせ",
+            title: NOTIFICATION_TITLES.CIRCLE_DELETE_WARNING,
             body: `「${circleName}」は${reasonText}ため、1週間後に自動削除されます。継続する場合は投稿してください。`,
             circleId,
             circleName,
@@ -114,7 +120,7 @@ export const checkGhostCircles = onSchedule(
             isDeleted: true,
             deletedAt: FieldValue.serverTimestamp(),
             deletedBy: "system_ghost_cleanup",
-            deleteReason: isGhost ? "1年以上人間の投稿がないため自動削除" : "投稿がなく放置されていたため自動削除",
+            deleteReason: isGhost ? LABELS.DELETE_REASON_GHOST : LABELS.DELETE_REASON_ABANDONED,
           });
 
           // Cloud Tasksでバックグラウンド削除をスケジュール
@@ -140,7 +146,7 @@ export const checkGhostCircles = onSchedule(
           // オーナーに削除完了通知
           await db.collection("users").doc(ownerId).collection("notifications").add({
             type: "circle_ghost_deleted",
-            title: "🗑️ サークルが削除されました",
+            title: NOTIFICATION_TITLES.CIRCLE_AUTO_DELETED,
             body: `「${circleName}」は活動がなかったため、自動削除されました。`,
             circleName,
             isRead: false,
@@ -237,11 +243,11 @@ export const triggerEvolveCircleAIs = onCall(
   async (request) => {
     // セキュリティ: 管理者権限チェック
     if (!request.auth) {
-      throw new HttpsError("unauthenticated", "ログインが必要です");
+      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
     }
     const userIsAdmin = await isAdmin(request.auth.uid);
     if (!userIsAdmin) {
-      throw new HttpsError("permission-denied", "管理者権限が必要です");
+      throw new HttpsError("permission-denied", AUTH_ERRORS.ADMIN_REQUIRED);
     }
 
     console.log("=== triggerEvolveCircleAIs (manual) START ===");
@@ -278,7 +284,7 @@ export const triggerEvolveCircleAIs = onCall(
 
       return {
         success: true,
-        message: `${evolvedCount}体のサークルAIが成長しました`,
+        message: SUCCESS_MESSAGES.circleAIsEvolved(evolvedCount),
         evolvedCount,
       };
 
