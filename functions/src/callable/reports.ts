@@ -7,6 +7,13 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { db, FieldValue } from "../helpers/firebase";
 import { isAdmin, getAdminUids } from "../helpers/admin";
 import { LOCATION } from "../config/constants";
+import {
+  AUTH_ERRORS,
+  VALIDATION_ERRORS,
+  NOTIFICATION_TITLES,
+  NOTIFICATION_BODIES,
+  LABELS,
+} from "../config/messages";
 
 /**
  * コンテンツを通報する
@@ -18,19 +25,19 @@ export const reportContent = onCall(
   { region: LOCATION },
   async (request) => {
     if (!request.auth) {
-      throw new HttpsError("unauthenticated", "ログインが必要です");
+      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
     }
 
     const reporterId = request.auth.uid;
     const { contentId, contentType, reason, targetUserId } = request.data;
 
     if (!contentId || !contentType || !reason || !targetUserId) {
-      throw new HttpsError("invalid-argument", "必要な情報が不足しています");
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.MISSING_REQUIRED);
     }
 
     // 自分自身を通報できない
     if (reporterId === targetUserId) {
-      throw new HttpsError("invalid-argument", "自分自身を通報することはできません");
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.SELF_REPORT_NOT_ALLOWED);
     }
 
     // 既に同じ内容を通報していないかチェック
@@ -41,7 +48,7 @@ export const reportContent = onCall(
       .get();
 
     if (!existingReport.empty) {
-      throw new HttpsError("already-exists", "既にこの内容を通報しています");
+      throw new HttpsError("already-exists", VALIDATION_ERRORS.ALREADY_REPORTED);
     }
 
     const now = FieldValue.serverTimestamp();
@@ -80,7 +87,7 @@ export const reportContent = onCall(
         await postRef.update({
           isVisible: false,
           hiddenAt: now,
-          hiddenReason: "通報多数のため自動非表示",
+          hiddenReason: LABELS.HIDDEN_BY_REPORTS,
         });
 
         // 投稿者に通知
@@ -90,8 +97,8 @@ export const reportContent = onCall(
           .collection("notifications")
           .add({
             type: "post_hidden",
-            title: "投稿が非表示になりました",
-            body: "複数の通報があったため、投稿が一時的に非表示になりました。運営が確認します。",
+            title: NOTIFICATION_TITLES.POST_HIDDEN,
+            body: NOTIFICATION_BODIES.POST_HIDDEN_BY_REPORTS,
             postId: contentId,
             isRead: false,
             createdAt: now,
@@ -119,7 +126,7 @@ export const reportContent = onCall(
         for (const adminUid of adminUids) {
           await db.collection("users").doc(adminUid).collection("notifications").add({
             type: "admin_report",
-            title: "新規通報を受信",
+            title: NOTIFICATION_TITLES.NEW_REPORT,
             body: notifyBody,
             reportId: reportRef.id,
             contentId: contentId,
@@ -138,7 +145,7 @@ export const reportContent = onCall(
     return {
       success: true,
       reportId: reportRef.id,
-      message: "通報内容を運営チームで審査します。ご協力ありがとうございました！",
+      message: NOTIFICATION_BODIES.REPORT_SUBMITTED,
     };
   }
 );

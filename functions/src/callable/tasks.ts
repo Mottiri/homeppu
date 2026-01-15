@@ -7,6 +7,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { db, FieldValue, Timestamp } from "../helpers/firebase";
 import { LOCATION } from "../config/constants";
+import { AUTH_ERRORS, VALIDATION_ERRORS } from "../config/messages";
 
 /**
  * タスクを作成
@@ -18,7 +19,7 @@ export const createTask = onCall(
   { region: LOCATION },
   async (request) => {
     if (!request.auth) {
-      throw new HttpsError("unauthenticated", "ログインが必要です");
+      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
     }
 
     const userId = request.auth.uid;
@@ -38,7 +39,7 @@ export const createTask = onCall(
     } = request.data;
 
     if (!content || !type) {
-      throw new HttpsError("invalid-argument", "タスク内容とタイプは必須です");
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.TASK_CONTENT_TYPE_REQUIRED);
     }
 
     const baseTaskData = {
@@ -190,7 +191,7 @@ export const getTasks = onCall(
   { region: LOCATION },
   async (request) => {
     if (!request.auth) {
-      throw new HttpsError("unauthenticated", "ログインが必要です");
+      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
     }
 
     const userId = request.auth.uid;

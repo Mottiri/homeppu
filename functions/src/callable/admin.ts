@@ -10,6 +10,14 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { db } from "../helpers/firebase";
 import { isAdmin } from "../helpers/admin";
 import { LOCATION } from "../config/constants";
+import {
+    AUTH_ERRORS,
+    RESOURCE_ERRORS,
+    VALIDATION_ERRORS,
+    SYSTEM_ERRORS,
+    NOTIFICATION_TITLES,
+    SUCCESS_MESSAGES,
+} from "../config/messages";
 
 /**
  * 管理用: 全ユーザーのフォローリストを掃除する
@@ -18,11 +26,11 @@ export const cleanUpUserFollows = onCall(
     { region: LOCATION, timeoutSeconds: 540 },
     async (request) => {
         if (!request.auth) {
-            throw new HttpsError("unauthenticated", "ログインが必要です");
+            throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
         }
         const userIsAdmin = await isAdmin(request.auth.uid);
         if (!userIsAdmin) {
-            throw new HttpsError("permission-denied", "管理者権限が必要です");
+            throw new HttpsError("permission-denied", AUTH_ERRORS.ADMIN_REQUIRED);
         }
 
         try {
@@ -63,11 +71,11 @@ export const cleanUpUserFollows = onCall(
             }
 
             console.log(`cleanUpUserFollows completed by admin ${request.auth.uid}. Updated ${updatedCount} users.`);
-            return { success: true, updatedCount, message: `${updatedCount}件のユーザーを更新しました` };
+            return { success: true, updatedCount, message: SUCCESS_MESSAGES.usersUpdated(updatedCount) };
 
         } catch (error) {
             console.error("Error cleaning up follows:", error);
-            throw new HttpsError("internal", "処理中にエラーが発生しました");
+            throw new HttpsError("internal", SYSTEM_ERRORS.PROCESSING_ERROR);
         }
     }
 );
@@ -80,12 +88,12 @@ export const deleteAllAIUsers = functionsV1.region(LOCATION).runWith({
     memory: "1GB"
 }).https.onCall(async (data, context) => {
     if (!context.auth) {
-        throw new functionsV1.https.HttpsError("unauthenticated", "ログインが必要です");
+        throw new functionsV1.https.HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
     }
 
     const userIsAdmin = await isAdmin(context.auth.uid);
     if (!userIsAdmin) {
-        throw new functionsV1.https.HttpsError("permission-denied", "管理者権限が必要です");
+        throw new functionsV1.https.HttpsError("permission-denied", AUTH_ERRORS.ADMIN_REQUIRED);
     }
 
     try {
@@ -98,7 +106,7 @@ export const deleteAllAIUsers = functionsV1.region(LOCATION).runWith({
         console.log(`Found ${aiUsersSnapshot.size} AI users to delete.`);
 
         if (aiUsersSnapshot.empty) {
-            return { success: true, message: "AIユーザーはいませんでした" };
+            return { success: true, message: SUCCESS_MESSAGES.NO_AI_USERS };
         }
 
         const aiUserIds = aiUsersSnapshot.docs.map(doc => doc.id);
@@ -153,11 +161,11 @@ export const deleteAllAIUsers = functionsV1.region(LOCATION).runWith({
         }
 
         console.log("Successfully deleted all AI data.");
-        return { success: true, message: `AIユーザー${aiUsersSnapshot.size}人とそのデータを削除しました` };
+        return { success: true, message: SUCCESS_MESSAGES.aiUsersDeleted(aiUsersSnapshot.size) };
 
     } catch (error) {
         console.error("Error deleting AI users:", error);
-        throw new functionsV1.https.HttpsError("internal", "削除処理中にエラーが発生しました");
+        throw new functionsV1.https.HttpsError("internal", SYSTEM_ERRORS.DELETE_ERROR);
     }
 });
 
@@ -168,11 +176,11 @@ export const cleanupOrphanedCircleAIs = onCall(
     { region: LOCATION, timeoutSeconds: 300 },
     async (request) => {
         if (!request.auth) {
-            throw new HttpsError("unauthenticated", "ログインが必要です");
+            throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
         }
         const userIsAdmin = await isAdmin(request.auth.uid);
         if (!userIsAdmin) {
-            throw new HttpsError("permission-denied", "管理者権限が必要です");
+            throw new HttpsError("permission-denied", AUTH_ERRORS.ADMIN_REQUIRED);
         }
 
         console.log("=== cleanupOrphanedCircleAIs START ===");
@@ -205,7 +213,7 @@ export const cleanupOrphanedCircleAIs = onCall(
         console.log(`=== cleanupOrphanedCircleAIs COMPLETE: ${deletedCount} users, ${notificationCount} notifications ===`);
         return {
             success: true,
-            message: `孤児サークルAIを${deletedCount}件削除しました（通知${notificationCount}件）`,
+            message: SUCCESS_MESSAGES.orphanAIsDeleted(deletedCount, notificationCount),
             deletedUsers: deletedCount,
             deletedNotifications: notificationCount,
         };
@@ -218,27 +226,27 @@ export const cleanupOrphanedCircleAIs = onCall(
 export const setAdminRole = onCall(async (request) => {
     const callerId = request.auth?.uid;
     if (!callerId) {
-        throw new HttpsError("unauthenticated", "認証が必要です");
+        throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED_ALT);
     }
 
     const callerIsAdmin = await isAdmin(callerId);
     if (!callerIsAdmin) {
-        throw new HttpsError("permission-denied", "管理者権限が必要です");
+        throw new HttpsError("permission-denied", AUTH_ERRORS.ADMIN_REQUIRED);
     }
 
     const { targetUid } = request.data;
     if (!targetUid || typeof targetUid !== "string") {
-        throw new HttpsError("invalid-argument", "対象ユーザーIDが必要です");
+        throw new HttpsError("invalid-argument", VALIDATION_ERRORS.TARGET_USER_ID_REQUIRED);
     }
 
     try {
         await admin.auth().setCustomUserClaims(targetUid, { admin: true });
         console.log(`Admin role granted to user: ${targetUid} by ${callerId}`);
 
-        return { success: true, message: `ユーザー ${targetUid} を管理者に設定しました` };
+        return { success: true, message: SUCCESS_MESSAGES.adminSet(targetUid) };
     } catch (error) {
         console.error(`Error setting admin role for ${targetUid}:`, error);
-        throw new HttpsError("internal", "管理者権限の設定に失敗しました");
+        throw new HttpsError("internal", SYSTEM_ERRORS.ADMIN_SET_FAILED);
     }
 });
 
@@ -248,21 +256,21 @@ export const setAdminRole = onCall(async (request) => {
 export const removeAdminRole = onCall(async (request) => {
     const callerId = request.auth?.uid;
     if (!callerId) {
-        throw new HttpsError("unauthenticated", "認証が必要です");
+        throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED_ALT);
     }
 
     const callerIsAdmin = await isAdmin(callerId);
     if (!callerIsAdmin) {
-        throw new HttpsError("permission-denied", "管理者権限が必要です");
+        throw new HttpsError("permission-denied", AUTH_ERRORS.ADMIN_REQUIRED);
     }
 
     const { targetUid } = request.data;
     if (!targetUid || typeof targetUid !== "string") {
-        throw new HttpsError("invalid-argument", "対象ユーザーIDが必要です");
+        throw new HttpsError("invalid-argument", VALIDATION_ERRORS.TARGET_USER_ID_REQUIRED);
     }
 
     if (callerId === targetUid) {
-        throw new HttpsError("invalid-argument", "自分自身の管理者権限は削除できません");
+        throw new HttpsError("invalid-argument", VALIDATION_ERRORS.SELF_ADMIN_REMOVE_NOT_ALLOWED);
     }
 
     try {
@@ -273,10 +281,10 @@ export const removeAdminRole = onCall(async (request) => {
 
         console.log(`Admin role removed from user: ${targetUid} by ${callerId}`);
 
-        return { success: true, message: `ユーザー ${targetUid} の管理者権限を削除しました` };
+        return { success: true, message: SUCCESS_MESSAGES.adminRemoved(targetUid) };
     } catch (error) {
         console.error(`Error removing admin role for ${targetUid}:`, error);
-        throw new HttpsError("internal", "管理者権限の削除に失敗しました");
+        throw new HttpsError("internal", SYSTEM_ERRORS.ADMIN_REMOVE_FAILED);
     }
 });
 
@@ -287,21 +295,21 @@ export const banUser = onCall(
     { region: LOCATION },
     async (request) => {
         if (!request.auth?.token.admin) {
-            throw new HttpsError("permission-denied", "管理者権限が必要です");
+            throw new HttpsError("permission-denied", AUTH_ERRORS.ADMIN_REQUIRED);
         }
 
         const { userId, reason } = request.data;
         if (!userId || !reason) {
-            throw new HttpsError("invalid-argument", "userIdとreasonは必須です");
+            throw new HttpsError("invalid-argument", VALIDATION_ERRORS.USER_ID_AND_REASON_REQUIRED);
         }
 
         if (userId === request.auth.uid) {
-            throw new HttpsError("invalid-argument", "自分自身をBANすることはできません");
+            throw new HttpsError("invalid-argument", VALIDATION_ERRORS.SELF_BAN_NOT_ALLOWED);
         }
 
         const userDoc = await db.collection("users").doc(userId).get();
         if (!userDoc.exists) {
-            throw new HttpsError("not-found", "ユーザーが見つかりません");
+            throw new HttpsError("not-found", RESOURCE_ERRORS.USER_NOT_FOUND);
         }
 
         const banRecord = {
@@ -324,7 +332,7 @@ export const banUser = onCall(
         batch.set(notificationRef, {
             userId: userId,
             type: "user_banned",
-            title: "アカウントが一時停止されました",
+            title: NOTIFICATION_TITLES.ACCOUNT_SUSPENDED,
             body: `規約違反のため、アカウント機能の一部を制限しました。理由: ${reason}`,
             isRead: false,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -346,16 +354,16 @@ export const permanentBanUser = onCall(
     { region: LOCATION },
     async (request) => {
         if (!request.auth?.token.admin) {
-            throw new HttpsError("permission-denied", "管理者権限が必要です");
+            throw new HttpsError("permission-denied", AUTH_ERRORS.ADMIN_REQUIRED);
         }
 
         const { userId, reason } = request.data;
         if (!userId || !reason) {
-            throw new HttpsError("invalid-argument", "userIdとreasonは必須です");
+            throw new HttpsError("invalid-argument", VALIDATION_ERRORS.USER_ID_AND_REASON_REQUIRED);
         }
 
         if (userId === request.auth.uid) {
-            throw new HttpsError("invalid-argument", "自分自身をBANすることはできません");
+            throw new HttpsError("invalid-argument", VALIDATION_ERRORS.SELF_BAN_NOT_ALLOWED);
         }
 
         const banRecord = {
@@ -382,7 +390,7 @@ export const permanentBanUser = onCall(
         batch.set(notificationRef, {
             userId: userId,
             type: "user_banned",
-            title: "アカウントが永久停止されました",
+            title: NOTIFICATION_TITLES.ACCOUNT_PERMANENTLY_BANNED,
             body: `規約違反のため、アカウントを永久停止しました。理由: ${reason}`,
             isRead: false,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -410,12 +418,12 @@ export const unbanUser = onCall(
     { region: LOCATION },
     async (request) => {
         if (!request.auth?.token.admin) {
-            throw new HttpsError("permission-denied", "管理者権限が必要です");
+            throw new HttpsError("permission-denied", AUTH_ERRORS.ADMIN_REQUIRED);
         }
 
         const { userId } = request.data;
         if (!userId) {
-            throw new HttpsError("invalid-argument", "userIdは必須です");
+            throw new HttpsError("invalid-argument", VALIDATION_ERRORS.USER_ID_ONLY_REQUIRED);
         }
 
         const batch = db.batch();
@@ -431,7 +439,7 @@ export const unbanUser = onCall(
         batch.set(notificationRef, {
             userId: userId,
             type: "user_unbanned",
-            title: "アカウント制限が解除されました",
+            title: NOTIFICATION_TITLES.ACCOUNT_RESTRICTION_LIFTED,
             body: `アカウントの制限が解除されました。`,
             isRead: false,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),

@@ -9,6 +9,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { db } from "../helpers/firebase";
 import { VIRTUE_CONFIG } from "../helpers/virtue";
 import { LOCATION } from "../config/constants";
+import { AUTH_ERRORS, RESOURCE_ERRORS, VALIDATION_ERRORS } from "../config/messages";
 
 /**
  * ユーザーをフォローする
@@ -17,18 +18,18 @@ export const followUser = onCall(
     { region: LOCATION },
     async (request) => {
         if (!request.auth) {
-            throw new HttpsError("unauthenticated", "ログインが必要です");
+            throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
         }
 
         const currentUserId = request.auth.uid;
         const { targetUserId } = request.data;
 
         if (!targetUserId) {
-            throw new HttpsError("invalid-argument", "フォロー対象のユーザーIDが必要です");
+            throw new HttpsError("invalid-argument", VALIDATION_ERRORS.FOLLOW_TARGET_REQUIRED);
         }
 
         if (currentUserId === targetUserId) {
-            throw new HttpsError("invalid-argument", "自分自身をフォローすることはできません");
+            throw new HttpsError("invalid-argument", VALIDATION_ERRORS.SELF_FOLLOW_NOT_ALLOWED);
         }
 
         const batch = db.batch();
@@ -38,7 +39,7 @@ export const followUser = onCall(
         // 対象ユーザーが存在するか確認
         const targetUser = await targetUserRef.get();
         if (!targetUser.exists) {
-            throw new HttpsError("not-found", "ユーザーが見つかりません");
+            throw new HttpsError("not-found", RESOURCE_ERRORS.USER_NOT_FOUND);
         }
 
         // 現在のユーザーのfollowing配列に追加
@@ -68,14 +69,14 @@ export const unfollowUser = onCall(
     { region: LOCATION },
     async (request) => {
         if (!request.auth) {
-            throw new HttpsError("unauthenticated", "ログインが必要です");
+            throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
         }
 
         const currentUserId = request.auth.uid;
         const { targetUserId } = request.data;
 
         if (!targetUserId) {
-            throw new HttpsError("invalid-argument", "フォロー解除対象のユーザーIDが必要です");
+            throw new HttpsError("invalid-argument", VALIDATION_ERRORS.UNFOLLOW_TARGET_REQUIRED);
         }
 
         const batch = db.batch();
@@ -109,14 +110,14 @@ export const getFollowStatus = onCall(
     { region: LOCATION },
     async (request) => {
         if (!request.auth) {
-            throw new HttpsError("unauthenticated", "ログインが必要です");
+            throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
         }
 
         const currentUserId = request.auth.uid;
         const { targetUserId } = request.data;
 
         if (!targetUserId) {
-            throw new HttpsError("invalid-argument", "ユーザーIDが必要です");
+            throw new HttpsError("invalid-argument", VALIDATION_ERRORS.USER_ID_REQUIRED);
         }
 
         const currentUser = await db.collection("users").doc(currentUserId).get();
@@ -139,7 +140,7 @@ export const getVirtueHistory = onCall(
     { region: LOCATION },
     async (request) => {
         if (!request.auth) {
-            throw new HttpsError("unauthenticated", "ログインが必要です");
+            throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
         }
 
         const userId = request.auth.uid;
@@ -168,14 +169,14 @@ export const getVirtueStatus = onCall(
     { region: LOCATION },
     async (request) => {
         if (!request.auth) {
-            throw new HttpsError("unauthenticated", "ログインが必要です");
+            throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
         }
 
         const userId = request.auth.uid;
         const userDoc = await db.collection("users").doc(userId).get();
 
         if (!userDoc.exists) {
-            throw new HttpsError("not-found", "ユーザーが見つかりません");
+            throw new HttpsError("not-found", RESOURCE_ERRORS.USER_NOT_FOUND);
         }
 
         const userData = userDoc.data()!;
