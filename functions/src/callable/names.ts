@@ -10,6 +10,13 @@ import { db, FieldValue } from "../helpers/firebase";
 import { isAdmin } from "../helpers/admin";
 import { NamePart, PREFIX_PARTS, SUFFIX_PARTS } from "../ai/personas";
 import { LOCATION } from "../config/constants";
+import {
+  AUTH_ERRORS,
+  RESOURCE_ERRORS,
+  VALIDATION_ERRORS,
+  PERMISSION_ERRORS,
+  SUCCESS_MESSAGES,
+} from "../config/messages";
 
 /**
  * 名前パーツマスタを初期化する関数（管理者用）
@@ -19,11 +26,11 @@ export const initializeNameParts = onCall(
   async (request) => {
     // セキュリティ: 管理者権限チェック
     if (!request.auth) {
-      throw new HttpsError("unauthenticated", "ログインが必要です");
+      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
     }
     const userIsAdmin = await isAdmin(request.auth.uid);
     if (!userIsAdmin) {
-      throw new HttpsError("permission-denied", "管理者権限が必要です");
+      throw new HttpsError("permission-denied", AUTH_ERRORS.ADMIN_REQUIRED);
     }
 
     const batch = db.batch();
@@ -58,7 +65,7 @@ export const initializeNameParts = onCall(
 
     return {
       success: true,
-      message: `名前パーツを初期化しました`,
+      message: SUCCESS_MESSAGES.NAME_PARTS_INITIALIZED,
       prefixCount,
       suffixCount,
     };
@@ -72,7 +79,7 @@ export const getNameParts = onCall(
   { region: LOCATION },
   async (request) => {
     if (!request.auth) {
-      throw new HttpsError("unauthenticated", "ログインが必要です");
+      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
     }
 
     const userId = request.auth.uid;
@@ -130,14 +137,14 @@ export const updateUserName = onCall(
   { region: LOCATION },
   async (request) => {
     if (!request.auth) {
-      throw new HttpsError("unauthenticated", "ログインが必要です");
+      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
     }
 
     const userId = request.auth.uid;
     const { prefixId, suffixId } = request.data;
 
     if (!prefixId || !suffixId) {
-      throw new HttpsError("invalid-argument", "パーツIDが必要です");
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.PARTS_ID_REQUIRED);
     }
 
     // ユーザー情報を取得
@@ -145,7 +152,7 @@ export const updateUserName = onCall(
     const userDoc = await userRef.get();
 
     if (!userDoc.exists) {
-      throw new HttpsError("not-found", "ユーザーが見つかりません");
+      throw new HttpsError("not-found", RESOURCE_ERRORS.USER_NOT_FOUND);
     }
 
     const userData = userDoc.data()!;
@@ -156,7 +163,7 @@ export const updateUserName = onCall(
     const suffixDoc = await db.collection("nameParts").doc(suffixId).get();
 
     if (!prefixDoc.exists || !suffixDoc.exists) {
-      throw new HttpsError("not-found", "パーツが見つかりません");
+      throw new HttpsError("not-found", RESOURCE_ERRORS.PARTS_NOT_FOUND);
     }
 
     const prefixData = prefixDoc.data() as NamePart;
@@ -167,7 +174,7 @@ export const updateUserName = onCall(
     const suffixUnlocked = suffixData.rarity === "normal" || unlockedParts.includes(suffixId);
 
     if (!prefixUnlocked || !suffixUnlocked) {
-      throw new HttpsError("permission-denied", "アンロックしていないパーツは使用できません");
+      throw new HttpsError("permission-denied", PERMISSION_ERRORS.PARTS_NOT_UNLOCKED);
     }
 
     // 新しい表示名を生成
@@ -187,7 +194,7 @@ export const updateUserName = onCall(
     return {
       success: true,
       displayName: newDisplayName,
-      message: `名前を「${newDisplayName}」に変更しました！`,
+      message: SUCCESS_MESSAGES.nameChanged(newDisplayName),
     };
   }
 );

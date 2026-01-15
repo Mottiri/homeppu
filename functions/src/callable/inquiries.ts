@@ -12,6 +12,15 @@ import { isAdmin, getAdminUids } from "../helpers/admin";
 import { appendInquiryToSpreadsheet } from "../helpers/spreadsheet";
 import { sheetsServiceAccountKey } from "../config/secrets";
 import { LOCATION } from "../config/constants";
+import {
+  AUTH_ERRORS,
+  RESOURCE_ERRORS,
+  VALIDATION_ERRORS,
+  PERMISSION_ERRORS,
+  SYSTEM_ERRORS,
+  NOTIFICATION_TITLES,
+  LABELS,
+} from "../config/messages";
 
 /**
  * 新規問い合わせを作成
@@ -20,14 +29,14 @@ export const createInquiry = onCall(
   { region: LOCATION },
   async (request) => {
     if (!request.auth) {
-      throw new HttpsError("unauthenticated", "ログインが必要です");
+      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
     }
 
     const userId = request.auth.uid;
     const { category, subject, content, imageUrl } = request.data;
 
     if (!category || !subject || !content) {
-      throw new HttpsError("invalid-argument", "カテゴリ、件名、内容は必須です");
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INQUIRY_FIELDS_REQUIRED);
     }
 
     console.log(`=== createInquiry: userId=${userId}, category=${category} ===`);
@@ -39,7 +48,7 @@ export const createInquiry = onCall(
       // ユーザー情報を取得
       const userDoc = await db.collection("users").doc(userId).get();
       const userData = userDoc.data();
-      const userDisplayName = userData?.displayName || "匿名ユーザー";
+      const userDisplayName = userData?.displayName || LABELS.ANONYMOUS_USER;
       const userAvatarIndex = userData?.avatarIndex || 0;
 
       // 問い合わせを作成
@@ -78,7 +87,7 @@ export const createInquiry = onCall(
           .collection("notifications")
           .add({
             type: "inquiry_received",
-            title: "新規問い合わせ",
+            title: NOTIFICATION_TITLES.NEW_INQUIRY,
             body: notifyBody,
             senderId: userId,
             senderName: userDisplayName,
@@ -95,7 +104,7 @@ export const createInquiry = onCall(
       return { success: true, inquiryId: inquiryRef.id };
     } catch (error) {
       console.error("Error creating inquiry:", error);
-      throw new HttpsError("internal", "問い合わせの作成に失敗しました");
+      throw new HttpsError("internal", SYSTEM_ERRORS.INQUIRY_CREATE_FAILED);
     }
   }
 );
@@ -107,14 +116,14 @@ export const sendInquiryMessage = onCall(
   { region: LOCATION },
   async (request) => {
     if (!request.auth) {
-      throw new HttpsError("unauthenticated", "ログインが必要です");
+      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
     }
 
     const userId = request.auth.uid;
     const { inquiryId, content, imageUrl } = request.data;
 
     if (!inquiryId || !content) {
-      throw new HttpsError("invalid-argument", "問い合わせIDと内容は必須です");
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INQUIRY_ID_CONTENT_REQUIRED);
     }
 
     console.log(`=== sendInquiryMessage: inquiryId=${inquiryId} ===`);
@@ -128,21 +137,21 @@ export const sendInquiryMessage = onCall(
       const inquiryDoc = await inquiryRef.get();
 
       if (!inquiryDoc.exists) {
-        throw new HttpsError("not-found", "問い合わせが見つかりません");
+        throw new HttpsError("not-found", RESOURCE_ERRORS.INQUIRY_NOT_FOUND);
       }
 
       const inquiryData = inquiryDoc.data()!;
       if (inquiryData.userId !== userId) {
         throw new HttpsError(
           "permission-denied",
-          "この問い合わせにはアクセスできません"
+          PERMISSION_ERRORS.INQUIRY_ACCESS_DENIED
         );
       }
 
       // ユーザー情報を取得
       const userDoc = await db.collection("users").doc(userId).get();
       const userData = userDoc.data();
-      const userDisplayName = userData?.displayName || "匿名ユーザー";
+      const userDisplayName = userData?.displayName || LABELS.ANONYMOUS_USER;
       const userAvatarIndex = userData?.avatarIndex || 0;
 
       const now = FieldValue.serverTimestamp();
@@ -174,7 +183,7 @@ export const sendInquiryMessage = onCall(
             .collection("notifications")
             .add({
               type: "inquiry_user_reply",
-              title: "問い合わせに返信",
+              title: NOTIFICATION_TITLES.INQUIRY_REPLY,
               body: notifyBody,
               senderId: userId,
               senderName: userDisplayName,
@@ -197,7 +206,7 @@ export const sendInquiryMessage = onCall(
     } catch (error) {
       if (error instanceof HttpsError) throw error;
       console.error("Error sending inquiry message:", error);
-      throw new HttpsError("internal", "メッセージの送信に失敗しました");
+      throw new HttpsError("internal", SYSTEM_ERRORS.MESSAGE_SEND_FAILED);
     }
   }
 );
@@ -218,11 +227,11 @@ export const sendInquiryReply = onCall(
     // 管理者チェック
     const adminIsAdmin = await isAdmin(adminId);
     if (!adminIsAdmin) {
-      throw new HttpsError("permission-denied", "管理者権限が必要です");
+      throw new HttpsError("permission-denied", AUTH_ERRORS.ADMIN_REQUIRED);
     }
 
     if (!inquiryId || !content) {
-      throw new HttpsError("invalid-argument", "問い合わせIDと内容は必須です");
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INQUIRY_ID_CONTENT_REQUIRED);
     }
 
     console.log(`=== sendInquiryReply: inquiryId=${inquiryId} ===`);
@@ -241,7 +250,7 @@ export const sendInquiryReply = onCall(
       // 返信メッセージを追加
       await inquiryRef.collection("messages").add({
         senderId: adminId,
-        senderName: "運営チーム",
+        senderName: LABELS.ADMIN_TEAM,
         senderType: "admin",
         content,
         imageUrl: null,
@@ -267,7 +276,7 @@ export const sendInquiryReply = onCall(
           .collection("notifications")
           .add({
             type: "inquiry_reply",
-            title: "問い合わせに返信がありました",
+            title: NOTIFICATION_TITLES.INQUIRY_REPLY_RECEIVED,
             body: notifyBody,
             inquiryId,
             isRead: false,
@@ -286,7 +295,7 @@ export const sendInquiryReply = onCall(
     } catch (error) {
       if (error instanceof HttpsError) throw error;
       console.error("Error sending inquiry reply:", error);
-      throw new HttpsError("internal", "返信の送信に失敗しました");
+      throw new HttpsError("internal", SYSTEM_ERRORS.REPLY_SEND_FAILED);
     }
   }
 );
@@ -298,7 +307,7 @@ export const updateInquiryStatus = onCall(
   { region: LOCATION, secrets: [sheetsServiceAccountKey] },
   async (request) => {
     if (!request.auth) {
-      throw new HttpsError("unauthenticated", "ログインが必要です");
+      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
     }
 
     const adminId = request.auth.uid;
@@ -313,20 +322,20 @@ export const updateInquiryStatus = onCall(
     // 管理者チェック
     const adminIsAdmin = await isAdmin(adminId);
     if (!adminIsAdmin) {
-      throw new HttpsError("permission-denied", "管理者権限が必要です");
+      throw new HttpsError("permission-denied", AUTH_ERRORS.ADMIN_REQUIRED);
     }
 
     if (!inquiryId || !status) {
       throw new HttpsError(
         "invalid-argument",
-        "問い合わせIDとステータスは必須です"
+        VALIDATION_ERRORS.INQUIRY_ID_STATUS_REQUIRED
       );
     }
 
     // 有効なステータスかチェック
     const VALID_STATUSES = ["open", "in_progress", "resolved"];
     if (!VALID_STATUSES.includes(status)) {
-      throw new HttpsError("invalid-argument", "無効なステータスです");
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_STATUS);
     }
 
     console.log(
@@ -338,7 +347,7 @@ export const updateInquiryStatus = onCall(
       const inquiryDoc = await inquiryRef.get();
 
       if (!inquiryDoc.exists) {
-        throw new HttpsError("not-found", "問い合わせが見つかりません");
+        throw new HttpsError("not-found", RESOURCE_ERRORS.INQUIRY_NOT_FOUND);
       }
 
       const inquiryData = inquiryDoc.data()!;
