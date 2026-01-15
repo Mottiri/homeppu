@@ -8,7 +8,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { CloudTasksClient } from "@google-cloud/tasks";
 
 import { db } from "../helpers/firebase";
-import { PROJECT_ID, LOCATION, QUEUE_NAME } from "../config/constants";
+import { PROJECT_ID, LOCATION, QUEUE_NAME, AI_MODELS } from "../config/constants";
 import { geminiApiKey } from "../config/secrets";
 import { MediaItem } from "../types";
 import { analyzeMediaForComment } from "../helpers/media-analysis";
@@ -63,7 +63,7 @@ export const onPostCreated = onDocumentCreated(
         }
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        const model = genAI.getGenerativeModel({ model: AI_MODELS.GEMINI_DEFAULT });
 
         // メディアがある場合は内容を分析
         let mediaDescriptions: string[] = [];

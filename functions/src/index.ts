@@ -12,7 +12,7 @@ import { CloudTasksClient } from "@google-cloud/tasks";
 // google (googleapis) は helpers/spreadsheet.ts に移動済み
 
 import { AIProviderFactory } from "./ai/provider";
-import { PROJECT_ID, LOCATION } from "./config/constants";
+import { PROJECT_ID, LOCATION, AI_MODELS } from "./config/constants";
 import { geminiApiKey, openaiApiKey } from "./config/secrets";
 // isAdmin は callable/admin.ts で使用
 // deleteStorageFileFromUrl は scheduled/cleanup.ts で使用
@@ -422,7 +422,7 @@ async function moderateText(text: string, postContent: string = ""): Promise<Mod
 
   const apiKey = geminiApiKey.value();
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+  const model = genAI.getGenerativeModel({ model: AI_MODELS.GEMINI_DEFAULT });
 
   const prompt = getTextModerationPrompt(text, postContent);
 
@@ -705,7 +705,7 @@ export const executeAIPostGeneration = functionsV1.region(LOCATION).runWith({
     if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = genAI.getGenerativeModel({ model: AI_MODELS.GEMINI_DEFAULT });
 
     // ペルソナ取得
     const persona = AI_PERSONAS.find((p) => p.id === personaId);
@@ -1276,7 +1276,7 @@ export const moderateImageCallable = onCall(
     try {
       const apiKey = geminiApiKey.value();
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+      const model = genAI.getGenerativeModel({ model: AI_MODELS.GEMINI_DEFAULT });
 
       const prompt = IMAGE_MODERATION_CALLABLE_PROMPT;
 

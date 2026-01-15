@@ -12,7 +12,7 @@ import { CloudTasksClient } from "@google-cloud/tasks";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db, FieldValue } from "../helpers/firebase";
 import { isAdmin } from "../helpers/admin";
-import { PROJECT_ID, LOCATION } from "../config/constants";
+import { PROJECT_ID, LOCATION, AI_MODELS } from "../config/constants";
 import { geminiApiKey } from "../config/secrets";
 
 // テスト用：本番は100
@@ -278,7 +278,7 @@ export const executeCircleAIPost = functionsV1.region(LOCATION).runWith({
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = genAI.getGenerativeModel({ model: AI_MODELS.GEMINI_DEFAULT });
 
     // Geminiで投稿内容を生成（過去投稿を渡して重複回避）
     const prompt = getCircleAIPostPrompt(aiName, circleName, circleDescription, circleCategory, circleRules, circleGoal, recentPostContents);
@@ -350,7 +350,7 @@ export const triggerCircleAIPosts = onCall(
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = genAI.getGenerativeModel({ model: AI_MODELS.GEMINI_DEFAULT });
 
     let totalPosts = 0;
     const postedCircleIds: string[] = [];

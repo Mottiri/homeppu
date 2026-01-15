@@ -15,3 +15,9 @@ export const CLOUD_TASK_FUNCTIONS = {
   cleanupDeletedCircle: "cleanupDeletedCircle",
   executeCircleAIPost: "executeCircleAIPost",
 } as const;
+
+// AI モデル設定
+export const AI_MODELS = {
+  GEMINI_DEFAULT: "gemini-2.5-flash",
+  OPENAI_DEFAULT: "gpt-4o-mini",
+} as const;

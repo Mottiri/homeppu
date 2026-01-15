@@ -13,7 +13,7 @@ import { isAdmin, getAdminUids } from "../helpers/admin";
 import { ModerationResult, MediaItem } from "../types";
 import { moderateMedia } from "../helpers/moderation";
 import { VIRTUE_CONFIG, NG_WORDS, decreaseVirtue } from "../helpers/virtue";
-import { LOCATION } from "../config/constants";
+import { LOCATION, AI_MODELS } from "../config/constants";
 
 /**
  * レート制限付きの投稿作成（スパム対策）
@@ -112,7 +112,7 @@ export const createPostWithModeration = onCall(
         console.log("STEP 2: API key loaded");
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        const model = genAI.getGenerativeModel({ model: AI_MODELS.GEMINI_DEFAULT });
         console.log("STEP 3: Model initialized");
 
         // 曖昧コンテンツフラグ用変数
