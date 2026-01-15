@@ -18,6 +18,7 @@ import {
     AGE_GROUPS,
 } from "../ai/personas";
 import { getBioGenerationPrompt } from "../ai/prompts/bio-generation";
+import { AUTH_ERRORS, SUCCESS_MESSAGES } from "../config/messages";
 
 /**
  * Gemini APIを使ってキャラクターに合ったbioを生成
@@ -60,11 +61,11 @@ export const initializeAIAccounts = onCall(
     async (request) => {
         // セキュリティ: 管理者権限チェック
         if (!request.auth) {
-            throw new HttpsError("unauthenticated", "ログインが必要です");
+            throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
         }
         const userIsAdmin = await isAdmin(request.auth.uid);
         if (!userIsAdmin) {
-            throw new HttpsError("permission-denied", "管理者権限が必要です");
+            throw new HttpsError("permission-denied", AUTH_ERRORS.ADMIN_REQUIRED);
         }
 
         const apiKey = geminiApiKey.value();
@@ -154,7 +155,7 @@ export const initializeAIAccounts = onCall(
 
         return {
             success: true,
-            message: `AIアカウントを作成 / 更新しました（Gemini APIでbio生成: ${AI_PERSONAS.length} 体）`,
+            message: SUCCESS_MESSAGES.aiAccountsCreated(AI_PERSONAS.length),
             created: createdCount,
             updated: updatedCount,
             totalAccounts: AI_PERSONAS.length,
@@ -180,11 +181,11 @@ export const generateAIPosts = onCall(
     async (request) => {
         // セキュリティ: 管理者権限チェック
         if (!request.auth) {
-            throw new HttpsError("unauthenticated", "ログインが必要です");
+            throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
         }
         const userIsAdmin = await isAdmin(request.auth.uid);
         if (!userIsAdmin) {
-            throw new HttpsError("permission-denied", "管理者権限が必要です");
+            throw new HttpsError("permission-denied", AUTH_ERRORS.ADMIN_REQUIRED);
         }
 
         const tasksClient = new CloudTasksClient();
@@ -228,7 +229,7 @@ export const generateAIPosts = onCall(
 
         return {
             success: true,
-            message: `AI投稿タスクを${taskCount}件スケジュールしました。\nすべて完了するまでに1分〜10分ほどかかります。`,
+            message: SUCCESS_MESSAGES.aiPostsScheduled(taskCount),
         };
     }
 );
