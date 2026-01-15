@@ -218,7 +218,7 @@ export const sendInquiryReply = onCall(
   { region: LOCATION },
   async (request) => {
     if (!request.auth) {
-      throw new HttpsError("unauthenticated", "ログインが必要です");
+      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
     }
 
     const adminId = request.auth.uid;
