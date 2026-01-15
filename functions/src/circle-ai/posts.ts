@@ -14,6 +14,7 @@ import { db, FieldValue } from "../helpers/firebase";
 import { isAdmin } from "../helpers/admin";
 import { PROJECT_ID, LOCATION, AI_MODELS } from "../config/constants";
 import { geminiApiKey } from "../config/secrets";
+import { AUTH_ERRORS } from "../config/messages";
 
 // テスト用：本番は100
 const MAX_CIRCLES_PER_RUN = 3;
@@ -335,11 +336,11 @@ export const triggerCircleAIPosts = onCall(
   async (request) => {
     // セキュリティ: 管理者権限チェック
     if (!request.auth) {
-      throw new HttpsError("unauthenticated", "ログインが必要です");
+      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
     }
     const userIsAdmin = await isAdmin(request.auth.uid);
     if (!userIsAdmin) {
-      throw new HttpsError("permission-denied", "管理者権限が必要です");
+      throw new HttpsError("permission-denied", AUTH_ERRORS.ADMIN_REQUIRED);
     }
 
     console.log("=== triggerCircleAIPosts (manual - optimized) START ===");
