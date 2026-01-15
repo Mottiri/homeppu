@@ -32,11 +32,19 @@
 | `prompts/bio-generation.ts` | bio生成プロンプト |
 | `prompts/index.ts` | 統合エクスポート |
 
+### 3. AIモデル定数化 ✅ (2026-01-15完了)
+
+**`config/constants.ts` に `AI_MODELS` 追加**
+- `GEMINI_DEFAULT`: gemini-2.5-flash
+- `OPENAI_DEFAULT`: gpt-4o-mini
+
 ---
 
 ## 優先度: 中（将来的に対応推奨）
 
-### 3. エラーメッセージ（50+箇所）
+### 4. エラーメッセージ（~40箇所）
+
+**`config/messages.ts` 作成済み ✅**（適用は段階的に実施）
 
 同じエラーメッセージが複数箇所でハードコードされています。
 
