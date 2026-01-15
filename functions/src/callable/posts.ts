@@ -14,6 +14,14 @@ import { ModerationResult, MediaItem } from "../types";
 import { moderateMedia } from "../helpers/moderation";
 import { VIRTUE_CONFIG, NG_WORDS, decreaseVirtue } from "../helpers/virtue";
 import { LOCATION, AI_MODELS } from "../config/constants";
+import {
+    AUTH_ERRORS,
+    VALIDATION_ERRORS,
+    SYSTEM_ERRORS,
+    NOTIFICATION_TITLES,
+    LABELS,
+    MODERATION_MESSAGES,
+} from "../config/messages";
 
 /**
  * レート制限付きの投稿作成（スパム対策）
@@ -24,7 +32,7 @@ export const createPostWithRateLimit = onCall(
         if (!request.auth) {
             throw new HttpsError(
                 "unauthenticated",
-                "ログインが必要です"
+                AUTH_ERRORS.UNAUTHENTICATED
             );
         }
 
@@ -44,7 +52,7 @@ export const createPostWithRateLimit = onCall(
         if (recentPosts.size >= 5) {
             throw new HttpsError(
                 "resource-exhausted",
-                "投稿が多すぎるよ！少し待ってからまた投稿してね"
+                VALIDATION_ERRORS.RATE_LIMITED
             );
         }
 
@@ -84,7 +92,7 @@ export const createPostWithModeration = onCall(
 
         if (!request.auth) {
             console.log("ERROR: Not authenticated");
-            throw new HttpsError("unauthenticated", "ログインが必要です");
+            throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
         }
 
         const userId = request.auth.uid;
@@ -97,7 +105,7 @@ export const createPostWithModeration = onCall(
             console.log("ERROR: User is banned");
             throw new HttpsError(
                 "permission-denied",
-                "アカウントが制限されているため、現在この機能は使用できません。マイページ画面から運営へお問い合わせください。"
+                AUTH_ERRORS.BANNED
             );
         }
         console.log("STEP 1: User check passed");
@@ -107,7 +115,7 @@ export const createPostWithModeration = onCall(
         // Fail Closed: APIキーがない場合はエラー
         if (!apiKey) {
             console.error("ERROR: GEMINI_API_KEY is not set");
-            throw new HttpsError("internal", "システムエラーが発生しました。しばらくしてから再度お試しください。");
+            throw new HttpsError("internal", SYSTEM_ERRORS.INTERNAL);
         }
         console.log("STEP 2: API key loaded");
 
@@ -123,7 +131,7 @@ export const createPostWithModeration = onCall(
         const userIsAdmin = await isAdmin(userId);
         if (userIsAdmin && mediaItems && Array.isArray(mediaItems) && mediaItems.length > 0) {
             needsReview = true;
-            needsReviewReason = "【テスト】管理者の添付付き投稿";
+            needsReviewReason = MODERATION_MESSAGES.TEST_ADMIN_MEDIA;
             console.log(`TEST FLAG: Admin post with media flagged for review`);
         }
 
@@ -135,7 +143,7 @@ export const createPostWithModeration = onCall(
             if (hasNgWord) {
                 const virtueResult = await decreaseVirtue(
                     userId,
-                    "NGワード使用",
+                    MODERATION_MESSAGES.NG_WORD_USED,
                     VIRTUE_CONFIG.lossPerNegative * 2
                 );
 
@@ -286,13 +294,13 @@ ${content}
                         });
 
                         const categoryLabels: Record<string, string> = {
-                            adult: "成人向けコンテンツ",
-                            violence: "暴力的なコンテンツ",
-                            hate: "差別的なコンテンツ",
-                            dangerous: "危険なコンテンツ",
+                            adult: LABELS.CONTENT_ADULT,
+                            violence: LABELS.CONTENT_VIOLENCE,
+                            hate: LABELS.CONTENT_HATE,
+                            dangerous: LABELS.CONTENT_DANGEROUS,
                         };
 
-                        const categoryLabel = categoryLabels[mediaResult.result.category] || "不適切なコンテンツ";
+                        const categoryLabel = categoryLabels[mediaResult.result.category] || LABELS.CONTENT_INAPPROPRIATE;
 
                         // アップロード済みメディアをStorageから削除
                         console.log(`Deleting ${mediaItems.length} uploaded media files due to moderation failure...`);
@@ -323,7 +331,7 @@ ${content}
                     throw error;
                 }
                 console.error("Media moderation error:", error);
-                throw new HttpsError("internal", "メディアの確認中にエラーが発生しました。");
+                throw new HttpsError("internal", SYSTEM_ERRORS.MEDIA_ERROR);
             }
         }
 
@@ -342,7 +350,7 @@ ${content}
         if (recentPosts.size >= 5) {
             throw new HttpsError(
                 "resource-exhausted",
-                "投稿が多すぎるよ！少し待ってからまた投稿してね"
+                VALIDATION_ERRORS.RATE_LIMITED
             );
         }
 
@@ -383,7 +391,7 @@ ${content}
                 for (const adminUid of adminUids) {
                     await db.collection("users").doc(adminUid).collection("notifications").add({
                         type: "review_needed",
-                        title: "要審査投稿",
+                        title: NOTIFICATION_TITLES.REVIEW_NEEDED,
                         body: notifyBody,
                         postId: postRef.id,
                         fromUserId: userId,
