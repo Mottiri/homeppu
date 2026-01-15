@@ -42,29 +42,40 @@
 
 ## 優先度: 中（将来的に対応推奨）
 
-### 4. エラーメッセージ（~40箇所）
+### 4. エラーメッセージ定数化 ✅ (2026-01-15完了)
 
-**`config/messages.ts` 作成済み ✅**（適用は段階的に実施）
+**`config/messages.ts` に全メッセージを集約し、163箇所を定数化完了**
 
-同じエラーメッセージが複数箇所でハードコードされています。
+| Phase | ファイル | 更新数 |
+|-------|---------|--------|
+| 1 | `callable/admin.ts` | 35 |
+| 1 | `callable/users.ts` | 12 |
+| 1 | `callable/tasks.ts` | 4 |
+| 1 | `callable/reports.ts` | 10 |
+| 2 | `callable/names.ts` | 11 |
+| 2 | `callable/inquiries.ts` | 22 |
+| 3 | `callable/circles.ts` | 28 |
+| 4 | `callable/posts.ts` | 12 |
+| 5 | `callable/ai.ts` | 7 |
+| 6 | `index.ts` | 4 |
+| 6 | `scheduled/circles.ts` | 8 |
+| 7 | `triggers/circles.ts` | 9 |
+| 7 | `scheduled/cleanup.ts` | 1 |
+| **合計** | **13ファイル** | **163箇所** |
 
-**よく使われるメッセージ**:
-- `"ログインが必要です"` - 約25箇所
-- `"管理者権限が必要です"` - 約16箇所
-- `"ユーザーが見つかりません"` - 約10箇所
+**定数カテゴリ**:
+- `AUTH_ERRORS` - 認証エラー
+- `PERMISSION_ERRORS` - 権限エラー
+- `RESOURCE_ERRORS` - リソース不在エラー
+- `VALIDATION_ERRORS` - 入力検証エラー
+- `SYSTEM_ERRORS` - システムエラー
+- `NOTIFICATION_TITLES` - 通知タイトル
+- `NOTIFICATION_BODIES` - 通知本文
+- `LABELS` - ラベル・表示文字列
+- `SUCCESS_MESSAGES` - 成功メッセージ（関数形式含む）
+- `MODERATION_MESSAGES` - モデレーション関連
 
-**将来の対応**:
-```typescript
-// helpers/errors.ts を作成
-export const ErrorMessages = {
-  UNAUTHENTICATED: "ログインが必要です",
-  ADMIN_REQUIRED: "管理者権限が必要です",
-  USER_NOT_FOUND: "ユーザーが見つかりません",
-  // ...
-} as const;
-```
-
-### 4. コレクション名（116箇所）
+### 5. コレクション名（116箇所）
 
 Firestoreコレクション名がハードコードされています。
 
@@ -91,7 +102,7 @@ export const Collections = {
 
 ## 優先度: 低（余裕があれば対応）
 
-### 5. 関数タイムアウト設定（21箇所）
+### 6. 関数タイムアウト設定（21箇所）
 
 ```typescript
 // 現状: バラバラな設定
@@ -109,7 +120,7 @@ export const Timeouts = {
 } as const;
 ```
 
-### 6. メモリ設定（9箇所）
+### 7. メモリ設定（9箇所）
 
 ```typescript
 // 現状
@@ -134,7 +145,7 @@ export const Memory = {
 1. `region: LOCATION` を必ず使用
 2. `db` は `helpers/firebase.ts` からインポート
 3. プロンプトは `ai/prompts/` に追加
-4. エラーメッセージは将来的に定数化予定
+4. エラーメッセージは `config/messages.ts` の定数を使用
 
 ### 即時対応が必要なケース
 
