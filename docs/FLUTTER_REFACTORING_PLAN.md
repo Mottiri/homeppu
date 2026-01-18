@@ -869,6 +869,25 @@ final confirmed = await DialogHelper.showDeleteConfirmDialog(
 
 > **推奨**: 新機能開発や既存バグ修正のついでに、触ったファイルから段階的に置き換え
 
+### ⚠️ 適用時の注意: 例外詳細の非表示
+
+既存コードには `$e` を直接表示している箇所が多数あります。適用時は必ず以下のパターンに修正してください：
+
+```dart
+// ❌ 避けるべきパターン
+catch (e) {
+  SnackBarHelper.showError(context, '失敗しました: $e');
+}
+
+// ✅ 推奨パターン
+catch (e) {
+  SnackBarHelper.showError(context, AppMessages.error.general);
+  debugPrint('Operation failed: $e');  // ログには残す
+}
+```
+
+詳細は `FLUTTER_HELPERS_REVIEW.md` を参照。
+
 ---
 
 ### 優先度：中（index.ts分割後）
