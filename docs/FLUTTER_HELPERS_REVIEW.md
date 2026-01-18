@@ -91,3 +91,7 @@ try {
 | 2026/01/18 | 誤適用差分を取り消し（対応案A採用） |
 | 2026/01/18 | `maybeOf` 化、`barrierDismissible` 追加 |
 | 2026/01/18 | `tasks_screen.dart` にヘルパー適用（-60行）、例外詳細非表示化 |
+
+---
+## 追記（2026/01/18）
+レビュー時点で `tasks_screen.dart` / `circle_detail_screen.dart` に `ScaffoldMessenger.of(context).showSnackBar(...)` や `showDialog<...>(...)` の直書きが一部残っています（`$e` を含む表示も残存）。
