@@ -11,6 +11,9 @@ import '../../../../shared/models/post_model.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/services/circle_service.dart';
 import '../../../home/presentation/widgets/post_card.dart';
+import '../../../../core/utils/snackbar_helper.dart';
+import '../../../../core/utils/dialog_helper.dart';
+import '../../../../core/constants/app_messages.dart';
 
 /// サークル詳細画面
 class CircleDetailScreen extends ConsumerStatefulWidget {
@@ -136,13 +139,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
     // BANユーザーチェック
     final currentUser = ref.read(currentUserProvider).valueOrNull;
     if (currentUser?.isBanned == true) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('アカウントが制限されているため、この操作はできません'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 2),
-        ),
-      );
+      SnackBarHelper.showError(context, AppMessages.error.banned);
       return;
     }
 
@@ -161,45 +158,29 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
         // 公開サークル: 即参加
         await circleService.joinCircle(widget.circleId, userId);
         if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('サークルに参加しました！🎉')));
+          SnackBarHelper.showSuccess(context, AppMessages.success.circleJoined);
         }
       } else {
         // 招待制サークル: 参加申請
-        final confirm = await showDialog<bool>(
+        final confirm = await DialogHelper.showConfirmDialog(
           context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('参加申請'),
-            content: const Text('このサークルは招待制です。\nオーナーに参加申請を送信しますか？'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('キャンセル'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('申請する'),
-              ),
-            ],
-          ),
+          title: '参加申請',
+          message: 'このサークルは招待制です。\nオーナーに参加申請を送信しますか？',
+          confirmText: '申請する',
         );
 
         if (confirm == true) {
           await circleService.sendJoinRequest(widget.circleId, userId);
           if (mounted) {
             setState(() => _hasPendingRequest = true);
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(const SnackBar(content: Text('参加申請を送信しました')));
+            SnackBarHelper.showSuccess(context, '参加申請を送信しました');
           }
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('エラーが発生しました: $e')));
+        SnackBarHelper.showError(context, AppMessages.error.general);
+        debugPrint('サークル参加エラー: $e');
       }
     } finally {
       if (mounted) setState(() => _isJoining = false);
@@ -207,23 +188,13 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
   }
 
   Future<void> _handleLeave(String userId) async {
-    final confirm = await showDialog<bool>(
+    final confirm = await DialogHelper.showConfirmDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('サークルを退会'),
-        content: const Text('本当にこのサークルを退会しますか？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('キャンセル'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('退会する'),
-          ),
-        ],
-      ),
+      title: 'サークルを退会',
+      message: '本当にこのサークルを退会しますか？',
+      confirmText: '退会する',
+      isDangerous: true,
+      barrierDismissible: false,
     );
 
     if (confirm == true) {
@@ -241,15 +212,12 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
           // 最新の状態を確認（招待制の場合など）
           _checkPendingRequest(userId);
 
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('サークルを退会しました')));
+          SnackBarHelper.showSuccess(context, AppMessages.success.circleLeft);
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('エラーが発生しました: $e')));
+          SnackBarHelper.showError(context, AppMessages.error.general);
+          debugPrint('退会エラー: $e');
         }
       }
     }
@@ -261,6 +229,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
 
     final confirmed = await showDialog<bool>(
       context: context,
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
@@ -331,7 +300,9 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
     setState(() => _isDeleting = true);
 
     // 削除中のSnackBarを表示（一覧画面に戻るまで表示）
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
+    if (scaffoldMessenger == null) return;
+
     scaffoldMessenger.showSnackBar(
       const SnackBar(
         content: Row(
@@ -364,22 +335,15 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
       scaffoldMessenger.hideCurrentSnackBar();
 
       if (mounted) {
-        scaffoldMessenger.showSnackBar(
-          const SnackBar(
-            content: Text('サークルを削除しました'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
+        SnackBarHelper.showSuccess(context, AppMessages.success.circleDeleted);
         // go()で一覧に戻る（forceRefreshで強制リロード）
         context.go('/circles', extra: {'forceRefresh': true});
       }
     } catch (e) {
       scaffoldMessenger.hideCurrentSnackBar();
       if (mounted) {
-        scaffoldMessenger.showSnackBar(
-          SnackBar(content: Text('削除に失敗しました: $e'), backgroundColor: Colors.red),
-        );
+        SnackBarHelper.showError(context, AppMessages.error.general);
+        debugPrint('削除失敗: $e');
       }
     }
   }

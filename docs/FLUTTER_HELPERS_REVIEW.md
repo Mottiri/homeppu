@@ -94,5 +94,5 @@ try {
 
 ---
 ## 追記（2026/01/18）
-`tasks_screen.dart` へのヘルパー適用・例外詳細非表示化は完了しました。
-`circle_detail_screen.dart` についてはまだ適用が完了しておらず、直書きが残っています。順次対応予定です。
+`tasks_screen.dart` および `circle_detail_screen.dart` へのヘルパー適用・例外詳細非表示化は完了しました。
+直書きコードは解消され、安全な実装に置き換わっています。
