@@ -2,28 +2,33 @@
 
 ## 現状分析
 
-### コードベースサマリー
+### コードベースサマリー（2026/01/15時点）
 
 | 項目 | 値 |
 |------|-----|
-| 総行数（Dart） | 35,273行 |
-| 最大ファイル | profile_screen.dart（1,878行）|
-| 500行超のファイル | 16ファイル |
+| 総行数（Dart） | 33,106行 |
+| 総ファイル数 | 83ファイル |
+| 最大ファイル | profile_screen.dart（1,879行）|
+| 500行超のファイル | 22ファイル |
 | テスト | プレースホルダーのみ（実質0）|
 
 ### 大きなファイル一覧（分割対象）
 
 | ファイル | 行数 | 優先度 |
 |---------|------|--------|
-| `profile_screen.dart` | 1,878行 | 高（アバター機能予定）|
-| `circle_detail_screen.dart` | 1,480行 | 高 |
-| `tasks_screen.dart` | 1,468行 | 高 |
-| `settings_screen.dart` | 1,226行 | 中 |
-| `circles_screen.dart` | 1,164行 | 中 |
-| `task_detail_sheet.dart` | 1,158行 | 中 |
-| `task_card.dart` | 1,068行 | 中 |
-| `post_card.dart` | 996行 | 中 |
-| `task_service.dart` | 724行 | 中 |
+| `profile_screen.dart` | 1,879行 | 高（アバター機能予定）|
+| `circle_detail_screen.dart` | 1,481行 | 高 |
+| `tasks_screen.dart` | 1,469行 | 高 |
+| `circles_screen.dart` | 1,154行 | 中 |
+| `settings_screen.dart` | 1,138行 | 中 |
+| `task_detail_sheet.dart` | 1,099行 | 中 |
+| `task_card.dart` | 1,027行 | 中 |
+| `post_card.dart` | 928行 | 中 |
+| `goal_detail_screen.dart` | 846行 | 中 |
+| `goal_card_with_stats.dart` | 695行 | 低 |
+| `create_post_screen.dart` | 681行 | 低 |
+| `admin_report_detail_screen.dart` | 664行 | 低 |
+| `task_service.dart` | 655行 | 中 |
 
 ---
 
@@ -31,16 +36,15 @@
 
 ### 発見された重複パターン
 
-| パターン | 出現回数 | 共通化優先度 |
+| パターン | 出現箇所 | 共通化優先度 |
 |---------|---------|-------------|
-| ローディング状態管理（`_isLoading`） | 40箇所以上 | 高 |
-| SnackBar表示 | 82箇所 | 高 |
-| 確認ダイアログ（AlertDialog） | 30箇所以上 | 高 |
-| エラーハンドリング（catch） | 40箇所以上 | 高 |
+| SnackBar表示（`showSnackBar`） | 117箇所（29ファイル） | 高 |
+| 確認ダイアログ（`showDialog`） | 35箇所（15ファイル） | 高 |
+| ローディング状態管理（`bool _isLoading`） | 21箇所（17ファイル） | 高 |
+| CircularProgressIndicator | 多数（39ファイル） | 中 |
 | 無限スクロール処理 | 10箇所以上 | 中 |
-| CircularProgressIndicator | 75箇所 | 中 |
-| debugPrint/print | 141箇所 | 低（削除対象）|
-| **メッセージ文字列** | 100箇所以上 | 高 |
+| debugPrint | 150箇所以上 | 低（削除対象）|
+| **メッセージ文字列（ハードコード）** | 100箇所以上 | 高 |
 
 ---
 
@@ -803,20 +807,20 @@ lib/
 
 ### 優先度：高（今すぐ着手）
 
-| 順位 | 作業 | 効果 | 工数目安 |
-|-----|------|------|---------|
-| 1 | `app_messages.dart` 作成 | メッセージ一元管理、表記統一 | 小 |
-| 2 | `snackbar_helper.dart` 作成 | 82箇所の統一 | 小 |
-| 3 | `dialog_helper.dart` 作成 | 30箇所以上の統一 | 小 |
-| 4 | `loading_state_mixin.dart` 作成 | 40箇所の統一 | 中 |
-| 5 | `profile_screen.dart` 分割 | アバター準備、1,878行削減 | 大 |
+| 順位 | 作業 | 効果 | 工数目安 | 状態 |
+|-----|------|------|---------|----|
+| 1 | `app_messages.dart` 作成 | メッセージ一元管理、表記統一 | 小 | ✅ 完了 |
+| 2 | `snackbar_helper.dart` 作成 | 117箇所の統一 | 小 | ✅ 完了 |
+| 3 | `dialog_helper.dart` 作成 | 35箇所以上の統一 | 小 | ✅ 完了 |
+| 4 | `loading_state_mixin.dart` 作成 | 21箇所の統一 | 中 | 未着手 |
+| 5 | `profile_screen.dart` 分割 | アバター準備、1,879行削減 | 大 | 未着手 |
 
 ### 優先度：中（index.ts分割後）
 
 | 順位 | 作業 | 効果 |
 |-----|------|------|
-| 6 | `tasks_screen.dart` 分割 | 1,468行削減 |
-| 7 | `circle_detail_screen.dart` 分割 | 1,480行削減 |
+| 6 | `tasks_screen.dart` 分割 | 1,469行削減 |
+| 7 | `circle_detail_screen.dart` 分割 | 1,481行削減 |
 | 8 | `infinite_scroll_mixin.dart` 作成 | 10箇所の統一 |
 | 9 | 共通Widget作成（loading_overlay等）| UI統一 |
 | 10 | 各画面でAppMessages適用 | メッセージ統一 |
@@ -835,10 +839,10 @@ lib/
 
 | 対象 | 現在の重複行数 | 共通化後 | 削減率 |
 |------|--------------|---------|--------|
-| SnackBar表示 | 約250行（82箇所×3行）| 82行（1行×82箇所）| 67% |
-| 確認ダイアログ | 約450行（30箇所×15行）| 60行（2行×30箇所）| 87% |
-| ローディング管理 | 約200行（40箇所×5行）| 40行（1行×40箇所）| 80% |
-| **合計** | **約900行** | **約180行** | **80%** |
+| SnackBar表示 | 約350行（117箇所×3行）| 117行（1行×117箇所）| 67% |
+| 確認ダイアログ | 約525行（35箇所×15行）| 70行（2行×35箇所）| 87% |
+| ローディング管理 | 約105行（21箇所×5行）| 21行（1行×21箇所）| 80% |
+| **合計** | **約980行** | **約208行** | **79%** |
 
 ---
 
