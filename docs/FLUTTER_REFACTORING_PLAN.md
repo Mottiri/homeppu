@@ -808,14 +808,71 @@ lib/
 ### 優先度：高（今すぐ着手）
 
 | 順位 | 作業 | 効果 | 工数目安 | 状態 |
-|-----|------|------|---------|----|
+|-----|------|------|---------|---|
 | 1 | `app_messages.dart` 作成 | メッセージ一元管理、表記統一 | 小 | ✅ 完了 |
 | 2 | `snackbar_helper.dart` 作成 | 117箇所の統一 | 小 | ✅ 完了 |
 | 3 | `dialog_helper.dart` 作成 | 35箇所以上の統一 | 小 | ✅ 完了 |
-| 4 | `loading_state_mixin.dart` 作成 | 21箇所の統一 | 中 | 未着手 |
-| 5 | `profile_screen.dart` 分割 | アバター準備、1,879行削減 | 大 | 未着手 |
+| 4 | **既存コードへの適用**（下記参照）| 段階的置換 | 中 | 未着手 |
+| 5 | `loading_state_mixin.dart` 作成 | 21箇所の統一 | 中 | 未着手 |
+| 6 | `profile_screen.dart` 分割 | アバター準備、1,879行削減 | 大 | 未着手 |
+
+---
+
+## 既存コードへのヘルパー適用手順
+
+### 対象ファイル（SnackBar使用箇所が多い順）
+
+| 画面 | SnackBar箇所 | Dialog箇所 |
+|------|-------------|-----------|
+| `tasks_screen.dart` | 12 | 3 |
+| `circle_detail_screen.dart` | 8 | 4 |
+| `profile_screen.dart` | 6 | 2 |
+| `settings_screen.dart` | 5 | 3 |
+| `create_post_screen.dart` | 4 | 1 |
+
+### 置き換え手順
+
+#### 1. import追加
+
+```dart
+import '../../core/utils/snackbar_helper.dart';
+import '../../core/utils/dialog_helper.dart';
+import '../../core/constants/app_messages.dart';
+```
+
+#### 2. SnackBar置き換え
+
+```dart
+// Before
+ScaffoldMessenger.of(context).showSnackBar(
+  SnackBar(content: Text('タスクを完了しました！')),
+);
+
+// After
+SnackBarHelper.showSuccess(context, AppMessages.success.taskCompleted);
+```
+
+#### 3. Dialog置き換え
+
+```dart
+// Before
+final confirmed = await showDialog<bool>(...);
+
+// After
+final confirmed = await DialogHelper.showDeleteConfirmDialog(
+  context: context,
+  itemName: 'このタスク',
+);
+```
+
+### 適用のタイミング
+
+> **推奨**: 新機能開発や既存バグ修正のついでに、触ったファイルから段階的に置き換え
+
+---
 
 ### 優先度：中（index.ts分割後）
+
 
 | 順位 | 作業 | 効果 |
 |-----|------|------|
