@@ -115,40 +115,49 @@ class DialogHelper {
     int? maxLength,
     int maxLines = 1,
   }) async {
-    final controller = TextEditingController(text: initialValue);
+    String? result;
 
-    final result = await showDialog<String>(
+    await showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(title),
-        content: TextField(
-          controller: controller,
-          decoration: InputDecoration(
-            hintText: hintText,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      builder: (dialogContext) {
+        final controller = TextEditingController(text: initialValue);
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
           ),
-          maxLength: maxLength,
-          maxLines: maxLines,
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              cancelText,
-              style: TextStyle(color: AppColors.textSecondary),
+          title: Text(title),
+          content: TextField(
+            controller: controller,
+            decoration: InputDecoration(
+              hintText: hintText,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
+            maxLength: maxLength,
+            maxLines: maxLines,
+            autofocus: true,
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, controller.text),
-            child: Text(confirmText),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(
+                cancelText,
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                result = controller.text;
+                Navigator.pop(dialogContext);
+              },
+              child: Text(confirmText),
+            ),
+          ],
+        );
+      },
     );
 
-    controller.dispose();
     return result;
   }
 }
