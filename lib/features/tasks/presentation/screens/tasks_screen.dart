@@ -13,6 +13,9 @@ import '../../../../shared/services/category_service.dart';
 import '../../../../shared/services/post_service.dart';
 import '../../../../shared/services/goal_service.dart';
 import '../../../../shared/providers/auth_provider.dart';
+import '../../../../core/utils/snackbar_helper.dart';
+import '../../../../core/utils/dialog_helper.dart';
+import '../../../../core/constants/app_messages.dart';
 
 import '../widgets/task_detail_sheet.dart';
 import '../widgets/task_card.dart';
@@ -484,9 +487,8 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
       // Revert on error
       await _loadData(showLoading: false);
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('完了処理に失敗しました: $e')));
+        SnackBarHelper.showError(context, AppMessages.error.general);
+        debugPrint('完了処理に失敗: $e');
       }
     }
   }
@@ -521,17 +523,14 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
 
       // await _loadData(); // Removed to avoid flicker
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('タスクを削除しました')));
+        SnackBarHelper.showSuccess(context, AppMessages.success.taskDeleted);
       }
     } catch (e) {
       // Revert if needed
       _loadData();
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('削除に失敗しました: $e')));
+        SnackBarHelper.showError(context, AppMessages.error.general);
+        debugPrint('削除に失敗: $e');
       }
     }
   }
@@ -567,19 +566,13 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
 
       if (mounted) {
         final message = postDeleted ? '完了を取り消しました。自動投稿を削除しました' : '完了を取り消しました';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        SnackBarHelper.showInfo(context, message);
       }
     } catch (e) {
       await _loadData(showLoading: false);
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('取り消しに失敗しました: $e')));
+        SnackBarHelper.showError(context, AppMessages.error.general);
+        debugPrint('取り消しに失敗: $e');
       }
     }
   }
@@ -797,15 +790,12 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${idsToDelete.length}件を削除しました')),
-        );
+        SnackBarHelper.showSuccess(context, '${idsToDelete.length}件を削除しました');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('削除に失敗しました: $e')));
+        SnackBarHelper.showError(context, AppMessages.error.general);
+        debugPrint('削除に失敗: $e');
         await _loadData(); // Sync on error
       }
     }
@@ -1345,87 +1335,40 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
   }
 
   Future<void> _showAddCategoryDialog() async {
-    final controller = TextEditingController();
-    await showDialog(
+    final name = await DialogHelper.showInputDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('新しいカテゴリ'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(hintText: 'カテゴリ名 (例: 仕事, 買い物)'),
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('キャンセル'),
-          ),
-          TextButton(
-            onPressed: () async {
-              final name = controller.text.trim();
-              if (name.isNotEmpty) {
-                Navigator.pop(context);
-                await _categoryService.addCategory(name);
-                _loadData(); // リロードしてタブ更新
-              }
-            },
-            child: const Text('追加'),
-          ),
-        ],
-      ),
+      title: '新しいカテゴリ',
+      hintText: 'カテゴリ名 (例: 仕事, 買い物)',
+      confirmText: '追加',
     );
+    if (name != null && name.trim().isNotEmpty) {
+      await _categoryService.addCategory(name.trim());
+      _loadData(); // リロードしてタブ更新
+    }
   }
 
   Future<void> _showRenameCategoryDialog(CategoryModel category) async {
-    final controller = TextEditingController(text: category.name);
-    await showDialog(
+    final name = await DialogHelper.showInputDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('カテゴリ名を変更'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(hintText: '新しいカテゴリ名'),
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('キャンセル'),
-          ),
-          TextButton(
-            onPressed: () async {
-              final name = controller.text.trim();
-              if (name.isNotEmpty) {
-                Navigator.pop(context);
-                await _categoryService.updateCategory(category.id, name);
-                _loadData();
-              }
-            },
-            child: const Text('変更'),
-          ),
-        ],
-      ),
+      title: 'カテゴリ名を変更',
+      initialValue: category.name,
+      hintText: '新しいカテゴリ名',
+      confirmText: '変更',
     );
+    if (name != null && name.trim().isNotEmpty) {
+      await _categoryService.updateCategory(category.id, name.trim());
+      _loadData();
+    }
   }
 
   Future<void> _confirmDeleteCategory(CategoryModel category) async {
-    final confirm = await showDialog<bool>(
+    final confirm = await DialogHelper.showConfirmDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('カテゴリを削除'),
-        content: Text('「${category.name}」を削除しますか？\n含まれるタスクも削除されます。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('キャンセル'),
-          ),
-          TextButton(
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('削除'),
-          ),
-        ],
-      ),
+      title: 'カテゴリを削除',
+      message: '「${category.name}」を削除しますか？\n含まれるタスクも削除されます。',
+      confirmText: '削除',
+      isDangerous: true,
+      barrierDismissible: false,
     );
 
     if (confirm == true) {
@@ -1449,15 +1392,12 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
       await _loadData();
 
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('カテゴリを削除しました')));
+        SnackBarHelper.showSuccess(context, 'カテゴリを削除しました');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('削除に失敗しました: $e')));
+        SnackBarHelper.showError(context, AppMessages.error.general);
+        debugPrint('カテゴリ削除に失敗: $e');
       }
     }
   }
