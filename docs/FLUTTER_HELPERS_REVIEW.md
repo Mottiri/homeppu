@@ -94,4 +94,5 @@ try {
 
 ---
 ## 追記（2026/01/18）
-レビュー時点で `tasks_screen.dart` / `circle_detail_screen.dart` に `ScaffoldMessenger.of(context).showSnackBar(...)` や `showDialog<...>(...)` の直書きが一部残っています（`$e` を含む表示も残存）。
+`tasks_screen.dart` へのヘルパー適用・例外詳細非表示化は完了しました。
+`circle_detail_screen.dart` についてはまだ適用が完了しておらず、直書きが残っています。順次対応予定です。
