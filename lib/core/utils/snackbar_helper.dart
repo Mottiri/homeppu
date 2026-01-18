@@ -62,8 +62,12 @@ class SnackBarHelper {
     IconData? icon,
     Duration duration = const Duration(seconds: 3),
   }) {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
+    // Scaffold外で呼ばれた場合は何もしない（クラッシュ防止）
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
       SnackBar(
         content: Row(
           children: [

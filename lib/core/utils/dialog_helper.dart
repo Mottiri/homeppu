@@ -23,6 +23,8 @@ class DialogHelper {
   /// 確認ダイアログを表示
   ///
   /// 戻り値: true = 確認ボタン押下, false = キャンセルまたは外側タップ
+  ///
+  /// [barrierDismissible] を false にすると、外側タップでダイアログが閉じなくなる（危険操作向け）
   static Future<bool> showConfirmDialog({
     required BuildContext context,
     required String title,
@@ -30,9 +32,11 @@ class DialogHelper {
     String confirmText = '確認',
     String cancelText = 'キャンセル',
     bool isDangerous = false,
+    bool barrierDismissible = true,
   }) async {
     final result = await showDialog<bool>(
       context: context,
+      barrierDismissible: barrierDismissible,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(title),
@@ -82,6 +86,7 @@ class DialogHelper {
       message: message,
       confirmText: '削除',
       isDangerous: true,
+      barrierDismissible: false,
     );
   }
 
@@ -93,6 +98,7 @@ class DialogHelper {
       message: '本当にログアウトしますか？\nまた会えるのを楽しみにしてるね💫',
       confirmText: 'ログアウト',
       isDangerous: true,
+      barrierDismissible: false,
     );
   }
 
