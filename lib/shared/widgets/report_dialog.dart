@@ -319,58 +319,60 @@ class NegativeContentDialog extends StatelessWidget {
           ),
         ],
       ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(reason, style: Theme.of(context).textTheme.bodyMedium),
-          if (suggestion != null) ...[
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.info.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('💡', style: TextStyle(fontSize: 16)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      suggestion
-                          .replaceFirst('💡 提案: ', '')
-                          .replaceFirst('💡 ', ''),
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: AppColors.info),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(reason, style: Theme.of(context).textTheme.bodyMedium),
+            if (suggestion != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.info.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('💡', style: TextStyle(fontSize: 16)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        suggestion
+                            .replaceFirst('💡 提案: ', '')
+                            .replaceFirst('💡 ', ''),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.copyWith(color: AppColors.info),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+            ],
+            if (virtueInfo != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                virtueInfo,
+                style: Theme.of(
+                  context,
+                ).textTheme.labelSmall?.copyWith(color: AppColors.textHint),
+              ),
+            ],
+            // BAN時はフッターメッセージを非表示
+            if (!isBanMessage) ...[
+              const SizedBox(height: 16),
+              Text(
+                'ほめっぷは「世界一優しいSNS」を目指しているよ。\nポジティブな言葉で投稿し直してみてね！',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+              ),
+            ],
           ],
-          if (virtueInfo != null) ...[
-            const SizedBox(height: 12),
-            Text(
-              virtueInfo,
-              style: Theme.of(
-                context,
-              ).textTheme.labelSmall?.copyWith(color: AppColors.textHint),
-            ),
-          ],
-          // BAN時はフッターメッセージを非表示
-          if (!isBanMessage) ...[
-            const SizedBox(height: 16),
-            Text(
-              'ほめっぷは「世界一優しいSNS」を目指しているよ。\nポジティブな言葉で投稿し直してみてね！',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
-            ),
-          ],
-        ],
+        ),
       ),
       actions: [
         if (onRetry != null)
