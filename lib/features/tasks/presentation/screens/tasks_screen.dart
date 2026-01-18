@@ -319,9 +319,8 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
       // ... err handling
       if (!mounted) return;
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('読み込みに失敗しました: $e')));
+      SnackBarHelper.showError(context, AppMessages.error.general);
+      debugPrint('読み込みに失敗: $e');
     }
   }
 
@@ -343,9 +342,8 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
       // エラー時はリロード
       await _loadData(showLoading: false);
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('更新に失敗しました: $e')));
+        SnackBarHelper.showError(context, AppMessages.error.general);
+        debugPrint('更新に失敗: $e');
       }
     }
   }
@@ -475,12 +473,10 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
           message = '🎉 タスク完了！ (+徳ポイント)';
         }
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: isMilestone || isGoalCompleted ? 4 : 2),
-          ),
+        SnackBarHelper.showSuccess(
+          context,
+          message,
+          duration: Duration(seconds: isMilestone || isGoalCompleted ? 4 : 2),
         );
       }
     } catch (e) {

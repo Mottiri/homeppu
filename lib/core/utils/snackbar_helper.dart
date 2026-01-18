@@ -15,12 +15,17 @@ class SnackBarHelper {
   SnackBarHelper._();
 
   /// 成功メッセージを表示（緑色）
-  static void showSuccess(BuildContext context, String message) {
+  static void showSuccess(
+    BuildContext context,
+    String message, {
+    Duration duration = const Duration(seconds: 3),
+  }) {
     _show(
       context,
       message: message,
       backgroundColor: AppColors.success,
       icon: Icons.check_circle_outline,
+      duration: duration,
     );
   }
 
