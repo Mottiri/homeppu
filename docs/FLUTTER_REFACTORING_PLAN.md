@@ -957,6 +957,51 @@ catch (e) {
 3. **共通化の徹底**: 新規コードも必ず共通ヘルパーを使用
 4. **テストの追加**: 共通化した部分から順次テスト追加
 
+### ⚠️ セキュリティ/運用ルール（必須遵守）
+
+以下のルールはレビューで必ずチェックすること。
+
+#### 1. 例外詳細のUI非表示
+
+```dart
+// ❌ 禁止: 例外をUIに表示
+catch (e) {
+  SnackBarHelper.showError(context, 'エラー: $e');
+}
+
+// ✅ 必須: 一般化メッセージ + ログ
+catch (e) {
+  SnackBarHelper.showError(context, AppMessages.error.general);
+  debugPrint('Operation failed: $e');
+}
+```
+
+> **理由**: 例外文字列には内部パス、クエリ、設定情報などが含まれる可能性がある
+
+#### 2. 重要操作のダイアログは `barrierDismissible: false`
+
+```dart
+// 削除、BAN、ログアウトなどの重要操作
+DialogHelper.showConfirmDialog(
+  context: context,
+  title: '削除確認',
+  message: '本当に削除しますか？',
+  barrierDismissible: false,  // ← 必須
+  isDangerous: true,
+);
+```
+
+> **対象**: 削除、BAN/解除、ログアウト、サークル退会など不可逆または重要な操作
+
+#### 3. 重要通知の冗長化
+
+`SnackBarHelper` は `maybeOf` を使用しており、Scaffoldがない場合はサイレント失敗する。
+重要な通知（BAN通知など）は以下のいずれかで補強すること：
+
+- 画面内にも状態を表示（バナー、テキスト等）
+- `debugPrint` でログを残す
+- 必要に応じてダイアログで確実に伝える
+
 ### 将来のアバター機能に向けて
 
 - `profile_header.dart` はアバター表示の主要な場所
