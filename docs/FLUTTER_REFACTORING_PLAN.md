@@ -249,11 +249,13 @@ final confirmed = await DialogHelper.showConfirmDialog(
 
 ### 既存の friendlyMessages との統合
 
-`app_constants.dart` の `friendlyMessages` は `AppMessages` に統合し、削除する。
+`app_constants.dart` の `friendlyMessages` は `AppMessages` に統合し、将来的に削除する予定。
+
+> **現状**: `friendlyMessages` は一部の画面でまだ使用中。全置換完了後に削除予定。
 
 ```dart
-// 統合後は app_constants.dart から削除
-// static const Map<String, String> friendlyMessages = { ... }; // 削除
+// 統合完了後に app_constants.dart から削除
+// static const Map<String, String> friendlyMessages = { ... }; // 将来削除
 ```
 
 ### メリット
@@ -283,10 +285,10 @@ ScaffoldMessenger.of(context).showSnackBar(
 );
 ```
 
-**共通化後**:
+**共通化後**（簡略版・実際の実装は `snackbar_helper.dart` 参照）:
 
 ```dart
-// lib/core/utils/snackbar_helper.dart
+// lib/core/utils/snackbar_helper.dart（概念例）
 class SnackBarHelper {
   static void showSuccess(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -812,7 +814,7 @@ lib/
 | 1 | `app_messages.dart` 作成 | メッセージ一元管理、表記統一 | 小 | ✅ 完了 |
 | 2 | `snackbar_helper.dart` 作成 | 117箇所の統一 | 小 | ✅ 完了 |
 | 3 | `dialog_helper.dart` 作成 | 35箇所以上の統一 | 小 | ✅ 完了 |
-| 4 | **既存コードへの適用**（下記参照）| 段階的置換 | 中 | 未着手 |
+| 4 | **既存コードへの適用**（下記参照）| 段階的置換 | 中 | ✅ 完了 |
 | 5 | `loading_state_mixin.dart` 作成 | 21箇所の統一 | 中 | 未着手 |
 | 6 | `profile_screen.dart` 分割 | アバター準備、1,879行削減 | 大 | 未着手 |
 
@@ -822,13 +824,15 @@ lib/
 
 ### 対象ファイル（SnackBar使用箇所が多い順）
 
-| 画面 | SnackBar箇所 | Dialog箇所 | 状態 |
+| 画面 | SnackBar置換 | Dialog置換 | 状態 |
 |------|-------------|-----------|------|
-| `tasks_screen.dart` | 10 | 4 | ✅ 完了 |
-| `circle_detail_screen.dart` | 8 | 4 | ✅ 完了 |
-| `profile_screen.dart` | 6 | 2 | ✅ 完了 |
-| `settings_screen.dart` | 5 | 3 | ✅ 完了 |
-| `create_post_screen.dart` | 4 | 1 | ✅ 完了 |
+| `tasks_screen.dart` | ✅ | ✅ | ✅ 完了 |
+| `circle_detail_screen.dart` | ✅ | ✅ | ✅ 完了 |
+| `profile_screen.dart` | ✅ | ✅ | ✅ 完了 |
+| `settings_screen.dart` | ✅ | ✅ | ✅ 完了 |
+| `create_post_screen.dart` | ✅ | - | ✅ 完了 |
+
+> **注**: カスタムUI（進捗表示・CircularProgressIndicator付き等）の直書きは許容。詳細は `FLUTTER_HELPERS_REVIEW.md` 参照。
 
 ### 置き換え手順
 
