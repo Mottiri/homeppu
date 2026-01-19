@@ -894,15 +894,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                       postMode: mode.value,
                                     );
                                     if (context.mounted) {
-                                      ScaffoldMessenger.of(
+                                      SnackBarHelper.showSuccess(
                                         context,
-                                      ).showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            '公開範囲を「${mode.label}」に変更しました',
-                                          ),
-                                          backgroundColor: AppColors.success,
-                                        ),
+                                        '公開範囲を「${mode.label}」に変更しました',
                                       );
                                     }
                                   }

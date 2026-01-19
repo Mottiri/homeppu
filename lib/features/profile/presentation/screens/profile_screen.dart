@@ -1450,24 +1450,19 @@ class _ProfilePostCardState extends State<_ProfilePostCard> {
           .update({'isFavorite': newValue});
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(newValue ? 'お気に入りに追加しました' : 'お気に入りから削除しました'),
-            backgroundColor: AppColors.success,
-            duration: const Duration(seconds: 1),
-          ),
+        final message = newValue ? 'お気に入りに追加しました' : 'お気に入りから削除しました';
+        SnackBarHelper.showSuccess(
+          context,
+          message,
+          duration: const Duration(seconds: 1),
         );
         // リストを即時更新
         widget.onFavoriteToggled?.call(newValue);
       }
     } catch (e) {
+      debugPrint('Error toggling favorite: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('エラーが発生しました: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SnackBarHelper.showError(context, AppMessages.error.general);
       }
     }
   }
