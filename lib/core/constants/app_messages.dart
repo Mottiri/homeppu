@@ -35,7 +35,7 @@ class _SuccessMessages {
 
   // 投稿関連
   String get postCreated => '投稿できたよ！みんなに届くのを待っててね✨';
-  String get postDeleted => '投稿を削除したよ';
+  String get postDeleted => '投稿を削除したよ！';
   String get commentCreated => 'コメントを送ったよ！';
 
   // サークル関連
@@ -89,6 +89,10 @@ class _ErrorMessages {
   // バリデーション
   String get emptyContent => '内容を入力してね';
   String get tooLong => '文字数オーバーだよ';
+
+  // フォロー関連
+  String get followFailed => 'フォローに失敗しました';
+  String get unfollowFailed => 'フォロー解除に失敗しました';
 
   // 動的エラー（引数付き）
   String withDetail(String detail) => 'エラーが発生しました: $detail';

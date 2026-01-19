@@ -825,10 +825,10 @@ lib/
 | 画面 | SnackBar箇所 | Dialog箇所 | 状態 |
 |------|-------------|-----------|------|
 | `tasks_screen.dart` | 10 | 4 | ✅ 完了 |
-| `circle_detail_screen.dart` | 8 | 4 | 未着手 |
-| `profile_screen.dart` | 6 | 2 | 未着手 |
-| `settings_screen.dart` | 5 | 3 | 未着手 |
-| `create_post_screen.dart` | 4 | 1 | 未着手 |
+| `circle_detail_screen.dart` | 8 | 4 | ✅ 完了 |
+| `profile_screen.dart` | 6 | 2 | ✅ 完了 |
+| `settings_screen.dart` | 5 | 3 | ✅ 完了 |
+| `create_post_screen.dart` | 4 | 1 | ✅ 完了 |
 
 ### 置き換え手順
 

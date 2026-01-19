@@ -7,6 +7,9 @@ import 'package:timeago/timeago.dart' as timeago;
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/constants/app_messages.dart';
+import '../../../../core/utils/snackbar_helper.dart';
+import '../../../../core/utils/dialog_helper.dart';
 import '../../../../shared/models/user_model.dart';
 import '../../../../shared/models/post_model.dart';
 import '../../../../shared/providers/auth_provider.dart';
@@ -167,12 +170,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       setState(() => _isFollowing = !_isFollowing);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_isFollowing ? 'フォロー解除に失敗しました' : 'フォローに失敗しました'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        final message = _isFollowing
+            ? AppMessages.error.unfollowFailed
+            : AppMessages.error.followFailed;
+        SnackBarHelper.showError(context, message);
+        debugPrint('フォロー操作エラー: $e');
       }
     } finally {
       if (mounted) {
@@ -917,27 +919,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   // BAN解除ダイアログ
-  void _showUnbanDialog(BuildContext context, UserModel user) {
-    showDialog(
+  Future<void> _showUnbanDialog(BuildContext context, UserModel user) async {
+    final confirmed = await DialogHelper.showConfirmDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('BAN解除'),
-        content: const Text('このユーザーの制限を解除しますか？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('キャンセル'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await _executeBanAction(user.uid, 'unban', '');
-            },
-            child: const Text('解除する'),
-          ),
-        ],
-      ),
+      title: 'BAN解除',
+      message: 'このユーザーの制限を解除しますか？',
+      confirmText: '解除する',
+      barrierDismissible: false,
     );
+    if (confirmed == true) {
+      await _executeBanAction(user.uid, 'unban', '');
+    }
   }
 
   // Cloud Functions呼び出し
@@ -964,23 +956,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ).httpsCallable(functionName).call(data);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(type == 'unban' ? '制限を解除しました' : 'BAN処理を実行しました'),
-          ),
-        );
+        final message = type == 'unban' ? '制限を解除しました' : 'BAN処理を実行しました';
+        SnackBarHelper.showSuccess(context, message);
         // 最新状態を再取得
         _loadUser();
       }
     } catch (e) {
       debugPrint('Error executing ban action: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('エラーが発生しました: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SnackBarHelper.showError(context, AppMessages.error.general);
         setState(() => _isLoading = false);
       }
     }

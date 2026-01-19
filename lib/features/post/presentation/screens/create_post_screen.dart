@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/constants/app_messages.dart';
+import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/models/post_model.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/providers/moderation_provider.dart';
@@ -44,11 +46,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   /// メディア選択メニューを表示
   void _showMediaPicker() {
     if (_selectedMedia.length >= MediaService.maxMediaCount) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('最大${MediaService.maxMediaCount}つまで添付できます'),
-          backgroundColor: AppColors.warning,
-        ),
+      SnackBarHelper.showWarning(
+        context,
+        '最大${MediaService.maxMediaCount}つまで添付できます',
       );
       return;
     }
@@ -200,9 +200,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   /// エラーを表示
   void _showError(String message) {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: AppColors.error),
-      );
+      SnackBarHelper.showError(context, message);
     }
   }
 
@@ -265,11 +263,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
       if (mounted) {
         // 成功メッセージ
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppConstants.friendlyMessages['post_success']!),
-            backgroundColor: AppColors.success,
-          ),
+        SnackBarHelper.showSuccess(
+          context,
+          AppConstants.friendlyMessages['post_success']!,
         );
         context.pop(true); // 成功を返す（ホーム画面でリロードするため）
       }
@@ -287,17 +283,13 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         ref.invalidate(virtueStatusProvider);
       }
     } catch (e) {
+      debugPrint('Error creating post: $e');
       if (mounted) {
         // ファイルサイズエラーなど具体的なメッセージがある場合はそれを表示
         final errorMessage = e.toString().contains('ファイルサイズ')
             ? e.toString().replaceFirst('Exception: ', '')
-            : AppConstants.friendlyMessages['error_general']!;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: AppColors.error,
-          ),
-        );
+            : AppMessages.error.general;
+        SnackBarHelper.showError(context, errorMessage);
       }
     } finally {
       if (mounted) {

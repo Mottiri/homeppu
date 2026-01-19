@@ -11,6 +11,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/constants/app_messages.dart';
+import '../../../../core/utils/snackbar_helper.dart';
+import '../../../../core/utils/dialog_helper.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
 import '../../../../shared/services/inquiry_service.dart';
@@ -94,12 +97,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
       if (nsfwResult != null) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(nsfwResult),
-              backgroundColor: AppColors.error,
-            ),
-          );
+          SnackBarHelper.showError(context, nsfwResult);
         }
         return;
       }
@@ -142,22 +140,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ref.invalidate(currentUserProvider);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('ヘッダー画像を変更しました！✨'),
-            backgroundColor: AppColors.success,
-          ),
-        );
+        SnackBarHelper.showSuccess(context, 'ヘッダー画像を変更しました！');
       }
     } catch (e) {
       debugPrint('Error uploading header image: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('ヘッダー画像の変更に失敗しました'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SnackBarHelper.showError(context, 'ヘッダー画像の変更に失敗しました');
       }
     } finally {
       if (mounted) {
@@ -171,22 +159,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final user = ref.read(currentUserProvider).valueOrNull;
     if (user == null) return;
 
-    final confirmed = await showDialog<bool>(
+    final confirmed = await DialogHelper.showConfirmDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('ヘッダー画像をリセット'),
-        content: const Text('ヘッダー画像をデフォルトに戻しますか？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('キャンセル'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('リセット'),
-          ),
-        ],
-      ),
+      title: 'ヘッダー画像をリセット',
+      message: 'ヘッダー画像をデフォルトに戻しますか？',
+      confirmText: 'リセット',
     );
 
     if (confirmed != true) return;
@@ -222,22 +199,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ref.invalidate(currentUserProvider);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('ヘッダー画像をリセットしました'),
-            backgroundColor: AppColors.success,
-          ),
-        );
+        SnackBarHelper.showSuccess(context, 'ヘッダー画像をリセットしました');
       }
     } catch (e) {
       debugPrint('Error resetting header image: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('リセットに失敗しました'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SnackBarHelper.showError(context, 'リセットに失敗しました');
       }
     } finally {
       if (mounted) {
@@ -300,22 +267,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ref.invalidate(currentUserProvider);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('ヘッダー画像を変更しました！'),
-            backgroundColor: AppColors.success,
-          ),
-        );
+        SnackBarHelper.showSuccess(context, 'ヘッダー画像を変更しました！');
       }
     } catch (e) {
       debugPrint('Error selecting default header: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('変更に失敗しました'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SnackBarHelper.showError(context, '変更に失敗しました');
       }
     } finally {
       if (mounted) {
@@ -341,22 +298,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('保存できたよ！✨'),
-            backgroundColor: AppColors.success,
-          ),
-        );
+        SnackBarHelper.showSuccess(context, '保存できたよ！');
         setState(() => _hasChanges = false);
       }
     } catch (e) {
+      debugPrint('Error saving changes: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppConstants.friendlyMessages['error_general']!),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SnackBarHelper.showError(context, AppMessages.error.general);
       }
     } finally {
       if (mounted) {
@@ -366,24 +314,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _logout() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('ログアウト'),
-        content: Text(AppConstants.friendlyMessages['logout_confirm']!),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('やっぱりやめる'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('ログアウト'),
-          ),
-        ],
-      ),
-    );
-
+    final confirmed = await DialogHelper.showLogoutConfirmDialog(context);
     if (confirmed == true) {
       await ref.read(authServiceProvider).signOut();
     }
