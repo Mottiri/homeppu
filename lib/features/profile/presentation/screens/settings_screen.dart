@@ -862,28 +862,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   if (isSelected) return;
 
                                   // 確認ダイアログ
-                                  final confirmed = await showDialog<bool>(
-                                    context: context,
-                                    builder: (context) => AlertDialog(
-                                      title: Text('${mode.label}に変更'),
-                                      content: Text(
-                                        '公開範囲を「${mode.label}」に変更しますか？\n\n'
-                                        '次回以降の投稿から適用されます。',
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () =>
-                                              Navigator.pop(context, false),
-                                          child: const Text('キャンセル'),
-                                        ),
-                                        ElevatedButton(
-                                          onPressed: () =>
-                                              Navigator.pop(context, true),
-                                          child: const Text('変更する'),
-                                        ),
-                                      ],
-                                    ),
-                                  );
+                                  final confirmed =
+                                      await DialogHelper.showConfirmDialog(
+                                        context: context,
+                                        title: '${mode.label}に変更',
+                                        message:
+                                            '公開範囲を「${mode.label}」に変更しますか？\n\n'
+                                            '次回以降の投稿から適用されます。',
+                                        confirmText: '変更する',
+                                      );
 
                                   if (confirmed == true) {
                                     final authService = ref.read(

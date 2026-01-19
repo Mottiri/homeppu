@@ -77,7 +77,7 @@ ScaffoldMessenger.of(context).showSnackBar(
 ### 改善案: メッセージファイルの整備
 
 ```dart
-// lib/core/constants/app_messages.dart
+// lib/core/constants/app_messages.dart（概念例・実際の実装は app_messages.dart 参照）
 
 /// アプリ内メッセージ定義
 /// 「ほめっぷ」のフレンドリーなトーンを統一
