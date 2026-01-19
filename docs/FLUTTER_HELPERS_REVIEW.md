@@ -74,6 +74,7 @@ messenger.showSnackBar(...);
 |----------|------|------|
 | `tasks_screen.dart` | `_confirmDelete` | Checkbox付きダイアログ（StatefulBuilder使用） |
 | `circle_detail_screen.dart` | `_showDeleteDialog` | 削除理由入力フォーム付き |
+| `circle_detail_screen.dart` | `_handleDeleteCircle` | 進捗表示付きSnackBar（Row＋CircularProgressIndicator） |
 | `circle_detail_screen.dart` | `_showRulesConsentDialog` | ルール表示付きカスタムUI |
 | `circle_detail_screen.dart` | `_showRulesDialog` | ルール表示付きカスタムUI |
 | `circle_detail_screen.dart` | `_showPinnedPostsList` | リスト表示ボトムシート |
