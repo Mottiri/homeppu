@@ -593,12 +593,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
               snapshot.data == null) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('このサークルは削除されました'),
-                    backgroundColor: Colors.orange,
-                  ),
-                );
+                SnackBarHelper.showWarning(context, 'このサークルは削除されました');
                 context.go('/circles');
               }
             });
@@ -618,12 +613,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
           _hasShownDeletedToast = true;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('このサークルは削除されました'),
-                  backgroundColor: Colors.orange,
-                ),
-              );
+              SnackBarHelper.showWarning(context, 'このサークルは削除されました');
               context.go('/circles');
             }
           });
@@ -664,12 +654,9 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                   onPressed: () async {
                     // BANユーザーチェック
                     if (currentUser?.isBanned == true) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('アカウントが制限されているため、この操作はできません'),
-                          backgroundColor: Colors.red,
-                          duration: Duration(seconds: 2),
-                        ),
+                      SnackBarHelper.showError(
+                        context,
+                        AppMessages.error.banned,
                       );
                       return;
                     }

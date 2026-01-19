@@ -709,6 +709,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
 
     final result = await showDialog<bool>(
       context: context,
+      barrierDismissible: false,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
           title: const Text('タスクを削除'),
