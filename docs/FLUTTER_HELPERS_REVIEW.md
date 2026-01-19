@@ -78,8 +78,9 @@ messenger.showSnackBar(...);
 | `circle_detail_screen.dart` | `_showRulesDialog` | ルール表示付きカスタムUI |
 | `circle_detail_screen.dart` | `_showPinnedPostsList` | リスト表示ボトムシート |
 
-これらの直書きでも以下は遵守されています：
-- `barrierDismissible: false`（重要操作）
+これらの直書きでは以下を遵守しています：
+- **重要操作**（削除、参加確認）は `barrierDismissible: false`
+- **閲覧用**（ルール確認）はデフォルト（`true`）で許容
 - エラー時は `$e` をUIに表示しない
 
 ---

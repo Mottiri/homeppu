@@ -352,6 +352,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
   Future<bool?> _showRulesConsentDialog(String rules) {
     return showDialog<bool>(
       context: context,
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
         title: Row(
           children: [
