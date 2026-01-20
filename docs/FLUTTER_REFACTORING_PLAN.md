@@ -700,6 +700,8 @@ class EmptyView extends StatelessWidget {
 - 投稿一覧（無限スクロール）
 - フォロー/フォロー解除
 - 設定メニュー
+- **管理者メニュー・BAN関連**（重要操作）
+- **_UserPostsList / _ProfilePostCard / _FollowingList**（内部Widget）
 
 **分割後**:
 
@@ -708,12 +710,33 @@ lib/features/profile/presentation/
 ├── screens/
 │   └── profile_screen.dart        # メインコンテナ（300行程度）
 └── widgets/
-    ├── profile_header.dart        # ヘッダー部分（アバター表示）
+    ├── profile_header.dart        # ヘッダー部分（配色・アバター表示）
     ├── profile_stats.dart         # 統計情報
     ├── profile_actions.dart       # フォローボタン等
-    ├── profile_posts_list.dart    # 投稿一覧（無限スクロール）
-    └── profile_menu.dart          # 設定メニュー
+    ├── profile_posts_list.dart    # 投稿一覧（無限スクロール内包）
+    ├── profile_post_card.dart     # 投稿カード（_ProfilePostCardから移行）
+    ├── profile_following_list.dart # フォロー一覧
+    ├── profile_menu.dart          # 設定メニュー
+    └── profile_admin_actions.dart # 管理者メニュー・BAN関連（専用Widget）
 ```
+
+**設計上の注意点**:
+
+> [!IMPORTANT]
+> **無限スクロールの疎結合化**
+> 現状: GlobalKey経由で親が `loadMoreCurrentTab()` を呼ぶ構造（強結合）
+> 対策: `profile_posts_list.dart` 側にスクロール監視を移し、コールバック `onLoadMore` で親に通知する形式に変更
+
+> [!WARNING]
+> **ヘッダー配色の責務**
+> 現状: 配色生成（`_headerColor1`, `_headerColor2`）が画面Stateで計算・保持
+> 対策: 親で計算→子に値渡し（props経由）を徹底し、複数UIでの色ズレ・再計算を防止
+
+> [!CAUTION]
+> **管理者メニュー/BAN関連の安全性**
+> - 重要操作のため `barrierDismissible: false` 必須
+> - `profile_admin_actions.dart` として専用Widget/サービス化
+> - レビュー時にセキュリティルール遵守を確認
 
 **アバター機能追加時の拡張**:
 
