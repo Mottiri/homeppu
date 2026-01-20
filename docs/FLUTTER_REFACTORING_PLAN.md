@@ -716,7 +716,7 @@ lib/features/profile/presentation/
     ├── profile_posts_list.dart    # 投稿一覧（無限スクロール内包）
     ├── profile_post_card.dart     # 投稿カード（_ProfilePostCardから移行）
     ├── profile_following_list.dart # フォロー一覧
-    ├── profile_menu.dart          # 設定メニュー
+    ├── profile_menu.dart          # 設定メニュー（現状は軽量、拡張予定がなければprofile_header統合も可）
     └── profile_admin_actions.dart # 管理者メニュー・BAN関連（専用Widget）
 ```
 
@@ -725,11 +725,11 @@ lib/features/profile/presentation/
 > [!IMPORTANT]
 > **無限スクロールの疎結合化**
 > 現状: GlobalKey経由で親が `loadMoreCurrentTab()` を呼ぶ構造（強結合）
-> 対策: `profile_posts_list.dart` 側にスクロール監視を移し、コールバック `onLoadMore` で親に通知する形式に変更
+> 対策: `profile_posts_list.dart` 側に `NotificationListener<ScrollNotification>` を移し、コールバック `onLoadMore` で親に通知する形式に変更
 
 > [!WARNING]
 > **ヘッダー配色の責務**
-> 現状: 配色生成（`_headerColor1`, `_headerColor2`）が画面Stateで計算・保持
+> 現状: 配色生成（`_primaryAccent`, `_secondaryAccent`）が画面Stateで計算・保持
 > 対策: 親で計算→子に値渡し（props経由）を徹底し、複数UIでの色ズレ・再計算を防止
 
 > [!CAUTION]
