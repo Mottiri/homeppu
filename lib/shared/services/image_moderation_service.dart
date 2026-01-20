@@ -52,7 +52,6 @@ class ImageModerationService {
 
       final data = result.data as Map<String, dynamic>;
       final isInappropriate = data['isInappropriate'] as bool? ?? false;
-      final reason = data['reason'] as String? ?? '';
       final category = data['category'] as String? ?? 'none';
 
       debugPrint(
@@ -71,7 +70,7 @@ class ImageModerationService {
           case 'dangerous':
             return '危険なコンテンツが検出されました。別の画像を選んでください。';
           default:
-            return '不適切なコンテンツが検出されました：$reason';
+            return '不適切なコンテンツが検出されました。別の画像を選んでください。';
         }
       }
 
@@ -84,8 +83,8 @@ class ImageModerationService {
       return 'モデレーションに失敗しました。しばらくしてから再度お試しください。';
     } catch (e) {
       debugPrint('ImageModerationService error: $e');
-      // その他のエラー時もブロック
-      return 'モデレーションに失敗しました: $e';
+      // その他のエラー時もブロック（例外詳細はUIに出さない）
+      return 'モデレーションに失敗しました。しばらくしてから再度お試しください。';
     }
   }
 }
