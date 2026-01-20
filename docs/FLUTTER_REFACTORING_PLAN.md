@@ -20,13 +20,13 @@
 | `circle_detail_screen.dart` | 1,370行 | 高 |
 | `tasks_screen.dart` | 1,265行 | 高 |
 | `circles_screen.dart` | 1,154行 | 中 |
-| `settings_screen.dart` | 1,138行 | 中 |
+| `settings_screen.dart` | 1,051行 | 中 |
 | `task_detail_sheet.dart` | 1,099行 | 中 |
 | `task_card.dart` | 1,027行 | 中 |
 | `post_card.dart` | 928行 | 中 |
 | `goal_detail_screen.dart` | 846行 | 中 |
 | `goal_card_with_stats.dart` | 695行 | 低 |
-| `create_post_screen.dart` | 681行 | 低 |
+| `create_post_screen.dart` | 673行 | 低 |
 | `admin_report_detail_screen.dart` | 664行 | 低 |
 | `task_service.dart` | 655行 | 中 |
 
@@ -691,7 +691,7 @@ class EmptyView extends StatelessWidget {
 
 ### Phase C: 大きなファイルの分割
 
-#### C-1: profile_screen.dart（1,878行）
+#### C-1: profile_screen.dart（1,730行）
 
 **現状の構造**:
 - ヘッダー表示（カラーパレット、アバター）
@@ -729,7 +729,7 @@ lib/features/profile/presentation/
 
 ---
 
-#### C-2: tasks_screen.dart（1,468行）
+#### C-2: tasks_screen.dart（1,265行）
 
 **分割後**:
 
@@ -747,7 +747,7 @@ lib/features/tasks/presentation/
 
 ---
 
-#### C-3: circle_detail_screen.dart（1,480行）
+#### C-3: circle_detail_screen.dart（1,370行）
 
 **分割後**:
 
@@ -812,7 +812,7 @@ lib/
 | 3 | `dialog_helper.dart` 作成 | 35箇所以上の統一 | 小 | ✅ 完了 |
 | 4 | **既存コードへの適用**（下記参照）| 段階的置換 | 中 | ✅ 完了 |
 | 5 | `loading_state_mixin.dart` 作成 | 21箇所の統一 | 中 | 未着手 |
-| 6 | `profile_screen.dart` 分割 | アバター準備、1,879行削減 | 大 | 未着手 |
+| 6 | `profile_screen.dart` 分割 | アバター準備、1,730行削減 | 大 | 未着手 |
 
 ---
 
