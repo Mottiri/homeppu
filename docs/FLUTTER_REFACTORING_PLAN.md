@@ -1,4 +1,4 @@
-# Flutter 側リファクタリング計画
+﻿# Flutter 側リファクタリング計画
 
 ## 現状分析
 
@@ -811,7 +811,7 @@ lib/
 | 2 | `snackbar_helper.dart` 作成 | 117箇所の統一 | 小 | ✅ 完了 |
 | 3 | `dialog_helper.dart` 作成 | 35箇所以上の統一 | 小 | ✅ 完了 |
 | 4 | **既存コードへの適用**（下記参照）| 段階的置換 | 中 | ✅ 完了 |
-| 5 | `loading_state_mixin.dart` 作成 | 21箇所の統一 | 中 | 未着手 |
+| 5 | `loading_state_mixin.dart` 作成 | 21箇所の統一 | 中 | ✅ 完了 |
 | 6 | `profile_screen.dart` 分割 | アバター準備、1,730行削減 | 大 | 未着手 |
 
 ---
