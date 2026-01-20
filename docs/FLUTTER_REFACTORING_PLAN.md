@@ -1,14 +1,14 @@
-# Flutter 側リファクタリング計画
+﻿# Flutter 側リファクタリング計画
 
 ## 現状分析
 
-### コードベースサマリー（2026/01/15時点）
+### コードベースサマリー（2026/01/20時点）
 
 | 項目 | 値 |
 |------|-----|
-| 総行数（Dart） | 33,106行 |
+| 総行数（Dart） | 約32,000行 |
 | 総ファイル数 | 83ファイル |
-| 最大ファイル | profile_screen.dart（1,879行）|
+| 最大ファイル | profile_screen.dart（1,730行）|
 | 500行超のファイル | 22ファイル |
 | テスト | プレースホルダーのみ（実質0）|
 
@@ -16,9 +16,9 @@
 
 | ファイル | 行数 | 優先度 |
 |---------|------|--------|
-| `profile_screen.dart` | 1,879行 | 高（アバター機能予定）|
-| `circle_detail_screen.dart` | 1,481行 | 高 |
-| `tasks_screen.dart` | 1,469行 | 高 |
+| `profile_screen.dart` | 1,730行 | 高（アバター機能予定）|
+| `circle_detail_screen.dart` | 1,370行 | 高 |
+| `tasks_screen.dart` | 1,265行 | 高 |
 | `circles_screen.dart` | 1,154行 | 中 |
 | `settings_screen.dart` | 1,138行 | 中 |
 | `task_detail_sheet.dart` | 1,099行 | 中 |
@@ -443,28 +443,19 @@ Future<void> _loadData() async {
 **共通化後**:
 
 ```dart
-// lib/core/mixins/loading_state_mixin.dart
+// lib/core/mixins/loading_state_mixin.dart（概念例）
 mixin LoadingStateMixin<T extends StatefulWidget> on State<T> {
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
-  String? _errorMessage;
-  String? get errorMessage => _errorMessage;
+  /// ローディング状態で処理を実行（二重実行防止付き）
+  Future<R?> runWithLoading<R>(Future<R> Function() action) async {
+    if (_isLoading) return null;
 
-  /// ローディング状態で処理を実行
-  Future<void> runWithLoading(Future<void> Function() action) async {
-    if (_isLoading) return;
-
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    setState(() => _isLoading = true);
 
     try {
-      await action();
-    } catch (e) {
-      setState(() => _errorMessage = e.toString());
-      rethrow;
+      return await action();
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -476,16 +467,21 @@ mixin LoadingStateMixin<T extends StatefulWidget> on State<T> {
 // 使用例
 class _MyScreenState extends State<MyScreen> with LoadingStateMixin {
   Future<void> _loadData() async {
-    await runWithLoading(() async {
-      final data = await fetchData();
-      // ...
-    });
+    try {
+      await runWithLoading(() async {
+        final data = await fetchData();
+        // ...
+      });
+    } catch (e) {
+      // エラーはUIに一般化メッセージのみ表示、詳細はログへ
+      SnackBarHelper.showError(context, AppMessages.error.general);
+      debugPrint('Load failed: $e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     if (isLoading) return CircularProgressIndicator();
-    if (errorMessage != null) return Text(errorMessage!);
     return Content();
   }
 }
@@ -894,13 +890,13 @@ catch (e) {
 
 ---
 
-### 優先度：中（index.ts分割後）
+### 優先度：中
 
 
 | 順位 | 作業 | 効果 |
 |-----|------|------|
-| 6 | `tasks_screen.dart` 分割 | 1,469行削減 |
-| 7 | `circle_detail_screen.dart` 分割 | 1,481行削減 |
+| 6 | `tasks_screen.dart` 分割 | 1,265行削減 |
+| 7 | `circle_detail_screen.dart` 分割 | 1,370行削減 |
 | 8 | `infinite_scroll_mixin.dart` 作成 | 10箇所の統一 |
 | 9 | 共通Widget作成（loading_overlay等）| UI統一 |
 | 10 | 各画面でAppMessages適用 | メッセージ統一 |
@@ -999,7 +995,6 @@ DialogHelper.showConfirmDialog(
 重要な通知（BAN通知など）は以下のいずれかで補強すること：
 
 - 画面内にも状態を表示（バナー、テキスト等）
-- `debugPrint` でログを残す
 - 必要に応じてダイアログで確実に伝える
 
 ### 将来のアバター機能に向けて

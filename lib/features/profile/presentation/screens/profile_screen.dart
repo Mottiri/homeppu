@@ -874,6 +874,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
         title: Text(isPermanent ? '永久BAN' : '一時BAN'),
         content: Column(
