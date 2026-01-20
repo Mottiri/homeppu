@@ -4,6 +4,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_messages.dart';
+import '../../../../core/mixins/loading_state_mixin.dart';
+import '../../../../core/utils/dialog_helper.dart';
+import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/services/circle_service.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
 
@@ -103,8 +107,8 @@ class _JoinRequestCard extends StatefulWidget {
   State<_JoinRequestCard> createState() => _JoinRequestCardState();
 }
 
-class _JoinRequestCardState extends State<_JoinRequestCard> {
-  bool _isLoading = false;
+class _JoinRequestCardState extends State<_JoinRequestCard>
+    with LoadingStateMixin {
   Map<String, dynamic>? _userInfo;
 
   @override
@@ -140,9 +144,7 @@ class _JoinRequestCardState extends State<_JoinRequestCard> {
   }
 
   Future<void> _handleApprove() async {
-    setState(() => _isLoading = true);
-
-    try {
+    await runWithLoading(() async {
       await widget.circleService.approveJoinRequest(
         widget.request['id'],
         widget.circleId,
@@ -150,58 +152,28 @@ class _JoinRequestCardState extends State<_JoinRequestCard> {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('参加を承認しました'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        SnackBarHelper.showSuccess(context, '参加を承認しました');
       }
-    } catch (e) {
+    }).catchError((e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('エラーが発生しました: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        SnackBarHelper.showError(context, AppMessages.error.general);
+        debugPrint('Approve join request failed: $e');
       }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
+    });
   }
 
   Future<void> _handleReject() async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await DialogHelper.showConfirmDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('申請を拒否'),
-        content: Text('${_userInfo?['displayName'] ?? ''}さんの申請を拒否しますか？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('キャンセル'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('拒否'),
-          ),
-        ],
-      ),
+      title: '申請を拒否',
+      message: '${_userInfo?['displayName'] ?? ''}さんの申請を拒否しますか？',
+      confirmText: '拒否',
+      isDangerous: true,
     );
 
     if (confirmed != true) return;
 
-    setState(() => _isLoading = true);
-
-    try {
+    await runWithLoading(() async {
       await widget.circleService.rejectJoinRequest(
         widget.request['id'],
         widget.circleId,
@@ -209,27 +181,14 @@ class _JoinRequestCardState extends State<_JoinRequestCard> {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('申請を拒否しました'),
-            backgroundColor: Colors.orange,
-          ),
-        );
+        SnackBarHelper.showWarning(context, '申請を拒否しました');
       }
-    } catch (e) {
+    }).catchError((e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('エラーが発生しました: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        SnackBarHelper.showError(context, AppMessages.error.general);
+        debugPrint('Reject join request failed: $e');
       }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
+    });
   }
 
   @override
@@ -277,7 +236,7 @@ class _JoinRequestCardState extends State<_JoinRequestCard> {
               ),
             ),
             // ボタン
-            if (_isLoading)
+            if (isLoading)
               const SizedBox(
                 width: 24,
                 height: 24,

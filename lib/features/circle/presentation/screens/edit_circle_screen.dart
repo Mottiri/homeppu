@@ -6,6 +6,9 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_messages.dart';
+import '../../../../core/mixins/loading_state_mixin.dart';
+import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/models/circle_model.dart';
 import '../../../../shared/services/circle_service.dart';
 import '../../../../shared/services/media_service.dart';
@@ -25,7 +28,8 @@ class EditCircleScreen extends ConsumerStatefulWidget {
   ConsumerState<EditCircleScreen> createState() => _EditCircleScreenState();
 }
 
-class _EditCircleScreenState extends ConsumerState<EditCircleScreen> {
+class _EditCircleScreenState extends ConsumerState<EditCircleScreen>
+    with LoadingStateMixin {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
   late TextEditingController _descriptionController;
@@ -34,7 +38,6 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen> {
 
   late String _selectedCategory;
   late bool _isPublic;
-  bool _isLoading = false;
 
   // 画像設定
   File? _iconImage;
@@ -114,9 +117,7 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen> {
   Future<void> _saveChanges() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _isLoading = true);
-
-    try {
+    await runWithLoading(() async {
       final circleService = ref.read(circleServiceProvider);
       final mediaService = MediaService();
       final moderationService = ImageModerationService();
@@ -126,10 +127,7 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen> {
         final error = await moderationService.moderateImage(_iconImage!);
         if (error != null) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(error), backgroundColor: Colors.red),
-            );
-            setState(() => _isLoading = false);
+            SnackBarHelper.showError(context, error);
           }
           return;
         }
@@ -139,10 +137,7 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen> {
         final error = await moderationService.moderateImage(_coverImage!);
         if (error != null) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(error), backgroundColor: Colors.red),
-            );
-            setState(() => _isLoading = false);
+            SnackBarHelper.showError(context, error);
           }
           return;
         }
@@ -182,22 +177,15 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('サークルを更新しました！')));
+        SnackBarHelper.showSuccess(context, 'サークルを更新しました');
         context.pop();
       }
-    } catch (e) {
+    }).catchError((e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('エラーが発生しました: $e')));
+        SnackBarHelper.showError(context, AppMessages.error.general);
+        debugPrint('Circle update failed: $e');
       }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
+    });
   }
 
   @override
@@ -215,8 +203,8 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen> {
         elevation: 0,
         actions: [
           TextButton(
-            onPressed: _isLoading ? null : _saveChanges,
-            child: _isLoading
+            onPressed: isLoading ? null : _saveChanges,
+            child: isLoading
                 ? const SizedBox(
                     width: 20,
                     height: 20,

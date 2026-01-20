@@ -5,6 +5,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:uuid/uuid.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_messages.dart';
+import '../../../../core/mixins/loading_state_mixin.dart';
+import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/widgets/reminder_setting_widget.dart';
 import '../../../../shared/models/goal_model.dart';
 import '../../../../shared/providers/goal_provider.dart';
@@ -17,14 +20,14 @@ class CreateGoalScreen extends ConsumerStatefulWidget {
   ConsumerState<CreateGoalScreen> createState() => _CreateGoalScreenState();
 }
 
-class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen> {
+class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen>
+    with LoadingStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
 
   DateTime? _deadline;
   int _selectedColorValue = 0xFFFF8A80; // Default: AppColors.primary
-  bool _isLoading = false;
   List<Map<String, dynamic>> _reminders = [];
 
   final List<Map<String, dynamic>> _colorOptions = [
@@ -59,9 +62,7 @@ class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen> {
   Future<void> _saveGoal() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _isLoading = true);
-
-    try {
+    await runWithLoading(() async {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('ログインが必要です');
 
@@ -78,7 +79,6 @@ class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen> {
           colorValue: _selectedColorValue,
           updatedAt: DateTime.now(),
           reminders: _reminders,
-          // 必要ならforceClearCompletedAtなども調整できるが、基本は編集のみ
         );
         await goalService.updateGoal(updatedGoal);
       } else {
@@ -101,35 +101,17 @@ class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen> {
 
       if (mounted) {
         context.pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle, color: Colors.white),
-                const SizedBox(width: 8),
-                Text(widget.goal != null ? '目標を更新しました！' : '目標を作成しました！頑張りましょう✨'),
-              ],
-            ),
-            backgroundColor: AppColors.success,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
+        SnackBarHelper.showSuccess(
+          context,
+          widget.goal != null ? '目標を更新しました！' : '目標を作成しました！頑張りましょう✨',
         );
       }
-    } catch (e) {
+    }).catchError((e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('エラーが発生しました: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SnackBarHelper.showError(context, AppMessages.error.general);
+        debugPrint('Goal save failed: $e');
       }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+    });
   }
 
   @override
@@ -516,7 +498,7 @@ class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen> {
 
   Widget _buildSaveButton(Color color) {
     return GestureDetector(
-      onTap: _isLoading ? null : _saveGoal,
+      onTap: isLoading ? null : _saveGoal,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 18),
@@ -537,7 +519,7 @@ class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen> {
           ],
         ),
         child: Center(
-          child: _isLoading
+          child: isLoading
               ? const SizedBox(
                   width: 24,
                   height: 24,

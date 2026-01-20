@@ -5,6 +5,9 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_messages.dart';
+import '../../../../core/mixins/loading_state_mixin.dart';
+import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/models/circle_model.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/services/circle_service.dart';
@@ -18,7 +21,8 @@ class CreateCircleScreen extends ConsumerStatefulWidget {
   ConsumerState<CreateCircleScreen> createState() => _CreateCircleScreenState();
 }
 
-class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
+class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen>
+    with LoadingStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
@@ -28,7 +32,6 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
   String _selectedCategory = 'その他';
   CircleAIMode _aiMode = CircleAIMode.mix;
   bool _isPublic = true;
-  bool _isLoading = false;
 
   // 画像設定
   File? _iconImage;
@@ -94,9 +97,7 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
     final currentUser = ref.read(currentUserProvider).value;
     if (currentUser == null) return;
 
-    setState(() => _isLoading = true);
-
-    try {
+    await runWithLoading(() async {
       final circleService = ref.read(circleServiceProvider);
       final mediaService = MediaService();
       final moderationService = ImageModerationService();
@@ -106,10 +107,7 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
         final error = await moderationService.moderateImage(_iconImage!);
         if (error != null) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(error), backgroundColor: Colors.red),
-            );
-            setState(() => _isLoading = false);
+            SnackBarHelper.showError(context, error);
           }
           return;
         }
@@ -119,10 +117,7 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
         final error = await moderationService.moderateImage(_coverImage!);
         if (error != null) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(error), backgroundColor: Colors.red),
-            );
-            setState(() => _isLoading = false);
+            SnackBarHelper.showError(context, error);
           }
           return;
         }
@@ -171,23 +166,16 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('サークルを作成しました！🎉')));
+        SnackBarHelper.showSuccess(context, AppMessages.success.circleCreated);
         context.pop();
         context.push('/circle/$circleId');
       }
-    } catch (e) {
+    }).catchError((e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('エラーが発生しました: $e')));
+        SnackBarHelper.showError(context, AppMessages.error.general);
+        debugPrint('Circle creation failed: $e');
       }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
+    });
   }
 
   @override
@@ -526,7 +514,7 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
 
               // 作成ボタン
               ElevatedButton(
-                onPressed: _isLoading ? null : _createCircle,
+                onPressed: isLoading ? null : _createCircle,
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   backgroundColor: AppColors.primary,
@@ -536,7 +524,7 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen> {
                   ),
                   elevation: 0,
                 ),
-                child: _isLoading
+                child: isLoading
                     ? const SizedBox(
                         width: 24,
                         height: 24,
