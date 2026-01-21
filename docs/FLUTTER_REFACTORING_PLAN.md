@@ -543,6 +543,16 @@ class InfiniteScrollListener extends StatelessWidget {
 
 ### Phase B: 共通Widgetの作成
 
+#### 適用優先度（InfiniteScrollListener）
+
+| 優先度 | 画面 | 理由 |
+|------|------|------|
+| 1 | `profile_screen` | 既にスクロールガード実装済み（置換容易） |
+| 2 | `circle_detail_screen` | 投稿一覧の無限スクロール使用 |
+| 3 | `home_screen` | TLの無限スクロール使用 |
+| 4 | `circles_screen` | サークル一覧の無限スクロール使用 |
+
+
 #### 既存の共通Widget（実装済み）
 
 以下のWidgetは既に共通化されています：
@@ -574,6 +584,8 @@ FullScreenImageViewer.show(
 
 #### B-1: ローディングオーバーレイ
 
+※ 入力ブロックのため `AbsorbPointer` を標準にする。
+
 ```dart
 // lib/shared/widgets/loading_overlay.dart
 class LoadingOverlay extends StatelessWidget {
@@ -591,7 +603,10 @@ class LoadingOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        child,
+        AbsorbPointer(
+          absorbing: isLoading,
+          child: child,
+        ),
         if (isLoading)
           Container(
             color: Colors.black26,
@@ -616,6 +631,11 @@ class LoadingOverlay extends StatelessWidget {
 
 #### B-2: エラー表示Widget
 
+**方針**
+- メッセージは `AppMessages.error.*` を使用する
+- 色/テーマは `AppColors` を使用し、必要なら引数で上書き可能にする
+
+
 ```dart
 // lib/shared/widgets/error_view.dart
 class ErrorView extends StatelessWidget {
@@ -633,14 +653,14 @@ class ErrorView extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.error_outline, size: 48, color: Colors.grey),
+          Icon(Icons.error_outline, size: 48, color: AppColors.textSecondary),
           SizedBox(height: 16),
-          Text(message, textAlign: TextAlign.center),
+          Text(message, textAlign: TextAlign.center, style: TextStyle(color: AppColors.textSecondary)),
           if (onRetry != null) ...[
             SizedBox(height: 16),
             ElevatedButton(
               onPressed: onRetry,
-              child: Text('再試行'),
+              child: Text(AppMessages.label.retry),
             ),
           ],
         ],
@@ -651,6 +671,11 @@ class ErrorView extends StatelessWidget {
 ```
 
 #### B-3: 空状態Widget
+
+**方針**
+- メッセージは `AppMessages.empty.*` を使用する
+- 色/テーマは `AppColors` を使用し、必要なら引数で上書き可能にする
+
 
 ```dart
 // lib/shared/widgets/empty_view.dart
@@ -673,12 +698,12 @@ class EmptyView extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 64, color: Colors.grey[400]),
+          Icon(icon, size: 64, color: AppColors.textTertiary),
           SizedBox(height: 16),
           Text(title, style: Theme.of(context).textTheme.titleMedium),
           if (description != null) ...[
             SizedBox(height: 8),
-            Text(description!, style: TextStyle(color: Colors.grey)),
+            Text(description!, style: TextStyle(color: AppColors.textSecondary)),
           ],
           if (action != null) ...[
             SizedBox(height: 24),
