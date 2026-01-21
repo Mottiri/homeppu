@@ -841,7 +841,7 @@ lib/
 | 4 | **既存コードへの適用**（下記参照）| 段階的置換 | 中 | ✅ 完了 |
 | 5 | `loading_state_mixin.dart` 作成 | 21箇所の統一 | 中 | ✅ 完了 |
 | 6 | `profile_screen.dart` 分割（Phase 1: 内部Widget抽出） | 885行削減 | 大 | ✅ 完了 |
-| 6a | `profile_screen.dart` 分割（Phase 2: InfiniteScrollListener対応含む） | 整理・疎結合化 | 中 | 未着手 |
+| 6a | `profile_screen.dart` 分割（Phase 2: InfiniteScrollListener対応） | 疎結合化 | 中 | ✅ 完了 |
 
 ---
 
