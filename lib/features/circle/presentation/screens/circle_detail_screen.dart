@@ -41,11 +41,18 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
   bool _hasMorePosts = true;
   bool _isLoadingPosts = true;
   bool _isLoadingMorePosts = false;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _loadPosts();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   /// 投稿リストを読み込み
@@ -688,6 +695,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
               onRefresh: _loadPosts,
               color: AppColors.primary,
               child: CustomScrollView(
+                controller: _scrollController,
                 slivers: [
                   // ヘッダー
                   SliverAppBar(
@@ -1392,6 +1400,9 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                       isLoadingMore: _isLoadingMorePosts,
                       isInitialLoadComplete: !_isLoadingPosts,
                       canLoadMore: _lastDocument != null,
+                      isScrollable:
+                          _scrollController.hasClients &&
+                          _scrollController.position.maxScrollExtent > 0,
                       onLoadMore: _loadMorePosts,
                     ),
                   ),

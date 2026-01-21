@@ -4,7 +4,7 @@ import '../../core/constants/app_colors.dart';
 
 /// もっと読み込むフッターWidget
 ///
-/// リストが短くスクロール不可の場合に表示し、押下で追加読み込みを実行する。
+/// スクロール不可の場合に表示し、押下で追加読み込みを実行する。
 ///
 /// 使用方法:
 /// ```dart
@@ -14,8 +14,8 @@ import '../../core/constants/app_colors.dart';
 ///     hasMore: _hasMore,
 ///     isLoadingMore: _isLoadingMore,
 ///     isInitialLoadComplete: !_isLoading,
-///     canLoadMore: _lastDocument != null, // 初回ロード成功時のみ
-///     isScrollable: _scrollController.position.maxScrollExtent > 0,
+///     canLoadMore: _lastDocument != null,
+///     isScrollable: _scrollController.hasClients && _scrollController.position.maxScrollExtent > 0,
 ///     onLoadMore: _loadMore,
 ///   ),
 /// )
@@ -34,13 +34,10 @@ class LoadMoreFooter extends StatelessWidget {
   final bool canLoadMore;
 
   /// スクロール可能かどうか（trueならスクロールで発火するため非表示）
-  final bool? isScrollable;
+  final bool isScrollable;
 
   /// 追加読み込みコールバック
   final VoidCallback onLoadMore;
-
-  /// スクロール不可と判定するアイテム数の閾値（isScrollableがnullの場合のフォールバック）
-  final int shortListThreshold;
 
   const LoadMoreFooter({
     super.key,
@@ -48,9 +45,8 @@ class LoadMoreFooter extends StatelessWidget {
     required this.isLoadingMore,
     required this.isInitialLoadComplete,
     required this.canLoadMore,
+    required this.isScrollable,
     required this.onLoadMore,
-    this.isScrollable,
-    this.shortListThreshold = 5,
   });
 
   @override
@@ -61,7 +57,7 @@ class LoadMoreFooter extends StatelessWidget {
         !isLoadingMore &&
         isInitialLoadComplete &&
         canLoadMore &&
-        (isScrollable == false || isScrollable == null);
+        !isScrollable;
 
     if (!shouldShow) {
       return const SizedBox.shrink();
