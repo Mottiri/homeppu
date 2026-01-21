@@ -14,6 +14,7 @@ import '../../../home/presentation/widgets/post_card.dart';
 import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../core/utils/dialog_helper.dart';
 import '../../../../core/constants/app_messages.dart';
+import '../../../../shared/widgets/infinite_scroll_listener.dart';
 
 /// サークル詳細画面
 class CircleDetailScreen extends ConsumerStatefulWidget {
@@ -675,15 +676,10 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                   child: const Icon(Icons.edit, color: Colors.white),
                 )
               : null,
-          body: NotificationListener<ScrollNotification>(
-            onNotification: (notification) {
-              // スクロール末尾に近づいたら追加読み込み
-              if (notification is ScrollEndNotification &&
-                  notification.metrics.extentAfter < 300) {
-                _loadMorePosts();
-              }
-              return false;
-            },
+          body: InfiniteScrollListener(
+            isLoadingMore: _isLoadingMorePosts,
+            hasMore: _hasMorePosts,
+            onLoadMore: _loadMorePosts,
             child: RefreshIndicator(
               onRefresh: _loadPosts,
               color: AppColors.primary,
@@ -1352,12 +1348,6 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                                 ),
                               ),
                             );
-                          }
-                          // 追加読み込みトリガー
-                          if (_hasMorePosts) {
-                            WidgetsBinding.instance.addPostFrameCallback((_) {
-                              _loadMorePosts();
-                            });
                           }
                           return const SizedBox.shrink();
                         }
