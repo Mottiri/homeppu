@@ -250,14 +250,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           child: NotificationListener<ScrollNotification>(
             onNotification: (notification) {
               if (notification is ScrollEndNotification) {
-                debugPrint(
-                  'ProfileScreen: ScrollEnd - extentAfter: ${notification.metrics.extentAfter}',
-                );
                 if (notification.metrics.extentAfter < 300) {
-                  debugPrint(
-                    'ProfileScreen: Near bottom, calling loadMoreCurrentTab',
-                  );
-                  _userPostsListKey.currentState?.loadMoreCurrentTab();
+                  // GlobalKey経由で状態を取得
+                  final state = _userPostsListKey.currentState;
+                  // null時またはロード中/データなし時は抑制
+                  final isLoadingMore = state?.isLoadingMore ?? true;
+                  final hasMore = state?.hasMore ?? false;
+
+                  if (!isLoadingMore && hasMore) {
+                    state?.loadMoreCurrentTab();
+                  }
                 }
               }
               return false;
