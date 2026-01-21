@@ -15,6 +15,7 @@ import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../core/utils/dialog_helper.dart';
 import '../../../../core/constants/app_messages.dart';
 import '../../../../shared/widgets/infinite_scroll_listener.dart';
+import '../../../../shared/widgets/load_more_footer.dart';
 
 /// サークル詳細画面
 class CircleDetailScreen extends ConsumerStatefulWidget {
@@ -1380,6 +1381,17 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                         );
                       }, childCount: _posts.length + (_hasMorePosts ? 1 : 0)),
                     ),
+
+                  // ショートリスト用「もっと読み込む」ボタン
+                  SliverToBoxAdapter(
+                    child: LoadMoreFooter(
+                      hasMore: _hasMorePosts,
+                      isLoadingMore: _isLoadingMorePosts,
+                      isInitialLoadComplete: !_isLoadingPosts,
+                      currentItemCount: _posts.length,
+                      onLoadMore: _loadMorePosts,
+                    ),
+                  ),
 
                   const SliverToBoxAdapter(child: SizedBox(height: 100)),
                 ],
