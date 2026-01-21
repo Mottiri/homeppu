@@ -489,48 +489,52 @@ class _MyScreenState extends State<MyScreen> with LoadingStateMixin {
 
 ---
 
-#### A-4: 無限スクロールMixin（優先度：中）
+#### A-4: 無限スクロールListener（優先度：中）
 
-**現状**: circles_screen, profile_screen などで類似実装
+※ 実装は Phase B（共通Widget作成）で infinite_scroll_listener.dart を追加する。
+
+**方針**: スクロール所有者に `NotificationListener` を置く共通Widget（方式A）で統一  
+**対象**: home_screen, circle_detail_screen, profile_screen, circles_screen など
+> **補足（運用方針）**
+> スクロール所有者は画面構成（CustomScrollView / NestedScrollView / ScrollController等）に合わせて異なることを許容する。  
+> 共通化対象は「無限スクロールの発火条件・多重実行ガード」であり、所有者の統一は行わない。
+
+> **運用詳細**
+> - profile_screen: child 側で二重実行防止を保持しつつ、親は GlobalKey で `isLoadingMore`/`hasMore` を取得して listener に渡す（運用上の標準）。currentState が null の場合は `hasMore=false` / `isLoadingMore=true` として loadMore を抑制する。
+> - circles_screen: ScrollController はスクロールトップ制御のみに使用し、loadMore は InfiniteScrollListener に統一（_onScroll 内の loadMore は廃止）。
 
 ```dart
-// lib/core/mixins/infinite_scroll_mixin.dart
-mixin InfiniteScrollMixin<T extends StatefulWidget> on State<T> {
-  final ScrollController scrollController = ScrollController();
-  bool _isLoadingMore = false;
-  bool _hasMore = true;
+// lib/shared/widgets/infinite_scroll_listener.dart
+class InfiniteScrollListener extends StatelessWidget {
+  final bool isLoadingMore;
+  final bool hasMore;
+  final VoidCallback onLoadMore;
+  final double threshold;
+  final Widget child;
+
+  const InfiniteScrollListener({
+    super.key,
+    required this.isLoadingMore,
+    required this.hasMore,
+    required this.onLoadMore,
+    this.threshold = 300,
+    required this.child,
+  });
 
   @override
-  void initState() {
-    super.initState();
-    scrollController.addListener(_onScroll);
-  }
-
-  @override
-  void dispose() {
-    scrollController.dispose();
-    super.dispose();
-  }
-
-  void _onScroll() {
-    if (_isLoadingMore || !_hasMore) return;
-    if (scrollController.position.pixels >=
-        scrollController.position.maxScrollExtent - 200) {
-      loadMore();
-    }
-  }
-
-  /// サブクラスでオーバーライド
-  Future<void> loadMore();
-
-  /// ロード中フラグを設定
-  void setLoadingMore(bool value) {
-    setState(() => _isLoadingMore = value);
-  }
-
-  /// 追加データがあるかフラグを設定
-  void setHasMore(bool value) {
-    setState(() => _hasMore = value);
+  Widget build(BuildContext context) {
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification is ScrollEndNotification &&
+            notification.metrics.extentAfter < threshold) {
+          if (!isLoadingMore && hasMore) {
+            onLoadMore();
+          }
+        }
+        return false;
+      },
+      child: child,
+    );
   }
 }
 ```
@@ -713,7 +717,7 @@ lib/features/profile/presentation/
     ├── profile_header.dart        # ヘッダー部分（配色・アバター表示）
     ├── profile_stats.dart         # 統計情報
     ├── profile_actions.dart       # フォローボタン等
-    ├── profile_posts_list.dart    # 投稿一覧（無限スクロール内包）
+    ├── profile_posts_list.dart    # 投稿一覧（loadMoreは親から通知）
     ├── profile_post_card.dart     # 投稿カード（_ProfilePostCardから移行）
     ├── profile_following_list.dart # フォロー一覧
     ├── profile_menu.dart          # 設定メニュー（現状は軽量、拡張予定がなければprofile_header統合も可）
@@ -725,7 +729,8 @@ lib/features/profile/presentation/
 > [!IMPORTANT]
 > **無限スクロールの疎結合化**
 > 現状: GlobalKey経由で親が `loadMoreCurrentTab()` を呼ぶ構造（強結合）
-> 対策: `profile_posts_list.dart` 側に `NotificationListener<ScrollNotification>` を移し、コールバック `onLoadMore` で親に通知する形式に変更
+> 対策: スクロール所有者側（`profile_screen.dart` など）に `InfiniteScrollListener` を配置し、`onLoadMore` で `loadMoreCurrentTab()` を呼ぶ形式に統一
+> 補足: isLoadingMore/hasMore は子側で二重実行防止を維持し、親は GlobalKey 経由で両方取得して listener 側の無駄呼び出しを抑制する（運用標準）。
 
 > [!WARNING]
 > **ヘッダー配色の責務**
@@ -801,8 +806,7 @@ lib/
 │   │   ├── dialog_helper.dart
 │   │   └── validators.dart
 │   └── mixins/                    # 【新規】Mixin
-│       ├── loading_state_mixin.dart
-│       └── infinite_scroll_mixin.dart
+│       └── loading_state_mixin.dart
 ├── features/
 │   ├── profile/
 │   │   └── presentation/
@@ -818,6 +822,7 @@ lib/
     │   ├── loading_overlay.dart   # 【新規】
     │   ├── error_view.dart        # 【新規】
     │   ├── empty_view.dart        # 【新規】
+    │   ├── infinite_scroll_listener.dart # 【新規】
     │   └── ...
     └── ...
 ```
@@ -835,7 +840,8 @@ lib/
 | 3 | `dialog_helper.dart` 作成 | 35箇所以上の統一 | 小 | ✅ 完了 |
 | 4 | **既存コードへの適用**（下記参照）| 段階的置換 | 中 | ✅ 完了 |
 | 5 | `loading_state_mixin.dart` 作成 | 21箇所の統一 | 中 | ✅ 完了 |
-| 6 | `profile_screen.dart` 分割 | アバター準備、1,730行削減 | 大 | 未着手 |
+| 6 | `profile_screen.dart` 分割（Phase 1: 内部Widget抽出） | 885行削減 | 大 | ✅ 完了 |
+| 6a | `profile_screen.dart` 分割（Phase 2: InfiniteScrollListener対応含む） | 整理・疎結合化 | 中 | 未着手 |
 
 ---
 
@@ -920,7 +926,7 @@ catch (e) {
 |-----|------|------|
 | 6 | `tasks_screen.dart` 分割 | 1,265行削減 |
 | 7 | `circle_detail_screen.dart` 分割 | 1,370行削減 |
-| 8 | `infinite_scroll_mixin.dart` 作成 | 10箇所の統一 |
+| 8 | `infinite_scroll_listener.dart` 作成 | 10箇所の統一 |
 | 9 | 共通Widget作成（loading_overlay等）| UI統一 |
 | 10 | 各画面でAppMessages適用 | メッセージ統一 |
 
@@ -1025,3 +1031,8 @@ DialogHelper.showConfirmDialog(
 - `profile_header.dart` はアバター表示の主要な場所
 - `avatar/` ディレクトリを作成して関連コードを集約
 - パーツデータは Firestore または ローカルアセットで管理
+
+
+
+
+
