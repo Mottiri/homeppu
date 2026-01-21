@@ -76,7 +76,10 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
     } catch (e) {
       debugPrint('Error loading circle posts: $e');
       if (mounted) {
-        setState(() => _isLoadingPosts = false);
+        setState(() {
+          _isLoadingPosts = false;
+          _hasMorePosts = false; // エラー時はLoadMoreFooter表示抑制
+        });
       }
     }
   }
@@ -1388,7 +1391,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                       hasMore: _hasMorePosts,
                       isLoadingMore: _isLoadingMorePosts,
                       isInitialLoadComplete: !_isLoadingPosts,
-                      currentItemCount: _posts.length,
+                      canLoadMore: _lastDocument != null,
                       onLoadMore: _loadMorePosts,
                     ),
                   ),

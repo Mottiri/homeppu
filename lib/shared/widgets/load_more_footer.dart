@@ -4,7 +4,7 @@ import '../../core/constants/app_colors.dart';
 
 /// もっと読み込むフッターWidget
 ///
-/// リストが短い（スクロール不可の可能性がある）場合に表示し、押下で追加読み込みを実行する。
+/// リストが短くスクロール不可の場合に表示し、押下で追加読み込みを実行する。
 ///
 /// 使用方法:
 /// ```dart
@@ -14,7 +14,8 @@ import '../../core/constants/app_colors.dart';
 ///     hasMore: _hasMore,
 ///     isLoadingMore: _isLoadingMore,
 ///     isInitialLoadComplete: !_isLoading,
-///     currentItemCount: _posts.length,
+///     canLoadMore: _lastDocument != null, // 初回ロード成功時のみ
+///     isScrollable: _scrollController.position.maxScrollExtent > 0,
 ///     onLoadMore: _loadMore,
 ///   ),
 /// )
@@ -29,13 +30,16 @@ class LoadMoreFooter extends StatelessWidget {
   /// 初回ロード完了かどうか
   final bool isInitialLoadComplete;
 
-  /// 現在のアイテム数（スクロール不可判定の代替）
-  final int currentItemCount;
+  /// 追加読み込み可能かどうか（初回ロード成功時のみtrue）
+  final bool canLoadMore;
+
+  /// スクロール可能かどうか（trueならスクロールで発火するため非表示）
+  final bool? isScrollable;
 
   /// 追加読み込みコールバック
   final VoidCallback onLoadMore;
 
-  /// スクロール不可と判定するアイテム数の閾値（デフォルト: 5）
+  /// スクロール不可と判定するアイテム数の閾値（isScrollableがnullの場合のフォールバック）
   final int shortListThreshold;
 
   const LoadMoreFooter({
@@ -43,21 +47,23 @@ class LoadMoreFooter extends StatelessWidget {
     required this.hasMore,
     required this.isLoadingMore,
     required this.isInitialLoadComplete,
-    required this.currentItemCount,
+    required this.canLoadMore,
     required this.onLoadMore,
+    this.isScrollable,
     this.shortListThreshold = 5,
   });
 
-  /// 表示条件: hasMore && !isLoadingMore && 初回ロード完了 && アイテム数が少ない
-  bool get _shouldShow =>
-      hasMore &&
-      !isLoadingMore &&
-      isInitialLoadComplete &&
-      currentItemCount < shortListThreshold;
-
   @override
   Widget build(BuildContext context) {
-    if (!_shouldShow) {
+    // 表示条件: hasMore && !isLoadingMore && 初回ロード完了 && canLoadMore && スクロール不可
+    final shouldShow =
+        hasMore &&
+        !isLoadingMore &&
+        isInitialLoadComplete &&
+        canLoadMore &&
+        (isScrollable == false || isScrollable == null);
+
+    if (!shouldShow) {
       return const SizedBox.shrink();
     }
 
