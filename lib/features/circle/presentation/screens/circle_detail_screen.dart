@@ -41,6 +41,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
   bool _hasMorePosts = true;
   bool _isLoadingPosts = true;
   bool _isLoadingMorePosts = false;
+  bool _isScrollable = false; // レイアウト後に再評価
   final ScrollController _scrollController = ScrollController();
 
   @override
@@ -79,6 +80,10 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
           _hasMorePosts = snapshot.docs.length == AppConstants.postsPerPage;
           _isLoadingPosts = false;
         });
+        // レイアウト後にスクロール可能か再評価
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _updateScrollable();
+        });
       }
     } catch (e) {
       debugPrint('Error loading circle posts: $e');
@@ -88,6 +93,17 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
           _hasMorePosts = false; // エラー時はLoadMoreFooter表示抑制
         });
       }
+    }
+  }
+
+  /// スクロール可能かを再評価
+  void _updateScrollable() {
+    if (!mounted) return;
+    final scrollable =
+        _scrollController.hasClients &&
+        _scrollController.position.maxScrollExtent > 0;
+    if (_isScrollable != scrollable) {
+      setState(() => _isScrollable = scrollable);
     }
   }
 
@@ -1400,9 +1416,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                       isLoadingMore: _isLoadingMorePosts,
                       isInitialLoadComplete: !_isLoadingPosts,
                       canLoadMore: _lastDocument != null,
-                      isScrollable:
-                          _scrollController.hasClients &&
-                          _scrollController.position.maxScrollExtent > 0,
+                      isScrollable: _isScrollable,
                       onLoadMore: _loadMorePosts,
                     ),
                   ),
