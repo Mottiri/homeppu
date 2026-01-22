@@ -134,6 +134,10 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
           _hasMorePosts = snapshot.docs.length == AppConstants.postsPerPage;
           _isLoadingMorePosts = false;
         });
+        // レイアウト後にスクロール可能か再評価
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _updateScrollable();
+        });
       }
     } catch (e) {
       debugPrint('Error loading more circle posts: $e');
