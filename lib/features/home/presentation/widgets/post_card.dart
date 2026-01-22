@@ -122,6 +122,7 @@ class _PostCardState extends State<PostCard> {
 
     // 自分の投稿にはリアクションできない
     if (isMyPost) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('自分の投稿にはリアクションできません'),

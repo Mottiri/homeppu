@@ -547,10 +547,10 @@ class InfiniteScrollListener extends StatelessWidget {
 
 | 優先度 | 画面 | 理由 |
 |------|------|------|
-| 1 | `profile_screen` | スクロールガード実装済み → ⏸️ 未実施 |
+| 1 | `profile_screen` | スクロールガード実装済み → ✅ 適用済み（LoadMoreFooter + 再評価） |
 | 2 | `circle_detail_screen` | 投稿一覧の無限スクロール使用 → ✅ 適用済み |
-| 3 | `home_screen` | TLの無限スクロール使用 → ⏸️ 未実施 |
-| 4 | `circles_screen` | サークル一覧の無限スクロール使用 → ⏸️ 未実施 |
+| 3 | `home_screen` | TLの無限スクロール使用 → ✅ 適用済み（LoadMoreFooter非表示） |
+| 4 | `circles_screen` | サークル一覧の無限スクロール使用 → ✅ 適用済み（検索時LoadMoreFooter非表示） |
 
 #### 全画面統一時の注意点（InfiniteScrollListener / LoadMoreFooter）
 
@@ -888,11 +888,17 @@ lib/
 | `error_view.dart` 作成 | エラー表示統一 | ✅ 完了 |
 | `empty_view.dart` 作成 | 空状態表示統一 | ✅ 完了 |
 | `circle_detail_screen.dart` に適用 | InfiniteScrollListener + LoadMoreFooter | ✅ 完了 |
-| `home_screen.dart` 共通Widget適用 | 既存方式から移行 | ⏸️ **未実施** |
-| `circles_screen.dart` 共通Widget適用 | 既存方式から移行 | ⏸️ **未実施** |
-| `LoadMoreFooter` 実機テスト | ショートリスト時のボタン表示確認 | ⏸️ **未実施** |
+| `home_screen.dart` 共通Widget適用 | 既存方式から移行 | ✅ 完了（LoadMoreFooter非表示） |
+| `circles_screen.dart` 共通Widget適用 | 既存方式から移行 | ✅ 完了（検索時LoadMoreFooter/LoadMore抑制） |
+| `LoadMoreFooter` 実機テスト | ショートリスト時のボタン表示確認 | ✅ 完了（実機） |
 
-> **注**: `profile_screen` は GlobalKey 方式でスクロールガード実装済みだが、全画面統一の方針により InfiniteScrollListener へ置換予定（残タスク）。
+> **注**: `profile_screen` は InfiniteScrollListener + LoadMoreFooter に置換済み（GlobalKeyで`hasMore/isLoadingMore`取得、読み込み完了で`_isScrollable`再評価）。
+
+**レビュー結果（対応済み）**
+- `profile_screen`: `_isScrollable` の再評価を読み込み完了/タブ切替後に実施
+- `circles_screen`: 検索時は `LoadMoreFooter` を抑制、loadMore発火を停止
+- 検証: flutter analyze 通過（既存warning 5件）
+- 実機テスト: LoadMoreFooter動作確認済み
 
 ---
 

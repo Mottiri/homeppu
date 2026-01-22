@@ -11,10 +11,10 @@ import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/widgets/infinite_scroll_listener.dart';
 import '../../../../shared/widgets/load_more_footer.dart';
 
-/// ƒT[ƒNƒ‹‰æ–Ê‚ÌƒXƒNƒ[ƒ‹ƒgƒbƒv‚ğ—v‹‚·‚éProvider
+/// ã‚µãƒ¼ã‚¯ãƒ«ç”»é¢ã®ã‚¹ã‚¯ãƒ­ãƒ¼ãƒ«ãƒˆãƒƒãƒ—ã‚’è¦æ±‚ã™ã‚‹Provider
 final circleScrollToTopProvider = StateProvider<int>((ref) => 0);
 
-/// ƒT[ƒNƒ‹ˆê——‰æ–Ê
+/// ã‚µãƒ¼ã‚¯ãƒ«ä¸€è¦§ç”»é¢
 class CirclesScreen extends ConsumerStatefulWidget {
   const CirclesScreen({super.key});
 
@@ -23,13 +23,13 @@ class CirclesScreen extends ConsumerStatefulWidget {
 }
 
 class _CirclesScreenState extends ConsumerState<CirclesScreen> {
-  int _selectedTab = 0; // 0: ‚İ‚ñ‚È‚Ì, 1: Q‰Á’†
-  String _selectedCategory = '‘S‚Ä';
+  int _selectedTab = 0; // 0: ã¿ã‚“ãªã®, 1: å‚åŠ ä¸­
+  String _selectedCategory = 'å…¨ã¦';
   final TextEditingController _searchController = TextEditingController();
   List<CircleModel> _searchResults = [];
   bool _isSearching = false;
 
-  // ƒvƒ‹XVE–³ŒÀƒXƒNƒ[ƒ‹—p‚Ìó‘Ô
+  // ãƒ—ãƒ«æ›´æ–°ãƒ»ç„¡é™ã‚¹ã‚¯ãƒ­ãƒ¼ãƒ«ç”¨ã®çŠ¶æ…‹
   List<CircleModel> _circles = [];
   bool _isLoading = true;
   bool _isLoadingMore = false;
@@ -39,20 +39,20 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   final ScrollController _scrollController = ScrollController();
   bool _isScrollable = false;
 
-  // •À‚Ñ‡EƒtƒBƒ‹ƒ^[—p‚Ìó‘Ô
+  // ä¸¦ã³é †ãƒ»ãƒ•ã‚£ãƒ«ã‚¿ãƒ¼ç”¨ã®çŠ¶æ…‹
   _SortOption _selectedSort = _SortOption.newest;
   final Set<_FilterOption> _selectedFilters = {};
 
   @override
   void initState() {
     super.initState();
-    // ScrollController‚ÍƒXƒNƒ[ƒ‹ƒgƒbƒv§Œä—p‚Ì‚İ
+    // ScrollControllerã¯ã‚¹ã‚¯ãƒ­ãƒ¼ãƒ«ãƒˆãƒƒãƒ—åˆ¶å¾¡ç”¨ã®ã¿
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // ‰æ–Ê‚ªÄ•\¦‚³‚ê‚é‚½‚Ñ‚ÉƒŠƒ[ƒhi‘¼‚Ì‰æ–Ê‚©‚ç–ß‚Á‚Ä‚«‚½‚È‚Çj
+    // ç”»é¢ãŒå†è¡¨ç¤ºã•ã‚Œã‚‹ãŸã³ã«ãƒªãƒ­ãƒ¼ãƒ‰ï¼ˆä»–ã®ç”»é¢ã‹ã‚‰æˆ»ã£ã¦ããŸæ™‚ãªã©ï¼‰
     _loadCircles();
   }
 
@@ -63,7 +63,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     super.dispose();
   }
 
-  /// ƒXƒNƒ[ƒ‹‰Â”\‚©‚ğÄ•]‰¿
+  /// ã‚¹ã‚¯ãƒ­ãƒ¼ãƒ«å¯èƒ½ã‹ã‚’å†è©•ä¾¡
   void _updateScrollable() {
     if (!mounted) return;
     final scrollable =
@@ -77,7 +77,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   Future<void> _loadCircles() async {
     final currentUser = ref.read(currentUserProvider).valueOrNull;
     if (currentUser == null) {
-      // ƒƒOƒCƒ“‚µ‚Ä‚¢‚È‚¢ê‡‚Í‰½‚à‚µ‚È‚¢i’Êí‚ ‚è‚¦‚È‚¢j
+      // ãƒ­ã‚°ã‚¤ãƒ³ã—ã¦ã„ãªã„å ´åˆã¯ä½•ã‚‚ã—ãªã„ï¼ˆé€šå¸¸ã‚ã‚Šãˆãªã„ï¼‰
       return;
     }
 
@@ -103,14 +103,14 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         _hasMore = result.hasMore;
         _isLoading = false;
       });
-      // ƒŒƒCƒAƒEƒgŒã‚ÉƒXƒNƒ[ƒ‹‰Â”\‚©Ä•]‰¿
+      // ãƒ¬ã‚¤ã‚¢ã‚¦ãƒˆå¾Œã«ã‚¹ã‚¯ãƒ­ãƒ¼ãƒ«å¯èƒ½ã‹å†è©•ä¾¡
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _updateScrollable();
       });
     } catch (e, stackTrace) {
-      // ƒfƒoƒbƒO—pFƒGƒ‰[‚ÌÚ×‚ğƒRƒ“ƒ\[ƒ‹‚Éo—Í
-      debugPrint('CirclesScreen._loadCircles ƒGƒ‰[: $e');
-      debugPrint('ƒXƒ^ƒbƒNƒgƒŒ[ƒX: $stackTrace');
+      // ãƒ‡ãƒãƒƒã‚°ç”¨ï¼šã‚¨ãƒ©ãƒ¼ã®è©³ç´°ã‚’ã‚³ãƒ³ã‚½ãƒ¼ãƒ«ã«å‡ºåŠ›
+      debugPrint('CirclesScreen._loadCircles ã‚¨ãƒ©ãƒ¼: $e');
+      debugPrint('ã‚¹ã‚¿ãƒƒã‚¯ãƒˆãƒ¬ãƒ¼ã‚¹: $stackTrace');
       setState(() {
         _error = e.toString();
         _isLoading = false;
@@ -142,7 +142,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         _hasMore = result.hasMore;
         _isLoadingMore = false;
       });
-      // ƒŒƒCƒAƒEƒgŒã‚ÉƒXƒNƒ[ƒ‹‰Â”\‚©Ä•]‰¿
+      // ãƒ¬ã‚¤ã‚¢ã‚¦ãƒˆå¾Œã«ã‚¹ã‚¯ãƒ­ãƒ¼ãƒ«å¯èƒ½ã‹å†è©•ä¾¡
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _updateScrollable();
       });
@@ -173,7 +173,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         _isSearching = false;
       });
     } catch (e) {
-      debugPrint('_performSearch ƒGƒ‰[: $e');
+      debugPrint('_performSearch ã‚¨ãƒ©ãƒ¼: $e');
       setState(() {
         _searchResults = [];
         _isSearching = false;
@@ -181,7 +181,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('ŒŸõ’†‚ÉƒGƒ‰[‚ª”­¶‚µ‚Ü‚µ‚½')));
+        ).showSnackBar(const SnackBar(content: Text('æ¤œç´¢ä¸­ã«ã‚¨ãƒ©ãƒ¼ãŒç™ºç”Ÿã—ã¾ã—ãŸ')));
       }
     }
   }
@@ -191,8 +191,10 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     final currentUser = ref.watch(currentUserProvider).valueOrNull;
     final isAdminAsync = ref.watch(isAdminProvider);
     final isAdmin = isAdminAsync.valueOrNull ?? false;
+    final isSearchMode =
+        _searchController.text.isNotEmpty || _isSearching;
 
-    // ƒT[ƒNƒ‹ƒ{ƒ^ƒ“ƒ^ƒbƒv‚ÅƒXƒNƒ[ƒ‹ƒgƒbƒv‚ğŠÄ‹
+    // ã‚µãƒ¼ã‚¯ãƒ«ãƒœã‚¿ãƒ³ã‚¿ãƒƒãƒ—ã§ã‚¹ã‚¯ãƒ­ãƒ¼ãƒ«ãƒˆãƒƒãƒ—ã‚’ç›£è¦–
     ref.listen<int>(circleScrollToTopProvider, (previous, next) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
@@ -203,7 +205,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
       }
     });
 
-    // ƒ†[ƒU[‚Ìƒwƒbƒ_[F‚ğæ“¾iİ’è‚³‚ê‚Ä‚¢‚ê‚Î‚»‚ÌFA‚È‚¯‚ê‚ÎƒfƒtƒHƒ‹ƒgj
+    // ãƒ¦ãƒ¼ã‚¶ãƒ¼ã®ãƒ˜ãƒƒãƒ€ãƒ¼è‰²ã‚’å–å¾—ï¼ˆè¨­å®šã•ã‚Œã¦ã„ã‚Œã°ãã®è‰²ã€ãªã‘ã‚Œã°ãƒ‡ãƒ•ã‚©ãƒ«ãƒˆï¼‰
     final primaryColor = currentUser?.headerPrimaryColor != null
         ? Color(currentUser!.headerPrimaryColor!)
         : AppColors.primary;
@@ -211,14 +213,14 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         ? Color(currentUser!.headerSecondaryColor!)
         : AppColors.secondary;
 
-    // ƒ†[ƒU[‚ÌF‚ÅƒOƒ‰ƒf[ƒVƒ‡ƒ“‚ğì¬iƒpƒXƒeƒ‹ƒJƒ‰[j
+    // ãƒ¦ãƒ¼ã‚¶ãƒ¼ã®è‰²ã§ã‚°ãƒ©ãƒ‡ãƒ¼ã‚·ãƒ§ãƒ³ã‚’ä½œæˆï¼ˆãƒ‘ã‚¹ãƒ†ãƒ«ã‚«ãƒ©ãƒ¼ï¼‰
     final userGradient = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
       colors: [
         primaryColor.withValues(alpha: 0.25),
         secondaryColor.withValues(alpha: 0.15),
-        const Color(0xFFFDF8F3), // warmGradient‚Ìã•”F
+        const Color(0xFFFDF8F3), // warmGradientã®ä¸Šéƒ¨è‰²
       ],
       stops: const [0.0, 0.5, 1.0],
     );
@@ -229,21 +231,21 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         child: SafeArea(
           bottom: false,
           child: InfiniteScrollListener(
-            isLoadingMore: _isLoadingMore,
-            hasMore: _hasMore,
+            isLoadingMore: !isSearchMode && _isLoadingMore,
+            hasMore: !isSearchMode && _hasMore,
             onLoadMore: _loadMoreCircles,
             child: RefreshIndicator(
               onRefresh: _loadCircles,
               child: CustomScrollView(
                 controller: _scrollController,
                 slivers: [
-                // ƒwƒbƒ_[iƒVƒ“ƒvƒ‹‚ÉuƒT[ƒNƒ‹v‚Ì‚İ’†‰›•\¦j
+                // ãƒ˜ãƒƒãƒ€ãƒ¼ï¼ˆã‚·ãƒ³ãƒ—ãƒ«ã«ã€Œã‚µãƒ¼ã‚¯ãƒ«ã€ã®ã¿ä¸­å¤®è¡¨ç¤ºï¼‰
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
                     child: Center(
                       child: Text(
-                        'ƒT[ƒNƒ‹',
+                        'ã‚µãƒ¼ã‚¯ãƒ«',
                         style: Theme.of(context).textTheme.headlineSmall
                             ?.copyWith(fontWeight: FontWeight.bold),
                       ),
@@ -251,7 +253,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
                   ),
                 ),
 
-                // ŒŸõƒo[
+                // æ¤œç´¢ãƒãƒ¼
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -271,7 +273,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
                         controller: _searchController,
                         onChanged: (value) => _performSearch(value),
                         decoration: InputDecoration(
-                          hintText: 'ƒT[ƒNƒ‹‚ğŒŸõ',
+                          hintText: 'ã‚µãƒ¼ã‚¯ãƒ«ã‚’æ¤œç´¢',
                           hintStyle: TextStyle(color: Colors.grey[400]),
                           prefixIcon: Icon(
                             Icons.search,
@@ -299,15 +301,15 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
 
                 const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
-                // ƒ^ƒuƒZƒŒƒNƒ^[i‚İ‚ñ‚È‚Ì / Q‰Á’†j
+                // ã‚¿ãƒ–ã‚»ãƒ¬ã‚¯ã‚¿ãƒ¼ï¼ˆã¿ã‚“ãªã® / å‚åŠ ä¸­ï¼‰
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Row(
                       children: [
-                        _buildTabButton('‚İ‚ñ‚È‚Ì', 0),
+                        _buildTabButton('ã¿ã‚“ãªã®', 0),
                         const SizedBox(width: 12),
-                        _buildTabButton('Q‰Á’†', 1),
+                        _buildTabButton('å‚åŠ ä¸­', 1),
                       ],
                     ),
                   ),
@@ -315,16 +317,16 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
 
                 const SliverToBoxAdapter(child: SizedBox(height: 12)),
 
-                // •À‚Ñ‡EƒtƒBƒ‹ƒ^[‘I‘ğ
+                // ä¸¦ã³é †ãƒ»ãƒ•ã‚£ãƒ«ã‚¿ãƒ¼é¸æŠ
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Row(
                       children: [
-                        // •À‚Ñ‡ƒhƒƒbƒvƒ_ƒEƒ“
+                        // ä¸¦ã³é †ãƒ‰ãƒ­ãƒƒãƒ—ãƒ€ã‚¦ãƒ³
                         _buildSortDropdown(isAdmin),
                         const SizedBox(width: 8),
-                        // ƒtƒBƒ‹ƒ^[ƒhƒƒbƒvƒ_ƒEƒ“
+                        // ãƒ•ã‚£ãƒ«ã‚¿ãƒ¼ãƒ‰ãƒ­ãƒƒãƒ—ãƒ€ã‚¦ãƒ³
                         _buildFilterDropdown(),
                       ],
                     ),
@@ -333,7 +335,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
 
                 const SliverToBoxAdapter(child: SizedBox(height: 8)),
 
-                // ƒJƒeƒSƒŠƒ`ƒbƒv
+                // ã‚«ãƒ†ã‚´ãƒªãƒãƒƒãƒ—
                 SliverToBoxAdapter(
                   child: SizedBox(
                     height: 40,
@@ -383,16 +385,16 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
 
                 const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
-                // ƒT[ƒNƒ‹ƒŠƒXƒg
+                // ã‚µãƒ¼ã‚¯ãƒ«ãƒªã‚¹ãƒˆ
                 _searchController.text.isNotEmpty
                     ? _buildSearchResults()
                     : _buildCircleList(currentUser?.uid),
 
-                // LoadMoreFooteriƒVƒ‡[ƒgƒŠƒXƒg—pè“®ƒtƒH[ƒ‹ƒoƒbƒNj
+                // LoadMoreFooterï¼ˆã‚·ãƒ§ãƒ¼ãƒˆãƒªã‚¹ãƒˆç”¨æ‰‹å‹•ãƒ•ã‚©ãƒ¼ãƒ«ãƒãƒƒã‚¯ï¼‰
                 SliverToBoxAdapter(
                   child: LoadMoreFooter(
-                    hasMore: _hasMore,
-                    isLoadingMore: _isLoadingMore,
+                    hasMore: !isSearchMode && _hasMore,
+                    isLoadingMore: !isSearchMode && _isLoadingMore,
                     isInitialLoadComplete: !_isLoading,
                     canLoadMore: _lastDocument != null,
                     isScrollable: _isScrollable,
@@ -405,7 +407,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         ),
       ),
       ),
-      // FAB‚Í’†‰›ƒ{ƒ^ƒ“‚Å‘Î‰‚·‚é‚½‚ßíœ
+      // FABã¯ä¸­å¤®ãƒœã‚¿ãƒ³ã§å¯¾å¿œã™ã‚‹ãŸã‚å‰Šé™¤
     );
   }
 
@@ -427,14 +429,14 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
             children: [
               Icon(Icons.search_off, size: 64, color: Colors.grey[300]),
               const SizedBox(height: 16),
-              Text('Œ©‚Â‚©‚è‚Ü‚¹‚ñ‚Å‚µ‚½', style: TextStyle(color: Colors.grey[600])),
+              Text('è¦‹ã¤ã‹ã‚Šã¾ã›ã‚“ã§ã—ãŸ', style: TextStyle(color: Colors.grey[600])),
             ],
           ),
         ),
       );
     }
 
-    // ƒL[ƒ{[ƒh•\¦‚Íƒ{ƒgƒ€ƒpƒfƒBƒ“ƒO‚ğŒ¸‚ç‚·
+    // ã‚­ãƒ¼ãƒœãƒ¼ãƒ‰è¡¨ç¤ºæ™‚ã¯ãƒœãƒˆãƒ ãƒ‘ãƒ‡ã‚£ãƒ³ã‚°ã‚’æ¸›ã‚‰ã™
     final keyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
     final bottomPadding = keyboardVisible ? 16.0 : 100.0;
 
@@ -453,7 +455,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   }
 
   Widget _buildCircleList(String? userId) {
-    // ƒ[ƒfƒBƒ“ƒO’†
+    // ãƒ­ãƒ¼ãƒ‡ã‚£ãƒ³ã‚°ä¸­
     if (_isLoading) {
       return const SliverFillRemaining(
         child: Center(
@@ -462,7 +464,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
       );
     }
 
-    // ƒGƒ‰[”­¶
+    // ã‚¨ãƒ©ãƒ¼ç™ºç”Ÿæ™‚
     if (_error != null) {
       return SliverFillRemaining(
         child: Center(
@@ -471,14 +473,14 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
             children: [
               Icon(Icons.error_outline, size: 64, color: Colors.grey[300]),
               const SizedBox(height: 16),
-              Text('ƒGƒ‰[‚ª”­¶‚µ‚Ü‚µ‚½', style: TextStyle(color: Colors.grey[600])),
+              Text('ã‚¨ãƒ©ãƒ¼ãŒç™ºç”Ÿã—ã¾ã—ãŸ', style: TextStyle(color: Colors.grey[600])),
             ],
           ),
         ),
       );
     }
 
-    // ƒf[ƒ^‚È‚µ
+    // ãƒ‡ãƒ¼ã‚¿ãªã—
     if (_circles.isEmpty) {
       return SliverFillRemaining(
         child: Center(
@@ -495,14 +497,14 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
               ),
               const SizedBox(height: 24),
               Text(
-                '‚Ü‚¾ƒT[ƒNƒ‹‚ª‚È‚¢‚æ',
+                'ã¾ã ã‚µãƒ¼ã‚¯ãƒ«ãŒãªã„ã‚ˆ',
                 style: Theme.of(
                   context,
                 ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               Text(
-                'Å‰‚ÌƒT[ƒNƒ‹‚ğì‚Á‚Ä‚İ‚æ‚¤I',
+                'æœ€åˆã®ã‚µãƒ¼ã‚¯ãƒ«ã‚’ä½œã£ã¦ã¿ã‚ˆã†ï¼',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: AppColors.textSecondary,
                 ),
@@ -522,7 +524,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
                   ),
                 ),
                 icon: const Icon(Icons.add),
-                label: const Text('ƒT[ƒNƒ‹‚ğì‚é'),
+                label: const Text('ã‚µãƒ¼ã‚¯ãƒ«ã‚’ä½œã‚‹'),
               ),
             ],
           ),
@@ -530,20 +532,20 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
       );
     }
 
-    // ƒL[ƒ{[ƒh•\¦‚Íƒ{ƒgƒ€ƒpƒfƒBƒ“ƒO‚ğŒ¸‚ç‚·
+    // ã‚­ãƒ¼ãƒœãƒ¼ãƒ‰è¡¨ç¤ºæ™‚ã¯ãƒœãƒˆãƒ ãƒ‘ãƒ‡ã‚£ãƒ³ã‚°ã‚’æ¸›ã‚‰ã™
     final keyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
     final bottomPadding = keyboardVisible ? 16.0 : 100.0;
 
-    // ƒ^ƒu‚É‰‚¶‚ÄƒtƒBƒ‹ƒ^ƒŠƒ“ƒO
+    // ã‚¿ãƒ–ã«å¿œã˜ã¦ãƒ•ã‚£ãƒ«ã‚¿ãƒªãƒ³ã‚°
     List<CircleModel> filteredCircles = _circles;
     if (_selectedTab == 1 && userId != null) {
-      // Q‰Á’†ƒ^ƒu: ©•ª‚ªƒƒ“ƒo[‚ÌƒT[ƒNƒ‹‚Ì‚İ
+      // å‚åŠ ä¸­ã‚¿ãƒ–: è‡ªåˆ†ãŒãƒ¡ãƒ³ãƒãƒ¼ã®ã‚µãƒ¼ã‚¯ãƒ«ã®ã¿
       filteredCircles = _circles
           .where((c) => c.memberIds.contains(userId))
           .toList();
     }
 
-    // ƒtƒBƒ‹ƒ^[“K—p
+    // ãƒ•ã‚£ãƒ«ã‚¿ãƒ¼é©ç”¨
     if (_selectedFilters.contains(_FilterOption.hasSpace)) {
       filteredCircles = filteredCircles
           .where((c) => c.memberCount < c.maxMembers)
@@ -553,7 +555,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
       filteredCircles = filteredCircles.where((c) => c.postCount > 0).toList();
     }
 
-    // •À‚Ñ‡“K—p
+    // ä¸¦ã³é †é©ç”¨
     switch (_selectedSort) {
       case _SortOption.newest:
         filteredCircles.sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -572,11 +574,11 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         filteredCircles.sort((a, b) => b.postCount.compareTo(a.postCount));
         break;
       case _SortOption.humanPostOldest:
-        // lŠÔ“Še‚ªŒÃ‚¢‡iƒS[ƒXƒgƒT[ƒNƒ‹”­Œ©—pj
+        // äººé–“æŠ•ç¨¿ãŒå¤ã„é †ï¼ˆã‚´ãƒ¼ã‚¹ãƒˆã‚µãƒ¼ã‚¯ãƒ«ç™ºè¦‹ç”¨ï¼‰
         filteredCircles.sort((a, b) {
           final aDate = a.lastHumanPostAt ?? DateTime(1970);
           final bDate = b.lastHumanPostAt ?? DateTime(1970);
-          return aDate.compareTo(bDate); // ŒÃ‚¢•û‚ªæ
+          return aDate.compareTo(bDate); // å¤ã„æ–¹ãŒå…ˆ
         });
         break;
     }
@@ -593,7 +595,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
               Icon(Icons.group_off, size: 64, color: Colors.grey[300]),
               const SizedBox(height: 16),
               Text(
-                _selectedTab == 1 ? 'Q‰Á’†‚ÌƒT[ƒNƒ‹‚ª‚ ‚è‚Ü‚¹‚ñ' : 'ƒT[ƒNƒ‹‚ª‚ ‚è‚Ü‚¹‚ñ',
+                _selectedTab == 1 ? 'å‚åŠ ä¸­ã®ã‚µãƒ¼ã‚¯ãƒ«ãŒã‚ã‚Šã¾ã›ã‚“' : 'ã‚µãƒ¼ã‚¯ãƒ«ãŒã‚ã‚Šã¾ã›ã‚“',
                 style: TextStyle(color: Colors.grey[600]),
               ),
             ],
@@ -606,7 +608,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
       padding: EdgeInsets.only(bottom: bottomPadding),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate((context, index) {
-          // ÅŒã‚Ì€–Ú‚Ìê‡Aƒ[ƒfƒBƒ“ƒOƒCƒ“ƒWƒP[ƒ^[‚ğ•\¦
+          // æœ€å¾Œã®é …ç›®ã®å ´åˆã€ãƒ­ãƒ¼ãƒ‡ã‚£ãƒ³ã‚°ã‚¤ãƒ³ã‚¸ã‚±ãƒ¼ã‚¿ãƒ¼ã‚’è¡¨ç¤º
           if (index == filteredCircles.length) {
             return _hasMore
                 ? const Padding(
@@ -675,9 +677,9 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     );
   }
 
-  /// •À‚Ñ‡ƒhƒƒbƒvƒ_ƒEƒ“
+  /// ä¸¦ã³é †ãƒ‰ãƒ­ãƒƒãƒ—ãƒ€ã‚¦ãƒ³
   Widget _buildSortDropdown(bool isAdmin) {
-    // ŠÇ—Ò‚Ì‚İhumanPostOldest‚ğ•\¦
+    // ç®¡ç†è€…ã®ã¿humanPostOldestã‚’è¡¨ç¤º
     final options = isAdmin
         ? _SortOption.values
         : _SortOption.values
@@ -750,7 +752,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     );
   }
 
-  /// ƒtƒBƒ‹ƒ^[ƒhƒƒbƒvƒ_ƒEƒ“
+  /// ãƒ•ã‚£ãƒ«ã‚¿ãƒ¼ãƒ‰ãƒ­ãƒƒãƒ—ãƒ€ã‚¦ãƒ³
   Widget _buildFilterDropdown() {
     final hasActiveFilter = _selectedFilters.isNotEmpty;
 
@@ -786,7 +788,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
             ),
             const SizedBox(width: 4),
             Text(
-              hasActiveFilter ? 'ƒtƒBƒ‹ƒ^[(${_selectedFilters.length})' : 'ƒtƒBƒ‹ƒ^[',
+              hasActiveFilter ? 'ãƒ•ã‚£ãƒ«ã‚¿ãƒ¼(${_selectedFilters.length})' : 'ãƒ•ã‚£ãƒ«ã‚¿ãƒ¼',
               style: TextStyle(
                 fontSize: 12,
                 color: hasActiveFilter ? AppColors.primary : Colors.grey[700],
@@ -829,7 +831,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   }
 }
 
-/// ƒT[ƒNƒ‹ƒJ[ƒh
+/// ã‚µãƒ¼ã‚¯ãƒ«ã‚«ãƒ¼ãƒ‰
 class _CircleCard extends ConsumerWidget {
   final CircleModel circle;
   final String? currentUserId;
@@ -839,12 +841,12 @@ class _CircleCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // CircleService‚ÌƒJƒeƒSƒŠƒAƒCƒRƒ“‚ğg—p
+    // CircleServiceã®ã‚«ãƒ†ã‚´ãƒªã‚¢ã‚¤ã‚³ãƒ³ã‚’ä½¿ç”¨
     final icon = CircleService.categoryIcons[circle.category] ?? '?';
     final isOwner = currentUserId != null && circle.ownerId == currentUserId;
     final isSubOwner =
         currentUserId != null && circle.subOwnerId == currentUserId;
-    // ŠÇ—Òƒ`ƒFƒbƒN
+    // ç®¡ç†è€…ãƒã‚§ãƒƒã‚¯
     final isAdminAsync = ref.watch(isAdminProvider);
     final isAdmin = isAdminAsync.valueOrNull ?? false;
 
@@ -866,9 +868,9 @@ class _CircleCard extends ConsumerWidget {
         child: InkWell(
           onTap: () async {
             final result = await context.push<bool>('/circle/${circle.id}');
-            // ƒT[ƒNƒ‹íœŒã‚ÉƒŠƒ[ƒh‚ª•K—v‚Èê‡
+            // ã‚µãƒ¼ã‚¯ãƒ«å‰Šé™¤å¾Œã«ãƒªãƒ­ãƒ¼ãƒ‰ãŒå¿…è¦ãªå ´åˆ
             if (result == true && context.mounted) {
-              // eState‚É’Ê’m‚·‚é‚½‚ß‚ÉƒR[ƒ‹ƒoƒbƒN‚ğŒÄ‚Ô
+              // è¦ªStateã«é€šçŸ¥ã™ã‚‹ãŸã‚ã«ã‚³ãƒ¼ãƒ«ãƒãƒƒã‚¯ã‚’å‘¼ã¶
               onDeleted?.call();
             }
           },
@@ -877,7 +879,7 @@ class _CircleCard extends ConsumerWidget {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                // ƒAƒCƒRƒ“iƒI[ƒi[‚Ìê‡‚Í\¿ƒoƒbƒW•t‚«j
+                // ã‚¢ã‚¤ã‚³ãƒ³ï¼ˆã‚ªãƒ¼ãƒŠãƒ¼ã®å ´åˆã¯ç”³è«‹ãƒãƒƒã‚¸ä»˜ãï¼‰
                 Stack(
                   clipBehavior: Clip.none,
                   children: [
@@ -910,7 +912,7 @@ class _CircleCard extends ConsumerWidget {
                               ),
                             ),
                     ),
-                    // ƒI[ƒi[A•›ƒI[ƒi[A‚Ü‚½‚ÍŠÇ—Ò‚Ìê‡‚Í\¿ƒoƒbƒW‚ğ•\¦
+                    // ã‚ªãƒ¼ãƒŠãƒ¼ã€å‰¯ã‚ªãƒ¼ãƒŠãƒ¼ã€ã¾ãŸã¯ç®¡ç†è€…ã®å ´åˆã¯ç”³è«‹ãƒãƒƒã‚¸ã‚’è¡¨ç¤º
                     if (isOwner || isSubOwner || isAdmin)
                       StreamBuilder<List<Map<String, dynamic>>>(
                         stream: ref
@@ -953,14 +955,14 @@ class _CircleCard extends ConsumerWidget {
                 ),
                 const SizedBox(width: 16),
 
-                // î•ñ
+                // æƒ…å ±
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          // ƒI[ƒi[ƒoƒbƒW
+                          // ã‚ªãƒ¼ãƒŠãƒ¼ãƒãƒƒã‚¸
                           if (currentUserId != null &&
                               circle.ownerId == currentUserId)
                             Container(
@@ -1001,15 +1003,15 @@ class _CircleCard extends ConsumerWidget {
                         children: [
                           _buildInfoChip(
                             Icons.people_outline,
-                            '${circle.memberCount}l',
+                            '${circle.memberCount}äºº',
                           ),
                           _buildInfoChip(
                             Icons.article_outlined,
-                            '${circle.postCount}Œ',
+                            '${circle.postCount}ä»¶',
                           ),
-                          // ÅIƒAƒNƒeƒBƒrƒeƒB•\¦
+                          // æœ€çµ‚ã‚¢ã‚¯ãƒ†ã‚£ãƒ“ãƒ†ã‚£è¡¨ç¤º
                           _buildActivityChip(circle.recentActivity),
-                          // ŠÇ—ÒŒü‚¯FlŠÔ‚ÌÅI“Še“úiƒtƒB[ƒ‹ƒh‚©‚ç’¼Úæ“¾j
+                          // ç®¡ç†è€…å‘ã‘ï¼šäººé–“ã®æœ€çµ‚æŠ•ç¨¿æ—¥æ™‚ï¼ˆãƒ•ã‚£ãƒ¼ãƒ«ãƒ‰ã‹ã‚‰ç›´æ¥å–å¾—ï¼‰
                           if (isAdmin)
                             _buildHumanActivityChip(circle.lastHumanPostAt),
                           Container(
@@ -1030,7 +1032,7 @@ class _CircleCard extends ConsumerWidget {
                               ),
                             ),
                           ),
-                          // AIƒ‚[ƒhƒoƒbƒW
+                          // AIãƒ¢ãƒ¼ãƒ‰ãƒãƒƒã‚¸
                           if (circle.aiMode == CircleAIMode.aiOnly)
                             Container(
                               padding: const EdgeInsets.symmetric(
@@ -1051,7 +1053,7 @@ class _CircleCard extends ConsumerWidget {
                                   ),
                                   const SizedBox(width: 2),
                                   Text(
-                                    'AIƒ‚[ƒh',
+                                    'AIãƒ¢ãƒ¼ãƒ‰',
                                     style: TextStyle(
                                       fontSize: 10,
                                       color: Colors.purple[700],
@@ -1061,7 +1063,7 @@ class _CircleCard extends ConsumerWidget {
                                 ],
                               ),
                             ),
-                          // µ‘Ò§ƒoƒbƒWi”ñŒöŠJ‚©‚ÂAIƒ‚[ƒh‚Å‚Í‚È‚¢ê‡j
+                          // æ‹›å¾…åˆ¶ãƒãƒƒã‚¸ï¼ˆéå…¬é–‹ã‹ã¤AIãƒ¢ãƒ¼ãƒ‰ã§ã¯ãªã„å ´åˆï¼‰
                           if (!circle.isPublic &&
                               circle.aiMode != CircleAIMode.aiOnly)
                             Container(
@@ -1083,7 +1085,7 @@ class _CircleCard extends ConsumerWidget {
                                   ),
                                   const SizedBox(width: 2),
                                   Text(
-                                    'µ‘Ò§',
+                                    'æ‹›å¾…åˆ¶',
                                     style: TextStyle(
                                       fontSize: 10,
                                       color: Colors.orange[700],
@@ -1120,7 +1122,7 @@ class _CircleCard extends ConsumerWidget {
   }
 
   Widget _buildActivityChip(DateTime? recentActivity) {
-    // timeago‚Ì“ú–{Œêİ’è
+    // timeagoã®æ—¥æœ¬èªè¨­å®š
     timeago.setLocaleMessages('ja', timeago.JaMessages());
 
     if (recentActivity == null) {
@@ -1130,7 +1132,7 @@ class _CircleCard extends ConsumerWidget {
           Icon(Icons.schedule, size: 14, color: Colors.grey[400]),
           const SizedBox(width: 4),
           Text(
-            '‚Ü‚¾“Še‚È‚µ',
+            'ã¾ã æŠ•ç¨¿ãªã—',
             style: TextStyle(fontSize: 12, color: Colors.grey[500]),
           ),
         ],
@@ -1140,7 +1142,7 @@ class _CircleCard extends ConsumerWidget {
     final now = DateTime.now();
     final difference = now.difference(recentActivity);
 
-    // 7“úˆÈ“à‚È‚çƒAƒNƒeƒBƒu•\¦i—ÎjA‚»‚êˆÈŠO‚ÍƒOƒŒ[
+    // 7æ—¥ä»¥å†…ãªã‚‰ã‚¢ã‚¯ãƒ†ã‚£ãƒ–è¡¨ç¤ºï¼ˆç·‘ï¼‰ã€ãã‚Œä»¥å¤–ã¯ã‚°ãƒ¬ãƒ¼
     final isActive = difference.inDays <= 7;
     final color = isActive ? Colors.green : Colors.grey[500];
     final icon = isActive ? Icons.local_fire_department : Icons.schedule;
@@ -1151,7 +1153,7 @@ class _CircleCard extends ConsumerWidget {
         Icon(icon, size: 14, color: color),
         const SizedBox(width: 4),
         Text(
-          '${timeago.format(recentActivity, locale: 'ja')}‚É“Še‚ ‚è',
+          '${timeago.format(recentActivity, locale: 'ja')}ã«æŠ•ç¨¿ã‚ã‚Š',
           style: TextStyle(
             fontSize: 12,
             color: color,
@@ -1162,9 +1164,9 @@ class _CircleCard extends ConsumerWidget {
     );
   }
 
-  /// ŠÇ—ÒŒü‚¯FlŠÔƒ†[ƒU[‚ÌÅI“Še“úƒ`ƒbƒv
+  /// ç®¡ç†è€…å‘ã‘ï¼šäººé–“ãƒ¦ãƒ¼ã‚¶ãƒ¼ã®æœ€çµ‚æŠ•ç¨¿æ—¥æ™‚ãƒãƒƒãƒ—
   Widget _buildHumanActivityChip(DateTime? lastHumanPostDate) {
-    // timeago‚Ì“ú–{Œêİ’è
+    // timeagoã®æ—¥æœ¬èªè¨­å®š
     timeago.setLocaleMessages('ja', timeago.JaMessages());
 
     if (lastHumanPostDate == null) {
@@ -1181,7 +1183,7 @@ class _CircleCard extends ConsumerWidget {
             Icon(Icons.person_off, size: 12, color: Colors.blue[400]),
             const SizedBox(width: 3),
             Text(
-              'lŠÔ“Še‚È‚µ',
+              'äººé–“æŠ•ç¨¿ãªã—',
               style: TextStyle(
                 fontSize: 10,
                 color: Colors.blue[600],
@@ -1196,7 +1198,7 @@ class _CircleCard extends ConsumerWidget {
     final now = DateTime.now();
     final difference = now.difference(lastHumanPostDate);
 
-    // 7“úˆÈ“à‚È‚ç—Î”wŒiA‚»‚êˆÈŠO‚ÍÂ”wŒiiŒx‚Æ‚µ‚Äj
+    // 7æ—¥ä»¥å†…ãªã‚‰ç·‘èƒŒæ™¯ã€ãã‚Œä»¥å¤–ã¯é’èƒŒæ™¯ï¼ˆè­¦å‘Šã¨ã—ã¦ï¼‰
     final isActive = difference.inDays <= 7;
     final bgColor = isActive
         ? Colors.green.withValues(alpha: 0.1)
@@ -1220,7 +1222,7 @@ class _CircleCard extends ConsumerWidget {
           Icon(Icons.person, size: 12, color: iconColor),
           const SizedBox(width: 3),
           Text(
-            'lŠÔ: ${timeago.format(lastHumanPostDate, locale: 'ja')}',
+            'äººé–“: ${timeago.format(lastHumanPostDate, locale: 'ja')}',
             style: TextStyle(
               fontSize: 10,
               color: textColor,
@@ -1233,23 +1235,23 @@ class _CircleCard extends ConsumerWidget {
   }
 }
 
-/// •À‚Ñ‡ƒIƒvƒVƒ‡ƒ“
+/// ä¸¦ã³é †ã‚ªãƒ—ã‚·ãƒ§ãƒ³
 enum _SortOption {
-  newest('V’…‡', Icons.schedule),
-  active('ƒAƒNƒeƒBƒu‡', Icons.local_fire_department),
-  popular('l‹C‡', Icons.people),
-  postCount('“Še”‡', Icons.article),
-  humanPostOldest('lŠÔ“ŠeŒÃ‚¢‡', Icons.person_off); // ŠÇ—Ò‚Ì‚İ
+  newest('æ–°ç€é †', Icons.schedule),
+  active('ã‚¢ã‚¯ãƒ†ã‚£ãƒ–é †', Icons.local_fire_department),
+  popular('äººæ°—é †', Icons.people),
+  postCount('æŠ•ç¨¿æ•°é †', Icons.article),
+  humanPostOldest('äººé–“æŠ•ç¨¿å¤ã„é †', Icons.person_off); // ç®¡ç†è€…ã®ã¿
 
   final String label;
   final IconData icon;
   const _SortOption(this.label, this.icon);
 }
 
-/// ƒtƒBƒ‹ƒ^[ƒIƒvƒVƒ‡ƒ“
+/// ãƒ•ã‚£ãƒ«ã‚¿ãƒ¼ã‚ªãƒ—ã‚·ãƒ§ãƒ³
 enum _FilterOption {
-  hasSpace('‹ó‚«‚ ‚è', Icons.person_add),
-  hasPosts('“Še‚ ‚è', Icons.article);
+  hasSpace('ç©ºãã‚ã‚Š', Icons.person_add),
+  hasPosts('æŠ•ç¨¿ã‚ã‚Š', Icons.article);
 
   final String label;
   final IconData icon;

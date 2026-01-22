@@ -12,12 +12,16 @@ class ProfilePostsList extends StatefulWidget {
   final bool viewerIsAI;
   final Color accentColor;
 
+  /// 親から渡されるコールバック: ロード完了時に呼び出し
+  final VoidCallback? onLoadComplete;
+
   const ProfilePostsList({
     super.key,
     required this.userId,
     this.isMyProfile = false,
     this.viewerIsAI = false,
     this.accentColor = AppColors.primary,
+    this.onLoadComplete,
   });
 
   @override
@@ -128,6 +132,10 @@ class ProfilePostsListState extends State<ProfilePostsList>
           });
         }
       }
+      // タブ切替後に親へ通知
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        widget.onLoadComplete?.call();
+      });
       setState(() {});
     }
   }
@@ -158,6 +166,10 @@ class ProfilePostsListState extends State<ProfilePostsList>
           _lastDocument = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
           _hasMore = snapshot.docs.length == _initialLoadCount;
           _isLoading = false;
+        });
+        // ロード完了を親へ通知
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          widget.onLoadComplete?.call();
         });
       }
     } catch (e) {
@@ -200,6 +212,10 @@ class ProfilePostsListState extends State<ProfilePostsList>
           _hasMore = snapshot.docs.length == _loadMoreCount;
           _isLoadingMore = false;
         });
+        // ロード完了を親へ通知
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          widget.onLoadComplete?.call();
+        });
       }
     } catch (e) {
       debugPrint('Error loading more posts: $e');
@@ -239,6 +255,10 @@ class ProfilePostsListState extends State<ProfilePostsList>
               : null;
           _favoriteHasMore = snapshot.docs.length == _loadMoreCount;
           _favoriteIsLoading = false;
+        });
+        // ロード完了を親へ通知
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          widget.onLoadComplete?.call();
         });
       }
     } catch (e) {
@@ -286,6 +306,10 @@ class ProfilePostsListState extends State<ProfilePostsList>
               : null;
           _favoriteHasMore = snapshot.docs.length == _loadMoreCount;
           _favoriteIsLoadingMore = false;
+        });
+        // ロード完了を親へ通知
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          widget.onLoadComplete?.call();
         });
       }
     } catch (e) {

@@ -17,9 +17,10 @@ class FullScreenImageViewer extends StatelessWidget {
       PageRouteBuilder(
         opaque: false,
         barrierDismissible: true,
-        pageBuilder: (_, __, ___) =>
+        pageBuilder: (context, animation, secondaryAnimation) =>
             FullScreenImageViewer(imageUrl: imageUrl, heroTag: heroTag),
-        transitionsBuilder: (_, animation, __, child) {
+        transitionsBuilder:
+            (context, animation, secondaryAnimation, child) {
           return FadeTransition(opacity: animation, child: child);
         },
       ),

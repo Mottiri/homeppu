@@ -413,7 +413,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                       ? Image.network(
                                           user!.headerImageUrl!,
                                           fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) =>
+                                          errorBuilder:
+                                              (context, error, stackTrace) =>
                                               Container(
                                                 color: AppColors.primaryLight,
                                                 child: const Center(

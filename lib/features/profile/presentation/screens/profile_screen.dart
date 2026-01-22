@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:go_router/go_router.dart';
-import 'package:timeago/timeago.dart' as timeago;
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
@@ -11,13 +10,10 @@ import '../../../../core/constants/app_messages.dart';
 import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../core/utils/dialog_helper.dart';
 import '../../../../shared/models/user_model.dart';
-import '../../../../shared/models/post_model.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/services/follow_service.dart';
-import '../../../../shared/services/post_service.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
 import '../../../admin/presentation/widgets/admin_menu_bottom_sheet.dart';
-import '../../../home/presentation/widgets/reaction_background.dart';
 import '../widgets/profile_posts_list.dart';
 import '../widgets/profile_following_list.dart';
 import '../../../../shared/widgets/infinite_scroll_listener.dart';
@@ -95,6 +91,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     if (_isScrollable != scrollable) {
       setState(() => _isScrollable = scrollable);
     }
+  }
+
+  void _handlePostsListUpdated() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateScrollable();
+    });
   }
 
   // ヘッダー画像とカラーパレットを生成（ユーザーIDで固定）
@@ -365,8 +367,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                 final isAdminAsync = ref.watch(isAdminProvider);
                                 return isAdminAsync.maybeWhen(
                                   data: (isAdmin) {
-                                    if (!isAdmin)
+                                    if (!isAdmin) {
                                       return const SizedBox.shrink();
+                                    }
                                     if (!_isOwnProfile) {
                                       return IconButton(
                                         icon: const Icon(
@@ -776,6 +779,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   viewerIsAI:
                       ref.watch(currentUserProvider).valueOrNull?.isAI ?? false,
                   accentColor: _primaryAccent,
+                  onLoadComplete: _handlePostsListUpdated,
                 ),
 
                 // LoadMoreFooter（ショートリスト用手動フォールバック）

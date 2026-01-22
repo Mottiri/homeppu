@@ -75,7 +75,7 @@ class _AdminBanUsersScreenState extends ConsumerState<AdminBanUsersScreen> {
           Icon(
             Icons.check_circle_outline,
             size: 64,
-            color: AppColors.success.withOpacity(0.5),
+            color: AppColors.success.withValues(alpha: 0.5),
           ),
           const SizedBox(height: 16),
           const Text(
@@ -214,8 +214,8 @@ class _BanUserCard extends StatelessWidget {
                               ),
                               decoration: BoxDecoration(
                                 color: banStatus == 'permanent'
-                                    ? AppColors.error.withOpacity(0.1)
-                                    : Colors.orange.withOpacity(0.1),
+                                    ? AppColors.error.withValues(alpha: 0.1)
+                                    : Colors.orange.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
