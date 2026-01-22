@@ -867,7 +867,24 @@ lib/
 | 5 | `loading_state_mixin.dart` 作成 | 21箇所の統一 | 中 | ✅ 完了 |
 | 6 | `profile_screen.dart` 分割（Phase 1: 内部Widget抽出） | 885行削減 | 大 | ✅ 完了 |
 | 6a | `profile_screen.dart` 分割（Phase 2: スクロールガード追加） | isLoadingMore/hasMoreチェック | 中 | ✅ 完了 |
-| - | **共通Widget `InfiniteScrollListener` 作成** | **Phase B (A-4) で実施予定** | 中 | 未着手 |
+
+---
+
+### Phase B: 共通Widget作成（2026/01/22時点）
+
+| 作業 | 効果 | 状態 |
+|------|------|------|
+| `infinite_scroll_listener.dart` 作成 | 無限スクロール発火・ガード統一 | ✅ 完了 |
+| `load_more_footer.dart` 作成 | ショートリスト用もっと読み込むボタン | ✅ 完了 |
+| `loading_overlay.dart` 作成 | AbsorbPointer付きローディング | ✅ 完了 |
+| `error_view.dart` 作成 | エラー表示統一 | ✅ 完了 |
+| `empty_view.dart` 作成 | 空状態表示統一 | ✅ 完了 |
+| `circle_detail_screen.dart` に適用 | InfiniteScrollListener + LoadMoreFooter | ✅ 完了 |
+| `home_screen.dart` 共通Widget適用 | 既存方式から移行 | ⏸️ **未実施** |
+| `circles_screen.dart` 共通Widget適用 | 既存方式から移行 | ⏸️ **未実施** |
+| `LoadMoreFooter` 実機テスト | ショートリスト時のボタン表示確認 | ⏸️ **未実施** |
+
+> **注**: `profile_screen` は GlobalKey 方式維持のため InfiniteScrollListener 未適用
 
 ---
 
