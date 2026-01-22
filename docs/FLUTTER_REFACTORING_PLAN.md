@@ -547,10 +547,17 @@ class InfiniteScrollListener extends StatelessWidget {
 
 | 優先度 | 画面 | 理由 |
 |------|------|------|
-| 1 | `profile_screen` | 既にスクロールガード実装済み（置換容易） |
-| 2 | `circle_detail_screen` | 投稿一覧の無限スクロール使用 |
-| 3 | `home_screen` | TLの無限スクロール使用 |
-| 4 | `circles_screen` | サークル一覧の無限スクロール使用 |
+| 1 | `profile_screen` | ※GlobalKey方式維持（スクロールガード実装済み） |
+| 2 | `circle_detail_screen` | 投稿一覧の無限スクロール使用 → ✅ 適用済み |
+| 3 | `home_screen` | TLの無限スクロール使用 → ⏸️ 未実施 |
+| 4 | `circles_screen` | サークル一覧の無限スクロール使用 → ⏸️ 未実施 |
+
+#### 全画面統一時の注意点（InfiniteScrollListener / LoadMoreFooter）
+
+- 既存トリガー（NotificationListener / _onScroll / addPostFrameCallback など）は必ず撤去し、無限スクロールの発火経路は一本化する。
+- スクロール所有者を必ずラップする（NestedScrollView は内側リスト、CustomScrollView はそのまま）。外側 ScrollController はスクロールトップ制御用途に限定する。
+- `LoadMoreFooter` の表示条件は `hasMore && !isLoadingMore && 初回ロード完了 && canLoadMore && !isScrollable` を標準とする。
+- `isScrollable` はレイアウト後に再評価し、初回ロード・追加読み込み・削除/フィルタなどリスト長が変わる操作のたびに更新する（post-frameで再計測）。
 
 
 #### 既存の共通Widget（実装済み）
@@ -884,7 +891,7 @@ lib/
 | `circles_screen.dart` 共通Widget適用 | 既存方式から移行 | ⏸️ **未実施** |
 | `LoadMoreFooter` 実機テスト | ショートリスト時のボタン表示確認 | ⏸️ **未実施** |
 
-> **注**: `profile_screen` は GlobalKey 方式維持のため InfiniteScrollListener 未適用
+> **注**: `profile_screen` は GlobalKey 方式でスクロールガード実装済みのため、InfiniteScrollListener 置換は行わず現行方式を維持
 
 ---
 
