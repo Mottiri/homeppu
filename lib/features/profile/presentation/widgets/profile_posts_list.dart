@@ -75,6 +75,10 @@ class ProfilePostsListState extends State<ProfilePostsList>
   /// 親から参照可能: 追加データあるか
   bool get hasMore => _currentTab == 2 ? _favoriteHasMore : _hasMore;
 
+  /// 親から参照可能: 初回ロード完了しており追加読み込み可能か
+  bool get canLoadMore =>
+      _currentTab == 2 ? _favoriteLastDocument != null : _lastDocument != null;
+
   /// 親から呼び出されるメソッド：追加読み込み
   void loadMoreCurrentTab() {
     if (_currentTab == 2) {

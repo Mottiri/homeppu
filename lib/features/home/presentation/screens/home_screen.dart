@@ -11,6 +11,7 @@ import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/repositories/notification_repository.dart';
 import '../widgets/post_card.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../shared/widgets/infinite_scroll_listener.dart';
 
 /// タイムラインリフレッシュ用のProvider（投稿作成後にインクリメント）
 final timelineRefreshProvider = StateProvider<int>((ref) => 0);
@@ -506,19 +507,15 @@ class _PostsListState extends State<_PostsList> {
       );
     }
 
-    return NotificationListener<ScrollNotification>(
-      onNotification: (notification) {
-        // スクロール末尾に近づいたら追加読み込み
-        if (notification is ScrollEndNotification &&
-            notification.metrics.extentAfter < 300) {
-          _loadMorePosts();
-        }
-        return false;
-      },
+    return InfiniteScrollListener(
+      isLoadingMore: _isLoadingMore,
+      hasMore: _hasMore,
+      onLoadMore: _loadMorePosts,
       child: RefreshIndicator(
         onRefresh: _loadPosts,
         color: AppColors.primary,
         child: ListView.builder(
+          primary: false,
           padding: const EdgeInsets.only(bottom: 120),
           itemCount: _posts.length + (_isLoadingMore ? 1 : 0),
           itemBuilder: (context, index) {

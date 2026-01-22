@@ -20,6 +20,8 @@ import '../../../admin/presentation/widgets/admin_menu_bottom_sheet.dart';
 import '../../../home/presentation/widgets/reaction_background.dart';
 import '../widgets/profile_posts_list.dart';
 import '../widgets/profile_following_list.dart';
+import '../../../../shared/widgets/infinite_scroll_listener.dart';
+import '../../../../shared/widgets/load_more_footer.dart';
 
 /// プロフィール画面
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -39,6 +41,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _isFollowLoading = false;
   final _followService = FollowService();
   final _userPostsListKey = GlobalKey<ProfilePostsListState>();
+  final ScrollController _scrollController = ScrollController();
+  bool _isScrollable = false;
 
   // ヘッダー画像とカラーパレット
   late int _headerImageIndex;
@@ -70,6 +74,27 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     super.initState();
     _generateHeaderAndColors();
     _loadUser();
+    // 初回レイアウト後にスクロール可能か評価
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateScrollable();
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  /// スクロール可能かを再評価
+  void _updateScrollable() {
+    if (!mounted) return;
+    final scrollable =
+        _scrollController.hasClients &&
+        _scrollController.position.maxScrollExtent > 0;
+    if (_isScrollable != scrollable) {
+      setState(() => _isScrollable = scrollable);
+    }
   }
 
   // ヘッダー画像とカラーパレットを生成（ユーザーIDで固定）
@@ -247,24 +272,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       body: Container(
         decoration: const BoxDecoration(gradient: AppColors.warmGradient),
         child: SafeArea(
-          child: NotificationListener<ScrollNotification>(
-            onNotification: (notification) {
-              if (notification is ScrollEndNotification) {
-                if (notification.metrics.extentAfter < 300) {
-                  // GlobalKey経由で状態を取得
-                  final state = _userPostsListKey.currentState;
-                  // null時またはロード中/データなし時は抑制
-                  final isLoadingMore = state?.isLoadingMore ?? true;
-                  final hasMore = state?.hasMore ?? false;
-
-                  if (!isLoadingMore && hasMore) {
-                    state?.loadMoreCurrentTab();
-                  }
-                }
-              }
-              return false;
+          child: InfiniteScrollListener(
+            isLoadingMore:
+                _userPostsListKey.currentState?.isLoadingMore ?? false,
+            hasMore: _userPostsListKey.currentState?.hasMore ?? false,
+            onLoadMore: () {
+              _userPostsListKey.currentState?.loadMoreCurrentTab();
             },
             child: CustomScrollView(
+              controller: _scrollController,
               slivers: [
                 // ヘッダー画像 + アバター（Stack構造）
                 SliverToBoxAdapter(
@@ -760,6 +776,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   viewerIsAI:
                       ref.watch(currentUserProvider).valueOrNull?.isAI ?? false,
                   accentColor: _primaryAccent,
+                ),
+
+                // LoadMoreFooter（ショートリスト用手動フォールバック）
+                SliverToBoxAdapter(
+                  child: LoadMoreFooter(
+                    hasMore: _userPostsListKey.currentState?.hasMore ?? false,
+                    isLoadingMore:
+                        _userPostsListKey.currentState?.isLoadingMore ?? false,
+                    isInitialLoadComplete: true,
+                    canLoadMore:
+                        _userPostsListKey.currentState?.canLoadMore ?? false,
+                    isScrollable: _isScrollable,
+                    onLoadMore: () {
+                      _userPostsListKey.currentState?.loadMoreCurrentTab();
+                    },
+                  ),
                 ),
 
                 const SliverToBoxAdapter(child: SizedBox(height: 100)),
