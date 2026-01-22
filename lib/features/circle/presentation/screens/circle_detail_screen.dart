@@ -1408,6 +1408,10 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                             setState(() {
                               _posts.removeAt(index);
                             });
+                            // リストが短くなった場合にスクロール可能か再評価
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              _updateScrollable();
+                            });
                           },
                         );
                       }, childCount: _posts.length + (_hasMorePosts ? 1 : 0)),
