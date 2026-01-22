@@ -558,6 +558,7 @@ class InfiniteScrollListener extends StatelessWidget {
 - スクロール所有者を必ずラップする（NestedScrollView は内側リスト、CustomScrollView はそのまま）。外側 ScrollController はスクロールトップ制御用途に限定する。
 - `LoadMoreFooter` の表示条件は `hasMore && !isLoadingMore && 初回ロード完了 && canLoadMore && !isScrollable` を標準とする。
 - `isScrollable` はレイアウト後に再評価し、初回ロード・追加読み込み・削除/フィルタなどリスト長が変わる操作のたびに更新する（post-frameで再計測）。
+- **例外**: `home_screen`（`NestedScrollView`）は`isScrollable`判定が不安定なため、`LoadMoreFooter`は`isScrollable: true`固定で手動フォールバックは非表示とする。
 
 
 #### 既存の共通Widget（実装済み）
