@@ -547,7 +547,7 @@ class InfiniteScrollListener extends StatelessWidget {
 
 | 優先度 | 画面 | 理由 |
 |------|------|------|
-| 1 | `profile_screen` | ※GlobalKey方式維持（スクロールガード実装済み） |
+| 1 | `profile_screen` | スクロールガード実装済み → ⏸️ 未実施 |
 | 2 | `circle_detail_screen` | 投稿一覧の無限スクロール使用 → ✅ 適用済み |
 | 3 | `home_screen` | TLの無限スクロール使用 → ⏸️ 未実施 |
 | 4 | `circles_screen` | サークル一覧の無限スクロール使用 → ⏸️ 未実施 |
@@ -891,7 +891,7 @@ lib/
 | `circles_screen.dart` 共通Widget適用 | 既存方式から移行 | ⏸️ **未実施** |
 | `LoadMoreFooter` 実機テスト | ショートリスト時のボタン表示確認 | ⏸️ **未実施** |
 
-> **注**: `profile_screen` は GlobalKey 方式でスクロールガード実装済みのため、InfiniteScrollListener 置換は行わず現行方式を維持
+> **注**: `profile_screen` は GlobalKey 方式でスクロールガード実装済みだが、全画面統一の方針により InfiniteScrollListener へ置換予定（残タスク）。
 
 ---
 
