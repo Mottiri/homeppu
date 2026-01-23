@@ -60,3 +60,5 @@ ios/Runner/GoogleService-Info*.plist
 
 # Claude Code temporary files
 tmpclaude-*/
+docs/error/
+
