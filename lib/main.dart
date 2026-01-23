@@ -100,6 +100,7 @@ class _HomeppuAppState extends ConsumerState<HomeppuApp> {
             '/tasks',
             extra: {
               'highlightTaskId': payload.taskId,
+              'highlightRequestId': DateTime.now().millisecondsSinceEpoch,
               'targetDate': scheduledAt,
               'forceRefresh': true,
             },

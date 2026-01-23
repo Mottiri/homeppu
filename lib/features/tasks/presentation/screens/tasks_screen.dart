@@ -18,17 +18,21 @@ import '../../../../core/utils/dialog_helper.dart';
 import '../../../../core/constants/app_messages.dart';
 
 import '../widgets/task_detail_sheet.dart';
-import '../widgets/task_card.dart';
-import '../widgets/week_calendar_strip.dart';
+import '../widgets/task_calendar_header.dart';
+import '../widgets/task_filter_bar.dart';
+import '../widgets/task_edit_mode_bar.dart';
+import '../widgets/task_list_view.dart';
 
 class TasksScreen extends ConsumerStatefulWidget {
   final String? highlightTaskId;
+  final int? highlightRequestId;
   final DateTime? targetDate;
   final String? targetCategoryId;
 
   const TasksScreen({
     super.key,
     this.highlightTaskId,
+    this.highlightRequestId,
     this.targetDate,
     this.targetCategoryId,
   });
@@ -39,6 +43,11 @@ class TasksScreen extends ConsumerStatefulWidget {
 
 class _TasksScreenState extends ConsumerState<TasksScreen>
     with TickerProviderStateMixin, WidgetsBindingObserver {
+  static const Duration _highlightPulseDuration =
+      Duration(milliseconds: 800);
+  static final Duration _highlightDisplayDuration = Duration(
+    milliseconds: _highlightPulseDuration.inMilliseconds * 2,
+  );
   final TaskService _taskService = TaskService();
   final CategoryService _categoryService = CategoryService();
   final PostService _postService = PostService();
@@ -47,6 +56,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
   late PageController _pageController;
   final int _initialPage = 10000;
   late DateTime _anchorDate;
+  bool _suppressNextPageChange = false;
 
   // Edit Mode Interaction
   bool _isEditMode = false;
@@ -73,6 +83,9 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
 
   // ハイライト対象タスクID
   String? _highlightTaskId;
+
+  // ??????????ID
+  int? _highlightRequestId;
 
   // 目標カテゴリID（外部から指定された場合）
   String? _targetCategoryId;
@@ -131,39 +144,76 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
 
     // ハイライト対象の設定
     _highlightTaskId = widget.highlightTaskId;
+    _highlightRequestId = widget.highlightRequestId;
 
     // 目標カテゴリIDの設定
     _targetCategoryId = widget.targetCategoryId;
 
-    _loadData().then((_) {
-      // ハイライトは3秒後に解除
-      if (_highlightTaskId != null) {
-        Future.delayed(const Duration(seconds: 3), () {
-          if (mounted) {
-            setState(() => _highlightTaskId = null);
-          }
-        });
-      }
-    });
+    _loadData();
   }
 
   @override
   void didUpdateWidget(TasksScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+
+    final requestChanged = widget.highlightRequestId != null &&
+        widget.highlightRequestId != _highlightRequestId;
+    final shouldClearHighlight =
+        widget.highlightRequestId == null && _highlightRequestId != null;
+    final targetCategoryChanged =
+        widget.targetCategoryId != oldWidget.targetCategoryId;
+    final shouldApplyTargetCategory = requestChanged || targetCategoryChanged;
+    if (requestChanged || shouldClearHighlight) {
+      setState(() {
+        _highlightTaskId = widget.highlightTaskId;
+        _highlightRequestId = widget.highlightRequestId;
+        _hasScrolledToHighlight = false;
+      });
+    }
+    if (shouldApplyTargetCategory) {
+      if (widget.targetCategoryId == null) {
+        _targetCategoryId = null;
+        if (_tabController.index != 0) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            if (_tabController.index != 0) {
+              _tabController.animateTo(0);
+            }
+          });
+        }
+      }
+      if (widget.targetCategoryId != null) {
+        final targetIndex = _categories.indexWhere(
+          (category) => category.id == widget.targetCategoryId,
+        );
+        if (targetIndex >= 0) {
+          final tabIndex = targetIndex + 1;
+          if (_tabController.index != tabIndex &&
+              tabIndex < _tabController.length) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              if (_tabController.index != tabIndex &&
+                  tabIndex < _tabController.length) {
+                _tabController.animateTo(tabIndex);
+              }
+            });
+          }
+        } else {
+          _targetCategoryId = widget.targetCategoryId;
+        }
+      }
+    }
+
     if (widget.targetDate != null &&
         widget.targetDate != oldWidget.targetDate) {
       setState(() {
         _selectedDate = widget.targetDate!;
       });
       final page = _getPageIndex(_selectedDate);
-      if (_pageController.hasClients) {
-        _pageController.jumpToPage(page);
-      }
-      // プロバイダー更新
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          ref.read(selectedDateProvider.notifier).state = _selectedDate;
-        }
+        if (!mounted) return;
+        ref.read(selectedDateProvider.notifier).state = _selectedDate;
+        _jumpToPageIfNeeded(page);
       });
     }
   }
@@ -198,6 +248,47 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
     final target = DateTime(date.year, date.month, date.day);
     final diff = target.difference(_anchorDate).inDays;
     return _initialPage + diff;
+  }
+
+
+  void _jumpToPageIfNeeded(int page) {
+    if (!_pageController.hasClients) return;
+    final currentPage =
+        _pageController.page?.round() ?? _pageController.initialPage;
+    if (currentPage == page) return;
+    _suppressNextPageChange = true;
+    _pageController.jumpToPage(page);
+  }
+
+  void _setSelectedDate(
+    DateTime date, {
+    bool jumpToPage = false,
+    bool clearHighlight = false,
+  }) {
+    setState(() {
+      _selectedDate = date;
+      if (clearHighlight) {
+        _highlightTaskId = null;
+        _hasScrolledToHighlight = false;
+      }
+    });
+    ref.read(selectedDateProvider.notifier).state = date;
+    if (jumpToPage) {
+      final page = _getPageIndex(date);
+      _jumpToPageIfNeeded(page);
+    }
+  }
+
+  void _handleHighlightScrolled() {
+    if (_hasScrolledToHighlight) return;
+    _hasScrolledToHighlight = true;
+    Future.delayed(_highlightDisplayDuration, () {
+      if (!mounted) return;
+      setState(() {
+        _highlightTaskId = null;
+        _hasScrolledToHighlight = false;
+      });
+    });
   }
 
   Future<void> _loadData({
@@ -872,48 +963,29 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
       ),
     );
 
+    final filterBar = TaskFilterBar(
+      controller: _tabController,
+      tabs: tabs,
+    );
+
     return Scaffold(
       resizeToAvoidBottomInset: false, // キーボード表示時に背景がリサイズされてオーバーフローするのを防ぐ
       backgroundColor: Colors.grey.shade50,
-      appBar: AppBar(
-        title: _isEditMode
-            ? Text(
-                '${_selectedTaskIds.length}件 選択中',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              )
-            : const Text('やることリスト'),
-        centerTitle: true,
-        elevation: 0,
-        backgroundColor: _isEditMode
-            ? Colors.orange.shade50
-            : Colors.transparent,
-        foregroundColor: Colors.black87,
-        leading: _isEditMode
-            ? IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () => _toggleEditMode(false),
-              )
-            : null,
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: true, // タブが多くなるのでスクロール可に
-          tabs: tabs,
-          labelColor: Theme.of(context).primaryColor,
-          unselectedLabelColor: Colors.grey,
-          indicatorColor: Theme.of(context).primaryColor,
-          labelPadding: const EdgeInsets.symmetric(horizontal: 12.0),
-          tabAlignment: TabAlignment.start, // 左寄せ
-        ),
-        actions: _isEditMode
-            ? [
-                IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.red),
-                  onPressed: _selectedTaskIds.isEmpty
-                      ? null
-                      : _deleteSelectedTasks,
-                ),
-              ]
-            : [
+      appBar: _isEditMode
+          ? TaskEditModeBar(
+              selectedCount: _selectedTaskIds.length,
+              onClose: () => _toggleEditMode(false),
+              onDelete: _selectedTaskIds.isEmpty ? null : _deleteSelectedTasks,
+              bottom: filterBar,
+            )
+          : AppBar(
+              title: const Text('やることリスト'),
+              centerTitle: true,
+              elevation: 0,
+              backgroundColor: Colors.transparent,
+              foregroundColor: Colors.black87,
+              bottom: filterBar,
+              actions: [
                 IconButton(
                   icon: const Icon(Icons.flag_outlined),
                   onPressed: () => context.push('/goals'),
@@ -927,32 +999,31 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
                     );
 
                     if (selectedDate != null && mounted) {
-                      setState(() {
-                        _selectedDate = selectedDate;
-                      });
-                      ref.read(selectedDateProvider.notifier).state =
-                          selectedDate;
-                      final page = _getPageIndex(selectedDate);
-                      _pageController.jumpToPage(page);
+                      _setSelectedDate(
+                        selectedDate,
+                        jumpToPage: true,
+                        clearHighlight: true,
+                      );
                     }
                   },
                 ),
               ],
-      ),
+            ),
       body: Stack(
         children: [
           // Main content
           Column(
             children: [
-              WeekCalendarStrip(
+              TaskCalendarHeader(
                 selectedDate: _selectedDate,
                 onDateSelected: (date) {
-                  setState(() => _selectedDate = date);
-                  ref.read(selectedDateProvider.notifier).state = date;
-                  final page = _getPageIndex(date);
-                  _pageController.jumpToPage(page);
+                  _setSelectedDate(
+                    date,
+                    jumpToPage: true,
+                    clearHighlight: true,
+                  );
                 },
-                tasks: _taskData,
+                taskData: _taskData,
               ),
               Expanded(
                 child: _isLoading
@@ -961,26 +1032,91 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
                         controller: _pageController,
                         physics: const PageScrollPhysics(),
                         onPageChanged: (index) {
+                          if (_suppressNextPageChange) {
+                            _suppressNextPageChange = false;
+                            return;
+                          }
                           final newDate = _getDateFromIndex(index);
-                          setState(() {
-                            _selectedDate = newDate;
-                          });
-                          ref.read(selectedDateProvider.notifier).state =
-                              newDate;
+                          _setSelectedDate(newDate, clearHighlight: true);
                         },
                         itemBuilder: (context, index) {
                           final date = _getDateFromIndex(index);
+                          final shakeAnimation =
+                              Tween<double>(begin: -0.02, end: 0.02).animate(
+                                CurvedAnimation(
+                                  parent: _shakeController,
+                                  curve: Curves.easeInOut,
+                                ),
+                              );
+
                           return TabBarView(
                             controller: _tabController,
                             physics: const NeverScrollableScrollPhysics(),
                             children: [
-                              _buildTaskList(_defaultTasks, 'task', null, date),
+                              TaskListView(
+                                tasks: _defaultTasks,
+                                type: 'task',
+                                category: null,
+                                targetDate: date,
+                                isEditMode: _isEditMode,
+                                selectedTaskIds: _selectedTaskIds,
+                                highlightTaskId: _highlightTaskId,
+                                hasScrolledToHighlight: _hasScrolledToHighlight,
+                                scrollController: _taskListScrollController,
+                                shakeAnimation: shakeAnimation,
+                                isFabVisible: _isFabVisible,
+                                onFabVisibilityChanged: (isVisible) {
+                                  setState(() => _isFabVisible = isVisible);
+                                },
+                                onTapTask: _showTaskDetail,
+                                onCompleteTask: _completeTask,
+                                onUncompleteTask: _uncompleteTask,
+                                onDeleteTask: _deleteTask,
+                                onToggleSelection: _toggleTaskSelection,
+                                onLongPressTask: (task) {
+                                  if (!_isEditMode) {
+                                    _toggleEditMode(true);
+                                    _toggleTaskSelection(task.id);
+                                  }
+                                },
+                                onConfirmDismiss: () => _confirmDelete(1),
+                                onExitEditMode: () => _toggleEditMode(false),
+                                onDismissHighlight: () =>
+                                    setState(() => _highlightTaskId = null),
+                                onHighlightScrolled: _handleHighlightScrolled,
+                              ),
                               ..._categories.map(
-                                (cat) => _buildTaskList(
-                                  _categoryTasks[cat.id] ?? [],
-                                  'custom',
-                                  cat,
-                                  date,
+                                (cat) => TaskListView(
+                                  tasks: _categoryTasks[cat.id] ?? [],
+                                  type: 'custom',
+                                  category: cat,
+                                  targetDate: date,
+                                  isEditMode: _isEditMode,
+                                  selectedTaskIds: _selectedTaskIds,
+                                  highlightTaskId: _highlightTaskId,
+                                  hasScrolledToHighlight: _hasScrolledToHighlight,
+                                  scrollController: _taskListScrollController,
+                                  shakeAnimation: shakeAnimation,
+                                  isFabVisible: _isFabVisible,
+                                  onFabVisibilityChanged: (isVisible) {
+                                    setState(() => _isFabVisible = isVisible);
+                                  },
+                                  onTapTask: _showTaskDetail,
+                                  onCompleteTask: _completeTask,
+                                  onUncompleteTask: _uncompleteTask,
+                                  onDeleteTask: _deleteTask,
+                                  onToggleSelection: _toggleTaskSelection,
+                                  onLongPressTask: (task) {
+                                    if (!_isEditMode) {
+                                      _toggleEditMode(true);
+                                      _toggleTaskSelection(task.id);
+                                    }
+                                  },
+                                  onConfirmDismiss: () => _confirmDelete(1),
+                                  onExitEditMode: () => _toggleEditMode(false),
+                                  onDismissHighlight: () =>
+                                      setState(() => _highlightTaskId = null),
+                                  onHighlightScrolled: _handleHighlightScrolled,
                                 ),
                               ),
                               const SizedBox(),
@@ -1097,213 +1233,6 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
           ),
         );
       },
-    );
-  }
-
-  Widget _buildTaskList(
-    List<TaskModel> tasks,
-    String type,
-    CategoryModel? category,
-    DateTime targetDate,
-  ) {
-    // コンテンツがない場合の表示
-    if (tasks.isEmpty) {
-      String message = 'タスクを追加しよう！';
-      IconData icon = Icons.task_alt;
-
-      if (type == 'daily') {
-        message = '毎日のタスクを追加しよう！';
-        icon = Icons.today;
-      } else if (type == 'custom') {
-        message = '${category?.name} のタスクを追加しよう！';
-        icon = Icons.label_outline;
-      }
-
-      return GestureDetector(
-        onTap: () {
-          if (_isEditMode) {
-            _toggleEditMode(false);
-          }
-        },
-        behavior: HitTestBehavior.opaque,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(icon, size: 64, color: Colors.grey.shade300),
-                      const SizedBox(height: 16),
-                      Text(
-                        message,
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 100),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      );
-    }
-
-    final sortedTasks = [...tasks];
-
-    // フィルタリング: targetDate を使用
-    final filteredTasks = sortedTasks.where((task) {
-      if (task.scheduledAt == null) {
-        return isSameDay(targetDate, DateTime.now());
-      }
-      return isSameDay(task.scheduledAt!, targetDate);
-    }).toList();
-
-    filteredTasks.sort((a, b) {
-      // 優先度
-      if (a.priority != b.priority) return b.priority - a.priority;
-      // 日付
-      if (a.scheduledAt != null && b.scheduledAt != null) {
-        return a.scheduledAt!.compareTo(b.scheduledAt!);
-      }
-      return 0;
-    });
-
-    if (filteredTasks.isEmpty) {
-      return GestureDetector(
-        onTap: () {
-          if (_isEditMode) {
-            _toggleEditMode(false);
-          }
-        },
-        behavior: HitTestBehavior.opaque,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.event_available,
-                        size: 64,
-                        color: Colors.grey.shade300,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'まだタスクがありません',
-                        style: TextStyle(
-                          color: Colors.grey.shade400,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      );
-    }
-
-    // リスト表示
-    // 振動アニメーション
-    final shakeAnimation = Tween<double>(begin: -0.02, end: 0.02).animate(
-      CurvedAnimation(parent: _shakeController, curve: Curves.easeInOut),
-    );
-
-    return GestureDetector(
-      onTap: () {
-        // ハイライト解除
-        if (_highlightTaskId != null) {
-          setState(() => _highlightTaskId = null);
-        }
-        if (_isEditMode) {
-          _toggleEditMode(false);
-        }
-      },
-      behavior: HitTestBehavior.opaque,
-      child: NotificationListener<ScrollNotification>(
-        onNotification: (notification) {
-          if (notification is ScrollUpdateNotification) {
-            final scrollDelta = notification.scrollDelta ?? 0;
-            if (scrollDelta > 2 && _isFabVisible) {
-              // スクロールダウン: FABを隠す
-              setState(() => _isFabVisible = false);
-            } else if (scrollDelta < -2 && !_isFabVisible) {
-              // スクロールアップ: FABを表示
-              setState(() => _isFabVisible = true);
-            }
-          }
-          return false;
-        },
-        child: Builder(
-          builder: (context) {
-            // ハイライトタスクへの自動スクロール
-            if (_highlightTaskId != null && !_hasScrolledToHighlight) {
-              final highlightIndex = filteredTasks.indexWhere(
-                (t) => t.id == _highlightTaskId,
-              );
-              if (highlightIndex >= 0) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted && _taskListScrollController.hasClients) {
-                    // タスクカードの高さ（約100px）× インデックス
-                    final offset = highlightIndex * 100.0;
-                    _taskListScrollController.animateTo(
-                      offset.clamp(
-                        0.0,
-                        _taskListScrollController.position.maxScrollExtent,
-                      ),
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeOut,
-                    );
-                    _hasScrolledToHighlight = true;
-                  }
-                });
-              }
-            }
-
-            return ListView.builder(
-              controller: _taskListScrollController,
-              padding: const EdgeInsets.only(bottom: 150),
-              itemCount: filteredTasks.length,
-              itemBuilder: (context, index) {
-                final task = filteredTasks[index];
-                return TaskCard(
-                  task: task,
-                  onTap: () => _showTaskDetail(task),
-                  onComplete: () => _completeTask(task),
-                  onUncomplete: () => _uncompleteTask(task),
-                  onDelete: () => _deleteTask(task),
-                  isEditMode: _isEditMode,
-                  isSelected: _selectedTaskIds.contains(task.id),
-                  isHighlighted: _highlightTaskId == task.id,
-                  onDismissHighlight: () =>
-                      setState(() => _highlightTaskId = null),
-                  onToggleSelection: () => _toggleTaskSelection(task.id),
-                  onLongPress: () {
-                    if (!_isEditMode) {
-                      _toggleEditMode(true);
-                      _toggleTaskSelection(task.id);
-                    }
-                  },
-                  shakeAnimation: shakeAnimation,
-                  onConfirmDismiss: () => _confirmDelete(1),
-                );
-              },
-            );
-          },
-        ),
-      ),
     );
   }
 

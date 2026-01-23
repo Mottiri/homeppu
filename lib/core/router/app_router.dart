@@ -115,15 +115,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               final highlightTaskId = extra?['highlightTaskId'] as String?;
               final targetDate = extra?['targetDate'] as DateTime?;
               final targetCategoryId = extra?['targetCategoryId'] as String?;
+              final highlightRequestId = extra?['highlightRequestId'] as int?;
               final forceRefresh = extra?['forceRefresh'] as bool? ?? false;
-              // forceRefresh または highlightTaskId がある場合は強制的に再作成
+              // Recreate screen only when forceRefresh is true.
               return TasksScreen(
-                key: (forceRefresh || highlightTaskId != null)
+                key: forceRefresh
                     ? ValueKey('tasks_${DateTime.now().millisecondsSinceEpoch}')
                     : null,
                 highlightTaskId: highlightTaskId,
                 targetDate: targetDate,
                 targetCategoryId: targetCategoryId,
+                highlightRequestId: highlightRequestId,
               );
             },
           ),

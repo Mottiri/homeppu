@@ -981,7 +981,7 @@ catch (e) {
 
 | 順位 | 作業 | 効果 |
 |-----|------|------|
-| 6 | `tasks_screen.dart` 分割 | 1,265行削減 |
+| 6 | `tasks_screen.dart` 分割（✅ 完了） | 1,265行削減 |
 | 7 | `circle_detail_screen.dart` 分割 | 1,370行削減 |
 | 8 | `infinite_scroll_listener.dart` 作成 | 10箇所の統一 |
 | 9 | 共通Widget作成（loading_overlay等）| UI統一 |
@@ -994,6 +994,12 @@ catch (e) {
 | debugPrint 整理（163箇所） | ログ品質向上 |
 | テスト追加 | 品質担保 |
 | data/domain層の活用 | アーキテクチャ改善 |
+
+**低優先度TODO（検討）**
+- [ ] `lib/features/tasks/presentation/widgets/task_edit_mode_bar.dart:32` `Colors.orange.shade50` の `AppColors` 定数化
+- [ ] `lib/features/tasks/presentation/widgets/task_empty_view.dart:32` / `lib/features/tasks/presentation/widgets/task_list_view.dart:70` の `Colors.grey.shade300/600` を `AppColors` へ統一
+- [ ] `lib/features/tasks/presentation/widgets/task_empty_view.dart:40` の `SizedBox(height: 100)` を `AppSpacing` 定数化
+- [ ] `lib/features/tasks/presentation/widgets/task_list_view.dart:131` の `highlight` スクロール `100.0` を `itemHeight` 定数化
 
 ---
 
@@ -1038,6 +1044,16 @@ catch (e) {
 2. **関数の責務**: 1関数1責務を徹底
 3. **共通化の徹底**: 新規コードも必ず共通ヘルパーを使用
 4. **テストの追加**: 共通化した部分から順次テスト追加
+
+### タスク画面の補足
+
+- highlightTaskId は日付変更操作（週カレンダー/月間カレンダー/ページ移動）で解除する
+- highlightTaskId は自動スクロール後に短時間で解除する
+- highlightTaskId では画面再生成しない（forceRefresh のみ）。ハイライト更新は didUpdateWidget で反映する
+- ハイライトは highlightRequestId の変更時のみ発火し、戻る遷移で再発火しないようにする
+- targetCategoryId のタブ切替は post-frame で実行し、Provider 更新のタイミングを安定化する
+- targetDate のプログラムジャンプは onPageChanged を抑制し、Provider 更新のタイミングを安定化する
+- ハイライト時に targetCategoryId が null の場合はデフォルトタブへ自動で戻す
 
 ### ⚠️ セキュリティ/運用ルール（必須遵守）
 

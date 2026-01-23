@@ -82,6 +82,7 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
       '/tasks',
       extra: {
         'highlightTaskId': task.id,
+        'highlightRequestId': DateTime.now().millisecondsSinceEpoch,
         'targetDate': task.scheduledAt ?? DateTime.now(),
         'targetCategoryId': task.categoryId,
       },
