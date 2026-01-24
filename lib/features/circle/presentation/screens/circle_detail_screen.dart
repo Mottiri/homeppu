@@ -198,16 +198,19 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
         // 招待制サークル: 参加申請
         final confirm = await DialogHelper.showConfirmDialog(
           context: context,
-          title: '参加申請',
-          message: 'このサークルは招待制です。\nオーナーに参加申請を送信しますか？',
-          confirmText: '申請する',
+          title: AppMessages.circle.joinRequestTitle,
+          message: AppMessages.circle.joinRequestMessage,
+          confirmText: AppMessages.circle.joinRequestConfirm,
         );
 
         if (confirm == true) {
           await circleService.sendJoinRequest(widget.circleId, userId);
           if (mounted) {
             setState(() => _hasPendingRequest = true);
-            SnackBarHelper.showSuccess(context, '参加申請を送信しました');
+            SnackBarHelper.showSuccess(
+              context,
+              AppMessages.circle.joinRequestSent,
+            );
           }
         }
       }
@@ -224,9 +227,9 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
   Future<void> _handleLeave(String userId) async {
     final confirm = await DialogHelper.showConfirmDialog(
       context: context,
-      title: 'サークルを退会',
-      message: '本当にこのサークルを退会しますか？',
-      confirmText: '退会する',
+      title: AppMessages.circle.leaveTitle,
+      message: AppMessages.circle.leaveMessage,
+      confirmText: AppMessages.circle.leaveConfirm,
       isDangerous: true,
       barrierDismissible: false,
     );
@@ -270,7 +273,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
           children: [
             Icon(Icons.warning_amber_rounded, color: Colors.red[400], size: 28),
             const SizedBox(width: 8),
-            const Text('サークルを削除'),
+            Text(AppMessages.circle.deleteTitle),
           ],
         ),
         content: SingleChildScrollView(
@@ -279,22 +282,20 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '「${circle.name}」を削除しますか？',
+                AppMessages.circle.deletePrompt(circle.name),
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               Text(
-                '• 全ての投稿・コメントが削除されます\n'
-                '• メンバーに通知が送信されます\n'
-                '• この操作は取り消せません',
+                AppMessages.circle.deleteDetails,
                 style: TextStyle(fontSize: 13, color: Colors.grey[600]),
               ),
               const SizedBox(height: 16),
               TextField(
                 controller: reasonController,
                 decoration: InputDecoration(
-                  labelText: '削除理由（任意）',
-                  hintText: 'メンバーに伝えたいことがあれば',
+                  labelText: AppMessages.circle.deleteReasonLabel,
+                  hintText: AppMessages.circle.deleteReasonHint,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -308,7 +309,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('キャンセル'),
+            child: Text(AppMessages.label.cancel),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
@@ -316,7 +317,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
             ),
-            child: const Text('削除する'),
+            child: Text(AppMessages.circle.deleteConfirm),
           ),
         ],
       ),
@@ -338,10 +339,10 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
     if (scaffoldMessenger == null) return;
 
     scaffoldMessenger.showSnackBar(
-      const SnackBar(
+      SnackBar(
         content: Row(
           children: [
-            SizedBox(
+            const SizedBox(
               width: 20,
               height: 20,
               child: CircularProgressIndicator(
@@ -349,11 +350,11 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                 color: Colors.white,
               ),
             ),
-            SizedBox(width: 16),
-            Text('サークルを削除中...'),
+            const SizedBox(width: 16),
+            Text(AppMessages.circle.deleteInProgress),
           ],
         ),
-        duration: Duration(minutes: 5), // 長めに設定（後で消す）
+        duration: const Duration(minutes: 5), // 長めに設定（後で消す）
         backgroundColor: Colors.orange,
       ),
     );
@@ -392,7 +393,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
           children: [
             Icon(Icons.description_outlined, color: Colors.grey[700]),
             const SizedBox(width: 8),
-            const Text('サークルルール'),
+            Text(AppMessages.circle.rulesTitle),
           ],
         ),
         content: SingleChildScrollView(
@@ -418,7 +419,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
               ),
               const SizedBox(height: 16),
               Text(
-                '参加するにはルールに同意する必要があります',
+                AppMessages.circle.rulesConsentMessage,
                 style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
             ],
@@ -427,7 +428,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('キャンセル'),
+            child: Text(AppMessages.label.cancel),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
@@ -435,7 +436,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
               backgroundColor: const Color(0xFF00ACC1),
               foregroundColor: Colors.white,
             ),
-            child: const Text('同意して参加'),
+            child: Text(AppMessages.circle.rulesAgree),
           ),
         ],
       ),
@@ -451,7 +452,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
           children: [
             Icon(Icons.description_outlined, color: Colors.grey[700]),
             const SizedBox(width: 8),
-            const Text('サークルルール'),
+            Text(AppMessages.circle.rulesTitle),
           ],
         ),
         content: SingleChildScrollView(
@@ -475,7 +476,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
         actions: [
           ElevatedButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('閉じる'),
+            child: Text(AppMessages.label.close),
           ),
         ],
       ),
@@ -516,9 +517,12 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                 children: [
                   Icon(Icons.push_pin, color: Colors.amber[700]),
                   const SizedBox(width: 8),
-                  const Text(
-                    'ピン留め投稿',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  Text(
+                    AppMessages.circle.pinnedPostsTitle,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ],
               ),
@@ -544,7 +548,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                       overflow: TextOverflow.ellipsis,
                     ),
                     subtitle: Text(
-                      post.isPinnedTop ? 'トップ表示' : '',
+                      post.isPinnedTop ? AppMessages.circle.pinnedTopLabel : '',
                       style: TextStyle(color: Colors.amber[700], fontSize: 12),
                     ),
                     trailing: isOwner
@@ -569,31 +573,31 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                             },
                             itemBuilder: (context) => [
                               if (!post.isPinnedTop)
-                                const PopupMenuItem(
+                                PopupMenuItem(
                                   value: 'top',
                                   child: Row(
                                     children: [
-                                      Icon(
+                                      const Icon(
                                         Icons.star,
                                         color: Colors.amber,
                                         size: 20,
                                       ),
-                                      SizedBox(width: 8),
-                                      Text('トップに表示'),
+                                      const SizedBox(width: 8),
+                                      Text(AppMessages.circle.pinnedTopAction),
                                     ],
                                   ),
                                 ),
-                              const PopupMenuItem(
+                              PopupMenuItem(
                                 value: 'unpin',
                                 child: Row(
                                   children: [
-                                    Icon(
+                                    const Icon(
                                       Icons.push_pin_outlined,
                                       color: Colors.grey,
                                       size: 20,
                                     ),
-                                    SizedBox(width: 8),
-                                    Text('ピン留め解除'),
+                                    const SizedBox(width: 8),
+                                    Text(AppMessages.circle.pinnedRemove),
                                   ],
                                 ),
                               ),
@@ -628,7 +632,10 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
               snapshot.data == null) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) {
-                SnackBarHelper.showWarning(context, 'このサークルは削除されました');
+                SnackBarHelper.showWarning(
+                  context,
+                  AppMessages.circle.circleDeleted,
+                );
                 context.go('/circles');
               }
             });
@@ -648,7 +655,10 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
           _hasShownDeletedToast = true;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
-              SnackBarHelper.showWarning(context, 'このサークルは削除されました');
+              SnackBarHelper.showWarning(
+                context,
+                AppMessages.circle.circleDeleted,
+              );
               context.go('/circles');
             }
           });
@@ -808,7 +818,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
-                                      'ピン留め',
+                                      AppMessages.circle.pinnedSectionTitle,
                                       style: TextStyle(
                                         color: Colors.amber[700],
                                         fontWeight: FontWeight.bold,
@@ -825,7 +835,9 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                                         child: Row(
                                           children: [
                                             Text(
-                                              '${pinnedPosts.length}件',
+                                              AppMessages.circle.pinnedCount(
+                                                pinnedPosts.length,
+                                              ),
                                               style: TextStyle(
                                                 color: Colors.grey[600],
                                                 fontSize: 12,
@@ -871,7 +883,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                           const Text('📝', style: TextStyle(fontSize: 20)),
                           const SizedBox(width: 8),
                           Text(
-                            'みんなの投稿',
+                            AppMessages.circle.postsTitle,
                             style: Theme.of(context).textTheme.titleMedium
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),

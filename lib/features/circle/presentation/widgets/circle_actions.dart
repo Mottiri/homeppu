@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_messages.dart';
 import '../../../../shared/models/circle_model.dart';
 
 class CircleActions extends StatelessWidget {
@@ -92,7 +93,7 @@ class CircleActions extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: const Text('ログインして参加'),
+                  child: Text(AppMessages.circle.loginToJoin),
                   )
                 : isMember
                     ? OutlinedButton(
@@ -115,7 +116,7 @@ class CircleActions extends StatelessWidget {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              '参加中',
+                              AppMessages.circle.joinedLabel,
                               style: TextStyle(
                                 color: Colors.grey[600],
                               ),
@@ -144,7 +145,7 @@ class CircleActions extends StatelessWidget {
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
-                                  '申請中',
+                                  AppMessages.circle.requestPendingLabel,
                                   style: TextStyle(
                                     color: Colors.grey[600],
                                   ),
@@ -177,8 +178,9 @@ class CircleActions extends StatelessWidget {
                                       const SizedBox(width: 8),
                                       Text(
                                         circle.isPublic
-                                            ? '参加する'
-                                            : '参加申請',
+                                            ? AppMessages.circle.joinButton
+                                            : AppMessages.circle
+                                                .joinRequestButton,
                                       ),
                                     ],
                                   ),

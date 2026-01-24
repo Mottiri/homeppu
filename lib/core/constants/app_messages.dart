@@ -27,6 +27,9 @@ class AppMessages {
 
   // ===== ローディング =====
   static const loading = _LoadingMessages();
+
+  // ===== サークル関連 =====
+  static const circle = _CircleMessages();
 }
 
 /// 成功メッセージ
@@ -166,4 +169,49 @@ class _EmptyMessages {
   String get followers => 'まだフォロワーがいないよ';
   String get following => 'まだ誰もフォローしていないよ';
   String get goals => '目標がないよ\n新しい目標を設定してみよう！';
+}
+
+/// サークル関連メッセージ
+class _CircleMessages {
+  const _CircleMessages();
+
+  String get joinRequestTitle => '参加申請';
+  String get joinRequestMessage =>
+      'このサークルは招待制です。\nオーナーに参加申請を送信しますか？';
+  String get joinRequestConfirm => '申請する';
+  String get joinRequestSent => '参加申請を送信しました';
+
+  String get leaveTitle => 'サークルを退会';
+  String get leaveMessage => '本当にこのサークルを退会しますか？';
+  String get leaveConfirm => '退会する';
+
+  String get deleteTitle => 'サークルを削除';
+  String deletePrompt(String name) => '「$name」を削除しますか？';
+  String get deleteDetails =>
+      '• 全ての投稿・コメントが削除されます\n• メンバーに通知が送信されます\n• この操作は取り消せません';
+  String get deleteReasonLabel => '削除理由（任意）';
+  String get deleteReasonHint => 'メンバーに伝えたいことがあれば';
+  String get deleteConfirm => '削除する';
+  String get deleteInProgress => 'サークルを削除中...';
+
+  String get rulesTitle => 'サークルルール';
+  String get rulesConsentMessage => '参加するにはルールに同意する必要があります';
+  String get rulesAgree => '同意して参加';
+
+  String get pinnedPostsTitle => 'ピン留め投稿';
+  String get pinnedTopLabel => 'トップ表示';
+  String get pinnedTopAction => 'トップに表示';
+  String get pinnedRemove => 'ピン留め解除';
+  String get pinnedSectionTitle => 'ピン留め';
+  String pinnedCount(int count) => '$count件';
+
+  String get postsTitle => 'みんなの投稿';
+  String get circleDeleted => 'このサークルは削除されました';
+  String get loginToJoin => 'ログインして参加';
+  String get memberCountSuffix => '人';
+  String get ruleLabel => 'ルール';
+  String get joinButton => '参加する';
+  String get joinRequestButton => '参加申請';
+  String get joinedLabel => '参加中';
+  String get requestPendingLabel => '申請中';
 }

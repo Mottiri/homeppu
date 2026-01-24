@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_messages.dart';
 import '../../../../shared/models/post_model.dart';
 import '../../../home/presentation/widgets/post_card.dart';
 
@@ -41,6 +42,13 @@ class CirclePostsList extends StatelessWidget {
     }
 
     if (posts.isEmpty) {
+      final emptyMessages = AppMessages.empty.posts.split('\n');
+      final title =
+          emptyMessages.isNotEmpty ? emptyMessages.first : AppMessages.empty.posts;
+      final description = emptyMessages.length > 1
+          ? emptyMessages.sublist(1).join('\n')
+          : null;
+
       return SliverToBoxAdapter(
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -64,17 +72,18 @@ class CirclePostsList extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               Text(
-                'まだ投稿がないよ',
+                title,
                 style: Theme.of(context)
                     .textTheme
                     .titleMedium
                     ?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              Text(
-                '最初の投稿をしてみよう！',
-                style: TextStyle(color: Colors.grey[600]),
-              ),
+              if (description != null)
+                Text(
+                  description,
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
             ],
           ),
         ),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/constants/app_messages.dart';
+
 class CircleSettingsMenu extends StatelessWidget {
   final bool isOwner;
   final bool isAdmin;
@@ -53,49 +55,49 @@ class CircleSettingsMenu extends StatelessWidget {
       },
       itemBuilder: (context) => [
         if (isOwner || isAdmin)
-          const PopupMenuItem(
+          PopupMenuItem(
             value: 'edit',
             child: Row(
               children: [
-                Icon(
+                const Icon(
                   Icons.edit_outlined,
                   color: Color(0xFF00ACC1),
                   size: 20,
                 ),
-                SizedBox(width: 8),
-                Text('編集'),
+                const SizedBox(width: 8),
+                Text(AppMessages.label.edit),
               ],
             ),
           ),
         if (!isPublic)
-          const PopupMenuItem(
+          PopupMenuItem(
             value: 'requests',
             child: Row(
               children: [
-                Icon(
+                const Icon(
                   Icons.person_add_outlined,
                   color: Color(0xFF00ACC1),
                   size: 20,
                 ),
-                SizedBox(width: 8),
-                Text('参加申請'),
+                const SizedBox(width: 8),
+                Text(AppMessages.circle.joinRequestButton),
               ],
             ),
           ),
         if (isOwner || isAdmin)
-          const PopupMenuItem(
+          PopupMenuItem(
             value: 'delete',
             child: Row(
               children: [
-                Icon(
+                const Icon(
                   Icons.delete_outline,
                   color: Colors.red,
                   size: 20,
                 ),
-                SizedBox(width: 8),
+                const SizedBox(width: 8),
                 Text(
-                  'サークルを削除',
-                  style: TextStyle(color: Colors.red),
+                  AppMessages.circle.deleteTitle,
+                  style: const TextStyle(color: Colors.red),
                 ),
               ],
             ),

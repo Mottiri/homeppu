@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/constants/app_messages.dart';
+
 class CircleMembersBar extends StatelessWidget {
   final int memberCount;
   final bool hasRules;
@@ -22,7 +24,7 @@ class CircleMembersBar extends StatelessWidget {
           onTap: onMembersTap,
           child: _buildTag(
             Icons.people_outline,
-            '$memberCount人',
+            '$memberCount${AppMessages.circle.memberCountSuffix}',
             showArrow: true,
           ),
         ),
@@ -32,7 +34,7 @@ class CircleMembersBar extends StatelessWidget {
             onTap: onRulesTap,
             child: _buildTag(
               Icons.description_outlined,
-              'ルール',
+              AppMessages.circle.ruleLabel,
               showArrow: true,
             ),
           ),
