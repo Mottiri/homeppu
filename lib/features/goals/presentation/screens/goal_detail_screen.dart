@@ -121,7 +121,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
         slivers: [
           // カスタムAppBar
           SliverAppBar(
-            expandedHeight: 320,
+            expandedHeight: isCompleted ? 360 : 320,
             pinned: true,
             backgroundColor: isCompleted
                 ? const Color(0xFFFFF8E1)
@@ -228,120 +228,159 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
               ),
       ),
       child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              // アイコン
-              Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  gradient: isCompleted
-                      ? const LinearGradient(
-                          colors: [Color(0xFFFFD700), Color(0xFFFFC107)],
-                        )
-                      : LinearGradient(
-                          colors: [color, color.withValues(alpha: 0.7)],
-                        ),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: (isCompleted ? const Color(0xFFFFD700) : color)
-                          .withValues(alpha: 0.3),
-                      blurRadius: 20,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Icon(
-                  isCompleted ? Icons.emoji_events_rounded : Icons.flag_rounded,
-                  size: 40,
-                  color: Colors.white,
-                ),
-              ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compactThreshold = isCompleted ? 300.0 : 260.0;
+            final ultraCompactThreshold = isCompleted ? 270.0 : 230.0;
+            final isCompact = constraints.maxHeight < compactThreshold;
+            final isUltraCompact = constraints.maxHeight < ultraCompactThreshold;
+            final iconSize = isUltraCompact
+                ? 48.0
+                : (isCompact ? 64.0 : 80.0);
+            final iconInnerSize = isUltraCompact
+                ? 24.0
+                : (isCompact ? 32.0 : 40.0);
+            final titleFontSize = isUltraCompact
+                ? 16.0
+                : (isCompact ? 20.0 : 22.0);
+            final descriptionMaxLines = isCompact ? 1 : 2;
+            final topPadding = isUltraCompact
+                ? 20.0
+                : (isCompact ? 32.0 : 40.0);
+            final bottomPadding = isUltraCompact
+                ? 8.0
+                : (isCompact ? 16.0 : 20.0);
+            final spacingLarge = isUltraCompact
+                ? 6.0
+                : (isCompact ? 10.0 : 12.0);
 
-              const SizedBox(height: 16),
-
-              // タイトル
-              Text(
-                goal.title,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-
-              // 説明
-              if (goal.description != null && goal.description!.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  goal.description!,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: AppColors.textSecondary,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-
-              const SizedBox(height: 16),
-
-              // ステータスチップ
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+            return Padding(
+              padding: EdgeInsets.fromLTRB(24, topPadding, 24, bottomPadding),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  if (isCompleted && goal.completedAt != null)
-                    _buildStatusChip(
-                      icon: Icons.check_circle_rounded,
-                      label:
-                          '${DateFormat('yyyy/MM/dd HH:mm').format(goal.completedAt!)} 達成',
-                      color: AppColors.success,
+                  // アイコン
+                  Container(
+                    width: iconSize,
+                    height: iconSize,
+                    decoration: BoxDecoration(
+                      gradient: isCompleted
+                          ? const LinearGradient(
+                              colors: [Color(0xFFFFD700), Color(0xFFFFC107)],
+                            )
+                          : LinearGradient(
+                              colors: [color, color.withValues(alpha: 0.7)],
+                            ),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: (isCompleted ? const Color(0xFFFFD700) : color)
+                              .withValues(alpha: 0.3),
+                          blurRadius: 20,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
                     ),
-                  if (!isCompleted && daysRemaining != null) ...[
-                    _buildDeadlineChip(daysRemaining, color),
+                    child: Icon(
+                      isCompleted
+                          ? Icons.emoji_events_rounded
+                          : Icons.flag_rounded,
+                      size: iconInnerSize,
+                      color: Colors.white,
+                    ),
+                  ),
+
+                  SizedBox(height: spacingLarge),
+
+                  // タイトル
+                  Text(
+                    goal.title,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: titleFontSize,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                    maxLines: isUltraCompact ? 1 : 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+
+                  // 説明
+                  if (!isUltraCompact &&
+                      goal.description != null &&
+                      goal.description!.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      goal.description!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppColors.textSecondary,
+                      ),
+                      maxLines: descriptionMaxLines,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ],
-                  if (goal.deadline != null) ...[
-                    const SizedBox(width: 8),
-                    _buildStatusChip(
-                      icon: Icons.event_rounded,
-                      label: DateFormat(
-                        'yyyy/MM/dd HH:mm',
-                      ).format(goal.deadline!),
-                      color: AppColors.textSecondary,
+
+                  SizedBox(height: spacingLarge),
+
+                  // ステータスチップ
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: isUltraCompact ? 6 : 8,
+                    runSpacing: isUltraCompact ? 6 : 8,
+                    children: [
+                      if (isCompleted && goal.completedAt != null)
+                        _buildStatusChip(
+                          icon: Icons.check_circle_rounded,
+                          label:
+                              '${DateFormat('yyyy/MM/dd HH:mm').format(goal.completedAt!)} 達成',
+                          color: AppColors.success,
+                          dense: isCompact,
+                        ),
+                      if (!isCompleted && daysRemaining != null)
+                        _buildDeadlineChip(
+                          daysRemaining,
+                          color,
+                          dense: isCompact,
+                        ),
+                      if (!isUltraCompact && goal.deadline != null)
+                        _buildStatusChip(
+                          icon: Icons.event_rounded,
+                          label: DateFormat(
+                            'yyyy/MM/dd HH:mm',
+                          ).format(goal.deadline!),
+                          color: AppColors.textSecondary,
+                          dense: isCompact,
+                        ),
+                    ],
+                  ),
+                  if (!isUltraCompact && goal.reminders.isNotEmpty) ...[
+                    SizedBox(height: spacingLarge),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.notifications_active_outlined,
+                          size: 16,
+                          color: AppColors.textSecondary,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _getRemindersText(goal.reminders),
+                          style: TextStyle(
+                            fontSize: isCompact ? 11 : 12,
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ],
               ),
-              if (goal.reminders.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.notifications_active_outlined,
-                      size: 16,
-                      color: AppColors.textSecondary,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      _getRemindersText(goal.reminders),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
@@ -351,9 +390,13 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
     required IconData icon,
     required String label,
     required Color color,
+    bool dense = false,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: EdgeInsets.symmetric(
+        horizontal: dense ? 10 : 12,
+        vertical: dense ? 4 : 6,
+      ),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
@@ -369,7 +412,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
           Text(
             label,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: dense ? 11 : 12,
               color: color,
               fontWeight: FontWeight.w600,
             ),
@@ -379,7 +422,11 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
     );
   }
 
-  Widget _buildDeadlineChip(int daysRemaining, Color goalColor) {
+  Widget _buildDeadlineChip(
+    int daysRemaining,
+    Color goalColor, {
+    bool dense = false,
+  }) {
     Color chipColor;
     Color textColor;
     String text;
@@ -408,7 +455,10 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: EdgeInsets.symmetric(
+        horizontal: dense ? 10 : 12,
+        vertical: dense ? 4 : 6,
+      ),
       decoration: BoxDecoration(
         color: chipColor,
         borderRadius: BorderRadius.circular(20),
@@ -421,7 +471,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
           Text(
             text,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: dense ? 11 : 12,
               color: textColor,
               fontWeight: FontWeight.bold,
             ),

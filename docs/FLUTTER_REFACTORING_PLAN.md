@@ -997,6 +997,7 @@ catch (e) {
 > - `circle_detail_screen.dart` のUIメッセージを AppMessages 化（2026-01-24）
 > - `circles_screen.dart` のUIメッセージを AppMessages 化（2026-01-24）
 > - `home_screen.dart` のUIメッセージを AppMessages 化（2026-01-24）
+> - `completed_goals_screen.dart` のUIメッセージを AppMessages 化（2026-01-24）
 
 ### 優先度：低（長期）
 
@@ -1065,6 +1066,13 @@ catch (e) {
 - targetCategoryId のタブ切替は post-frame で実行し、Provider 更新のタイミングを安定化する
 - targetDate のプログラムジャンプは onPageChanged を抑制し、Provider 更新のタイミングを安定化する
 - ハイライト時に targetCategoryId が null の場合はデフォルトタブへ自動で戻す
+
+### 画面表示の補足
+
+- 目標詳細ヘッダーで長文タイトルがオーバーフローするため、タイトルは2行で省略する（2026-01-24）
+- 目標詳細ヘッダーは高さが足りない場合にコンパクト表示（アイコン/余白/説明行数/チップ密度を縮小）（2026-01-24）
+- さらに高さが不足する場合は説明/リマインド/期限チップ表示を省略し、タイトルは1行にする（2026-01-24）
+- 殿堂入り（達成済み）詳細画面はヘッダーのexpandedHeightを拡張（2026-01-24）
 
 ### ⚠️ セキュリティ/運用ルール（必須遵守）
 

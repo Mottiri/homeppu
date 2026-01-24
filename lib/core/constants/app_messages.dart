@@ -33,6 +33,9 @@ class AppMessages {
 
   // ===== ホーム関連 =====
   static const home = _HomeMessages();
+
+  // ===== 目標関連 =====
+  static const goal = _GoalMessages();
 }
 
 /// 成功メッセージ
@@ -262,4 +265,13 @@ class _HomeMessages {
   String get emptyFollowingTitle => 'まだ誰もフォローしていないよ';
   String get emptyFollowingDescription =>
       '「おすすめ」タブで気になる人を\n見つけてフォローしてみよう！';
+}
+
+/// 目標関連メッセージ
+class _GoalMessages {
+  const _GoalMessages();
+
+  String get completedTitle => '殿堂入り';
+  String get completedEmptyTitle => 'まだ達成した目標はありません';
+  String get completedEmptyDescription => '目標を達成すると、ここに表示されます';
 }

@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_messages.dart';
 import '../../../../shared/models/goal_model.dart';
 import '../../../../shared/providers/goal_provider.dart';
 import '../widgets/goal_card.dart';
@@ -16,7 +17,9 @@ class CompletedGoalsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      return const Scaffold(body: Center(child: Text('ログインが必要です')));
+      return Scaffold(
+        body: Center(child: Text(AppMessages.error.unauthorized)),
+      );
     }
 
     final goalService = ref.read(goalServiceProvider);
@@ -48,7 +51,7 @@ class CompletedGoalsScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(width: 10),
-            const Text('殿堂入り'),
+            Text(AppMessages.goal.completedTitle),
           ],
         ),
       ),
@@ -85,7 +88,7 @@ class CompletedGoalsScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    'まだ達成した目標はありません',
+                    AppMessages.goal.completedEmptyTitle,
                     style: TextStyle(
                       fontSize: 16,
                       color: AppColors.textSecondary,
@@ -93,7 +96,7 @@ class CompletedGoalsScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '目標を達成すると、ここに表示されます',
+                    AppMessages.goal.completedEmptyDescription,
                     style: TextStyle(fontSize: 14, color: AppColors.textHint),
                   ),
                 ],
