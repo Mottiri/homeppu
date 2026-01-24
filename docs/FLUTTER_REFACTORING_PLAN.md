@@ -810,6 +810,8 @@ lib/features/tasks/presentation/
 
 #### C-3: circle_detail_screen.dart（1,370行）
 
+**状態**: ✅ 分割完了（2026-01-24）
+
 **分割後**:
 
 ```
