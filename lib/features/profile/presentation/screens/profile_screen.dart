@@ -12,10 +12,13 @@ import '../../../../core/utils/dialog_helper.dart';
 import '../../../../shared/models/user_model.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/services/follow_service.dart';
-import '../../../../shared/widgets/avatar_selector.dart';
 import '../../../admin/presentation/widgets/admin_menu_bottom_sheet.dart';
+import '../widgets/profile_actions.dart';
+import '../widgets/profile_admin_actions.dart';
+import '../widgets/profile_header.dart';
+import '../widgets/profile_menu.dart';
 import '../widgets/profile_posts_list.dart';
-import '../widgets/profile_following_list.dart';
+import '../widgets/profile_stats.dart';
 import '../../../../shared/widgets/infinite_scroll_listener.dart';
 import '../../../../shared/widgets/load_more_footer.dart';
 
@@ -270,6 +273,27 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       );
     }
 
+    final isAdmin = ref.watch(isAdminProvider).valueOrNull ?? false;
+    final showBanWarning = user.isBanned && (_isOwnProfile || isAdmin);
+    Widget? adminAction;
+    if (isAdmin) {
+      if (_isOwnProfile && widget.userId == null) {
+        adminAction = const AdminMenuIcon();
+      } else if (!_isOwnProfile) {
+        adminAction = IconButton(
+          icon: const Icon(
+            Icons.admin_panel_settings,
+            color: Colors.white,
+          ),
+          onPressed: () => _showUserAdminMenu(context, user),
+          tooltip: '管理者メニュー',
+          style: IconButton.styleFrom(
+            backgroundColor: AppColors.error.withValues(alpha: 0.8),
+          ),
+        );
+      }
+    }
+
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(gradient: AppColors.warmGradient),
@@ -284,477 +308,58 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             child: CustomScrollView(
               controller: _scrollController,
               slivers: [
-                // ヘッダー画像 + アバター（Stack構造）
-                SliverToBoxAdapter(
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      // ヘッダー画像
-                      Consumer(
-                        builder: (context, ref, _) {
-                          // 自分のプロフィールの場合はRiverpodから最新のユーザー情報を取得
-                          final displayUser = _isOwnProfile
-                              ? ref.watch(currentUserProvider).valueOrNull
-                              : _targetUser;
-                          final headerUrl = displayUser?.headerImageUrl;
-
-                          return ClipRect(
-                            child: SizedBox(
-                              width: double.infinity,
-                              height: 180,
-                              child: headerUrl != null
-                                  ? Image.network(
-                                      headerUrl,
-                                      fit: BoxFit.cover,
-                                      errorBuilder:
-                                          (
-                                            context,
-                                            error,
-                                            stackTrace,
-                                          ) => Image.asset(
-                                            _headerImages[_headerImageIndex],
-                                            fit: BoxFit.cover,
-                                          ),
-                                    )
-                                  : Image.asset(
-                                      _headerImages[_headerImageIndex],
-                                      fit: BoxFit.cover,
-                                    ),
-                            ),
-                          );
-                        },
-                      ),
-                      // 角丸の白い背景（コンテンツエリア上部）
-                      Positioned(
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        child: Container(
-                          height: 30,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFFDF8F3), // warmGradientの上部色
-                            borderRadius: BorderRadius.only(
-                              topLeft: Radius.circular(30),
-                              topRight: Radius.circular(30),
-                            ),
-                          ),
-                        ),
-                      ),
-                      // 戻るボタン（他ユーザー閲覧時）
-                      if (!_isOwnProfile)
-                        Positioned(
-                          top: 8,
-                          left: 8,
-                          child: IconButton(
-                            onPressed: () => context.pop(),
-                            icon: const Icon(
-                              Icons.arrow_back,
-                              color: Colors.white,
-                            ),
-                            style: IconButton.styleFrom(
-                              backgroundColor: Colors.black26,
-                            ),
-                          ),
-                        ),
-                      // 設定ボタン等（右上）
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: Row(
-                          children: [
-                            Consumer(
-                              builder: (context, ref, _) {
-                                final isAdminAsync = ref.watch(isAdminProvider);
-                                return isAdminAsync.maybeWhen(
-                                  data: (isAdmin) {
-                                    if (!isAdmin) {
-                                      return const SizedBox.shrink();
-                                    }
-                                    if (!_isOwnProfile) {
-                                      return IconButton(
-                                        icon: const Icon(
-                                          Icons.admin_panel_settings,
-                                          color: Colors.white,
-                                        ),
-                                        onPressed: () =>
-                                            _showUserAdminMenu(context, user),
-                                        tooltip: '管理者メニュー',
-                                        style: IconButton.styleFrom(
-                                          backgroundColor: AppColors.error
-                                              .withValues(alpha: 0.8),
-                                        ),
-                                      );
-                                    }
-                                    if (_isOwnProfile &&
-                                        widget.userId == null) {
-                                      return const AdminMenuIcon();
-                                    }
-                                    return const SizedBox.shrink();
-                                  },
-                                  orElse: () => const SizedBox.shrink(),
-                                );
-                              },
-                            ),
-                            if (_isOwnProfile)
-                              IconButton(
-                                onPressed: () => context.push('/settings'),
-                                icon: const Icon(
-                                  Icons.settings_outlined,
-                                  color: Colors.white,
-                                ),
-                                style: IconButton.styleFrom(
-                                  backgroundColor: Colors.black26,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      // アバター（中央配置、グラデーション枠 + グロー効果）
-                      Positioned(
-                        bottom: -55,
-                        left: 0,
-                        right: 0,
-                        child: Center(
-                          child: Container(
-                            padding: const EdgeInsets.all(5),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: LinearGradient(
-                                colors: [_primaryAccent, _secondaryAccent],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: _primaryAccent.withValues(alpha: 0.4),
-                                  blurRadius: 20,
-                                  spreadRadius: 5,
-                                ),
-                              ],
-                            ),
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.white,
-                              ),
-                              child: AvatarWidget(
-                                avatarIndex: user.avatarIndex,
-                                size: 100,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // アバター分のスペース + 名前（中央揃え）
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 60, 16, 0),
-                    child: Column(
-                      children: [
-                        Text(
-                          user.displayName,
-                          style: Theme.of(context).textTheme.headlineSmall
-                              ?.copyWith(fontWeight: FontWeight.bold),
-                          textAlign: TextAlign.center,
-                        ),
-                        // 自己紹介
-                        if (user.bio != null && user.bio!.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              user.bio!,
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(color: AppColors.textSecondary),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
+                // ヘッダー画像 + アバター + 名前
+                ProfileHeader(
+                  user: user,
+                  isOwnProfile: _isOwnProfile,
+                  fallbackHeaderImage: _headerImages[_headerImageIndex],
+                  primaryAccent: _primaryAccent,
+                  secondaryAccent: _secondaryAccent,
+                  onBack: _isOwnProfile ? null : () => context.pop(),
+                  onOpenSettings:
+                      _isOwnProfile ? () => context.push('/settings') : null,
+                  adminAction: adminAction,
                 ),
 
                 // 統計情報（パステルカラー背景）
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 16,
-                        horizontal: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            _primaryAccent.withValues(alpha: 0.15),
-                            _secondaryAccent.withValues(alpha: 0.1),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: IntrinsicHeight(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            Expanded(
-                              child: _buildProfileStat(
-                                '投稿',
-                                '${user.totalPosts}',
-                              ),
-                            ),
-                            Container(width: 1, color: Colors.grey.shade300),
-                            Expanded(
-                              child: _buildProfileStat(
-                                '称賛',
-                                '${user.totalPraises}',
-                              ),
-                            ),
-                            Container(width: 1, color: Colors.grey.shade300),
-                            Expanded(
-                              child: _buildProfileStat('徳', '${user.virtue}'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+                ProfileStats(
+                  totalPosts: user.totalPosts,
+                  totalPraises: user.totalPraises,
+                  virtue: user.virtue,
+                  primaryAccent: _primaryAccent,
+                  secondaryAccent: _secondaryAccent,
                 ),
 
                 // フォローボタン（ヘッダーカラー）+ メッセージボタン
                 if (!_isOwnProfile)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Container(
-                              decoration: BoxDecoration(
-                                gradient: _isFollowing
-                                    ? null
-                                    : LinearGradient(
-                                        colors: [
-                                          _primaryAccent,
-                                          _secondaryAccent,
-                                        ],
-                                        begin: Alignment.centerLeft,
-                                        end: Alignment.centerRight,
-                                      ),
-                                color: _isFollowing
-                                    ? Colors.grey.shade200
-                                    : null,
-                                borderRadius: BorderRadius.circular(28),
-                              ),
-                              child: ElevatedButton(
-                                onPressed: _isFollowLoading
-                                    ? null
-                                    : _toggleFollow,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.transparent,
-                                  foregroundColor: _isFollowing
-                                      ? AppColors.textPrimary
-                                      : Colors.white,
-                                  shadowColor: Colors.transparent,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 14,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(28),
-                                  ),
-                                ),
-                                child: _isFollowLoading
-                                    ? const SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Colors.white,
-                                        ),
-                                      )
-                                    : Text(
-                                        _isFollowing ? 'フォロー中' : 'フォロー',
-                                        style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          // メッセージボタン
-                          Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [_primaryAccent, _secondaryAccent],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              borderRadius: BorderRadius.circular(28),
-                            ),
-                            child: IconButton(
-                              onPressed: () {
-                                // TODO: メッセージ機能
-                              },
-                              icon: const Icon(
-                                Icons.mail_outline,
-                                color: Colors.white,
-                              ),
-                              padding: const EdgeInsets.all(12),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                  ProfileActions(
+                    isFollowing: _isFollowing,
+                    isFollowLoading: _isFollowLoading,
+                    primaryAccent: _primaryAccent,
+                    secondaryAccent: _secondaryAccent,
+                    onToggleFollow: _toggleFollow,
+                    onMessage: () {},
                   ),
 
                 // 管理者のみ: 累計被通報回数
-                Consumer(
-                  builder: (context, ref, _) {
-                    final isAdmin =
-                        ref.watch(isAdminProvider).valueOrNull ?? false;
-                    if (!isAdmin || user.reportCount == 0) {
-                      return const SliverToBoxAdapter(child: SizedBox.shrink());
-                    }
-                    return SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
-                        child: Center(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: user.reportCount >= 3
-                                  ? AppColors.error.withValues(alpha: 0.1)
-                                  : Colors.orange.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.flag,
-                                  size: 14,
-                                  color: user.reportCount >= 3
-                                      ? AppColors.error
-                                      : Colors.orange,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '累計被通報: ${user.reportCount}回',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: user.reportCount >= 3
-                                        ? AppColors.error
-                                        : Colors.orange,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
+                ProfileAdminReportBadge(
+                  isAdmin: isAdmin,
+                  reportCount: user.reportCount,
                 ),
 
                 // BAN状態の警告
-                if (user.isBanned)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.error.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: AppColors.error.withValues(alpha: 0.3),
-                          ),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(
-                                  Icons.warning_amber_rounded,
-                                  color: AppColors.error,
-                                ),
-                                const SizedBox(width: 8),
-                                const Expanded(
-                                  child: Text(
-                                    'アカウントが制限されています。投稿やコメントができません。',
-                                    style: TextStyle(
-                                      color: AppColors.error,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (_isOwnProfile)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 12),
-                                child: SizedBox(
-                                  width: double.infinity,
-                                  child: OutlinedButton.icon(
-                                    onPressed: () =>
-                                        context.push('/ban-appeal'),
-                                    icon: const Icon(
-                                      Icons.support_agent,
-                                      size: 20,
-                                    ),
-                                    label: const Text('運営へ問い合わせる'),
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: AppColors.error,
-                                      side: const BorderSide(
-                                        color: AppColors.error,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+                ProfileBanWarning(
+                  showWarning: showBanWarning,
+                  showContactButton: _isOwnProfile,
+                  onContact: () => context.push('/ban-appeal'),
+                ),
 
                 const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
                 // フォロー中（自分のプロフィールのみ）
                 // 実際のfollowingリストの長さを使用（followingCountとの不整合を防ぐ）
-                if (_isOwnProfile && user.following.isNotEmpty) ...[
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Row(
-                        children: [
-                          Text(
-                            'フォロー中',
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SliverToBoxAdapter(child: SizedBox(height: 12)),
-                  SliverToBoxAdapter(
-                    child: ProfileFollowingList(followingIds: user.following),
-                  ),
-                  const SliverToBoxAdapter(child: SizedBox(height: 24)),
-                ],
+                if (_isOwnProfile && user.following.isNotEmpty)
+                  ProfileMenu(followingIds: user.following),
 
                 // 過去の投稿
                 SliverToBoxAdapter(
@@ -804,24 +409,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  // プロフィール統計項目を構築（ラベルが上、数字が下）
-  Widget _buildProfileStat(String label, String value) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          label,
-          style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-        ),
-      ],
     );
   }
 
