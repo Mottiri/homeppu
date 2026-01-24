@@ -984,10 +984,13 @@ catch (e) {
 | 順位 | 作業 | 効果 |
 |-----|------|------|
 | 6 | `tasks_screen.dart` 分割（✅ 完了） | 1,265行削減 |
-| 7 | `circle_detail_screen.dart` 分割 | 1,370行削減 |
-| 8 | `infinite_scroll_listener.dart` 作成 | 10箇所の統一 |
-| 9 | 共通Widget作成（loading_overlay等）| UI統一 |
-| 10 | 各画面でAppMessages適用 | メッセージ統一 |
+| 7 | `circle_detail_screen.dart` 分割（✅ 完了） | 1,370行削減 |
+| 8 | `infinite_scroll_listener.dart` 作成（✅ 完了） | 10箇所の統一 |
+| 9 | 共通Widget作成（loading_overlay等）（✅ 完了）| UI統一 |
+| 10 | 各画面でAppMessages適用（⏳ 残作業） | メッセージ統一 |
+
+> **注**: 行削減の数値はリファクタリング前との差分の目安。  
+> **注**: AppMessages適用は「ハードコードを基本ゼロ」にすることを完了条件とする。
 
 ### 優先度：低（長期）
 
