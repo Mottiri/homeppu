@@ -5,6 +5,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/constants/app_messages.dart';
 import '../../../../shared/models/post_model.dart';
 import '../../../../shared/models/user_model.dart';
 import '../../../../shared/providers/auth_provider.dart';
@@ -192,9 +193,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         fontWeight: FontWeight.normal,
                         fontSize: 15,
                       ),
-                      tabs: const [
-                        Tab(text: 'おすすめ'),
-                        Tab(text: 'フォロー中'),
+                      tabs: [
+                        Tab(text: AppMessages.home.tabRecommended),
+                        Tab(text: AppMessages.home.tabFollowing),
                       ],
                     ),
                   ),
@@ -445,13 +446,13 @@ class _PostsListState extends State<_PostsList> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(color: AppColors.primary),
-            SizedBox(height: 16),
-            Text('みんなの投稿を読み込み中...'),
+            const CircularProgressIndicator(color: AppColors.primary),
+            const SizedBox(height: 16),
+            Text(AppMessages.home.timelineLoading),
           ],
         ),
       );
@@ -465,11 +466,14 @@ class _PostsListState extends State<_PostsList> {
             const Text('😢', style: TextStyle(fontSize: 48)),
             const SizedBox(height: 16),
             Text(
-              AppConstants.friendlyMessages['error_general']!,
+              AppMessages.error.general,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
-            ElevatedButton(onPressed: _loadPosts, child: const Text('再読み込み')),
+            ElevatedButton(
+              onPressed: _loadPosts,
+              child: Text(AppMessages.label.retry),
+            ),
           ],
         ),
       );
@@ -489,12 +493,12 @@ class _PostsListState extends State<_PostsList> {
                   const Text('✨', style: TextStyle(fontSize: 64)),
                   const SizedBox(height: 16),
                   Text(
-                    'まだ投稿がないよ',
+                    AppMessages.home.emptyPostsTitle,
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '最初の投稿をしてみよう！',
+                    AppMessages.home.emptyPostsDescription,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: AppColors.textSecondary,
                     ),
@@ -558,13 +562,13 @@ class _EmptyFollowingState extends StatelessWidget {
             const Text('👥', style: TextStyle(fontSize: 64)),
             const SizedBox(height: 16),
             Text(
-              'まだ誰もフォローしていないよ',
+              AppMessages.home.emptyFollowingTitle,
               style: Theme.of(context).textTheme.titleLarge,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
-              '「おすすめ」タブで気になる人を\n見つけてフォローしてみよう！',
+              AppMessages.home.emptyFollowingDescription,
               style: Theme.of(
                 context,
               ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),

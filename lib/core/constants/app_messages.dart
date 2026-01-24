@@ -30,6 +30,9 @@ class AppMessages {
 
   // ===== サークル関連 =====
   static const circle = _CircleMessages();
+
+  // ===== ホーム関連 =====
+  static const home = _HomeMessages();
 }
 
 /// 成功メッセージ
@@ -214,4 +217,49 @@ class _CircleMessages {
   String get joinRequestButton => '参加申請';
   String get joinedLabel => '参加中';
   String get requestPendingLabel => '申請中';
+
+  // サークル一覧画面
+  String get listTitle => 'サークル';
+  String get searchHint => 'サークルを検索';
+  String get tabAll => 'みんなの';
+  String get tabJoined => '参加中';
+  String get searchNotFound => '見つかりませんでした';
+  String get searchError => '検索中にエラーが発生しました';
+  String get listError => 'エラーが発生しました';
+  String get emptyTitle => 'まだサークルがないよ';
+  String get emptyDescription => '最初のサークルを作ってみよう！';
+  String get createCircle => 'サークルを作る';
+  String get emptyJoined => '参加中のサークルがありません';
+  String get emptyGeneric => 'サークルがありません';
+  String get filterLabel => 'フィルター';
+  String filterWithCount(int count) => 'フィルター($count)';
+  String memberCountLabel(int count) => '$count人';
+  String postCountLabel(int count) => '$count件';
+  String get aiModeLabel => 'AIモード';
+  String get inviteOnlyLabel => '招待制';
+  String get noPostsYet => 'まだ投稿なし';
+  String postedAt(String time) => '$timeに投稿あり';
+  String get humanPostsNone => '人間投稿なし';
+  String humanPostAt(String time) => '人間: $time';
+  String get sortNewest => '新着順';
+  String get sortActive => 'アクティブ順';
+  String get sortPopular => '人気順';
+  String get sortPostCount => '投稿数順';
+  String get sortHumanPostOldest => '人間投稿古い順';
+  String get filterHasSpace => '空きあり';
+  String get filterHasPosts => '投稿あり';
+}
+
+/// ホーム関連メッセージ
+class _HomeMessages {
+  const _HomeMessages();
+
+  String get tabRecommended => 'おすすめ';
+  String get tabFollowing => 'フォロー中';
+  String get timelineLoading => 'みんなの投稿を読み込み中...';
+  String get emptyPostsTitle => 'まだ投稿がないよ';
+  String get emptyPostsDescription => '最初の投稿をしてみよう！';
+  String get emptyFollowingTitle => 'まだ誰もフォローしていないよ';
+  String get emptyFollowingDescription =>
+      '「おすすめ」タブで気になる人を\n見つけてフォローしてみよう！';
 }

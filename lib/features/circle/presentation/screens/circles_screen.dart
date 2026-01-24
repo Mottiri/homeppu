@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_messages.dart';
+import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/models/circle_model.dart';
 import '../../../../shared/services/circle_service.dart';
 import '../../../../shared/providers/auth_provider.dart';
@@ -24,7 +26,7 @@ class CirclesScreen extends ConsumerStatefulWidget {
 
 class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   int _selectedTab = 0; // 0: みんなの, 1: 参加中
-  String _selectedCategory = '全て';
+  String _selectedCategory = CircleService.categories.first;
   final TextEditingController _searchController = TextEditingController();
   List<CircleModel> _searchResults = [];
   bool _isSearching = false;
@@ -179,9 +181,10 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         _isSearching = false;
       });
       if (mounted) {
-        ScaffoldMessenger.of(
+        SnackBarHelper.showError(
           context,
-        ).showSnackBar(const SnackBar(content: Text('検索中にエラーが発生しました')));
+          AppMessages.circle.searchError,
+        );
       }
     }
   }
@@ -245,7 +248,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
                     padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
                     child: Center(
                       child: Text(
-                        'サークル',
+                        AppMessages.circle.listTitle,
                         style: Theme.of(context).textTheme.headlineSmall
                             ?.copyWith(fontWeight: FontWeight.bold),
                       ),
@@ -273,7 +276,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
                         controller: _searchController,
                         onChanged: (value) => _performSearch(value),
                         decoration: InputDecoration(
-                          hintText: 'サークルを検索',
+                          hintText: AppMessages.circle.searchHint,
                           hintStyle: TextStyle(color: Colors.grey[400]),
                           prefixIcon: Icon(
                             Icons.search,
@@ -307,9 +310,9 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Row(
                       children: [
-                        _buildTabButton('みんなの', 0),
+                        _buildTabButton(AppMessages.circle.tabAll, 0),
                         const SizedBox(width: 12),
-                        _buildTabButton('参加中', 1),
+                        _buildTabButton(AppMessages.circle.tabJoined, 1),
                       ],
                     ),
                   ),
@@ -429,7 +432,10 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
             children: [
               Icon(Icons.search_off, size: 64, color: Colors.grey[300]),
               const SizedBox(height: 16),
-              Text('見つかりませんでした', style: TextStyle(color: Colors.grey[600])),
+              Text(
+                AppMessages.circle.searchNotFound,
+                style: TextStyle(color: Colors.grey[600]),
+              ),
             ],
           ),
         ),
@@ -473,7 +479,10 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
             children: [
               Icon(Icons.error_outline, size: 64, color: Colors.grey[300]),
               const SizedBox(height: 16),
-              Text('エラーが発生しました', style: TextStyle(color: Colors.grey[600])),
+              Text(
+                AppMessages.circle.listError,
+                style: TextStyle(color: Colors.grey[600]),
+              ),
             ],
           ),
         ),
@@ -497,14 +506,14 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
               ),
               const SizedBox(height: 24),
               Text(
-                'まだサークルがないよ',
+                AppMessages.circle.emptyTitle,
                 style: Theme.of(
                   context,
                 ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               Text(
-                '最初のサークルを作ってみよう！',
+                AppMessages.circle.emptyDescription,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: AppColors.textSecondary,
                 ),
@@ -524,7 +533,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
                   ),
                 ),
                 icon: const Icon(Icons.add),
-                label: const Text('サークルを作る'),
+                label: Text(AppMessages.circle.createCircle),
               ),
             ],
           ),
@@ -595,7 +604,9 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
               Icon(Icons.group_off, size: 64, color: Colors.grey[300]),
               const SizedBox(height: 16),
               Text(
-                _selectedTab == 1 ? '参加中のサークルがありません' : 'サークルがありません',
+                _selectedTab == 1
+                    ? AppMessages.circle.emptyJoined
+                    : AppMessages.circle.emptyGeneric,
                 style: TextStyle(color: Colors.grey[600]),
               ),
             ],
@@ -677,6 +688,30 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     );
   }
 
+  String _sortLabel(_SortOption option) {
+    switch (option) {
+      case _SortOption.newest:
+        return AppMessages.circle.sortNewest;
+      case _SortOption.active:
+        return AppMessages.circle.sortActive;
+      case _SortOption.popular:
+        return AppMessages.circle.sortPopular;
+      case _SortOption.postCount:
+        return AppMessages.circle.sortPostCount;
+      case _SortOption.humanPostOldest:
+        return AppMessages.circle.sortHumanPostOldest;
+    }
+  }
+
+  String _filterLabel(_FilterOption option) {
+    switch (option) {
+      case _FilterOption.hasSpace:
+        return AppMessages.circle.filterHasSpace;
+      case _FilterOption.hasPosts:
+        return AppMessages.circle.filterHasPosts;
+    }
+  }
+
   /// 並び順ドロップダウン
   Widget _buildSortDropdown(bool isAdmin) {
     // 管理者のみhumanPostOldestを表示
@@ -705,7 +740,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
             Icon(_selectedSort.icon, size: 14, color: AppColors.primary),
             const SizedBox(width: 4),
             Text(
-              _selectedSort.label,
+              _sortLabel(_selectedSort),
               style: TextStyle(
                 fontSize: 12,
                 color: Colors.grey[700],
@@ -731,7 +766,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
               ),
               const SizedBox(width: 8),
               Text(
-                option.label,
+                _sortLabel(option),
                 style: TextStyle(
                   color: _selectedSort == option
                       ? AppColors.primary
@@ -788,7 +823,9 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
             ),
             const SizedBox(width: 4),
             Text(
-              hasActiveFilter ? 'フィルター(${_selectedFilters.length})' : 'フィルター',
+              hasActiveFilter
+                  ? AppMessages.circle.filterWithCount(_selectedFilters.length)
+                  : AppMessages.circle.filterLabel,
               style: TextStyle(
                 fontSize: 12,
                 color: hasActiveFilter ? AppColors.primary : Colors.grey[700],
@@ -817,7 +854,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
               ),
               const SizedBox(width: 8),
               Text(
-                option.label,
+                _filterLabel(option),
                 style: TextStyle(
                   color: isSelected ? AppColors.primary : Colors.grey[800],
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
@@ -1003,11 +1040,15 @@ class _CircleCard extends ConsumerWidget {
                         children: [
                           _buildInfoChip(
                             Icons.people_outline,
-                            '${circle.memberCount}人',
+                            AppMessages.circle.memberCountLabel(
+                              circle.memberCount,
+                            ),
                           ),
                           _buildInfoChip(
                             Icons.article_outlined,
-                            '${circle.postCount}件',
+                            AppMessages.circle.postCountLabel(
+                              circle.postCount,
+                            ),
                           ),
                           // 最終アクティビティ表示
                           _buildActivityChip(circle.recentActivity),
@@ -1053,7 +1094,7 @@ class _CircleCard extends ConsumerWidget {
                                   ),
                                   const SizedBox(width: 2),
                                   Text(
-                                    'AIモード',
+                                    AppMessages.circle.aiModeLabel,
                                     style: TextStyle(
                                       fontSize: 10,
                                       color: Colors.purple[700],
@@ -1085,7 +1126,7 @@ class _CircleCard extends ConsumerWidget {
                                   ),
                                   const SizedBox(width: 2),
                                   Text(
-                                    '招待制',
+                                    AppMessages.circle.inviteOnlyLabel,
                                     style: TextStyle(
                                       fontSize: 10,
                                       color: Colors.orange[700],
@@ -1132,7 +1173,7 @@ class _CircleCard extends ConsumerWidget {
           Icon(Icons.schedule, size: 14, color: Colors.grey[400]),
           const SizedBox(width: 4),
           Text(
-            'まだ投稿なし',
+            AppMessages.circle.noPostsYet,
             style: TextStyle(fontSize: 12, color: Colors.grey[500]),
           ),
         ],
@@ -1153,7 +1194,9 @@ class _CircleCard extends ConsumerWidget {
         Icon(icon, size: 14, color: color),
         const SizedBox(width: 4),
         Text(
-          '${timeago.format(recentActivity, locale: 'ja')}に投稿あり',
+          AppMessages.circle.postedAt(
+            timeago.format(recentActivity, locale: 'ja'),
+          ),
           style: TextStyle(
             fontSize: 12,
             color: color,
@@ -1183,7 +1226,7 @@ class _CircleCard extends ConsumerWidget {
             Icon(Icons.person_off, size: 12, color: Colors.blue[400]),
             const SizedBox(width: 3),
             Text(
-              '人間投稿なし',
+              AppMessages.circle.humanPostsNone,
               style: TextStyle(
                 fontSize: 10,
                 color: Colors.blue[600],
@@ -1222,7 +1265,9 @@ class _CircleCard extends ConsumerWidget {
           Icon(Icons.person, size: 12, color: iconColor),
           const SizedBox(width: 3),
           Text(
-            '人間: ${timeago.format(lastHumanPostDate, locale: 'ja')}',
+            AppMessages.circle.humanPostAt(
+              timeago.format(lastHumanPostDate, locale: 'ja'),
+            ),
             style: TextStyle(
               fontSize: 10,
               color: textColor,
@@ -1237,23 +1282,21 @@ class _CircleCard extends ConsumerWidget {
 
 /// 並び順オプション
 enum _SortOption {
-  newest('新着順', Icons.schedule),
-  active('アクティブ順', Icons.local_fire_department),
-  popular('人気順', Icons.people),
-  postCount('投稿数順', Icons.article),
-  humanPostOldest('人間投稿古い順', Icons.person_off); // 管理者のみ
+  newest(Icons.schedule),
+  active(Icons.local_fire_department),
+  popular(Icons.people),
+  postCount(Icons.article),
+  humanPostOldest(Icons.person_off); // 管理者のみ
 
-  final String label;
   final IconData icon;
-  const _SortOption(this.label, this.icon);
+  const _SortOption(this.icon);
 }
 
 /// フィルターオプション
 enum _FilterOption {
-  hasSpace('空きあり', Icons.person_add),
-  hasPosts('投稿あり', Icons.article);
+  hasSpace(Icons.person_add),
+  hasPosts(Icons.article);
 
-  final String label;
   final IconData icon;
-  const _FilterOption(this.label, this.icon);
+  const _FilterOption(this.icon);
 }
