@@ -78,9 +78,16 @@ class _SuccessMessages {
   String get taskDeleted => 'タスクを削除したよ';
   String taskDeletedCount(int count) => '$count件を削除しました';
   String get categoryDeleted => 'カテゴリを削除しました';
+  String get taskCompletionReverted => '完了を取り消しました';
+  String get taskCompletionRevertedWithPostDeleted =>
+      '完了を取り消しました。自動投稿を削除しました';
   String taskCompletedWithVirtue(int streak) => '🎉 タスク完了！ (+徳ポイント)';
   String taskMilestone(int streak, String message) =>
       '🎉 $streak日連続達成！$message！';
+
+  // 目標関連
+  String get goalCreated => '目標を作成しました！頑張りましょう✨';
+  String get goalUpdated => '目標を更新しました！';
 
   // ユーザー関連
   String get profileUpdated => 'プロフィールを更新したよ！';

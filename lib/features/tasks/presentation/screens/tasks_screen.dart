@@ -652,7 +652,9 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
       await _loadData(showLoading: false);
 
       if (mounted) {
-        final message = postDeleted ? '完了を取り消しました。自動投稿を削除しました' : '完了を取り消しました';
+        final message = postDeleted
+            ? AppMessages.success.taskCompletionRevertedWithPostDeleted
+            : AppMessages.success.taskCompletionReverted;
         SnackBarHelper.showInfo(context, message);
       }
     } catch (e) {

@@ -999,6 +999,7 @@ catch (e) {
 > - ✅ バッチ3完了（2026-01-25）: タスク（複数削除/カテゴリ削除）/サークル更新/投稿詳細/投稿削除サービス
 > - ✅ バッチ4完了（2026-01-25）: 認証（ログイン/登録）/プロフィールのfriendlyMessages置換
 > - ✅ バッチ4補正（2026-01-25）: general文言の改行調整／登録のメール系エラーを欄下表示
+> - ✅ バッチ5完了（2026-01-25）: 投稿作成/目標作成/完了取り消しの文言をAppMessagesへ統一
 > - `circle_detail_screen.dart` のUIメッセージを AppMessages 化（2026-01-24）
 > - `circles_screen.dart` のUIメッセージを AppMessages 化（2026-01-24）
 > - `home_screen.dart` のUIメッセージを AppMessages 化（2026-01-24）

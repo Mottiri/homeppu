@@ -103,7 +103,9 @@ class _CreateGoalScreenState extends ConsumerState<CreateGoalScreen>
         context.pop();
         SnackBarHelper.showSuccess(
           context,
-          widget.goal != null ? '目標を更新しました！' : '目標を作成しました！頑張りましょう✨',
+          widget.goal != null
+              ? AppMessages.success.goalUpdated
+              : AppMessages.success.goalCreated,
         );
       }
     }).catchError((e) {

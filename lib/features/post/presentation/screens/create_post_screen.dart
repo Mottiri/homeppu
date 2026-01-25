@@ -265,7 +265,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         // 成功メッセージ
         SnackBarHelper.showSuccess(
           context,
-          AppConstants.friendlyMessages['post_success']!,
+          AppMessages.success.postCreated,
         );
         context.pop(true); // 成功を返す（ホーム画面でリロードするため）
       }
