@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/constants/app_messages.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../shared/models/post_model.dart';
@@ -109,8 +110,8 @@ class _PostCardState extends State<PostCard> {
       if (userDoc.exists && userDoc.data()?['isBanned'] == true) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('アカウントが制限されているため、この操作はできません'),
+            SnackBar(
+              content: Text(AppMessages.error.banned),
               backgroundColor: Colors.red,
               duration: Duration(seconds: 2),
             ),
@@ -124,8 +125,8 @@ class _PostCardState extends State<PostCard> {
     if (isMyPost) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('自分の投稿にはリアクションできません'),
+        SnackBar(
+          content: Text(AppMessages.error.reactionOwnPost),
           duration: Duration(seconds: 2),
         ),
       );
@@ -137,8 +138,8 @@ class _PostCardState extends State<PostCard> {
     if (!canReact) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('この投稿へのリアクションは5回までです'),
+          SnackBar(
+            content: Text(AppMessages.error.reactionLimitReached),
             duration: Duration(seconds: 2),
           ),
         );
@@ -166,8 +167,8 @@ class _PostCardState extends State<PostCard> {
                 if (currentRemaining <= 0) {
                   Navigator.of(dialogContext).pop();
                   ScaffoldMessenger.of(this.context).showSnackBar(
-                    const SnackBar(
-                      content: Text('この投稿へのリアクションは5回までです'),
+                    SnackBar(
+                      content: Text(AppMessages.error.reactionLimitReached),
                       duration: Duration(seconds: 2),
                     ),
                   );
@@ -188,8 +189,8 @@ class _PostCardState extends State<PostCard> {
                 if (remaining - sessionCount <= 0) {
                   navigator.pop();
                   scaffoldMessenger.showSnackBar(
-                    const SnackBar(
-                      content: Text('この投稿へのリアクションは5回までです'),
+                    SnackBar(
+                      content: Text(AppMessages.error.reactionLimitReached),
                       duration: Duration(seconds: 2),
                     ),
                   );
@@ -652,38 +653,11 @@ class _MediaGrid extends StatelessWidget {
         );
 
       case MediaType.file:
-        return GestureDetector(
-          onTap: () => _openFile(context, item),
-          child: Container(
-            height: height,
-            color: Colors.grey.shade100,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  _getFileIcon(item.fileName ?? ''),
-                  size: 40,
-                  color: AppColors.primary,
-                ),
-                const SizedBox(height: 8),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Text(
-                    item.fileName ?? 'ファイル',
-                    style: const TextStyle(fontSize: 12),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                if (item.fileSize != null)
-                  Text(
-                    _formatFileSize(item.fileSize!),
-                    style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
-                  ),
-              ],
-            ),
-          ),
+        return Container(
+          height: height,
+          color: Colors.grey.shade200,
+          alignment: Alignment.center,
+          child: const Icon(Icons.block, size: 40, color: Colors.grey),
         );
     }
   }
@@ -713,39 +687,6 @@ class _MediaGrid extends StatelessWidget {
     Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute(builder: (context) => VideoPlayerScreen(videoUrl: url)),
     );
-  }
-
-  void _openFile(BuildContext context, MediaItem item) {
-    // TODO: ファイルダウンロード・表示を実装
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('${item.fileName}を開きます')));
-  }
-
-  IconData _getFileIcon(String fileName) {
-    final ext = fileName.split('.').last.toLowerCase();
-    switch (ext) {
-      case 'pdf':
-        return Icons.picture_as_pdf;
-      case 'doc':
-      case 'docx':
-        return Icons.description;
-      case 'xls':
-      case 'xlsx':
-        return Icons.table_chart;
-      case 'txt':
-        return Icons.text_snippet;
-      case 'zip':
-        return Icons.folder_zip;
-      default:
-        return Icons.insert_drive_file;
-    }
-  }
-
-  String _formatFileSize(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 }
 

@@ -181,7 +181,10 @@ class PostModel {
 
   /// すべてのメディア（後方互換性も含めて）
   List<MediaItem> get allMedia {
-    if (mediaItems.isNotEmpty) return mediaItems;
+    if (mediaItems.isNotEmpty) {
+      // ファイル添付は未サポートのため表示対象から除外する
+      return mediaItems.where((m) => m.type != MediaType.file).toList();
+    }
     if (imageUrl != null && imageUrl!.isNotEmpty) {
       return [MediaItem(url: imageUrl!, type: MediaType.image)];
     }

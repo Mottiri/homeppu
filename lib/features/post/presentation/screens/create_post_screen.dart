@@ -180,13 +180,11 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   }
 
   /// メディアを追加
-  void _addMedia(String path, MediaType type, {String? fileName}) {
+  void _addMedia(String path, MediaType type) {
     if (_selectedMedia.length >= MediaService.maxMediaCount) return;
 
     setState(() {
-      _selectedMedia.add(
-        _SelectedMedia(path: path, type: type, fileName: fileName),
-      );
+      _selectedMedia.add(_SelectedMedia(path: path, type: type));
     });
   }
 
@@ -228,7 +226,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
             filePath: media.path,
             userId: user.uid,
             type: media.type,
-            fileName: media.fileName,
             onProgress: (progress) {
               setState(() {
                 _uploadProgress = (i + progress) / _selectedMedia.length;
@@ -523,7 +520,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                         icon: Badge(
                           isLabelVisible: _selectedMedia.isNotEmpty,
                           label: Text('${_selectedMedia.length}'),
-                          child: const Icon(Icons.attach_file),
+                          child: const Icon(Icons.add_photo_alternate_outlined),
                         ),
                         color: _selectedMedia.isNotEmpty
                             ? AppColors.primary
@@ -558,9 +555,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 class _SelectedMedia {
   final String path;
   final MediaType type;
-  final String? fileName;
 
-  _SelectedMedia({required this.path, required this.type, this.fileName});
+  _SelectedMedia({required this.path, required this.type});
 }
 
 /// メディア選択オプション
@@ -635,29 +631,6 @@ class _MediaPreview extends StatelessWidget {
               ),
             ),
           ),
-          // ファイル名（ファイルの場合）
-          if (media.type == MediaType.file)
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.6),
-                  borderRadius: const BorderRadius.vertical(
-                    bottom: Radius.circular(11),
-                  ),
-                ),
-                child: Text(
-                  media.fileName ?? 'ファイル',
-                  style: const TextStyle(color: Colors.white, fontSize: 10),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ),
           // 動画アイコン
           if (media.type == MediaType.video)
             const Center(
@@ -694,29 +667,11 @@ class _MediaPreview extends StatelessWidget {
         return Container(
           width: 120,
           height: 120,
-          color: Colors.grey.shade100,
-          child: Icon(_getFileIcon(), size: 40, color: Colors.grey.shade600),
+          color: Colors.grey.shade200,
+          child: const Center(
+            child: Icon(Icons.block, size: 40, color: Colors.grey),
+          ),
         );
-    }
-  }
-
-  IconData _getFileIcon() {
-    final ext = media.path.split('.').last.toLowerCase();
-    switch (ext) {
-      case 'pdf':
-        return Icons.picture_as_pdf;
-      case 'doc':
-      case 'docx':
-        return Icons.description;
-      case 'xls':
-      case 'xlsx':
-        return Icons.table_chart;
-      case 'txt':
-        return Icons.text_snippet;
-      case 'zip':
-        return Icons.folder_zip;
-      default:
-        return Icons.insert_drive_file;
     }
   }
 }

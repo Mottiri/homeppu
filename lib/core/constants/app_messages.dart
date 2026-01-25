@@ -126,6 +126,8 @@ class _ErrorMessages {
   String get moderationBlocked => 'この内容は投稿できないみたい😢';
   String get postDeletedNotice => 'この投稿は削除されました';
   String get reportFailed => '通報に失敗しました。もう一度お試しください。';
+  String get reactionOwnPost => '自分の投稿にはリアクションできません';
+  String get reactionLimitReached => 'この投稿へのリアクションは5回までです';
 
   // バリデーション
   String get emptyContent => '内容を入力してね';
