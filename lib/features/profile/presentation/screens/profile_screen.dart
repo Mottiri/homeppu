@@ -5,7 +5,6 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/constants/app_constants.dart';
 import '../../../../core/constants/app_messages.dart';
 import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../core/utils/dialog_helper.dart';
@@ -256,7 +255,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       body: Container(
         decoration: const BoxDecoration(gradient: AppColors.warmGradient),
         child: Center(
-          child: Text(AppConstants.friendlyMessages['error_general']!),
+          child: Text(AppMessages.error.general),
         ),
       ),
     );

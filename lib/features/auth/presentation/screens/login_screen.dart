@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/constants/app_constants.dart';
+import '../../../../core/constants/app_messages.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../widgets/auth_text_field.dart';
 
@@ -58,15 +58,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   String _getErrorMessage(String error) {
     if (error.contains('user-not-found')) {
-      return 'このメールアドレスは登録されていないみたい🔍';
+      return AppMessages.auth.loginUserNotFound;
     } else if (error.contains('wrong-password')) {
-      return 'パスワードが違うみたい🔐';
+      return AppMessages.auth.loginWrongPassword;
     } else if (error.contains('invalid-email')) {
-      return 'メールアドレスの形式を確認してね📧';
+      return AppMessages.auth.loginInvalidEmail;
     } else if (error.contains('too-many-requests')) {
-      return 'ちょっと休憩してからまた試してね⏰';
+      return AppMessages.auth.loginTooManyRequests;
     }
-    return AppConstants.friendlyMessages['error_general']!;
+    return AppMessages.error.general;
   }
 
   @override

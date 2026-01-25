@@ -40,6 +40,9 @@ class AppMessages {
   // ===== オンボーディング関連 =====
   static const onboarding = _OnboardingMessages();
 
+  // ===== 認証関連 =====
+  static const auth = _AuthMessages();
+
   // ===== 通知関連 =====
   static const notification = _NotificationMessages();
 
@@ -102,7 +105,7 @@ class _ErrorMessages {
   const _ErrorMessages();
 
   // 汎用
-  String get general => 'ごめんね、うまくいかなかったみたい😢\nもう一度試してみてね';
+  String get general => 'ごめんね、うまくいかなかったみたい\n😢 もう一度試してみてね';
   String get network => 'ネットワークの調子が悪いみたい🌐\n接続を確認してね';
   String get unauthorized => 'ログインが必要だよ';
   String get permissionDenied => 'この操作はできないみたい';
@@ -411,6 +414,22 @@ class _InquiryMessages {
   String get attachImage => '画像を添付';
   String get messageHint => 'メッセージを入力...';
   String get imageOnlyMessage => '（画像を添付しました）';
+}
+
+/// 認証関連メッセージ
+class _AuthMessages {
+  const _AuthMessages();
+
+  // ログイン
+  String get loginUserNotFound => 'このメールアドレスは登録されていないみたい🔍';
+  String get loginWrongPassword => 'パスワードが違うみたい🔐';
+  String get loginInvalidEmail => 'メールアドレスの形式を確認してね📧';
+  String get loginTooManyRequests => 'ちょっと休憩してからまた試してね⏰';
+
+  // 登録
+  String get registerEmailAlreadyInUse => 'このメールアドレスはすでに使われているみたい📧';
+  String get registerWeakPassword => 'もう少し強いパスワードにしてね🔐';
+  String get registerInvalidEmail => 'メールアドレスの形式を確認してね📧';
 }
 
 /// プロフィール関連メッセージ

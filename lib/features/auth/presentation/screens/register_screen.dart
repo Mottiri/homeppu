@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/constants/app_constants.dart';
+import '../../../../core/constants/app_messages.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
 import '../../../../shared/models/name_part_model.dart';
@@ -270,14 +270,20 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   String _getErrorMessage(String error) {
     if (error.contains('email-already-in-use')) {
-      return 'このメールアドレスはすでに使われているみたい📧';
+      return AppMessages.auth.registerEmailAlreadyInUse;
     } else if (error.contains('weak-password')) {
-      return 'もう少し強いパスワードにしてね🔐';
+      return AppMessages.auth.registerWeakPassword;
     } else if (error.contains('invalid-email')) {
-      return 'メールアドレスの形式を確認してね📧';
+      return AppMessages.auth.registerInvalidEmail;
     }
-    return AppConstants.friendlyMessages['error_general']!;
+    return AppMessages.error.general;
   }
+
+  bool get _hasEmailError =>
+      _errorMessage == AppMessages.auth.registerEmailAlreadyInUse ||
+      _errorMessage == AppMessages.auth.registerInvalidEmail;
+
+  String? get _emailErrorMessage => _hasEmailError ? _errorMessage : null;
 
   @override
   Widget build(BuildContext context) {
@@ -333,7 +339,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   const SizedBox(height: 32),
 
                   // エラーメッセージ
-                  if (_errorMessage != null) ...[
+                  if (_errorMessage != null && !_hasEmailError) ...[
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -380,6 +386,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       return null;
                     },
                   ),
+                  if (_emailErrorMessage != null) ...[
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        _emailErrorMessage!,
+                        style: const TextStyle(color: AppColors.error),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
 
                   // パスワード
