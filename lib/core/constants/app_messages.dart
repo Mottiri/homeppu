@@ -64,6 +64,8 @@ class _SuccessMessages {
   String get postCreated => '投稿できたよ！みんなに届くのを待っててね✨';
   String get postDeleted => '投稿を削除したよ！';
   String get commentCreated => 'コメントを送ったよ！';
+  String get favoriteAdded => 'お気に入りに追加しました';
+  String get favoriteRemoved => 'お気に入りから削除しました';
 
   // サークル関連
   String get circleCreated => 'サークルを作成したよ！🎉';
@@ -123,6 +125,7 @@ class _ErrorMessages {
   String get deleteFailed => '削除できなかったみたい';
   String get moderationBlocked => 'この内容は投稿できないみたい😢';
   String get postDeletedNotice => 'この投稿は削除されました';
+  String get reportFailed => '通報に失敗しました。もう一度お試しください。';
 
   // バリデーション
   String get emptyContent => '内容を入力してね';
@@ -137,6 +140,7 @@ class _ErrorMessages {
   String loadFailed(String target) => '$targetの読み込みに失敗しました';
   String updateFailed(String target) => '$targetの更新に失敗しました';
   String deleteFailed2(String target) => '$targetの削除に失敗しました';
+  String uploadFailed(String target) => '$targetのアップロードに失敗しました';
 }
 
 /// 確認ダイアログメッセージ

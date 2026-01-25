@@ -55,7 +55,9 @@ class _ProfilePostCardState extends State<ProfilePostCard> {
           .update({'isFavorite': newValue});
 
       if (mounted) {
-        final message = newValue ? 'お気に入りに追加しました' : 'お気に入りから削除しました';
+        final message = newValue
+            ? AppMessages.success.favoriteAdded
+            : AppMessages.success.favoriteRemoved;
         SnackBarHelper.showSuccess(
           context,
           message,

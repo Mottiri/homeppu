@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:homeppu/shared/models/category_model.dart';
 import 'package:homeppu/core/constants/app_colors.dart';
+import 'package:homeppu/core/constants/app_messages.dart';
+import 'package:homeppu/core/utils/snackbar_helper.dart';
 import 'package:homeppu/shared/models/task_model.dart';
 import 'package:homeppu/features/tasks/presentation/widgets/recurrence_settings_sheet.dart';
 import 'package:homeppu/shared/services/media_service.dart';
@@ -225,10 +227,12 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
         _attachmentUrls.add(url);
       });
     } catch (e) {
+      debugPrint('TaskDetailSheet: attachment upload failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(
+        SnackBarHelper.showError(
           context,
-        ).showSnackBar(SnackBar(content: Text('アップロードに失敗しました: $e')));
+          AppMessages.error.uploadFailed('画像'),
+        );
       }
     } finally {
       if (mounted) {

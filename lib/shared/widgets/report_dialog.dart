@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/constants/app_messages.dart';
+import '../../core/utils/snackbar_helper.dart';
 import '../providers/moderation_provider.dart';
 import '../services/moderation_service.dart';
 
@@ -85,17 +87,12 @@ class _ReportDialogState extends ConsumerState<ReportDialog> {
 
       if (mounted) {
         Navigator.of(context).pop(true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('通報を受け付けました。ご協力ありがとうございます☺️'),
-            backgroundColor: AppColors.success,
-          ),
-        );
+        SnackBarHelper.showSuccess(context, AppMessages.success.reportSent);
       }
     } on ModerationException catch (e) {
       setState(() => _error = e.message);
     } catch (e) {
-      setState(() => _error = '通報に失敗しました。もう一度お試しください。');
+      setState(() => _error = AppMessages.error.reportFailed);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
