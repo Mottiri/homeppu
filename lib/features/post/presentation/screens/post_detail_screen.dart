@@ -7,6 +7,7 @@ import 'dart:async';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/constants/app_messages.dart';
 import '../../../../shared/models/post_model.dart';
 import '../../../../shared/models/comment_model.dart';
 import '../../../../shared/providers/auth_provider.dart';
@@ -97,7 +98,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(AppConstants.friendlyMessages['error_general']!),
+            content: Text(AppMessages.error.general),
             backgroundColor: AppColors.error,
           ),
         );
@@ -158,8 +159,8 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                       WidgetsBinding.instance.addPostFrameCallback((_) {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('この投稿は削除されました'),
+                            SnackBar(
+                              content: Text(AppMessages.error.postDeletedNotice),
                               backgroundColor: Colors.orange,
                             ),
                           );
@@ -180,8 +181,8 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                       WidgetsBinding.instance.addPostFrameCallback((_) {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('この投稿は削除されました'),
+                            SnackBar(
+                              content: Text(AppMessages.error.postDeletedNotice),
                               backgroundColor: Colors.orange,
                             ),
                           );

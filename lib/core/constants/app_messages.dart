@@ -67,11 +67,14 @@ class _SuccessMessages {
   String get circleJoined => 'サークルに参加したよ！';
   String get circleLeft => 'サークルを退会したよ';
   String get circleDeleted => 'サークルを削除しました';
+  String get circleUpdated => 'サークルを更新しました';
 
   // タスク関連
   String get taskCreated => 'タスクを追加したよ！';
   String get taskCompleted => 'タスク完了！お疲れさま✨';
   String get taskDeleted => 'タスクを削除したよ';
+  String taskDeletedCount(int count) => '$count件を削除しました';
+  String get categoryDeleted => 'カテゴリを削除しました';
   String taskCompletedWithVirtue(int streak) => '🎉 タスク完了！ (+徳ポイント)';
   String taskMilestone(int streak, String message) =>
       '🎉 $streak日連続達成！$message！';
@@ -109,6 +112,7 @@ class _ErrorMessages {
   String get postFailed => '投稿できなかったみたい。もう一度試してみてね';
   String get deleteFailed => '削除できなかったみたい';
   String get moderationBlocked => 'この内容は投稿できないみたい😢';
+  String get postDeletedNotice => 'この投稿は削除されました';
 
   // バリデーション
   String get emptyContent => '内容を入力してね';

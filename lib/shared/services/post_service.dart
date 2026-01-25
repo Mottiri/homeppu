@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../../core/constants/app_colors.dart';
+import '../../core/constants/app_messages.dart';
+import '../../core/utils/dialog_helper.dart';
+import '../../core/utils/snackbar_helper.dart';
 import '../models/post_model.dart';
 import 'ai_service.dart';
 
@@ -28,26 +30,17 @@ class PostService {
     VoidCallback? onDeleted,
   }) async {
     // 確認ダイアログを表示
-    final confirmed = await showDialog<bool>(
+    final confirmed = await DialogHelper.showConfirmDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('投稿を削除'),
-        content: const Text('この投稿を削除しますか？\nこの操作は取り消せません。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('キャンセル'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('削除'),
-          ),
-        ],
-      ),
+      title: AppMessages.label.confirm,
+      message: AppMessages.confirm.deletePost(),
+      confirmText: AppMessages.label.delete,
+      cancelText: AppMessages.label.cancel,
+      isDangerous: true,
+      barrierDismissible: false,
     );
 
-    if (confirmed != true) return false;
+    if (!confirmed) return false;
 
     try {
       // 投稿ドキュメントを削除（カスケード削除はCloud Functionsで処理）
@@ -58,12 +51,7 @@ class PostService {
 
       // 成功メッセージ
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('投稿を削除しました'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        SnackBarHelper.showSuccess(context, AppMessages.success.postDeleted);
       }
 
       // コールバック実行
@@ -74,12 +62,7 @@ class PostService {
       debugPrint('PostService: Stack trace: $stackTrace');
 
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('削除に失敗しました: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SnackBarHelper.showError(context, AppMessages.error.general);
       }
       return false;
     }

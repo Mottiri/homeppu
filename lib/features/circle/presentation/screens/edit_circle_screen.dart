@@ -177,7 +177,7 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen>
       });
 
       if (mounted) {
-        SnackBarHelper.showSuccess(context, 'サークルを更新しました');
+        SnackBarHelper.showSuccess(context, AppMessages.success.circleUpdated);
         context.pop();
       }
     }).catchError((e) {

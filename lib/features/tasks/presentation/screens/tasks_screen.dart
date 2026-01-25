@@ -878,7 +878,10 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
       }
 
       if (mounted) {
-        SnackBarHelper.showSuccess(context, '${idsToDelete.length}件を削除しました');
+        SnackBarHelper.showSuccess(
+          context,
+          AppMessages.success.taskDeletedCount(idsToDelete.length),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -1318,7 +1321,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
       await _loadData();
 
       if (mounted) {
-        SnackBarHelper.showSuccess(context, 'カテゴリを削除しました');
+        SnackBarHelper.showSuccess(context, AppMessages.success.categoryDeleted);
       }
     } catch (e) {
       if (mounted) {
