@@ -1003,6 +1003,7 @@ catch (e) {
 > - ✅ バッチ6完了（2026-01-25）: お気に入り/添付アップロード/通報ダイアログの文言統一（例外詳細UI非表示）
 > - ✅ バッチ7完了（2026-01-25）: post_cardのリアクション制限/制限ユーザー/ファイル操作の文言をAppMessagesへ統一
 > - ✅ バッチ8完了（2026-01-25）: ファイル添付の残骸を除去（投稿作成/投稿表示/モデル）
+> - ✅ バッチ9完了（2026-01-25）: BAN時Snackbar色をAppColors.errorへ統一
 > - `circle_detail_screen.dart` のUIメッセージを AppMessages 化（2026-01-24）
 > - `circles_screen.dart` のUIメッセージを AppMessages 化（2026-01-24）
 > - `home_screen.dart` のUIメッセージを AppMessages 化（2026-01-24）

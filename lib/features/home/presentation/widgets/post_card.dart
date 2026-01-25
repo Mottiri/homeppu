@@ -112,8 +112,8 @@ class _PostCardState extends State<PostCard> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(AppMessages.error.banned),
-              backgroundColor: Colors.red,
-              duration: Duration(seconds: 2),
+              backgroundColor: AppColors.error,
+              duration: const Duration(seconds: 2),
             ),
           );
         }
