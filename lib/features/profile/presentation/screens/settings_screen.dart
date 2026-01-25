@@ -140,12 +140,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ref.invalidate(currentUserProvider);
 
       if (mounted) {
-        SnackBarHelper.showSuccess(context, 'ヘッダー画像を変更しました！');
+        SnackBarHelper.showSuccess(context, AppMessages.profile.headerChangeSuccess);
       }
     } catch (e) {
       debugPrint('Error uploading header image: $e');
       if (mounted) {
-        SnackBarHelper.showError(context, 'ヘッダー画像の変更に失敗しました');
+        SnackBarHelper.showError(context, AppMessages.profile.headerChangeFailed);
       }
     } finally {
       if (mounted) {
@@ -161,9 +161,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     final confirmed = await DialogHelper.showConfirmDialog(
       context: context,
-      title: 'ヘッダー画像をリセット',
-      message: 'ヘッダー画像をデフォルトに戻しますか？',
-      confirmText: 'リセット',
+      title: AppMessages.profile.headerResetTitle,
+      message: AppMessages.profile.headerResetMessage,
+      confirmText: AppMessages.profile.headerResetConfirm,
     );
 
     if (confirmed != true) return;
@@ -199,12 +199,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ref.invalidate(currentUserProvider);
 
       if (mounted) {
-        SnackBarHelper.showSuccess(context, 'ヘッダー画像をリセットしました');
+        SnackBarHelper.showSuccess(context, AppMessages.profile.headerResetSuccess);
       }
     } catch (e) {
       debugPrint('Error resetting header image: $e');
       if (mounted) {
-        SnackBarHelper.showError(context, 'リセットに失敗しました');
+        SnackBarHelper.showError(context, AppMessages.profile.headerResetFailed);
       }
     } finally {
       if (mounted) {
@@ -267,12 +267,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ref.invalidate(currentUserProvider);
 
       if (mounted) {
-        SnackBarHelper.showSuccess(context, 'ヘッダー画像を変更しました！');
+        SnackBarHelper.showSuccess(context, AppMessages.profile.headerChangeSuccess);
       }
     } catch (e) {
       debugPrint('Error selecting default header: $e');
       if (mounted) {
-        SnackBarHelper.showError(context, '変更に失敗しました');
+        SnackBarHelper.showError(context, AppMessages.profile.changeFailed);
       }
     } finally {
       if (mounted) {
@@ -298,7 +298,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
 
       if (mounted) {
-        SnackBarHelper.showSuccess(context, '保存できたよ！');
+        SnackBarHelper.showSuccess(context, AppMessages.profile.savedFriendly);
         setState(() => _hasChanges = false);
       }
     } catch (e) {
@@ -328,7 +328,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           onPressed: () => context.pop(),
           icon: const Icon(Icons.arrow_back_rounded),
         ),
-        title: const Text('設定'),
+        title: Text(AppMessages.profile.settingsTitle),
         actions: [
           if (_hasChanges)
             TextButton(
@@ -342,7 +342,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         color: AppColors.primary,
                       ),
                     )
-                  : const Text('保存'),
+                  : Text(AppMessages.label.save),
             ),
         ],
       ),
@@ -359,7 +359,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'プロフィール編集',
+                      AppMessages.profile.profileEditTitle,
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 20),
@@ -382,7 +382,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
                     // ヘッダー画像
                     Text(
-                      'ヘッダー画像',
+                      AppMessages.profile.headerImageLabel,
                       style: Theme.of(context).textTheme.labelLarge,
                     ),
                     const SizedBox(height: 8),
@@ -429,9 +429,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                       : Container(
                                           color: AppColors.primaryLight
                                               .withValues(alpha: 0.3),
-                                          child: const Center(
+                                          child: Center(
                                             child: Text(
-                                              'デフォルト画像',
+                                              AppMessages.profile.defaultHeaderLabel,
                                               style: TextStyle(
                                                 color: AppColors.textSecondary,
                                               ),
@@ -484,14 +484,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                       )
                                     : const Icon(Icons.image),
                                 label: Text(
-                                  _isUploadingHeader ? '処理中...' : '画像を変更',
+                                  _isUploadingHeader
+                                      ? AppMessages.profile.processing
+                                      : AppMessages.profile.changeImage,
                                 ),
                               ),
                             ),
                             const SizedBox(height: 16),
                             // デフォルト画像から選択
                             Text(
-                              'またはデフォルトから選択',
+                              AppMessages.profile.selectFromDefault,
                               style: Theme.of(context).textTheme.bodySmall
                                   ?.copyWith(color: AppColors.textSecondary),
                             ),
@@ -562,7 +564,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     const SizedBox(height: 24),
 
                     // 表示名（名前パーツ方式）
-                    Text('なまえ', style: Theme.of(context).textTheme.labelLarge),
+                    Text(
+                      AppMessages.profile.nameLabel,
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
                     const SizedBox(height: 8),
                     Consumer(
                       builder: (context, ref, _) {
@@ -606,7 +611,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     children: [
                                       Text(
                                         currentUser?.displayName ??
-                                            'タップして名前を設定',
+                                            AppMessages.profile.tapToSetName,
                                         style: const TextStyle(
                                           fontSize: 18,
                                           fontWeight: FontWeight.bold,
@@ -614,7 +619,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        'タップして名前を変更',
+                                        AppMessages.profile.tapToChangeName,
                                         style: TextStyle(
                                           fontSize: 12,
                                           color: Colors.grey[600],
@@ -637,14 +642,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     const SizedBox(height: 16),
 
                     // 自己紹介
-                    Text('自己紹介', style: Theme.of(context).textTheme.labelLarge),
+                    Text(
+                      AppMessages.profile.bioLabel,
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
                     const SizedBox(height: 8),
                     TextField(
                       controller: _bioController,
                       maxLength: AppConstants.maxBioLength,
                       maxLines: 3,
-                      decoration: const InputDecoration(
-                        hintText: '自己紹介を入力（任意）',
+                      decoration: InputDecoration(
+                        hintText: AppMessages.profile.bioHint,
                       ),
                       onChanged: (_) => setState(() => _hasChanges = true),
                     ),
@@ -659,7 +667,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             Card(
               child: ExpansionTile(
                 leading: const Icon(Icons.notifications_outlined),
-                title: const Text('通知設定'),
+                title: Text(AppMessages.profile.notificationSettingsTitle),
                 subtitle: Consumer(
                   builder: (context, ref, _) {
                     final user = ref.watch(currentUserProvider).valueOrNull;
@@ -668,7 +676,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             .where((e) => e)
                             .length ??
                         0);
-                    return Text(enabledCount == 0 ? 'すべてオフ' : 'カスタマイズ中');
+                    return Text(
+                      enabledCount == 0
+                          ? AppMessages.profile.allOff
+                          : AppMessages.profile.customizing,
+                    );
                   },
                 ),
                 children: [
@@ -680,8 +692,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       return Column(
                         children: [
                           SwitchListTile(
-                            title: const Text('コメント通知'),
-                            subtitle: const Text('投稿へのコメントを通知します'),
+                            title: Text(AppMessages.profile.commentNotificationTitle),
+                            subtitle: Text(AppMessages.profile.commentNotificationSubtitle),
                             secondary: const Icon(Icons.chat_bubble_outline),
                             value:
                                 user.notificationSettings['comments'] ?? true,
@@ -700,8 +712,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           ),
                           const Divider(height: 1),
                           SwitchListTile(
-                            title: const Text('リアクション通知'),
-                            subtitle: const Text('投稿へのリアクションを通知します'),
+                            title: Text(AppMessages.profile.reactionNotificationTitle),
+                            subtitle: Text(AppMessages.profile.reactionNotificationSubtitle),
                             secondary: const Icon(Icons.favorite_border),
                             value:
                                 user.notificationSettings['reactions'] ?? true,
@@ -733,14 +745,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             Card(
               child: ExpansionTile(
                 leading: const Icon(Icons.celebration_outlined),
-                title: const Text('自動投稿設定'),
+                title: Text(AppMessages.profile.autoPostSettingsTitle),
                 subtitle: Consumer(
                   builder: (context, ref, _) {
                     final user = ref.watch(currentUserProvider).valueOrNull;
                     final enabledCount =
                         (user?.autoPostSettings.values.where((e) => e).length ??
                         0);
-                    return Text(enabledCount == 0 ? 'すべてオフ' : 'カスタマイズ中');
+                    return Text(
+                      enabledCount == 0
+                          ? AppMessages.profile.allOff
+                          : AppMessages.profile.customizing,
+                    );
                   },
                 ),
                 children: [
@@ -752,8 +768,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       return Column(
                         children: [
                           SwitchListTile(
-                            title: const Text('ストリーク達成時'),
-                            subtitle: const Text('連続達成（マイルストーン）した時に自動で投稿します'),
+                            title: Text(AppMessages.profile.milestonesTitle),
+                            subtitle: Text(AppMessages.profile.milestonesSubtitle),
                             secondary: const Icon(
                               Icons.local_fire_department_outlined,
                             ),
@@ -773,8 +789,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           ),
                           const Divider(height: 1),
                           SwitchListTile(
-                            title: const Text('目標達成時'),
-                            subtitle: const Text('目標を達成した時に自動で投稿します'),
+                            title: Text(AppMessages.profile.goalAutoPostTitle),
+                            subtitle: Text(AppMessages.profile.goalAutoPostSubtitle),
                             secondary: const Icon(Icons.flag_outlined),
                             value: user.autoPostSettings['goals'] ?? true,
                             onChanged: (value) async {
@@ -803,7 +819,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             Card(
               child: ExpansionTile(
                 leading: const Icon(Icons.visibility_outlined),
-                title: const Text('公開範囲'),
+                title: Text(AppMessages.profile.privacyTitle),
                 subtitle: Consumer(
                   builder: (context, ref, _) {
                     final user = ref.watch(currentUserProvider).valueOrNull;
@@ -811,7 +827,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       (m) => m.value == user?.postMode,
                       orElse: () => PrivacyMode.ai,
                     );
-                    return Text('現在: ${currentMode.label}');
+                    return Text(
+                      AppMessages.profile.privacyCurrent(currentMode.label),
+                    );
                   },
                 ),
                 children: [
@@ -823,18 +841,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         color: AppColors.primaryLight.withValues(alpha: 0.3),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Row(
+                      child: Row(
                         children: [
-                          Icon(
+                          const Icon(
                             Icons.info_outline,
                             size: 18,
                             color: AppColors.primary,
                           ),
-                          SizedBox(width: 8),
+                          const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              '次回以降の投稿から適用されます\n過去の投稿は変わりません',
-                              style: TextStyle(
+                              AppMessages.profile.privacyInfo,
+                              style: const TextStyle(
                                 fontSize: 12,
                                 color: AppColors.textSecondary,
                               ),
@@ -866,11 +884,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   final confirmed =
                                       await DialogHelper.showConfirmDialog(
                                         context: context,
-                                        title: '${mode.label}に変更',
-                                        message:
-                                            '公開範囲を「${mode.label}」に変更しますか？\n\n'
-                                            '次回以降の投稿から適用されます。',
-                                        confirmText: '変更する',
+                                        title: AppMessages.profile
+                                            .privacyChangeTitle(mode.label),
+                                        message: AppMessages.profile
+                                            .privacyChangeMessage(mode.label),
+                                        confirmText:
+                                            AppMessages.profile.privacyChangeConfirm,
                                       );
 
                                   if (confirmed == true) {
@@ -884,7 +903,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     if (context.mounted) {
                                       SnackBarHelper.showSuccess(
                                         context,
-                                        '公開範囲を「${mode.label}」に変更しました',
+                                        AppMessages.profile.privacyChanged(mode.label),
                                       );
                                     }
                                   }
@@ -911,8 +930,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       Icons.mail_outline,
                       color: AppColors.primary,
                     ),
-                    title: const Text('問い合わせ・要望'),
-                    subtitle: const Text('バグ報告や機能要望を送信'),
+                    title: Text(AppMessages.profile.inquiryTitle),
+                    subtitle: Text(AppMessages.profile.inquirySubtitle),
                     trailing: StreamBuilder<int>(
                       stream: InquiryService().getUnreadCount(),
                       builder: (context, snapshot) {
@@ -961,7 +980,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 children: [
                   ListTile(
                     leading: const Icon(Icons.info_outline),
-                    title: const Text('アプリについて'),
+                    title: Text(AppMessages.profile.aboutTitle),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () {
                       showAboutDialog(
@@ -981,7 +1000,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   const Divider(height: 1),
                   ListTile(
                     leading: const Icon(Icons.help_outline),
-                    title: const Text('ヘルプ'),
+                    title: Text(AppMessages.profile.helpTitle),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () {
                       // TODO: ヘルプ画面
@@ -990,7 +1009,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   const Divider(height: 1),
                   ListTile(
                     leading: const Icon(Icons.description_outlined),
-                    title: const Text('利用規約'),
+                    title: Text(AppMessages.profile.termsTitle),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () {
                       // TODO: 利用規約画面
@@ -999,7 +1018,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   const Divider(height: 1),
                   ListTile(
                     leading: const Icon(Icons.privacy_tip_outlined),
-                    title: const Text('プライバシーポリシー'),
+                    title: Text(AppMessages.profile.privacyPolicyTitle),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () {
                       // TODO: プライバシーポリシー画面
@@ -1015,9 +1034,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             Card(
               child: ListTile(
                 leading: const Icon(Icons.logout, color: AppColors.error),
-                title: const Text(
-                  'ログアウト',
-                  style: TextStyle(color: AppColors.error),
+                title: Text(
+                  AppMessages.profile.logoutTitle,
+                  style: const TextStyle(color: AppColors.error),
                 ),
                 onTap: _logout,
               ),

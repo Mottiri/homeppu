@@ -201,6 +201,16 @@ class _CircleMessages {
       'このサークルは招待制です。\nオーナーに参加申請を送信しますか？';
   String get joinRequestConfirm => '申請する';
   String get joinRequestSent => '参加申請を送信しました';
+  String get joinRequestsTitle => '参加申請';
+  String get joinRequestsEmpty => '参加申請はありません';
+  String get joinApproveSuccess => '参加を承認しました';
+  String get joinRejectTitle => '申請を拒否';
+  String get joinRejectConfirm => '拒否';
+  String get joinRejectSuccess => '申請を拒否しました';
+  String joinRejectMessage(String name) => '$nameさんの申請を拒否しますか？';
+  String get loadingDisplayName => '読み込み中...';
+  String get tooltipReject => '拒否';
+  String get tooltipApprove => '承認';
 
   String get leaveTitle => 'サークルを退会';
   String get leaveMessage => '本当にこのサークルを退会しますか？';
@@ -286,6 +296,45 @@ class _HomeMessages {
 class _GoalMessages {
   const _GoalMessages();
 
+  String get title => '目標';
+  String get streamError => 'エラーが発生しました';
+  String get inProgressTitle => '進行中の目標';
+  String get reorderDone => '完了';
+  String get reorderLabel => '並替';
+  String get headerTitle => '目標を達成しよう！';
+  String get headerDescription => '小さな積み重ねが大きな成果に✨';
+  String get hallOfFameTitle => '殿堂入り';
+  String get hallOfFameSubtitle => '達成した目標を見る';
+  String get newGoal => '新しい目標';
+  String get notFound => '目標が見つかりません';
+  String get completeButton => '目標を達成する！';
+  String get revertButton => '未完了に戻す（再開）';
+  String get accumulationTitle => 'これまでの積み上げ';
+  String get tabIncomplete => '未完了';
+  String get tabComplete => '完了';
+  String get emptyTasksTitle => 'まだタスクがありません';
+  String get emptyTasksDescription => 'タスクを作成して目標に紐づけよう';
+  String get taskAddPrompt => 'タスクを追加してください';
+  String get deleteGoalTitle => '目標を削除';
+  String get deleteGoalMessage =>
+      '紐づいているすべてのタスクも削除されます。\nこの操作は取り消せません。';
+  String get congratsTitle => 'おめでとう！🎉';
+  String get hallOfFamePrompt => '目標を「殿堂入り」にしますか？';
+  String get deleteFutureTasksNote => '未来のタスクがあれば削除されます';
+  String get hallOfFameConfirm => '殿堂入りへ';
+  String get completeSuccess => 'おめでとう！目標を達成しました！🎊';
+  String get resumed => '目標を再開しました';
+  String get deadlineToday => '今日まで！';
+  String deadlineRemainingDays(int days) => 'あと$days日';
+  String deadlineOverdueDays(int days) => '$days日超過';
+  String get unitMinutes => '分';
+  String get unitHours => '時間';
+  String get unitDays => '日';
+  String get dateToday => '今日';
+  String get dateTomorrow => '明日';
+  String get dateYesterday => '昨日';
+  String daysLater(int days) => '$days日後';
+
   String get completedTitle => '殿堂入り';
   String get completedEmptyTitle => 'まだ達成した目標はありません';
   String get completedEmptyDescription => '目標を達成すると、ここに表示されます';
@@ -363,6 +412,57 @@ class _InquiryMessages {
 /// プロフィール関連メッセージ
 class _ProfileMessages {
   const _ProfileMessages();
+
+  // 設定画面
+  String get settingsTitle => '設定';
+  String get profileEditTitle => 'プロフィール編集';
+  String get headerImageLabel => 'ヘッダー画像';
+  String get defaultHeaderLabel => 'デフォルト画像';
+  String get processing => '処理中...';
+  String get changeImage => '画像を変更';
+  String get selectFromDefault => 'またはデフォルトから選択';
+  String get nameLabel => 'なまえ';
+  String get tapToSetName => 'タップして名前を設定';
+  String get tapToChangeName => 'タップして名前を変更';
+  String get bioLabel => '自己紹介';
+  String get bioHint => '自己紹介を入力（任意）';
+  String get notificationSettingsTitle => '通知設定';
+  String get allOff => 'すべてオフ';
+  String get customizing => 'カスタマイズ中';
+  String get commentNotificationTitle => 'コメント通知';
+  String get commentNotificationSubtitle => '投稿へのコメントを通知します';
+  String get reactionNotificationTitle => 'リアクション通知';
+  String get reactionNotificationSubtitle => '投稿へのリアクションを通知します';
+  String get autoPostSettingsTitle => '自動投稿設定';
+  String get milestonesTitle => 'ストリーク達成時';
+  String get milestonesSubtitle => '連続達成（マイルストーン）した時に自動で投稿します';
+  String get goalAutoPostTitle => '目標達成時';
+  String get goalAutoPostSubtitle => '目標を達成した時に自動で投稿します';
+  String get privacyTitle => '公開範囲';
+  String privacyCurrent(String label) => '現在: $label';
+  String get privacyInfo =>
+      '次回以降の投稿から適用されます\n過去の投稿は変わりません';
+  String privacyChangeTitle(String label) => '$labelに変更';
+  String privacyChangeMessage(String label) =>
+      '公開範囲を「$label」に変更しますか？\n\n次回以降の投稿から適用されます。';
+  String get privacyChangeConfirm => '変更する';
+  String privacyChanged(String label) => '公開範囲を「$label」に変更しました';
+  String get inquiryTitle => '問い合わせ・要望';
+  String get inquirySubtitle => 'バグ報告や機能要望を送信';
+  String get aboutTitle => 'アプリについて';
+  String get helpTitle => 'ヘルプ';
+  String get termsTitle => '利用規約';
+  String get privacyPolicyTitle => 'プライバシーポリシー';
+  String get logoutTitle => 'ログアウト';
+  String get headerResetTitle => 'ヘッダー画像をリセット';
+  String get headerResetMessage => 'ヘッダー画像をデフォルトに戻しますか？';
+  String get headerResetConfirm => 'リセット';
+  String get headerChangeSuccess => 'ヘッダー画像を変更しました！';
+  String get headerChangeFailed => 'ヘッダー画像の変更に失敗しました';
+  String get headerResetSuccess => 'ヘッダー画像をリセットしました';
+  String get headerResetFailed => 'リセットに失敗しました';
+  String get changeFailed => '変更に失敗しました';
+  String get savedFriendly => '保存できたよ！';
 
   String get nameEditTitle => '名前を変更';
   String get previewLabel => 'プレビュー';

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../../../core/constants/app_messages.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../shared/models/goal_model.dart';
 import '../../../../shared/providers/goal_provider.dart';
@@ -64,7 +65,9 @@ class _GoalListScreenState extends ConsumerState<GoalListScreen>
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      return const Scaffold(body: Center(child: Text('ログインが必要です')));
+      return Scaffold(
+        body: Center(child: Text(AppMessages.error.unauthorized)),
+      );
     }
 
     final goalService = ref.read(goalServiceProvider);
@@ -99,7 +102,7 @@ class _GoalListScreenState extends ConsumerState<GoalListScreen>
                     padding: const EdgeInsets.all(24),
                     child: Center(
                       child: Text(
-                        'エラーが発生しました',
+                        AppMessages.goal.streamError,
                         style: TextStyle(color: AppColors.error),
                       ),
                     ),
@@ -134,7 +137,7 @@ class _GoalListScreenState extends ConsumerState<GoalListScreen>
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            '進行中の目標',
+                            AppMessages.goal.inProgressTitle,
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
@@ -173,7 +176,9 @@ class _GoalListScreenState extends ConsumerState<GoalListScreen>
                                     : AppColors.textSecondary,
                               ),
                               label: Text(
-                                _isReorderMode ? '完了' : '並替',
+                                _isReorderMode
+                                    ? AppMessages.goal.reorderDone
+                                    : AppMessages.goal.reorderLabel,
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: _isReorderMode
@@ -295,7 +300,7 @@ class _GoalListScreenState extends ConsumerState<GoalListScreen>
             ),
           ),
           const SizedBox(width: 10),
-          const Text('目標'),
+          Text(AppMessages.goal.title),
         ],
       ),
     );
@@ -324,7 +329,7 @@ class _GoalListScreenState extends ConsumerState<GoalListScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '目標を達成しよう！',
+                  AppMessages.goal.headerTitle,
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -333,7 +338,7 @@ class _GoalListScreenState extends ConsumerState<GoalListScreen>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '小さな積み重ねが大きな成果に✨',
+                  AppMessages.goal.headerDescription,
                   style: TextStyle(
                     fontSize: 13,
                     color: AppColors.textSecondary,
@@ -404,7 +409,7 @@ class _GoalListScreenState extends ConsumerState<GoalListScreen>
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                '殿堂入り',
+                AppMessages.goal.hallOfFameTitle,
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.bold,
@@ -413,7 +418,7 @@ class _GoalListScreenState extends ConsumerState<GoalListScreen>
               ),
             ),
             Text(
-              '達成した目標を見る',
+              AppMessages.goal.hallOfFameSubtitle,
               style: TextStyle(
                 fontSize: 12,
                 color: const Color(0xFFB8860B).withValues(alpha: 0.7),
@@ -455,12 +460,12 @@ class _GoalListScreenState extends ConsumerState<GoalListScreen>
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
-            children: const [
-              Icon(Icons.add_rounded, color: Colors.white, size: 22),
-              SizedBox(width: 8),
+            children: [
+              const Icon(Icons.add_rounded, color: Colors.white, size: 22),
+              const SizedBox(width: 8),
               Text(
-                '新しい目標',
-                style: TextStyle(
+                AppMessages.goal.newGoal,
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 15,
                   fontWeight: FontWeight.bold,

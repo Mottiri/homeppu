@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_messages.dart';
+import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/models/goal_model.dart';
 import '../../../../shared/models/task_model.dart';
 import '../../../../shared/services/task_service.dart';
@@ -45,9 +47,8 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('エラー: $e')));
+        debugPrint('Toggle task completion failed: $e');
+        SnackBarHelper.showError(context, AppMessages.error.general);
       }
     }
   }
@@ -69,9 +70,8 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
       await _taskService.updateTask(updatedTask);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('エラー: $e')));
+        debugPrint('Toggle subtask completion failed: $e');
+        SnackBarHelper.showError(context, AppMessages.error.general);
       }
     }
   }
@@ -97,13 +97,13 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
     final diff = taskDate.difference(today).inDays;
 
     if (diff == 0) {
-      return '今日';
+      return AppMessages.goal.dateToday;
     } else if (diff == 1) {
-      return '明日';
+      return AppMessages.goal.dateTomorrow;
     } else if (diff == -1) {
-      return '昨日';
+      return AppMessages.goal.dateYesterday;
     } else if (diff > 0 && diff < 7) {
-      return '$diff日後';
+      return AppMessages.goal.daysLater(diff);
     } else {
       return DateFormat('M/d').format(date);
     }
@@ -242,7 +242,7 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                     child: Text(
-                      'タスクを追加してください',
+                      AppMessages.goal.taskAddPrompt,
                       style: TextStyle(
                         fontSize: 13,
                         color: AppColors.textHint,
@@ -259,9 +259,16 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
   }
 
   Widget _buildHeader(Color goalColor, int completedCount, int totalCount) {
-    final daysRemaining = widget.goal.deadline
-        ?.difference(DateTime.now())
-        .inDays;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final deadlineDate = widget.goal.deadline == null
+        ? null
+        : DateTime(
+            widget.goal.deadline!.year,
+            widget.goal.deadline!.month,
+            widget.goal.deadline!.day,
+          );
+    final daysRemaining = deadlineDate?.difference(today).inDays;
     final progress = totalCount > 0 ? completedCount / totalCount : 0.0;
 
     return InkWell(
@@ -671,22 +678,22 @@ class _GoalCardWithStatsState extends State<GoalCardWithStats> {
     if (daysRemaining < 0) {
       chipColor = AppColors.error.withValues(alpha: 0.1);
       textColor = AppColors.error;
-      text = '${-daysRemaining}日超過';
+      text = AppMessages.goal.deadlineOverdueDays(-daysRemaining);
       icon = Icons.warning_amber_rounded;
     } else if (daysRemaining == 0) {
       chipColor = AppColors.warning.withValues(alpha: 0.2);
       textColor = AppColors.warning;
-      text = '今日まで';
+      text = AppMessages.goal.deadlineToday;
       icon = Icons.schedule_rounded;
     } else if (daysRemaining <= 7) {
       chipColor = AppColors.warning.withValues(alpha: 0.1);
       textColor = const Color(0xFFE65100);
-      text = 'あと$daysRemaining日';
+      text = AppMessages.goal.deadlineRemainingDays(daysRemaining);
       icon = Icons.timer_outlined;
     } else {
       chipColor = goalColor.withValues(alpha: 0.1);
       textColor = goalColor;
-      text = 'あと$daysRemaining日';
+      text = AppMessages.goal.deadlineRemainingDays(daysRemaining);
       icon = Icons.event_available_rounded;
     }
 

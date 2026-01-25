@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_messages.dart';
 import '../../../../shared/models/goal_model.dart';
 import '../../../../shared/models/task_model.dart';
 import '../../../../shared/services/goal_service.dart';
@@ -37,13 +38,13 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
           String unitLabel;
           switch (unit) {
             case 'minutes':
-              unitLabel = '分';
+              unitLabel = AppMessages.goal.unitMinutes;
               break;
             case 'hours':
-              unitLabel = '時間';
+              unitLabel = AppMessages.goal.unitHours;
               break;
             case 'days':
-              unitLabel = '日';
+              unitLabel = AppMessages.goal.unitDays;
               break;
             default:
               unitLabel = '';
@@ -57,7 +58,9 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      return const Scaffold(body: Center(child: Text('ログインが必要です')));
+      return Scaffold(
+        body: Center(child: Text(AppMessages.error.unauthorized)),
+      );
     }
 
     final goalService = ref.read(goalServiceProvider);
@@ -88,7 +91,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    '目標が見つかりません',
+                    AppMessages.goal.notFound,
                     style: TextStyle(
                       fontSize: 16,
                       color: AppColors.textSecondary,
@@ -113,7 +116,12 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
   ) {
     final isCompleted = goal.isCompleted;
     final color = Color(goal.colorValue);
-    final daysRemaining = goal.deadline?.difference(DateTime.now()).inDays;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final deadlineDate = goal.deadline == null
+        ? null
+        : DateTime(goal.deadline!.year, goal.deadline!.month, goal.deadline!.day);
+    final daysRemaining = deadlineDate?.difference(today).inDays;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -435,22 +443,22 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
     if (daysRemaining < 0) {
       chipColor = AppColors.error;
       textColor = Colors.white;
-      text = '${-daysRemaining}日超過';
+      text = AppMessages.goal.deadlineOverdueDays(-daysRemaining);
       icon = Icons.warning_amber_rounded;
     } else if (daysRemaining == 0) {
       chipColor = AppColors.warning;
       textColor = Colors.white;
-      text = '今日まで！';
+      text = AppMessages.goal.deadlineToday;
       icon = Icons.schedule_rounded;
     } else if (daysRemaining <= 7) {
       chipColor = const Color(0xFFFF6B35);
       textColor = Colors.white;
-      text = 'あと$daysRemaining日';
+      text = AppMessages.goal.deadlineRemainingDays(daysRemaining);
       icon = Icons.timer_outlined;
     } else {
       chipColor = goalColor;
       textColor = Colors.white;
-      text = 'あと$daysRemaining日';
+      text = AppMessages.goal.deadlineRemainingDays(daysRemaining);
       icon = Icons.event_available_rounded;
     }
 
@@ -510,12 +518,16 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
-            Icon(Icons.emoji_events_rounded, color: Colors.white, size: 24),
-            SizedBox(width: 10),
+          children: [
+            const Icon(
+              Icons.emoji_events_rounded,
+              color: Colors.white,
+              size: 24,
+            ),
+            const SizedBox(width: 10),
             Text(
-              '目標を達成する！',
-              style: TextStyle(
+              AppMessages.goal.completeButton,
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 17,
                 fontWeight: FontWeight.bold,
@@ -535,7 +547,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
     return OutlinedButton.icon(
       onPressed: () => _toggleComplete(context, service, goal, false),
       icon: const Icon(Icons.undo_rounded),
-      label: const Text('未完了に戻す（再開）'),
+      label: Text(AppMessages.goal.revertButton),
       style: OutlinedButton.styleFrom(
         foregroundColor: AppColors.textSecondary,
         side: BorderSide(color: AppColors.textHint),
@@ -567,7 +579,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
               ),
               const SizedBox(width: 10),
               Text(
-                'これまでの積み上げ',
+                AppMessages.goal.accumulationTitle,
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -605,7 +617,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
                 // アクティブタスク
                 if (activeTasks.isNotEmpty) ...[
                   _buildTaskSubHeader(
-                    '未完了',
+                    AppMessages.goal.tabIncomplete,
                     activeTasks.length,
                     AppColors.warning,
                   ),
@@ -616,7 +628,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
                 if (completedTasks.isNotEmpty) ...[
                   if (activeTasks.isNotEmpty) const SizedBox(height: 8),
                   _buildTaskSubHeader(
-                    '完了',
+                    AppMessages.goal.tabComplete,
                     completedTasks.length,
                     AppColors.success,
                   ),
@@ -644,12 +656,12 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
           Icon(Icons.assignment_outlined, size: 48, color: AppColors.textHint),
           const SizedBox(height: 12),
           Text(
-            'まだタスクがありません',
+            AppMessages.goal.emptyTasksTitle,
             style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
           ),
           const SizedBox(height: 4),
           Text(
-            'タスクを作成して目標に紐づけよう',
+            AppMessages.goal.emptyTasksDescription,
             style: TextStyle(fontSize: 12, color: AppColors.textHint),
           ),
         ],
@@ -767,14 +779,14 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
           children: [
             Icon(Icons.warning_amber_rounded, color: AppColors.error),
             const SizedBox(width: 8),
-            const Text('目標を削除'),
+            Text(AppMessages.goal.deleteGoalTitle),
           ],
         ),
-        content: const Text('紐づいているすべてのタスクも削除されます。\nこの操作は取り消せません。'),
+        content: Text(AppMessages.goal.deleteGoalMessage),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('キャンセル'),
+            child: Text(AppMessages.label.cancel),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
@@ -782,7 +794,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
               backgroundColor: AppColors.error,
               foregroundColor: Colors.white,
             ),
-            child: const Text('削除'),
+            child: Text(AppMessages.label.delete),
           ),
         ],
       ),
@@ -828,14 +840,14 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
                 ),
               ),
               const SizedBox(width: 10),
-              const Text('おめでとう！🎉'),
+              Text(AppMessages.goal.congratsTitle),
             ],
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('目標を「殿堂入り」にしますか？'),
+              Text(AppMessages.goal.hallOfFamePrompt),
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -853,7 +865,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        '未来のタスクがあれば削除されます',
+                        AppMessages.goal.deleteFutureTasksNote,
                         style: TextStyle(
                           fontSize: 12,
                           color: AppColors.textSecondary,
@@ -868,7 +880,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, null),
-              child: const Text('キャンセル'),
+              child: Text(AppMessages.label.cancel),
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(context, true),
@@ -876,7 +888,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
                 backgroundColor: const Color(0xFFFFD700),
                 foregroundColor: Colors.white,
               ),
-              child: const Text('殿堂入りへ'),
+              child: Text(AppMessages.goal.hallOfFameConfirm),
             ),
           ],
         ),
@@ -895,10 +907,10 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Row(
-                children: const [
-                  Icon(Icons.emoji_events, color: Colors.white),
-                  SizedBox(width: 8),
-                  Text('おめでとう！目標を達成しました！🎊'),
+                children: [
+                  const Icon(Icons.emoji_events, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Text(AppMessages.goal.completeSuccess),
                 ],
               ),
               backgroundColor: const Color(0xFFFFB300),
@@ -912,10 +924,11 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
           context.go('/tasks', extra: {'forceRefresh': true});
         }
       } catch (e) {
+        debugPrint('Goal completion failed: $e');
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('目標達成に失敗しました: $e'),
+              content: Text(AppMessages.error.general),
               backgroundColor: Colors.red,
             ),
           );
@@ -926,7 +939,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('目標を再開しました'),
+            content: Text(AppMessages.goal.resumed),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),

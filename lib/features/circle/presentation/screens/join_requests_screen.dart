@@ -27,7 +27,7 @@ class JoinRequestsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('参加申請'),
+        title: Text(AppMessages.circle.joinRequestsTitle),
         backgroundColor: const Color(0xFF00ACC1),
         foregroundColor: Colors.white,
       ),
@@ -61,7 +61,7 @@ class JoinRequestsScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    '参加申請はありません',
+                    AppMessages.circle.joinRequestsEmpty,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       color: AppColors.textSecondary,
                     ),
@@ -152,7 +152,10 @@ class _JoinRequestCardState extends State<_JoinRequestCard>
       );
 
       if (mounted) {
-        SnackBarHelper.showSuccess(context, '参加を承認しました');
+        SnackBarHelper.showSuccess(
+          context,
+          AppMessages.circle.joinApproveSuccess,
+        );
       }
     }).catchError((e) {
       if (mounted) {
@@ -163,11 +166,15 @@ class _JoinRequestCardState extends State<_JoinRequestCard>
   }
 
   Future<void> _handleReject() async {
+    final displayName = (_userInfo?['displayName'] as String?) ?? '';
+    final rejectName =
+        displayName.isNotEmpty ? displayName : AppMessages.circle.loadingDisplayName;
+
     final confirmed = await DialogHelper.showConfirmDialog(
       context: context,
-      title: '申請を拒否',
-      message: '${_userInfo?['displayName'] ?? ''}さんの申請を拒否しますか？',
-      confirmText: '拒否',
+      title: AppMessages.circle.joinRejectTitle,
+      message: AppMessages.circle.joinRejectMessage(rejectName),
+      confirmText: AppMessages.circle.joinRejectConfirm,
       isDangerous: true,
     );
 
@@ -181,7 +188,10 @@ class _JoinRequestCardState extends State<_JoinRequestCard>
       );
 
       if (mounted) {
-        SnackBarHelper.showWarning(context, '申請を拒否しました');
+        SnackBarHelper.showWarning(
+          context,
+          AppMessages.circle.joinRejectSuccess,
+        );
       }
     }).catchError((e) {
       if (mounted) {
@@ -195,6 +205,10 @@ class _JoinRequestCardState extends State<_JoinRequestCard>
   Widget build(BuildContext context) {
     final createdAt = widget.request['createdAt'] as Timestamp?;
     final dateStr = createdAt != null ? _formatDate(createdAt.toDate()) : '';
+    final displayName = (_userInfo?['displayName'] as String?) ?? '';
+    final displayNameLabel = displayName.isNotEmpty
+        ? displayName
+        : AppMessages.circle.loadingDisplayName;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -220,7 +234,7 @@ class _JoinRequestCardState extends State<_JoinRequestCard>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _userInfo?['displayName'] ?? '読み込み中...',
+                      displayNameLabel,
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
@@ -250,7 +264,7 @@ class _JoinRequestCardState extends State<_JoinRequestCard>
                   IconButton(
                     onPressed: _handleReject,
                     icon: const Icon(Icons.close, color: Colors.red),
-                    tooltip: '拒否',
+                    tooltip: AppMessages.circle.tooltipReject,
                     style: IconButton.styleFrom(
                       backgroundColor: Colors.red.withValues(alpha: 0.1),
                     ),
@@ -260,7 +274,7 @@ class _JoinRequestCardState extends State<_JoinRequestCard>
                   IconButton(
                     onPressed: _handleApprove,
                     icon: const Icon(Icons.check, color: Colors.green),
-                    tooltip: '承認',
+                    tooltip: AppMessages.circle.tooltipApprove,
                     style: IconButton.styleFrom(
                       backgroundColor: Colors.green.withValues(alpha: 0.1),
                     ),
