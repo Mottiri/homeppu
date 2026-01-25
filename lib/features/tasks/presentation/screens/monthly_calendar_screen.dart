@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:homeppu/core/constants/app_colors.dart';
+import 'package:homeppu/core/constants/app_messages.dart';
 import 'package:homeppu/shared/models/task_model.dart';
 
 class MonthlyCalendarScreen extends StatefulWidget {
@@ -41,7 +42,7 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         foregroundColor: AppColors.textPrimary,
-        title: const Text('カレンダー'),
+        title: Text(AppMessages.calendar.title),
       ),
       body: PageView.builder(
         controller: _pageController,
@@ -142,7 +143,7 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
         // Days Header
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: ['月', '火', '水', '木', '金', '土', '日'].map((day) {
+          children: AppMessages.calendar.weekdayLabels.map((day) {
             return SizedBox(
               width: 35,
               child: Center(

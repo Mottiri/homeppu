@@ -36,6 +36,21 @@ class AppMessages {
 
   // ===== 目標関連 =====
   static const goal = _GoalMessages();
+
+  // ===== オンボーディング関連 =====
+  static const onboarding = _OnboardingMessages();
+
+  // ===== 通知関連 =====
+  static const notification = _NotificationMessages();
+
+  // ===== カレンダー関連 =====
+  static const calendar = _CalendarMessages();
+
+  // ===== 問い合わせ関連 =====
+  static const inquiry = _InquiryMessages();
+
+  // ===== プロフィール関連 =====
+  static const profile = _ProfileMessages();
 }
 
 /// 成功メッセージ
@@ -274,4 +289,89 @@ class _GoalMessages {
   String get completedTitle => '殿堂入り';
   String get completedEmptyTitle => 'まだ達成した目標はありません';
   String get completedEmptyDescription => '目標を達成すると、ここに表示されます';
+}
+
+/// オンボーディング関連メッセージ
+class _OnboardingMessages {
+  const _OnboardingMessages();
+
+  String get skip => 'スキップ';
+  String get next => '次へ';
+  String get start => 'はじめる';
+  String get alreadyHaveAccount => 'すでにアカウントをお持ちの方';
+
+  String get page1Title => 'ようこそ、ほめっぷへ';
+  String get page1Description =>
+      '世界一優しいSNSへようこそ！\nここでは誰もがあなたを応援してくれるよ';
+  String get page2Title => 'たくさん褒められよう';
+  String get page2Description =>
+      '日常の小さなことを投稿するだけで\nAIや仲間から温かい言葉が届くよ';
+  String get page3Title => 'ポジティブな空間';
+  String get page3Description =>
+      'ネガティブな言葉は一切なし\n安心して自分を表現してね';
+}
+
+/// 通知関連メッセージ
+class _NotificationMessages {
+  const _NotificationMessages();
+
+  String get title => '通知';
+  String get markAllRead => '全て既読にする';
+  String get empty => 'まだ通知はありません';
+  String get tabTimeline => 'TL';
+  String get tabTask => 'タスク';
+  String get tabCircle => 'サークル';
+  String get tabSupport => 'サポート';
+  String minutesAgo(int minutes) => '$minutes分前';
+  String hoursAgo(int hours) => '$hours時間前';
+}
+
+/// カレンダー関連メッセージ
+class _CalendarMessages {
+  const _CalendarMessages();
+
+  String get title => 'カレンダー';
+  List<String> get weekdayLabels => const ['月', '火', '水', '木', '金', '土', '日'];
+}
+
+/// 問い合わせ関連メッセージ
+class _InquiryMessages {
+  const _InquiryMessages();
+
+  String get listTitle => '問い合わせ・要望';
+  String get emptyTitle => 'まだ問い合わせがありません';
+  String get emptyDescription => 'お困りごとや要望があれば\nお気軽にお送りください！';
+  String get newInquiry => '新規問い合わせ';
+  String get formTitle => '新規問い合わせ';
+  String get detailTitle => '問い合わせ詳細';
+  String get send => '送信';
+  String get categoryLabel => 'カテゴリ';
+  String get subjectLabel => '件名';
+  String get subjectHint => '問い合わせの件名を入力';
+  String get subjectRequired => '件名を入力してください';
+  String get contentLabel => '内容';
+  String get contentHint => 'お問い合わせ内容を詳しく記入してください';
+  String get contentRequired => '内容を入力してください';
+  String get screenshotOptional => 'スクリーンショット（任意）';
+  String get screenshotHelp =>
+      'バグ報告の場合は画面のスクリーンショットを添付すると解決が早くなります';
+  String get attachImage => '画像を添付';
+  String get messageHint => 'メッセージを入力...';
+  String get imageOnlyMessage => '（画像を添付しました）';
+}
+
+/// プロフィール関連メッセージ
+class _ProfileMessages {
+  const _ProfileMessages();
+
+  String get nameEditTitle => '名前を変更';
+  String get previewLabel => 'プレビュー';
+  String get prefixTab => '前半（形容詞）';
+  String get suffixTab => '後半（名詞）';
+  String get selectParts => 'パーツを選択してください';
+  String get namePartsLoadFailed => 'パーツの読み込みに失敗しました';
+  String get nameUpdateFailed => '名前の変更に失敗しました';
+  String get namePartPlaceholder => '???';
+  String lockedPartMessage(String partText, String rarity) =>
+      '「$partText」は$rarityパーツです。徳ポイントショップでアンロックできます。';
 }

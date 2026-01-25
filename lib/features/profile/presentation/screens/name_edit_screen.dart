@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/constants/app_messages.dart';
+import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/models/name_part_model.dart';
 import '../../../../shared/services/name_parts_service.dart';
 import '../../../../shared/providers/auth_provider.dart';
@@ -49,8 +51,9 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
         _isLoading = false;
       });
     } catch (e) {
+      debugPrint('NameEditScreen load failed: $e');
       setState(() {
-        _error = 'パーツの読み込みに失敗しました';
+        _error = AppMessages.profile.namePartsLoadFailed;
         _isLoading = false;
       });
     }
@@ -61,7 +64,7 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
       (p) => p.id == _selectedPrefixId,
       orElse: () => NamePartModel(
         id: '',
-        text: '???',
+        text: AppMessages.profile.namePartPlaceholder,
         category: '',
         rarity: 'normal',
         type: 'prefix',
@@ -72,7 +75,7 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
       (s) => s.id == _selectedSuffixId,
       orElse: () => NamePartModel(
         id: '',
-        text: '???',
+        text: AppMessages.profile.namePartPlaceholder,
         category: '',
         rarity: 'normal',
         type: 'suffix',
@@ -84,9 +87,7 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
 
   Future<void> _saveName() async {
     if (_selectedPrefixId == null || _selectedSuffixId == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('パーツを選択してください')));
+      SnackBarHelper.showError(context, AppMessages.profile.selectParts);
       return;
     }
 
@@ -103,17 +104,14 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
         ref.invalidate(currentUserProvider);
 
         if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(result.message)));
+          SnackBarHelper.showSuccess(context, result.message);
           Navigator.of(context).pop(true);
         }
       }
     } catch (e) {
+      debugPrint('NameEditScreen save failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('名前の変更に失敗しました')));
+        SnackBarHelper.showError(context, AppMessages.profile.nameUpdateFailed);
       }
     } finally {
       if (mounted) {
@@ -126,7 +124,7 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('名前を変更'),
+        title: Text(AppMessages.profile.nameEditTitle),
         actions: [
           if (!_isLoading &&
               _selectedPrefixId != null &&
@@ -139,7 +137,7 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
                       height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('保存'),
+                  : Text(AppMessages.label.save),
             ),
         ],
       ),
@@ -154,7 +152,7 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: _loadNameParts,
-                    child: const Text('再読み込み'),
+                    child: Text(AppMessages.label.retry),
                   ),
                 ],
               ),
@@ -168,9 +166,9 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
                   color: Theme.of(context).colorScheme.primaryContainer,
                   child: Column(
                     children: [
-                      const Text(
-                        'プレビュー',
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      Text(
+                        AppMessages.profile.previewLabel,
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
                       ),
                       const SizedBox(height: 8),
                       Text(
@@ -190,10 +188,10 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
                     length: 2,
                     child: Column(
                       children: [
-                        const TabBar(
+                        TabBar(
                           tabs: [
-                            Tab(text: '前半（形容詞）'),
-                            Tab(text: '後半（名詞）'),
+                            Tab(text: AppMessages.profile.prefixTab),
+                            Tab(text: AppMessages.profile.suffixTab),
                           ],
                         ),
                         Expanded(
@@ -270,11 +268,11 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
     return GestureDetector(
       onTap: isLocked
           ? () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    '「${part.text}」は${part.rarityDisplayName}パーツです。徳ポイントショップでアンロックできます。',
-                  ),
+              SnackBarHelper.showInfo(
+                context,
+                AppMessages.profile.lockedPartMessage(
+                  part.text,
+                  part.rarityDisplayName,
                 ),
               );
             }

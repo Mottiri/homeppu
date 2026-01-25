@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_messages.dart';
+import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/services/inquiry_service.dart';
 import '../../../../shared/services/media_service.dart';
 
@@ -67,7 +69,9 @@ class _InquiryFormScreenState extends ConsumerState<InquiryFormScreen> {
       if (_selectedImage != null) {
         final mediaService = MediaService();
         final userId = FirebaseAuth.instance.currentUser?.uid;
-        if (userId == null) throw Exception('ログインが必要です');
+        if (userId == null) {
+          throw Exception(AppMessages.error.unauthorized);
+        }
         imageUrl = await mediaService.uploadInquiryImage(
           _selectedImage!,
           userId: userId,
@@ -84,22 +88,13 @@ class _InquiryFormScreenState extends ConsumerState<InquiryFormScreen> {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('問い合わせを送信しました！'),
-            backgroundColor: AppColors.success,
-          ),
-        );
+        SnackBarHelper.showSuccess(context, AppMessages.success.inquirySent);
         context.pop();
       }
     } catch (e) {
+      debugPrint('InquiryFormScreen submit failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('送信に失敗しました: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SnackBarHelper.showError(context, AppMessages.error.general);
       }
     } finally {
       if (mounted) {
@@ -112,7 +107,7 @@ class _InquiryFormScreenState extends ConsumerState<InquiryFormScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('新規問い合わせ'),
+        title: Text(AppMessages.inquiry.formTitle),
         leading: IconButton(
           icon: const Icon(Icons.close),
           onPressed: () => context.pop(),
@@ -129,7 +124,7 @@ class _InquiryFormScreenState extends ConsumerState<InquiryFormScreen> {
                       color: AppColors.primary,
                     ),
                   )
-                : const Text('送信'),
+                : Text(AppMessages.inquiry.send),
           ),
         ],
       ),
@@ -148,7 +143,7 @@ class _InquiryFormScreenState extends ConsumerState<InquiryFormScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'カテゴリ',
+                        AppMessages.inquiry.categoryLabel,
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 12),
@@ -190,19 +185,19 @@ class _InquiryFormScreenState extends ConsumerState<InquiryFormScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '件名',
+                        AppMessages.inquiry.subjectLabel,
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: _subjectController,
-                        decoration: const InputDecoration(
-                          hintText: '問い合わせの件名を入力',
+                        decoration: InputDecoration(
+                          hintText: AppMessages.inquiry.subjectHint,
                         ),
                         maxLength: 100,
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
-                            return '件名を入力してください';
+                            return AppMessages.inquiry.subjectRequired;
                           }
                           return null;
                         },
@@ -222,20 +217,20 @@ class _InquiryFormScreenState extends ConsumerState<InquiryFormScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '内容',
+                        AppMessages.inquiry.contentLabel,
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: _contentController,
-                        decoration: const InputDecoration(
-                          hintText: 'お問い合わせ内容を詳しく記入してください',
+                        decoration: InputDecoration(
+                          hintText: AppMessages.inquiry.contentHint,
                         ),
                         maxLines: 6,
                         maxLength: 1000,
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
-                            return '内容を入力してください';
+                            return AppMessages.inquiry.contentRequired;
                           }
                           return null;
                         },
@@ -255,12 +250,12 @@ class _InquiryFormScreenState extends ConsumerState<InquiryFormScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'スクリーンショット（任意）',
+                        AppMessages.inquiry.screenshotOptional,
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'バグ報告の場合は画面のスクリーンショットを添付すると解決が早くなります',
+                        AppMessages.inquiry.screenshotHelp,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: AppColors.textSecondary,
                         ),
@@ -296,7 +291,7 @@ class _InquiryFormScreenState extends ConsumerState<InquiryFormScreen> {
                         OutlinedButton.icon(
                           onPressed: _pickImage,
                           icon: const Icon(Icons.add_photo_alternate_outlined),
-                          label: const Text('画像を添付'),
+                          label: Text(AppMessages.inquiry.attachImage),
                           style: OutlinedButton.styleFrom(
                             minimumSize: const Size(double.infinity, 48),
                           ),

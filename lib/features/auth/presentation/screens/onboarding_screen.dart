@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_messages.dart';
 
 /// オンボーディング画面
 class OnboardingScreen extends StatefulWidget {
@@ -19,20 +20,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final List<_OnboardingData> _pages = [
     _OnboardingData(
       emoji: '🌸',
-      title: 'ようこそ、ほめっぷへ',
-      description: '世界一優しいSNSへようこそ！\nここでは誰もがあなたを応援してくれるよ',
+      title: AppMessages.onboarding.page1Title,
+      description: AppMessages.onboarding.page1Description,
       color: AppColors.primaryLight,
     ),
     _OnboardingData(
       emoji: '✨',
-      title: 'たくさん褒められよう',
-      description: '日常の小さなことを投稿するだけで\nAIや仲間から温かい言葉が届くよ',
+      title: AppMessages.onboarding.page2Title,
+      description: AppMessages.onboarding.page2Description,
       color: AppColors.accent,
     ),
     _OnboardingData(
       emoji: '💕',
-      title: 'ポジティブな空間',
-      description: 'ネガティブな言葉は一切なし\n安心して自分を表現してね',
+      title: AppMessages.onboarding.page3Title,
+      description: AppMessages.onboarding.page3Description,
       color: AppColors.secondaryLight,
     ),
   ];
@@ -58,7 +59,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   padding: const EdgeInsets.all(16),
                   child: TextButton(
                     onPressed: () => context.go('/login'),
-                    child: const Text('スキップ'),
+                    child: Text(AppMessages.onboarding.skip),
                   ),
                 ),
               ),
@@ -119,14 +120,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           }
                         },
                         child: Text(
-                          _currentPage < _pages.length - 1 ? '次へ' : 'はじめる',
+                          _currentPage < _pages.length - 1
+                              ? AppMessages.onboarding.next
+                              : AppMessages.onboarding.start,
                         ),
                       ),
                     ),
                     const SizedBox(height: 12),
                     TextButton(
                       onPressed: () => context.go('/login'),
-                      child: const Text('すでにアカウントをお持ちの方'),
+                      child: Text(AppMessages.onboarding.alreadyHaveAccount),
                     ),
                   ],
                 ),

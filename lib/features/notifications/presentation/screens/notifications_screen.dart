@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_messages.dart';
 import '../../../../shared/models/notification_model.dart';
 import '../../../../shared/repositories/notification_repository.dart';
 import '../../../../shared/providers/auth_provider.dart';
@@ -23,10 +24,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
 
   // カテゴリタブの定義
   static const _tabs = [
-    (NotificationCategory.timeline, 'TL', Icons.chat_bubble_outline),
-    (NotificationCategory.task, 'タスク', Icons.task_alt),
-    (NotificationCategory.circle, 'サークル', Icons.group_outlined),
-    (NotificationCategory.support, 'サポート', Icons.support_agent),
+    (NotificationCategory.timeline, 'timeline', Icons.chat_bubble_outline),
+    (NotificationCategory.task, 'task', Icons.task_alt),
+    (NotificationCategory.circle, 'circle', Icons.group_outlined),
+    (NotificationCategory.support, 'support', Icons.support_agent),
   ];
 
   @override
@@ -55,7 +56,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('通知'),
+        title: Text(AppMessages.notification.title),
         actions: [
           IconButton(
             icon: const Icon(Icons.done_all),
@@ -64,7 +65,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                   .read(notificationRepositoryProvider)
                   .markAllAsRead(user.uid);
             },
-            tooltip: '全て既読にする',
+            tooltip: AppMessages.notification.markAllRead,
           ),
         ],
         bottom: PreferredSize(
@@ -85,7 +86,14 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                 ), // 適度なパディング
                 tabs: _tabs.map((tab) {
                   final category = tab.$1;
-                  final label = tab.$2;
+                  final labelKey = tab.$2;
+                  final label = switch (labelKey) {
+                    'timeline' => AppMessages.notification.tabTimeline,
+                    'task' => AppMessages.notification.tabTask,
+                    'circle' => AppMessages.notification.tabCircle,
+                    'support' => AppMessages.notification.tabSupport,
+                    _ => labelKey,
+                  };
                   final unreadCount = _getUnreadCount(notifications, category);
                   return Tab(
                     child: Stack(
@@ -140,7 +148,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
           }
 
           if (snapshot.hasError) {
-            return Center(child: Text('エラーが発生しました: ${snapshot.error}'));
+            debugPrint('NotificationsScreen error: ${snapshot.error}');
+            return Center(child: Text(AppMessages.error.general));
           }
 
           final allNotifications = snapshot.data ?? [];
@@ -196,21 +205,21 @@ class _NotificationList extends StatelessWidget {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              Icons.notifications_off_outlined,
-              size: 64,
-              color: AppColors.textSecondary,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'まだ通知はありません',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(color: AppColors.textSecondary),
-            ),
-          ],
-        ),
+            children: [
+              const Icon(
+                Icons.notifications_off_outlined,
+                size: 64,
+                color: AppColors.textSecondary,
+              ),
+              const SizedBox(height: 16),
+              Text(
+              AppMessages.notification.empty,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(color: AppColors.textSecondary),
+              ),
+            ],
+          ),
       );
     }
 
@@ -309,9 +318,9 @@ class _NotificationTile extends ConsumerWidget {
     final diff = now.difference(date);
 
     if (diff.inMinutes < 60) {
-      return '${diff.inMinutes}分前';
+      return AppMessages.notification.minutesAgo(diff.inMinutes);
     } else if (diff.inHours < 24) {
-      return '${diff.inHours}時間前';
+      return AppMessages.notification.hoursAgo(diff.inHours);
     } else {
       return DateFormat('MM/dd HH:mm').format(date);
     }

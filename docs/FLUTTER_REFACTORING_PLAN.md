@@ -998,6 +998,13 @@ catch (e) {
 > - `circles_screen.dart` のUIメッセージを AppMessages 化（2026-01-24）
 > - `home_screen.dart` のUIメッセージを AppMessages 化（2026-01-24）
 > - `completed_goals_screen.dart` のUIメッセージを AppMessages 化（2026-01-24）
+> - `onboarding_screen.dart` のUIメッセージを AppMessages 化（2026-01-24）
+> - `notifications_screen.dart` のUIメッセージを AppMessages 化（2026-01-24）
+> - `monthly_calendar_screen.dart` のUIメッセージを AppMessages 化（2026-01-24）
+> - `inquiry_list_screen.dart` のUIメッセージを AppMessages 化（2026-01-24）
+> - `inquiry_form_screen.dart` のUIメッセージを AppMessages 化（2026-01-24）
+> - `inquiry_detail_screen.dart` のUIメッセージを AppMessages 化（2026-01-24）
+> - `name_edit_screen.dart` のUIメッセージを AppMessages 化（2026-01-24）
 
 ### 優先度：低（長期）
 

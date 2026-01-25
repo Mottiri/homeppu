@@ -7,6 +7,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_messages.dart';
+import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/services/inquiry_service.dart';
 import '../../../../shared/services/media_service.dart';
 import '../../../../shared/widgets/full_screen_image_viewer.dart';
@@ -81,7 +83,9 @@ class _InquiryDetailScreenState extends ConsumerState<InquiryDetailScreen> {
       if (_selectedImage != null) {
         final mediaService = MediaService();
         final userId = FirebaseAuth.instance.currentUser?.uid;
-        if (userId == null) throw Exception('ログインが必要です');
+        if (userId == null) {
+          throw Exception(AppMessages.error.unauthorized);
+        }
         imageUrl = await mediaService.uploadInquiryImage(
           _selectedImage!,
           userId: userId,
@@ -90,7 +94,8 @@ class _InquiryDetailScreenState extends ConsumerState<InquiryDetailScreen> {
 
       await _inquiryService.sendMessage(
         inquiryId: widget.inquiryId,
-        content: content.isEmpty ? '（画像を添付しました）' : content,
+        content:
+            content.isEmpty ? AppMessages.inquiry.imageOnlyMessage : content,
         imageUrl: imageUrl,
       );
 
@@ -108,13 +113,9 @@ class _InquiryDetailScreenState extends ConsumerState<InquiryDetailScreen> {
         }
       });
     } catch (e) {
+      debugPrint('InquiryDetailScreen send failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('送信に失敗しました: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SnackBarHelper.showError(context, AppMessages.error.general);
       }
     } finally {
       if (mounted) {
@@ -127,7 +128,7 @@ class _InquiryDetailScreenState extends ConsumerState<InquiryDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('問い合わせ詳細'),
+        title: Text(AppMessages.inquiry.detailTitle),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),
@@ -292,10 +293,12 @@ class _InquiryDetailScreenState extends ConsumerState<InquiryDetailScreen> {
                 Expanded(
                   child: TextField(
                     controller: _messageController,
-                    decoration: const InputDecoration(
-                      hintText: 'メッセージを入力...',
+                    decoration: InputDecoration(
+                      hintText: AppMessages.inquiry.messageHint,
                       border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                      ),
                     ),
                     maxLines: null,
                     textInputAction: TextInputAction.send,

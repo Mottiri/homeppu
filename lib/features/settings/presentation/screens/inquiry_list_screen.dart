@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_messages.dart';
 import '../../../../shared/services/inquiry_service.dart';
 
 /// 問い合わせ一覧画面
@@ -16,7 +17,7 @@ class InquiryListScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('問い合わせ・要望'),
+        title: Text(AppMessages.inquiry.listTitle),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),
@@ -39,16 +40,16 @@ class InquiryListScreen extends ConsumerWidget {
               return Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text('📩', style: TextStyle(fontSize: 64)),
-                    const SizedBox(height: 16),
-                    Text(
-                      'まだ問い合わせがありません',
+                children: [
+                  const Text('📩', style: TextStyle(fontSize: 64)),
+                  const SizedBox(height: 16),
+                  Text(
+                      AppMessages.inquiry.emptyTitle,
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'お困りごとや要望があれば\nお気軽にお送りください！',
+                      AppMessages.inquiry.emptyDescription,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: AppColors.textSecondary,
                       ),
@@ -84,9 +85,9 @@ class InquiryListScreen extends ConsumerWidget {
             elevation: 4,
           ),
           icon: const Icon(Icons.add),
-          label: const Text(
-            '新規問い合わせ',
-            style: TextStyle(fontWeight: FontWeight.w500, fontSize: 16),
+          label: Text(
+            AppMessages.inquiry.newInquiry,
+            style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 16),
           ),
         ),
       ),
