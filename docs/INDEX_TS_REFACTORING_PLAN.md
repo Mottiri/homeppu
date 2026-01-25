@@ -157,6 +157,25 @@ functions/src/
 | `types/index.ts` | MediaItem, ModerationResult等 | 40行 | ✅ 完了 |
 | `helpers/notification.ts` | sendPushOnly | 80行 | 未着手 |
 
+#### ⚠️ 2026-01-25 通知トリガーのズレ（計画と実装の差異）
+
+**発見した差異（コードを正とする）**:
+- 本計画では `triggers/notifications.ts` に `onNotificationCreated` を配置する想定（提案構成: notifications.ts に onNotificationCreated）。
+- しかし現行ソースには `onNotificationCreated` の実装が存在しない（コメント参照のみ）。
+- 多くの箇所が「通知ドキュメント作成で push が自動送信される」前提で実装されている。
+
+**運用リスク**:
+- この状態で Cloud Functions を全体 deploy し、未定義関数の削除に同意すると、プッシュ通知が広範囲で停止する可能性がある。
+
+**解決方針（最小で安全な復旧）**:
+- `onNotificationCreated` を復活し、「通知ドキュメント作成 → 自動 push」を単一責務として再固定する。
+- 柔軟性確保のため、通知ドキュメントに任意フィールドで push 制御を持たせる（例: `pushPolicy: always/never/bySettings`）。
+- push 送達状態を通知ドキュメントに記録し、運用観点の追跡性を確保する（`pushStatus` など）。
+- ✅ 2026-01-25: `onNotificationCreated` を `triggers/notifications.ts` に復元（pushPolicy/pushStatus対応）
+
+詳細仕様は以下に分離:
+- `docs/NOTIFICATION_ON_CREATE_SPEC_2026-01-25.md`
+
 **効果**: 共有コードを1箇所に集約、テスト可能に
 
 **追加対応（セキュリティ#15）**:

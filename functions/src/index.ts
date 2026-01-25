@@ -80,7 +80,7 @@ export { scheduleAIPosts } from "./scheduled/ai-posts";
 
 // Phase 6: ユーザー通知関連
 export { followUser, unfollowUser, getFollowStatus, getVirtueHistory, getVirtueStatus } from "./callable/users";
-export { onCommentCreatedNotify, onReactionAddedNotify } from "./triggers/notifications";
+export { onNotificationCreated, onCommentCreatedNotify, onReactionAddedNotify } from "./triggers/notifications";
 export { onTaskUpdated } from "./triggers/tasks";
 
 // Phase 7: スケジュール・管理者

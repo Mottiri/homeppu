@@ -51,8 +51,12 @@ functions/src/
 |---------|------|-------------|
 | `circles.ts` | サークル | 作成時AI生成、更新時メンバー通知 |
 | `posts.ts` | 投稿 | 作成時AIコメントスケジュール |
-| `notifications.ts` | 通知 | コメント・リアクション時プッシュ通知 |
+| `notifications.ts` | 通知 | 通知ドキュメント作成時の自動プッシュ送信 + コメント/リアクション通知作成 |
 | `tasks.ts` | タスク | 更新時リマインダースケジュール |
+
+補足（2026-01-25）:
+- `users/{userId}/notifications/{notificationId}` の作成で `onNotificationCreated` が自動でFCM送信
+- `pushPolicy: never` を通知ドキュメントに持たせると「通知は作るがpushは送らない」
 
 ### circle-ai/ - サークルAI専用
 

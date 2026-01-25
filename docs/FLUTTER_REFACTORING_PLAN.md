@@ -994,6 +994,7 @@ catch (e) {
 > **注**: 行削減の数値はリファクタリング前との差分の目安。  
 > **注**: AppMessages適用は「ハードコードを基本ゼロ」にすることを完了条件とする。
 > **進捗**:
+> - ✅ バッチ1完了（2026-01-25）: 通知/カレンダー/問い合わせ/オンボーディング/名前編集
 > - `circle_detail_screen.dart` のUIメッセージを AppMessages 化（2026-01-24）
 > - `circles_screen.dart` のUIメッセージを AppMessages 化（2026-01-24）
 > - `home_screen.dart` のUIメッセージを AppMessages 化（2026-01-24）
