@@ -12,12 +12,14 @@
 | Phase 6: 管理者・ユーザー | ✅ 完了・テスト済 | 2026-01-14 |
 | Phase 7: スケジュール・HTTP | ✅ 完了・テスト済 | 2026-01-14 |
 
+**2026-01-26 追記**: index.ts に残っていた重い関数を分離し、HTTP/Callable/Triggers/Scheduledへ整理（AI生成、コメント/リアクション、リマインダー、画像モデレーションなど）。
+
 ## 現状分析
 
 | 項目 | 初期値 | 現在値 | 削減 |
 |------|--------|--------|------|
-| 総行数 | 8,628行 | 約1,392行 | -7,236行 (84%) |
-| ファイルサイズ | 308KB | ~50KB | -84% |
+| 総行数 | 8,628行 | 74行 | -8,554行 (99%) |
+| ファイルサイズ | 308KB | ~3KB | -99% |
 | export数 | 64関数 | 64関数 | - |
 
 
@@ -155,7 +157,7 @@ functions/src/
 | `config/constants.ts` | PROJECT_ID, LOCATION等 | 18行 | ✅ 完了 |
 | `config/secrets.ts` | geminiApiKey等 | 11行 | ✅ 完了 |
 | `types/index.ts` | MediaItem, ModerationResult等 | 40行 | ✅ 完了 |
-| `helpers/notification.ts` | sendPushOnly | 80行 | 未着手 |
+| `helpers/notification.ts` | sendPushOnly | 80行 | ✅ 完了 |
 
 #### ⚠️ 2026-01-25 通知トリガーのズレ（計画と実装の差異）
 
@@ -371,6 +373,8 @@ Generated AI 3: [name] ([id])
 | `scheduled/reminders.ts` | executeTaskReminder, executeGoalReminder等 | 450行 |
 | `http/ai-generation.ts` | executeAIPostGeneration, generateAICommentV1等 | 350行 |
 
+> **運用メモ**: AI自動投稿（scheduleAIPosts）は現在無効化中（`scheduled/ai-posts.ts` 内で早期return）。  
+> 需要と負荷を見ながら再有効化を判断する方針。
 ---
 
 ## 分割作業時の注意点
