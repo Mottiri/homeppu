@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_messages.dart';
+import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/providers/ai_provider.dart';
 
 /// 管理者用ボトムシート
@@ -179,29 +181,22 @@ class _AdminMenuBottomSheetState extends ConsumerState<AdminMenuBottomSheet>
               try {
                 final aiService = ref.read(aiServiceProvider);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('AIアカウントを初期化中...'),
+                  SnackBar(
+                    content: Text(AppMessages.admin.aiInitInProgress),
                     backgroundColor: AppColors.primary,
                   ),
                 );
                 await aiService.initializeAIAccounts();
                 if (mounted) {
-                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('AIアカウントを作成しました！🤖'),
-                      backgroundColor: AppColors.success,
-                    ),
+                  SnackBarHelper.showSuccess(
+                    context,
+                    AppMessages.admin.aiInitCompleted,
                   );
                 }
               } catch (e) {
+                debugPrint('AdminMenuBottomSheet: AI init failed: $e');
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('エラー: $e'),
-                      backgroundColor: AppColors.error,
-                    ),
-                  );
+                  SnackBarHelper.showError(context, AppMessages.error.general);
                 }
               }
             },
@@ -217,30 +212,23 @@ class _AdminMenuBottomSheetState extends ConsumerState<AdminMenuBottomSheet>
               try {
                 final aiService = ref.read(aiServiceProvider);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('AI投稿を生成中...（少し時間がかかります）'),
+                  SnackBar(
+                    content: Text(AppMessages.admin.aiGenerateInProgress),
                     backgroundColor: AppColors.primary,
-                    duration: Duration(seconds: 10),
+                    duration: const Duration(seconds: 10),
                   ),
                 );
                 final result = await aiService.generateAIPosts();
                 if (mounted) {
-                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(result['message'] as String? ?? '完了'),
-                      backgroundColor: AppColors.success,
-                    ),
-                  );
+                  final message =
+                      result['message'] as String? ??
+                      AppMessages.admin.aiGenerateCompletedDefault;
+                  SnackBarHelper.showSuccess(context, message);
                 }
               } catch (e) {
+                debugPrint('AdminMenuBottomSheet: AI generate failed: $e');
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('エラー: $e'),
-                      backgroundColor: AppColors.error,
-                    ),
-                  );
+                  SnackBarHelper.showError(context, AppMessages.error.general);
                 }
               }
             },
@@ -301,7 +289,7 @@ class _AdminMenuBottomSheetState extends ConsumerState<AdminMenuBottomSheet>
             color: AppColors.warning,
             onTap: () {
               Navigator.pop(context);
-              context.push('/admin/review');
+              context.pushNamed('adminReview');
             },
           ),
         ],

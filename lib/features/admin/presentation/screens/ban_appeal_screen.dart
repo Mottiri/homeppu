@@ -5,6 +5,9 @@ import 'package:go_router/go_router.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_messages.dart';
+import '../../../../core/utils/dialog_helper.dart';
+import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/providers/auth_provider.dart';
 
 class BanAppealScreen extends ConsumerStatefulWidget {
@@ -118,28 +121,19 @@ class _BanAppealScreenState extends ConsumerState<BanAppealScreen> {
   }
 
   // 対応完了確認ダイアログ
-  void _showDeleteConfirmDialog(BuildContext context) {
-    showDialog(
+  Future<void> _showDeleteConfirmDialog(BuildContext context) async {
+    final confirmed = await DialogHelper.showConfirmDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('対応完了'),
-        content: const Text('このチャット履歴を削除しますか？\n削除後は復元できません。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('キャンセル'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _deleteAppeal();
-            },
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('削除'),
-          ),
-        ],
-      ),
+      title: AppMessages.admin.appealCloseTitle,
+      message: AppMessages.admin.appealCloseMessage,
+      confirmText: AppMessages.label.delete,
+      cancelText: AppMessages.label.cancel,
+      isDangerous: true,
+      barrierDismissible: false,
     );
+    if (confirmed) {
+      await _deleteAppeal();
+    }
   }
 
   // チャット履歴を削除
@@ -152,16 +146,13 @@ class _BanAppealScreenState extends ConsumerState<BanAppealScreen> {
           .delete();
 
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('チャット履歴を削除しました')));
+        SnackBarHelper.showSuccess(context, AppMessages.admin.appealClosed);
         context.pop();
       }
     } catch (e) {
+      debugPrint('BanAppealScreen: delete appeal failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('削除エラー: $e')));
+        SnackBarHelper.showError(context, AppMessages.admin.appealCloseFailed);
       }
     }
   }
@@ -219,10 +210,9 @@ class _BanAppealScreenState extends ConsumerState<BanAppealScreen> {
         );
       }
     } catch (e) {
+      debugPrint('BanAppealScreen: send message failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('送信エラー: $e')));
+        SnackBarHelper.showError(context, AppMessages.admin.appealSendFailed);
       }
     } finally {
       if (mounted) {

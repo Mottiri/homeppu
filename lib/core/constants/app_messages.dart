@@ -43,6 +43,9 @@ class AppMessages {
   // ===== 認証関連 =====
   static const auth = _AuthMessages();
 
+  // ===== 管理者関連 =====
+  static const admin = _AdminMessages();
+
   // ===== 通知関連 =====
   static const notification = _NotificationMessages();
 
@@ -443,6 +446,53 @@ class _AuthMessages {
   String get registerEmailAlreadyInUse => 'このメールアドレスはすでに使われているみたい📧';
   String get registerWeakPassword => 'もう少し強いパスワードにしてね🔐';
   String get registerInvalidEmail => 'メールアドレスの形式を確認してね📧';
+}
+
+/// 管理者関連メッセージ
+class _AdminMessages {
+  const _AdminMessages();
+
+  // AI操作
+  String get aiInitInProgress => 'AIアカウントを初期化中...';
+  String get aiInitCompleted => 'AIアカウントを作成しました！🤖';
+  String get aiGenerateInProgress => 'AI投稿を生成中...（少し時間がかかります）';
+  String get aiGenerateCompletedDefault => '完了しました';
+
+  // 通報/審査
+  String get postApproved => '投稿を承認しました';
+  String get postDeleted => '投稿を削除しました';
+  String get approveFailed => '承認に失敗しました';
+  String get deleteFailed => '削除に失敗しました';
+  String get deletePostTitle => '投稿を削除';
+  String get deletePostMessage =>
+      'この投稿を削除しますか？\nこの操作は取り消せません。';
+  String get deletePostWithNotifyMessage =>
+      'この投稿を削除しますか？\n投稿者に通知が送信されます。';
+  String reportBatchResolved(int count) => '$count件の通報を処理しました';
+  String get falseReportDismissed => '虚偽判定しました';
+  String get reportResolved => '問題なしとして処理しました';
+  String get reportProcessFailed => '処理に失敗しました';
+
+  // 問い合わせ
+  String get inquiryReplySent => '返信を送信しました';
+  String get inquiryReplyFailed => '送信に失敗しました';
+  String inquiryStatusChanged(String label) => 'ステータスを「$label」に変更しました';
+  String inquiryStatusChangedAndLogged(String label) =>
+      'ステータスを「$label」に変更し、スプレッドシートに記録しました';
+  String get inquiryStatusChangeFailed => '変更に失敗しました';
+  String get inquiryResolveTitle => 'ステータスを「解決済み」に変更';
+  String get inquiryResolveRecord => 'スプレッドシートに記録する';
+  String get inquiryResolveConfirm => '解決済みにする';
+
+  // BAN異議申し立て
+  String get appealCloseTitle => '対応完了';
+  String get appealCloseMessage => 'このチャット履歴を削除しますか？\n削除後は復元できません。';
+  String get appealClosed => 'チャット履歴を削除しました';
+  String get appealCloseFailed => '削除に失敗しました';
+  String get appealSendFailed => '送信に失敗しました';
+
+  // その他
+  String get idCopied => 'IDをコピーしました';
 }
 
 /// プロフィール関連メッセージ

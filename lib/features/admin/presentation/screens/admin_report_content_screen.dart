@@ -6,6 +6,9 @@ import 'package:go_router/go_router.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_messages.dart';
+import '../../../../core/utils/dialog_helper.dart';
+import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
 
 /// コンテンツ単位の通報詳細画面
@@ -253,8 +256,10 @@ class _AdminReportContentScreenState
                         Clipboard.setData(
                           ClipboardData(text: widget.contentId),
                         );
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('IDをコピーしました')),
+                        SnackBarHelper.showSuccess(
+                          context,
+                          AppMessages.admin.idCopied,
+                          duration: const Duration(seconds: 1),
                         );
                       },
                       child: Text(
@@ -510,19 +515,16 @@ class _AdminReportContentScreenState
       await batch.commit();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${reports.length}件の通報を処理しました'),
-            backgroundColor: AppColors.success,
-          ),
+        SnackBarHelper.showSuccess(
+          context,
+          AppMessages.admin.reportBatchResolved(reports.length),
         );
         context.pop();
       }
     } catch (e) {
+      debugPrint('AdminReportContentScreen: resolve failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('エラー: $e'), backgroundColor: AppColors.error),
-        );
+        SnackBarHelper.showError(context, AppMessages.admin.reportProcessFailed);
       }
     } finally {
       if (mounted) setState(() => _isProcessing = false);
@@ -534,26 +536,17 @@ class _AdminReportContentScreenState
     String targetUserId,
     List<QueryDocumentSnapshot> reports,
   ) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await DialogHelper.showConfirmDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('投稿を削除'),
-        content: const Text('この投稿を削除しますか？\n投稿者に通知が送信されます。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('キャンセル'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('削除'),
-          ),
-        ],
-      ),
+      title: AppMessages.admin.deletePostTitle,
+      message: AppMessages.admin.deletePostWithNotifyMessage,
+      confirmText: AppMessages.label.delete,
+      cancelText: AppMessages.label.cancel,
+      isDangerous: true,
+      barrierDismissible: false,
     );
 
-    if (confirmed != true) return;
+    if (!confirmed) return;
 
     setState(() => _isProcessing = true);
     try {
@@ -591,19 +584,13 @@ class _AdminReportContentScreenState
       await batch.commit();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('投稿を削除しました'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SnackBarHelper.showSuccess(context, AppMessages.admin.postDeleted);
         context.pop();
       }
     } catch (e) {
+      debugPrint('AdminReportContentScreen: delete failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('エラー: $e'), backgroundColor: AppColors.error),
-        );
+        SnackBarHelper.showError(context, AppMessages.admin.reportProcessFailed);
       }
     } finally {
       if (mounted) setState(() => _isProcessing = false);

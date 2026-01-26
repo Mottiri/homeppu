@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_messages.dart';
+import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/services/inquiry_service.dart';
 import '../../../../shared/widgets/full_screen_image_viewer.dart';
 
@@ -69,21 +71,12 @@ class _AdminInquiryDetailScreenState
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('返信を送信しました'),
-            backgroundColor: AppColors.success,
-          ),
-        );
+        SnackBarHelper.showSuccess(context, AppMessages.admin.inquiryReplySent);
       }
     } catch (e) {
+      debugPrint('AdminInquiryDetailScreen: send reply failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('送信に失敗しました: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SnackBarHelper.showError(context, AppMessages.admin.inquiryReplyFailed);
       }
     } finally {
       if (mounted) {
@@ -107,24 +100,22 @@ class _AdminInquiryDetailScreenState
           remarks: result.remarks,
         );
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                result.saveToSpreadsheet
-                    ? 'ステータスを「${newStatus.label}」に変更し、スプレッドシートに記録しました'
-                    : 'ステータスを「${newStatus.label}」に変更しました',
-              ),
-              backgroundColor: AppColors.success,
-            ),
+          final message = result.saveToSpreadsheet
+              ? AppMessages.admin.inquiryStatusChangedAndLogged(
+                  newStatus.label,
+                )
+              : AppMessages.admin.inquiryStatusChanged(newStatus.label);
+          SnackBarHelper.showSuccess(
+            context,
+            message,
           );
         }
       } catch (e) {
+        debugPrint('AdminInquiryDetailScreen: status change failed: $e');
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('変更に失敗しました: $e'),
-              backgroundColor: AppColors.error,
-            ),
+          SnackBarHelper.showError(
+            context,
+            AppMessages.admin.inquiryStatusChangeFailed,
           );
         }
       }
@@ -135,20 +126,17 @@ class _AdminInquiryDetailScreenState
     try {
       await _inquiryService.updateStatus(widget.inquiryId, newStatus);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('ステータスを「${newStatus.label}」に変更しました'),
-            backgroundColor: AppColors.success,
-          ),
+        SnackBarHelper.showSuccess(
+          context,
+          AppMessages.admin.inquiryStatusChanged(newStatus.label),
         );
       }
     } catch (e) {
+      debugPrint('AdminInquiryDetailScreen: status change failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('変更に失敗しました: $e'),
-            backgroundColor: AppColors.error,
-          ),
+        SnackBarHelper.showError(
+          context,
+          AppMessages.admin.inquiryStatusChangeFailed,
         );
       }
     }
@@ -164,7 +152,7 @@ class _AdminInquiryDetailScreenState
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('ステータスを「解決済み」に変更'),
+          title: Text(AppMessages.admin.inquiryResolveTitle),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -172,7 +160,7 @@ class _AdminInquiryDetailScreenState
               children: [
                 // スプレッドシート記録チェックボックス
                 CheckboxListTile(
-                  title: const Text('スプレッドシートに記録する'),
+                  title: Text(AppMessages.admin.inquiryResolveRecord),
                   value: saveToSpreadsheet,
                   onChanged: (value) {
                     setDialogState(() => saveToSpreadsheet = value ?? false);
@@ -238,7 +226,7 @@ class _AdminInquiryDetailScreenState
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('キャンセル'),
+              child: Text(AppMessages.label.cancel),
             ),
             FilledButton(
               onPressed: () {
@@ -251,7 +239,7 @@ class _AdminInquiryDetailScreenState
                   ),
                 );
               },
-              child: const Text('解決済みにする'),
+              child: Text(AppMessages.admin.inquiryResolveConfirm),
             ),
           ],
         ),

@@ -4,6 +4,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_messages.dart';
+import '../../../../core/utils/dialog_helper.dart';
+import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/services/media_service.dart';
 import '../../../../shared/models/post_model.dart';
 
@@ -153,8 +156,10 @@ class _AdminReviewScreenState extends ConsumerState<AdminReviewScreen> {
                             child: SizedBox(
                               width: double.infinity,
                               child: OutlinedButton.icon(
-                                onPressed: () =>
-                                    context.push('/post/${post.id}'),
+                                onPressed: () => context.pushNamed(
+                                  'postDetail',
+                                  pathParameters: {'postId': post.id},
+                                ),
                                 icon: const Icon(Icons.open_in_new),
                                 label: const Text('投稿詳細を見る'),
                               ),
@@ -223,47 +228,29 @@ class _AdminReviewScreenState extends ConsumerState<AdminReviewScreen> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('投稿を承認しました'),
-            backgroundColor: AppColors.success,
-          ),
-        );
+        SnackBarHelper.showSuccess(context, AppMessages.admin.postApproved);
       }
     } catch (e) {
+      debugPrint('AdminReviewScreen: approve failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('承認に失敗しました: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SnackBarHelper.showError(context, AppMessages.admin.approveFailed);
       }
     }
   }
 
   /// 投稿を削除
   Future<void> _deletePost(PostModel post, String reviewId) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await DialogHelper.showConfirmDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('投稿を削除'),
-        content: const Text('この投稿を削除しますか？この操作は取り消せません。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('キャンセル'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('削除'),
-          ),
-        ],
-      ),
+      title: AppMessages.admin.deletePostTitle,
+      message: AppMessages.admin.deletePostMessage,
+      confirmText: AppMessages.label.delete,
+      cancelText: AppMessages.label.cancel,
+      isDangerous: true,
+      barrierDismissible: false,
     );
 
-    if (confirmed != true) return;
+    if (!confirmed) return;
 
     try {
       // Storageからメディアを削除
@@ -290,21 +277,12 @@ class _AdminReviewScreenState extends ConsumerState<AdminReviewScreen> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('投稿を削除しました'),
-            backgroundColor: AppColors.success,
-          ),
-        );
+        SnackBarHelper.showSuccess(context, AppMessages.admin.postDeleted);
       }
     } catch (e) {
+      debugPrint('AdminReviewScreen: delete failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('削除に失敗しました: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SnackBarHelper.showError(context, AppMessages.admin.deleteFailed);
       }
     }
   }

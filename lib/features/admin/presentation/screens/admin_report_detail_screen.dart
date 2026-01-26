@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_messages.dart';
+import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
 
 /// 通報詳細画面
@@ -466,11 +468,10 @@ class _AdminReportDetailScreenState
             icon: const Icon(Icons.copy, size: 16),
             onPressed: () {
               Clipboard.setData(ClipboardData(text: value));
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('コピーしました'),
-                  duration: Duration(seconds: 1),
-                ),
+              SnackBarHelper.showSuccess(
+                context,
+                AppMessages.admin.idCopied,
+                duration: const Duration(seconds: 1),
               );
             },
             padding: EdgeInsets.zero,
@@ -580,11 +581,9 @@ class _AdminReportDetailScreenState
           'reviewedAt': now,
         });
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('虚偽判定しました'),
-              backgroundColor: AppColors.warning,
-            ),
+          SnackBarHelper.showWarning(
+            context,
+            AppMessages.admin.falseReportDismissed,
           );
           context.pop();
         }
@@ -602,12 +601,7 @@ class _AdminReportDetailScreenState
           'reviewedAt': now,
         });
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('問題なしとして処理しました'),
-              backgroundColor: AppColors.success,
-            ),
-          );
+          SnackBarHelper.showSuccess(context, AppMessages.admin.reportResolved);
           context.pop();
         }
       } else if (action == 'delete_post') {
@@ -630,20 +624,14 @@ class _AdminReportDetailScreenState
           'reviewedAt': now,
         });
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('投稿を削除しました'),
-              backgroundColor: AppColors.error,
-            ),
-          );
+          SnackBarHelper.showSuccess(context, AppMessages.admin.postDeleted);
           context.pop();
         }
       }
     } catch (e) {
+      debugPrint('AdminReportDetailScreen: handleAction failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('エラー: $e'), backgroundColor: AppColors.error),
-        );
+        SnackBarHelper.showError(context, AppMessages.admin.reportProcessFailed);
       }
     } finally {
       if (mounted) setState(() => _isProcessing = false);
