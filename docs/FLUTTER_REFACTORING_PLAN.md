@@ -1005,7 +1005,9 @@ catch (e) {
 > - ✅ バッチ8完了（2026-01-25）: ファイル添付の残骸を除去（投稿作成/投稿表示/モデル）
 > - ✅ バッチ9完了（2026-01-25）: BAN時Snackbar色をAppColors.errorへ統一
 > - ✅ バッチ10完了（2026-01-25）: admin系（審査/通報/問い合わせ/BAN異議/管理メニュー）の文言統一と例外詳細UI非表示
-> - ⏳ 残り約4画面: `members_list_screen.dart` / `main_shell.dart` / `task_card.dart` / `virtue_indicator.dart`
+> - ✅ バッチ11完了（2026-01-25）: members_list / main_shell / virtue_indicator の文言統一
+> - ✅ バッチ11補正（2026-01-25）: プロフィール統計の徳タップで詳細ダイアログを表示
+> - ✅ AppMessages対応 残り0画面
 > - `circle_detail_screen.dart` のUIメッセージを AppMessages 化（2026-01-24）
 > - `circles_screen.dart` のUIメッセージを AppMessages 化（2026-01-24）
 > - `home_screen.dart` のUIメッセージを AppMessages 化（2026-01-24）

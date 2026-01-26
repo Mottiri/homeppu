@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/constants/app_messages.dart';
 import '../providers/moderation_provider.dart';
 import '../services/moderation_service.dart';
 
@@ -86,7 +87,7 @@ class _VirtueDisplay extends StatelessWidget {
               ),
               // 徳アイコン
               Text(
-                '徳',
+                AppMessages.virtue.shortLabel,
                 style: TextStyle(
                   fontSize: size * 0.35,
                   fontWeight: FontWeight.bold,
@@ -111,7 +112,7 @@ class _VirtueDisplay extends StatelessWidget {
                 ),
                 if (status.needsWarning)
                   Text(
-                    '⚠️ 注意',
+                    AppMessages.virtue.warningLabel,
                     style: TextStyle(fontSize: 10, color: AppColors.warning),
                   ),
               ],
@@ -152,7 +153,7 @@ class VirtueDetailDialog extends ConsumerWidget {
             child: const Text('✨', style: TextStyle(fontSize: 24)),
           ),
           const SizedBox(width: 12),
-          const Text('徳ポイント'),
+          Text(AppMessages.virtue.title),
         ],
       ),
       content: SizedBox(
@@ -198,12 +199,12 @@ class VirtueDetailDialog extends ConsumerWidget {
 
             // 説明
             Text(
-              '徳ポイントは、ほめっぷでの行いを表す指標だよ☺️',
+              AppMessages.virtue.description,
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 8),
             Text(
-              '• ポジティブな投稿で徳が上がるよ\n• ネガティブな発言をすると下がるよ\n• 0になると投稿できなくなるよ',
+              AppMessages.virtue.guidelines,
               style: Theme.of(
                 context,
               ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
@@ -226,7 +227,7 @@ class VirtueDetailDialog extends ConsumerWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        '徳ポイントが少なくなっているよ。ポジティブな投稿を心がけてね！',
+                        AppMessages.virtue.lowWarning,
                         style: TextStyle(
                           fontSize: 12,
                           color: AppColors.warning,
@@ -243,7 +244,10 @@ class VirtueDetailDialog extends ConsumerWidget {
             const SizedBox(height: 8),
 
             // 履歴
-            Text('履歴', style: Theme.of(context).textTheme.titleSmall),
+            Text(
+              AppMessages.virtue.historyTitle,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
             const SizedBox(height: 8),
 
             historyAsync.when(
@@ -253,7 +257,7 @@ class VirtueDetailDialog extends ConsumerWidget {
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Text(
-                        'まだ履歴がないよ',
+                        AppMessages.virtue.historyEmpty,
                         style: TextStyle(color: AppColors.textHint),
                       ),
                     ),
@@ -314,7 +318,7 @@ class VirtueDetailDialog extends ConsumerWidget {
               loading: () => const Center(
                 child: CircularProgressIndicator(color: AppColors.virtue),
               ),
-              error: (e, _) => const Text('履歴を読み込めませんでした'),
+              error: (e, _) => Text(AppMessages.virtue.historyLoadFailed),
             ),
           ],
         ),
@@ -322,7 +326,7 @@ class VirtueDetailDialog extends ConsumerWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('閉じる'),
+          child: Text(AppMessages.label.close),
         ),
       ],
     );
@@ -359,7 +363,7 @@ class VirtueBadge extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                '徳',
+                AppMessages.virtue.shortLabel,
                 style: TextStyle(
                   fontSize: 10,
                   color: color,

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_messages.dart';
+import '../../../../core/utils/snackbar_helper.dart';
 import '../../../tasks/presentation/widgets/add_task_bottom_sheet.dart';
 import '../../../../shared/services/task_service.dart';
 import '../../../../shared/services/category_service.dart';
@@ -62,16 +64,10 @@ class _MainShellState extends ConsumerState<MainShell>
     // BANチェック
     final currentUser = ref.read(currentUserProvider).valueOrNull;
     if (currentUser?.isBanned == true) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            currentUser?.banStatus == 'permanent'
-                ? 'アカウントが停止されています'
-                : 'アカウントが制限されているため、この操作はできません',
-          ),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      final message = currentUser?.banStatus == 'permanent'
+          ? AppMessages.error.accountSuspended
+          : AppMessages.error.banned;
+      SnackBarHelper.showError(context, message);
       return;
     }
 

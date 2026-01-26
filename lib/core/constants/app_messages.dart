@@ -57,6 +57,9 @@ class AppMessages {
 
   // ===== プロフィール関連 =====
   static const profile = _ProfileMessages();
+
+  // ===== 徳ポイント関連 =====
+  static const virtue = _VirtueMessages();
 }
 
 /// 成功メッセージ
@@ -122,6 +125,7 @@ class _ErrorMessages {
   String get unauthorized => 'ログインが必要だよ';
   String get permissionDenied => 'この操作はできないみたい';
   String get banned => 'アカウントが制限されているため、この操作はできません';
+  String get accountSuspended => 'アカウントが停止されています';
 
   // 投稿関連
   String get postFailed => '投稿できなかったみたい。もう一度試してみてね';
@@ -238,6 +242,21 @@ class _CircleMessages {
   String get leaveTitle => 'サークルを退会';
   String get leaveMessage => '本当にこのサークルを退会しますか？';
   String get leaveConfirm => '退会する';
+
+  // メンバー管理
+  String get subOwnerAssignTitle => '副オーナーを任命';
+  String get subOwnerRemoveTitle => '副オーナーを解任';
+  String subOwnerAssignConfirm(String name) => '$name さんを副オーナーに任命しますか？';
+  String subOwnerAssignDescription(String name) =>
+      '$name さんを副オーナーに任命しますか？\n\n副オーナーはピン留めや参加承認などの権限を持ちます。';
+  String subOwnerRemoveConfirm(String name) =>
+      '$name さんの副オーナー権限を解除しますか？';
+  String subOwnerAssigned(String name) => '$name さんを副オーナーに任命しました';
+  String subOwnerRemoved(String name) => '$name さんの副オーナー権限を解除しました';
+  String get subOwnerAssignFailed => '任命に失敗しました';
+  String get subOwnerRemoveFailed => '解任に失敗しました';
+  String get subOwnerAssignAction => '任命する';
+  String get subOwnerRemoveAction => '解任する';
 
   String get deleteTitle => 'サークルを削除';
   String deletePrompt(String name) => '「$name」を削除しますか？';
@@ -560,4 +579,24 @@ class _ProfileMessages {
   String get namePartPlaceholder => '???';
   String lockedPartMessage(String partText, String rarity) =>
       '「$partText」は$rarityパーツです。徳ポイントショップでアンロックできます。';
+}
+
+/// 徳ポイント関連メッセージ
+class _VirtueMessages {
+  const _VirtueMessages();
+
+  String get shortLabel => '徳';
+  String get warningLabel => '⚠️ 注意';
+  String get title => '徳ポイント';
+  String get description =>
+      '徳ポイントは、ほめっぷでの行いを表す指標だよ☺️';
+  String get guidelines =>
+      '• ポジティブな投稿で徳が上がるよ\n'
+      '• ネガティブな発言をすると下がるよ\n'
+      '• 0になると投稿できなくなるよ';
+  String get lowWarning =>
+      '徳ポイントが少なくなっているよ。ポジティブな投稿を心がけてね！';
+  String get historyTitle => '履歴';
+  String get historyEmpty => 'まだ履歴がないよ';
+  String get historyLoadFailed => '履歴を読み込めませんでした';
 }

@@ -11,6 +11,8 @@ import '../../../../core/utils/dialog_helper.dart';
 import '../../../../shared/models/user_model.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/services/follow_service.dart';
+import '../../../../shared/widgets/virtue_indicator.dart';
+import '../../../../shared/providers/moderation_provider.dart';
 import '../../../admin/presentation/widgets/admin_menu_bottom_sheet.dart';
 import '../widgets/profile_actions.dart';
 import '../widgets/profile_admin_actions.dart';
@@ -99,6 +101,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _updateScrollable();
     });
+  }
+
+  Future<void> _openVirtueDialog() async {
+    try {
+      final status = await ref.read(virtueStatusProvider.future);
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => VirtueDetailDialog(status: status),
+      );
+    } catch (e) {
+      debugPrint('ProfileScreen: virtue status load failed: $e');
+      if (mounted) {
+        SnackBarHelper.showError(context, AppMessages.error.general);
+      }
+    }
   }
 
   // ヘッダー画像とカラーパレットを生成（ユーザーIDで固定）
@@ -327,6 +345,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   virtue: user.virtue,
                   primaryAccent: _primaryAccent,
                   secondaryAccent: _secondaryAccent,
+                  onVirtueTap: _isOwnProfile
+                      ? () {
+                          _openVirtueDialog();
+                        }
+                      : null,
                 ),
 
                 // フォローボタン（ヘッダーカラー）+ メッセージボタン

@@ -8,6 +8,7 @@ class ProfileStats extends StatelessWidget {
   final int virtue;
   final Color primaryAccent;
   final Color secondaryAccent;
+  final VoidCallback? onVirtueTap;
 
   const ProfileStats({
     super.key,
@@ -16,6 +17,7 @@ class ProfileStats extends StatelessWidget {
     required this.virtue,
     required this.primaryAccent,
     required this.secondaryAccent,
+    this.onVirtueTap,
   });
 
   @override
@@ -61,6 +63,7 @@ class ProfileStats extends StatelessWidget {
                   child: _buildStat(
                     label: '徳',
                     value: '$virtue',
+                    onTap: onVirtueTap,
                   ),
                 ),
               ],
@@ -71,8 +74,12 @@ class ProfileStats extends StatelessWidget {
     );
   }
 
-  Widget _buildStat({required String label, required String value}) {
-    return Column(
+  Widget _buildStat({
+    required String label,
+    required String value,
+    VoidCallback? onTap,
+  }) {
+    final content = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
@@ -88,6 +95,14 @@ class ProfileStats extends StatelessWidget {
           style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
         ),
       ],
+    );
+
+    if (onTap == null) return content;
+
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: content,
     );
   }
 }

@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_messages.dart';
+import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
 import '../../../../shared/services/circle_service.dart';
 import '../../../../shared/providers/auth_provider.dart';
@@ -294,14 +296,12 @@ class MembersListScreen extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('副オーナーに任命'),
-        content: Text(
-          '$displayName さんを副オーナーに任命しますか？\n\n副オーナーはピン留めや参加承認などの権限を持ちます。',
-        ),
+        title: Text(AppMessages.circle.subOwnerAssignTitle),
+        content: Text(AppMessages.circle.subOwnerAssignDescription(displayName)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('キャンセル'),
+            child: Text(AppMessages.label.cancel),
           ),
           FilledButton(
             onPressed: () async {
@@ -327,26 +327,23 @@ class MembersListScreen extends ConsumerWidget {
                       ownerId: ownerId,
                     );
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('$displayName さんを副オーナーに任命しました'),
-                      backgroundColor: Colors.green,
-                    ),
+                  SnackBarHelper.showSuccess(
+                    context,
+                    AppMessages.circle.subOwnerAssigned(displayName),
                   );
                   // Navigator.pop()は呼ばない - StreamBuilderで自動更新される
                 }
               } catch (e) {
+                debugPrint('MembersListScreen: assign sub-owner failed: $e');
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('任命に失敗しました'),
-                      backgroundColor: Colors.red,
-                    ),
+                  SnackBarHelper.showError(
+                    context,
+                    AppMessages.circle.subOwnerAssignFailed,
                   );
                 }
               }
             },
-            child: const Text('任命する'),
+            child: Text(AppMessages.circle.subOwnerAssignAction),
           ),
         ],
       ),
@@ -362,12 +359,12 @@ class MembersListScreen extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('副オーナーを解任'),
-        content: Text('$displayName さんの副オーナー権限を解除しますか？'),
+        title: Text(AppMessages.circle.subOwnerRemoveTitle),
+        content: Text(AppMessages.circle.subOwnerRemoveConfirm(displayName)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('キャンセル'),
+            child: Text(AppMessages.label.cancel),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
@@ -394,26 +391,23 @@ class MembersListScreen extends ConsumerWidget {
                       ownerId: ownerId,
                     );
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('$displayName さんの副オーナー権限を解除しました'),
-                      backgroundColor: Colors.orange,
-                    ),
+                  SnackBarHelper.showWarning(
+                    context,
+                    AppMessages.circle.subOwnerRemoved(displayName),
                   );
                   // Navigator.pop()は呼ばない - StreamBuilderで自動更新される
                 }
               } catch (e) {
+                debugPrint('MembersListScreen: remove sub-owner failed: $e');
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('解任に失敗しました'),
-                      backgroundColor: Colors.red,
-                    ),
+                  SnackBarHelper.showError(
+                    context,
+                    AppMessages.circle.subOwnerRemoveFailed,
                   );
                 }
               }
             },
-            child: const Text('解任する'),
+            child: Text(AppMessages.circle.subOwnerRemoveAction),
           ),
         ],
       ),
