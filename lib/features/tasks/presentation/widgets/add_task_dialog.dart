@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/constants/app_messages.dart';
+
 class AddTaskDialog extends StatefulWidget {
   const AddTaskDialog({super.key});
 
@@ -127,7 +129,7 @@ class _AddTaskDialogState extends State<AddTaskDialog> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      child: const Text('キャンセル'),
+                      child: Text(AppMessages.label.cancel),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -148,7 +150,7 @@ class _AddTaskDialogState extends State<AddTaskDialog> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      child: const Text('追加'),
+                      child: Text(AppMessages.label.add),
                     ),
                   ),
                 ],

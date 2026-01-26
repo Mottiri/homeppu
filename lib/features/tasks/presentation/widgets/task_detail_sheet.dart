@@ -120,17 +120,17 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
       final confirm = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('タスクの削除'),
-          content: const Text('このタスクを削除してもよろしいですか？'),
+          title: Text(AppMessages.confirm.deleteTaskTitle),
+          content: Text(AppMessages.confirm.deleteTaskMessage),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('キャンセル'),
+              child: Text(AppMessages.label.cancel),
             ),
             TextButton(
               onPressed: () => Navigator.pop(context, true),
               style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('削除'),
+              child: Text(AppMessages.label.delete),
             ),
           ],
         ),
@@ -145,28 +145,34 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
       final deleteMode = await showDialog<String>(
         context: context,
         builder: (context) => SimpleDialog(
-          title: const Text('繰り返しタスクの削除'),
+          title: Text(AppMessages.confirm.deleteRecurringTaskTitle),
           children: [
             SimpleDialogOption(
               onPressed: () => Navigator.pop(context, 'single'),
-              child: const Padding(
+              child: Padding(
                 padding: EdgeInsets.symmetric(vertical: 8),
-                child: Text('このタスクのみ削除'),
+                child: Text(AppMessages.label.deleteThisTask),
               ),
             ),
             SimpleDialogOption(
               onPressed: () => Navigator.pop(context, 'future'),
-              child: const Padding(
+              child: Padding(
                 padding: EdgeInsets.symmetric(vertical: 8),
-                child: Text('これ以降のタスクも削除', style: TextStyle(color: Colors.red)),
+                child: Text(
+                  AppMessages.label.deleteFutureTasks,
+                  style: TextStyle(color: Colors.red),
+                ),
               ),
             ),
             const Divider(),
             SimpleDialogOption(
               onPressed: () => Navigator.pop(context, 'cancel'),
-              child: const Padding(
+              child: Padding(
                 padding: EdgeInsets.symmetric(vertical: 8),
-                child: Text('キャンセル', style: TextStyle(color: Colors.grey)),
+                child: Text(
+                  AppMessages.label.cancel,
+                  style: TextStyle(color: Colors.grey),
+                ),
               ),
             ),
           ],
@@ -418,11 +424,11 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
           // ダイアログタイトルを変更内容に応じて設定
           String dialogTitle;
           if (hasRuleChanges && hasReminderChanges) {
-            dialogTitle = '設定の変更';
+            dialogTitle = AppMessages.confirm.updateSettingsTitle;
           } else if (hasRuleChanges) {
-            dialogTitle = '繰り返し設定の変更';
+            dialogTitle = AppMessages.confirm.updateRecurrenceTitle;
           } else {
-            dialogTitle = '通知設定の変更';
+            dialogTitle = AppMessages.confirm.updateNotificationTitle;
           }
 
           final editMode = await showDialog<String>(
@@ -432,24 +438,27 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
               children: [
                 SimpleDialogOption(
                   onPressed: () => Navigator.pop(context, 'single'),
-                  child: const Padding(
+                  child: Padding(
                     padding: EdgeInsets.symmetric(vertical: 8),
-                    child: Text('このタスクのみ変更'),
+                    child: Text(AppMessages.label.updateThisTask),
                   ),
                 ),
                 SimpleDialogOption(
                   onPressed: () => Navigator.pop(context, 'future'),
-                  child: const Padding(
+                  child: Padding(
                     padding: EdgeInsets.symmetric(vertical: 8),
-                    child: Text('これ以降のタスクも変更'),
+                    child: Text(AppMessages.label.updateFutureTasks),
                   ),
                 ),
                 const Divider(),
                 SimpleDialogOption(
                   onPressed: () => Navigator.pop(context, 'cancel'),
-                  child: const Padding(
+                  child: Padding(
                     padding: EdgeInsets.symmetric(vertical: 8),
-                    child: Text('キャンセル', style: TextStyle(color: Colors.grey)),
+                    child: Text(
+                      AppMessages.label.cancel,
+                      style: TextStyle(color: Colors.grey),
+                    ),
                   ),
                 ),
               ],

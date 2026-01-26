@@ -92,6 +92,10 @@ class _SuccessMessages {
   String taskCompletedWithVirtue(int streak) => '🎉 タスク完了！ (+徳ポイント)';
   String taskMilestone(int streak, String message) =>
       '🎉 $streak日連続達成！$message！';
+  String get goalCompleted => '🎉 目標達成！おめでとうございます！';
+  String get goalCompletedWithPost => '🎉 目標達成！おめでとうございます！目標達成を投稿しました！';
+  String taskMilestoneWithPost(int streak, String message) =>
+      '🎉 $streak日連続達成！$message！タスクを完了したことを投稿しました！';
 
   // 目標関連
   String get goalCreated => '目標を作成しました！頑張りましょう✨';
@@ -123,9 +127,12 @@ class _ErrorMessages {
   String get general => 'ごめんね、うまくいかなかったみたい\n😢 もう一度試してみてね';
   String get network => 'ネットワークの調子が悪いみたい🌐\n接続を確認してね';
   String get unauthorized => 'ログインが必要だよ';
+  String get loginRequired => 'ログインが必要です';
   String get permissionDenied => 'この操作はできないみたい';
   String get banned => 'アカウントが制限されているため、この操作はできません';
   String get accountSuspended => 'アカウントが停止されています';
+  String get notFoundTitle => 'あれ？ページが見つからないよ';
+  String get notFoundDescription => '大丈夫、ホームに戻ろう！';
 
   // 投稿関連
   String get postFailed => '投稿できなかったみたい。もう一度試してみてね';
@@ -135,6 +142,16 @@ class _ErrorMessages {
   String get reportFailed => '通報に失敗しました。もう一度お試しください。';
   String get reactionOwnPost => '自分の投稿にはリアクションできません';
   String get reactionLimitReached => 'この投稿へのリアクションは5回までです';
+
+  // 動画再生
+  String get videoPlaybackFailedTitle => '動画を再生できません';
+  String get videoUnsupportedFormat =>
+      'この動画形式はお使いの端末では再生できません。\n'
+      '（HEVC/H.265形式）\n\n'
+      '投稿者に別の形式で再投稿をお願いしてみてください。';
+  String get videoNetworkError => 'ネットワーク接続を確認してください。';
+  String get videoNotFound => '動画が見つかりませんでした。\n削除された可能性があります。';
+  String get videoPlaybackFailed => '動画を再生できませんでした。\nしばらくしてから再試行してください。';
 
   // バリデーション
   String get emptyContent => '内容を入力してね';
@@ -162,6 +179,21 @@ class _ConfirmMessages {
   String deleteCircle(String name) => '「$name」を削除する？\nメンバー全員がアクセスできなくなるよ';
   String deleteComment() => 'このコメントを削除する？';
   String deleteCategory() => 'このカテゴリを削除する？';
+  String get deleteCategoryTitle => 'カテゴリを削除';
+  String deleteCategoryMessage(String name) =>
+      '「$name」を削除しますか？\n含まれるタスクも削除されます。';
+  String get deleteTitle => '削除の確認';
+  String deleteItem(String itemName, {String? additionalMessage}) =>
+      additionalMessage != null
+          ? '「$itemName」を削除しますか？\n$additionalMessage'
+          : '「$itemName」を削除しますか？';
+  String get deleteTasksTitle => 'タスクを削除';
+  String deleteTasksMessage(int count) =>
+      '$count件のタスクを削除しますか？\n\n'
+      '※繰り返し設定のあるタスクは、今日の分のみが削除されます（次回以降は残ります）。';
+  String get deleteTaskTitle => 'タスクの削除';
+  String get deleteTaskMessage => 'このタスクを削除してもよろしいですか？';
+  String get deleteRecurringTaskTitle => '繰り返しタスクの削除';
 
   // 退会・解除
   String leaveCircle() => '本当にこのサークルを退会する？';
@@ -169,6 +201,11 @@ class _ConfirmMessages {
 
   // ログアウト
   String get logout => '本当にログアウトする？\nまた会えるのを楽しみにしてるね💫';
+
+  // タスク更新
+  String get updateSettingsTitle => '設定の変更';
+  String get updateRecurrenceTitle => '繰り返し設定の変更';
+  String get updateNotificationTitle => '通知設定の変更';
 
   // アカウント削除
   String get deleteAccount => '本当にアカウントを削除する？\nすべてのデータが消えちゃうよ😢';
@@ -187,11 +224,20 @@ class _LabelMessages {
   String get send => '送信';
   String get close => '閉じる';
   String get retry => '再試行';
+  String get back => '戻る';
+  String get backToHome => 'ホームへ戻る';
   String get yes => 'はい';
   String get no => 'いいえ';
   String get done => '完了';
   String get edit => '編集';
   String get create => '作成';
+  String get logout => 'ログアウト';
+  String get add => '追加';
+  String get dontShowAgain => '今後表示しない';
+  String get deleteThisTask => 'このタスクのみ削除';
+  String get deleteFutureTasks => 'これ以降のタスクも削除';
+  String get updateThisTask => 'このタスクのみ変更';
+  String get updateFutureTasks => 'これ以降のタスクも変更';
 }
 
 /// ローディングメッセージ
@@ -217,6 +263,11 @@ class _EmptyMessages {
   String get followers => 'まだフォロワーがいないよ';
   String get following => 'まだ誰もフォローしていないよ';
   String get goals => '目標がないよ\n新しい目標を設定してみよう！';
+  String get taskNoneForDate => 'まだタスクがありません';
+  String get taskAddPrompt => 'タスクを追加しよう！';
+  String get dailyTaskAddPrompt => '毎日のタスクを追加しよう！';
+  String categoryTaskAddPrompt(String name) => '$name のタスクを追加しよう！';
+  String get adminReviewEmpty => '審査待ちの投稿はありません';
 }
 
 /// サークル関連メッセージ
@@ -509,6 +560,14 @@ class _AdminMessages {
   String get appealClosed => 'チャット履歴を削除しました';
   String get appealCloseFailed => '削除に失敗しました';
   String get appealSendFailed => '送信に失敗しました';
+  String get appealLoginRequired => 'ログインしていません';
+  String get appealPermanentNotice =>
+      'アカウントは永久停止されています。\n解除の申し立てはここから管理者へ連絡できます。';
+  String get appealTemporaryNotice =>
+      'アカウントは一時的に制限されています。\n解除の申し立てや詳細はここから管理者へ連絡できます。';
+  String get appealIntroTitle => '異議申し立て・お問い合わせ';
+  String get appealIntroDescription =>
+      '管理者にメッセージを送信して、\nBANの解除や詳細について問い合わせることができます。';
 
   // その他
   String get idCopied => 'IDをコピーしました';

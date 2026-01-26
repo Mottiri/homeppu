@@ -38,6 +38,7 @@ import '../../features/admin/presentation/screens/admin_ban_users_screen.dart';
 import '../../features/tasks/presentation/screens/monthly_calendar_screen.dart';
 import '../../shared/models/task_model.dart';
 import '../../shared/providers/auth_provider.dart';
+import '../constants/app_messages.dart';
 
 /// アプリのルーター設定
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -418,15 +419,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             const Text('🔍', style: TextStyle(fontSize: 64)),
             const SizedBox(height: 16),
             Text(
-              'あれ？ページが見つからないよ',
+              AppMessages.error.notFoundTitle,
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 8),
-            Text('大丈夫、ホームに戻ろう！', style: Theme.of(context).textTheme.bodyMedium),
+            Text(
+              AppMessages.error.notFoundDescription,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: () => context.go('/home'),
-              child: const Text('ホームへ戻る'),
+              child: Text(AppMessages.label.backToHome),
             ),
           ],
         ),

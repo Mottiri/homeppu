@@ -249,7 +249,9 @@ class _BanAppealScreenState extends ConsumerState<BanAppealScreen> {
       ),
       body: userAsync.when(
         data: (user) {
-          if (user == null) return const Center(child: Text('ログインしていません'));
+          if (user == null) {
+            return Center(child: Text(AppMessages.admin.appealLoginRequired));
+          }
 
           // まだチャットが始まっていない場合
           if (_currentAppealId == null) {
@@ -271,8 +273,8 @@ class _BanAppealScreenState extends ConsumerState<BanAppealScreen> {
                       Expanded(
                         child: Text(
                           user.banStatus == 'permanent'
-                              ? 'アカウントは永久停止されています。\n解除の申し立てはここから管理者へ連絡できます。'
-                              : 'アカウントは一時的に制限されています。\n解除の申し立てや詳細はここから管理者へ連絡できます。',
+                              ? AppMessages.admin.appealPermanentNotice
+                              : AppMessages.admin.appealTemporaryNotice,
                           style: const TextStyle(fontSize: 12),
                         ),
                       ),
@@ -338,7 +340,8 @@ class _BanAppealScreenState extends ConsumerState<BanAppealScreen> {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('エラーが発生しました: $e')),
+        error: (e, _) =>
+            Center(child: Text(AppMessages.error.withDetail(e.toString()))),
       ),
     );
   }
@@ -359,15 +362,15 @@ class _BanAppealScreenState extends ConsumerState<BanAppealScreen> {
                     color: AppColors.primary,
                   ),
                   const SizedBox(height: 16),
-                  const Text(
-                    '異議申し立て・お問い合わせ',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  Text(
+                    AppMessages.admin.appealIntroTitle,
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    '管理者にメッセージを送信して、\nBANの解除や詳細について問い合わせることができます。',
+                  Text(
+                    AppMessages.admin.appealIntroDescription,
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey),
+                    style: const TextStyle(color: Colors.grey),
                   ),
                 ],
               ),

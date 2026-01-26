@@ -553,15 +553,15 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
         String message;
         if (isGoalCompleted) {
           message = didPost
-              ? '🎉 目標達成！おめでとうございます！目標達成を投稿しました！'
-              : '🎉 目標達成！おめでとうございます！';
+              ? AppMessages.success.goalCompletedWithPost
+              : AppMessages.success.goalCompleted;
         } else if (isMilestone) {
           final milestoneMsg = TaskService.getMilestoneMessage(newStreak);
           message = didPost
-              ? '🎉 $newStreak日連続達成！$milestoneMsg！タスクを完了したことを投稿しました！'
-              : '🎉 $newStreak日連続達成！$milestoneMsg！';
+              ? AppMessages.success.taskMilestoneWithPost(newStreak, milestoneMsg)
+              : AppMessages.success.taskMilestone(newStreak, milestoneMsg);
         } else {
-          message = '🎉 タスク完了！ (+徳ポイント)';
+          message = AppMessages.success.taskCompletedWithVirtue(newStreak);
         }
 
         SnackBarHelper.showSuccess(
@@ -805,13 +805,13 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
       barrierDismissible: false,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
-          title: const Text('タスクを削除'),
+          title: Text(AppMessages.confirm.deleteTasksTitle),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '$count件のタスクを削除しますか？\n\n※繰り返し設定のあるタスクは、今日の分のみが削除されます（次回以降は残ります）。',
+                AppMessages.confirm.deleteTasksMessage(count),
               ),
               const SizedBox(height: 16),
               Row(
@@ -824,7 +824,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
                       });
                     },
                   ),
-                  const Text('今後表示しない'),
+                  Text(AppMessages.label.dontShowAgain),
                 ],
               ),
             ],
@@ -832,12 +832,12 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('キャンセル'),
+              child: Text(AppMessages.label.cancel),
             ),
             TextButton(
               style: TextButton.styleFrom(foregroundColor: Colors.red),
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('削除'),
+              child: Text(AppMessages.label.delete),
             ),
           ],
         ),
@@ -898,7 +898,9 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      return const Scaffold(body: Center(child: Text('ログインが必要です')));
+      return Scaffold(
+        body: Center(child: Text(AppMessages.error.loginRequired)),
+      );
     }
 
     // タブ生成
@@ -1295,9 +1297,9 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
   Future<void> _confirmDeleteCategory(CategoryModel category) async {
     final confirm = await DialogHelper.showConfirmDialog(
       context: context,
-      title: 'カテゴリを削除',
-      message: '「${category.name}」を削除しますか？\n含まれるタスクも削除されます。',
-      confirmText: '削除',
+      title: AppMessages.confirm.deleteCategoryTitle,
+      message: AppMessages.confirm.deleteCategoryMessage(category.name),
+      confirmText: AppMessages.label.delete,
       isDangerous: true,
       barrierDismissible: false,
     );

@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 
+import '../../core/constants/app_messages.dart';
+
 /// 動画再生画面
 class VideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
@@ -54,7 +56,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         playbackSpeeds: _speedOptions,
         optionsTranslation: OptionsTranslation(
           playbackSpeedButtonText: '再生速度',
-          cancelButtonText: 'キャンセル',
+          cancelButtonText: AppMessages.label.cancel,
         ),
         placeholder: Container(
           color: Colors.black,
@@ -70,7 +72,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 const Icon(Icons.error, color: Colors.red, size: 48),
                 const SizedBox(height: 16),
                 Text(
-                  '動画を再生できません',
+                  AppMessages.error.videoPlaybackFailedTitle,
                   style: const TextStyle(color: Colors.white),
                 ),
                 const SizedBox(height: 8),
@@ -101,15 +103,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   /// エラーメッセージをユーザーフレンドリーに変換
   String _getFriendlyErrorMessage(String error) {
     if (error.contains('hevc') || error.contains('HEVC') || error.contains('hvc1')) {
-      return 'この動画形式はお使いの端末では再生できません。\n'
-             '（HEVC/H.265形式）\n\n'
-             '投稿者に別の形式で再投稿をお願いしてみてください。';
+      return AppMessages.error.videoUnsupportedFormat;
     } else if (error.contains('network') || error.contains('Network')) {
-      return 'ネットワーク接続を確認してください。';
+      return AppMessages.error.videoNetworkError;
     } else if (error.contains('404') || error.contains('not found')) {
-      return '動画が見つかりませんでした。\n削除された可能性があります。';
+      return AppMessages.error.videoNotFound;
     }
-    return '動画を再生できませんでした。\nしばらくしてから再試行してください。';
+    return AppMessages.error.videoPlaybackFailed;
   }
 
   @override
@@ -151,8 +151,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                       children: [
                         const Icon(Icons.videocam_off_outlined, color: Colors.white54, size: 64),
                         const SizedBox(height: 24),
-                        const Text(
-                          '動画を再生できません',
+                        Text(
+                          AppMessages.error.videoPlaybackFailedTitle,
                           style: TextStyle(
                             color: Colors.white, 
                             fontSize: 18,
@@ -184,14 +184,14 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                           ),
                           icon: const Icon(Icons.refresh),
-                          label: const Text('再試行'),
+                          label: Text(AppMessages.label.retry),
                         ),
                         const SizedBox(height: 16),
                         TextButton(
                           onPressed: () => Navigator.pop(context),
-                          child: const Text(
-                            '戻る',
-                            style: TextStyle(color: Colors.white54),
+                          child: Text(
+                            AppMessages.label.back,
+                            style: const TextStyle(color: Colors.white54),
                           ),
                         ),
                       ],

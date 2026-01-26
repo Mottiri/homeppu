@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/constants/app_messages.dart';
+
 import '../../../../shared/models/category_model.dart';
 import '../../../../shared/models/task_model.dart';
 import 'task_card.dart';
@@ -85,7 +87,7 @@ class TaskListView extends StatelessWidget {
     if (filteredTasks.isEmpty) {
       return TaskEmptyView(
         icon: Icons.event_available,
-        message: 'まだタスクがありません',
+        message: AppMessages.empty.taskNoneForDate,
         textColor: Colors.grey.shade400,
         onTap: isEditMode ? onExitEditMode : null,
       );
@@ -172,12 +174,16 @@ class TaskListView extends StatelessWidget {
 
   String _emptyMessageForType(String type, CategoryModel? category) {
     if (type == 'daily') {
-      return '毎日のタスクを追加しよう！';
+      return AppMessages.empty.dailyTaskAddPrompt;
     }
     if (type == 'custom') {
-      return '${category?.name} のタスクを追加しよう！';
+      final categoryName = category?.name;
+      if (categoryName == null || categoryName.isEmpty) {
+        return AppMessages.empty.taskAddPrompt;
+      }
+      return AppMessages.empty.categoryTaskAddPrompt(categoryName);
     }
-    return 'タスクを追加しよう！';
+    return AppMessages.empty.taskAddPrompt;
   }
 
   IconData _emptyIconForType(String type) {

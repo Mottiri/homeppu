@@ -45,24 +45,28 @@ class _AdminReviewScreenState extends ConsumerState<AdminReviewScreen> {
             }
 
             if (snapshot.hasError) {
-              return Center(child: Text('エラーが発生しました: ${snapshot.error}'));
+              return Center(
+                child: Text(
+                  AppMessages.error.withDetail(snapshot.error.toString()),
+                ),
+              );
             }
 
             final docs = snapshot.data?.docs ?? [];
 
             if (docs.isEmpty) {
-              return const Center(
+              return Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
+                    const Icon(
                       Icons.check_circle_outline,
                       size: 64,
                       color: AppColors.success,
                     ),
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                     Text(
-                      '審査待ちの投稿はありません',
+                      AppMessages.empty.adminReviewEmpty,
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,

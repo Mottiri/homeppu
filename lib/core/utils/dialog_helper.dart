@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
+import '../constants/app_messages.dart';
 
 /// ダイアログ表示ヘルパー
 ///
@@ -29,11 +30,14 @@ class DialogHelper {
     required BuildContext context,
     required String title,
     required String message,
-    String confirmText = '確認',
-    String cancelText = 'キャンセル',
+    String? confirmText,
+    String? cancelText,
     bool isDangerous = false,
     bool barrierDismissible = true,
   }) async {
+    final resolvedConfirmText = confirmText ?? AppMessages.label.confirm;
+    final resolvedCancelText = cancelText ?? AppMessages.label.cancel;
+
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: barrierDismissible,
@@ -45,7 +49,7 @@ class DialogHelper {
           TextButton(
             onPressed: () => Navigator.pop(context, false),
             child: Text(
-              cancelText,
+              resolvedCancelText,
               style: TextStyle(color: AppColors.textSecondary),
             ),
           ),
@@ -54,7 +58,7 @@ class DialogHelper {
             style: isDangerous
                 ? TextButton.styleFrom(foregroundColor: AppColors.error)
                 : null,
-            child: Text(confirmText),
+            child: Text(resolvedConfirmText),
           ),
         ],
       ),
@@ -76,15 +80,16 @@ class DialogHelper {
     required String itemName,
     String? additionalMessage,
   }) {
-    final message = additionalMessage != null
-        ? '「$itemName」を削除しますか？\n$additionalMessage'
-        : '「$itemName」を削除しますか？';
+    final message = AppMessages.confirm.deleteItem(
+      itemName,
+      additionalMessage: additionalMessage,
+    );
 
     return showConfirmDialog(
       context: context,
-      title: '削除の確認',
+      title: AppMessages.confirm.deleteTitle,
       message: message,
-      confirmText: '削除',
+      confirmText: AppMessages.label.delete,
       isDangerous: true,
       barrierDismissible: false,
     );
@@ -94,9 +99,9 @@ class DialogHelper {
   static Future<bool> showLogoutConfirmDialog(BuildContext context) {
     return showConfirmDialog(
       context: context,
-      title: 'ログアウト',
-      message: '本当にログアウトしますか？\nまた会えるのを楽しみにしてるね💫',
-      confirmText: 'ログアウト',
+      title: AppMessages.label.logout,
+      message: AppMessages.confirm.logout,
+      confirmText: AppMessages.label.logout,
       isDangerous: true,
       barrierDismissible: false,
     );
@@ -110,12 +115,14 @@ class DialogHelper {
     required String title,
     String? initialValue,
     String? hintText,
-    String confirmText = '保存',
-    String cancelText = 'キャンセル',
+    String? confirmText,
+    String? cancelText,
     int? maxLength,
     int maxLines = 1,
   }) async {
     String? result;
+    final resolvedConfirmText = confirmText ?? AppMessages.label.save;
+    final resolvedCancelText = cancelText ?? AppMessages.label.cancel;
 
     await showDialog<void>(
       context: context,
@@ -142,7 +149,7 @@ class DialogHelper {
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
               child: Text(
-                cancelText,
+                resolvedCancelText,
                 style: TextStyle(color: AppColors.textSecondary),
               ),
             ),
@@ -151,7 +158,7 @@ class DialogHelper {
                 result = controller.text;
                 Navigator.pop(dialogContext);
               },
-              child: Text(confirmText),
+              child: Text(resolvedConfirmText),
             ),
           ],
         );
