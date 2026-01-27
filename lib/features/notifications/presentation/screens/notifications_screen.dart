@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -50,9 +50,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       return const Center(child: CircularProgressIndicator());
     }
 
-    final notificationsStream = ref
-        .watch(notificationRepositoryProvider)
-        .getNotificationsStream(user.uid);
+    final notificationRepository =
+        ref.watch(notificationRepositoryProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -70,126 +69,124 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
-          child: StreamBuilder<List<NotificationModel>>(
-            stream: notificationsStream,
-            builder: (context, snapshot) {
-              final notifications = snapshot.data ?? [];
-              return TabBar(
-                controller: _tabController,
-                isScrollable: true, // スクロール可能にして狭い画面に対応
-                tabAlignment: TabAlignment.center, // 中央寄せ
-                labelColor: AppColors.primary,
-                unselectedLabelColor: AppColors.textSecondary,
-                indicatorColor: AppColors.primary,
-                labelPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                ), // 適度なパディング
-                tabs: _tabs.map((tab) {
-                  final category = tab.$1;
-                  final labelKey = tab.$2;
-                  final label = switch (labelKey) {
-                    'timeline' => AppMessages.notification.tabTimeline,
-                    'task' => AppMessages.notification.tabTask,
-                    'circle' => AppMessages.notification.tabCircle,
-                    'support' => AppMessages.notification.tabSupport,
-                    _ => labelKey,
-                  };
-                  final unreadCount = _getUnreadCount(notifications, category);
-                  return Tab(
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: Text(
-                            label,
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                        ),
-                        if (unreadCount > 0)
-                          Positioned(
-                            top: -4,
-                            right: -4,
-                            child: Container(
-                              constraints: const BoxConstraints(
-                                minWidth: 16,
-                                minHeight: 16,
-                              ),
-                              padding: const EdgeInsets.all(2),
-                              decoration: const BoxDecoration(
-                                color: AppColors.primary,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Text(
-                                unreadCount > 99 ? '99' : '$unreadCount',
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
+          child: TabBar(
+            controller: _tabController,
+            isScrollable: true, // スクロール可能にして狭い画面に対応
+            tabAlignment: TabAlignment.center, // 中央寄せ
+            labelColor: AppColors.primary,
+            unselectedLabelColor: AppColors.textSecondary,
+            indicatorColor: AppColors.primary,
+            labelPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+            ), // 適度なパディング
+            tabs: _tabs.map((tab) {
+              final category = tab.$1;
+              final labelKey = tab.$2;
+              final label = switch (labelKey) {
+                'timeline' => AppMessages.notification.tabTimeline,
+                'task' => AppMessages.notification.tabTask,
+                'circle' => AppMessages.notification.tabCircle,
+                'support' => AppMessages.notification.tabSupport,
+                _ => labelKey,
+              };
+              return Tab(
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Text(
+                        label,
+                        style: const TextStyle(fontSize: 13),
+                      ),
                     ),
-                  );
-                }).toList(),
+                    Positioned(
+                      top: -4,
+                      right: -4,
+                      child: _UnreadCountBadge(
+                        category: category,
+                        userId: user.uid,
+                      ),
+                    ),
+                  ],
+                ),
               );
-            },
+            }).toList(),
           ),
         ),
       ),
-      body: StreamBuilder<List<NotificationModel>>(
-        stream: notificationsStream,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: TabBarView(
+        controller: _tabController,
+        children: _tabs.map((tab) {
+          final category = tab.$1;
+          final notificationsStream = notificationRepository
+              .getNotificationsStreamByCategory(user.uid, category);
+          return StreamBuilder<List<NotificationModel>>(
+            stream: notificationsStream,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-          if (snapshot.hasError) {
-            debugPrint('NotificationsScreen error: ${snapshot.error}');
-            return Center(child: Text(AppMessages.error.general));
-          }
+              if (snapshot.hasError) {
+                debugPrint('NotificationsScreen error: ${snapshot.error}');
+                return Center(child: Text(AppMessages.error.general));
+              }
 
-          final allNotifications = snapshot.data ?? [];
-
-          return TabBarView(
-            controller: _tabController,
-            children: _tabs.map((tab) {
-              final category = tab.$1;
-              final filteredNotifications = _filterByCategory(
-                allNotifications,
-                category,
-              );
-              return _NotificationList(notifications: filteredNotifications);
-            }).toList(),
+              final notifications = snapshot.data ?? [];
+              return _NotificationList(notifications: notifications);
+            },
           );
-        },
+        }).toList(),
       ),
     );
   }
+}
 
-  /// カテゴリ別の未読数を取得
-  int _getUnreadCount(
-    List<NotificationModel> notifications,
-    NotificationCategory category,
-  ) {
-    // サポートカテゴリは他と同じロジックで処理
-    return notifications
-        .where((n) => !n.isRead && getCategoryFromType(n.type) == category)
-        .length;
-  }
+class _UnreadCountBadge extends ConsumerWidget {
+  final NotificationCategory category;
+  final String userId;
 
-  /// カテゴリでフィルタリング
-  List<NotificationModel> _filterByCategory(
-    List<NotificationModel> notifications,
-    NotificationCategory category,
-  ) {
-    // 各カテゴリに該当する通知のみ返す
-    return notifications
-        .where((n) => getCategoryFromType(n.type) == category)
-        .toList();
+  const _UnreadCountBadge({
+    required this.category,
+    required this.userId,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final unreadStream = ref
+        .watch(notificationRepositoryProvider)
+        .getUnreadCountStreamByCategory(userId, category);
+
+    return StreamBuilder<int>(
+      stream: unreadStream,
+      builder: (context, snapshot) {
+        final unreadCount = snapshot.data ?? 0;
+        if (unreadCount <= 0) {
+          return const SizedBox.shrink();
+        }
+        return Container(
+          constraints: const BoxConstraints(
+            minWidth: 16,
+            minHeight: 16,
+          ),
+          padding: const EdgeInsets.all(2),
+          decoration: const BoxDecoration(
+            color: AppColors.primary,
+            shape: BoxShape.circle,
+          ),
+          child: Text(
+            unreadCount > 99 ? '99' : '$unreadCount',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 
