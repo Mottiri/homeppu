@@ -94,19 +94,28 @@ class _HomeppuAppState extends ConsumerState<HomeppuApp> {
       // タスク関連
       case 'task_reminder':
       case 'task_scheduled':
-        if (payload.taskId != null && payload.scheduledAt != null) {
-          final scheduledAt = DateTime.tryParse(payload.scheduledAt!);
+        if (payload.taskId != null) {
+          final scheduledAt = payload.scheduledAt != null
+              ? DateTime.tryParse(payload.scheduledAt!)
+              : null;
           router.go(
             '/tasks',
             extra: {
               'highlightTaskId': payload.taskId,
               'highlightRequestId': DateTime.now().millisecondsSinceEpoch,
-              'targetDate': scheduledAt,
+              if (scheduledAt != null) 'targetDate': scheduledAt,
               'forceRefresh': true,
             },
           );
         } else {
           router.go('/tasks');
+        }
+        break;
+      case 'goal_reminder':
+        if (payload.goalId != null) {
+          router.push('/goals/detail/${payload.goalId}');
+        } else {
+          router.go('/goals');
         }
         break;
 

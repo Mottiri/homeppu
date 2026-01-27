@@ -11,6 +11,7 @@ class NotificationPayload {
   final String? postId;
   final String? circleId;
   final String? taskId;
+  final String? goalId;
   final String? inquiryId;
   final String? reportId;
   final String? contentId;
@@ -21,6 +22,7 @@ class NotificationPayload {
     this.postId,
     this.circleId,
     this.taskId,
+    this.goalId,
     this.inquiryId,
     this.reportId,
     this.contentId,
@@ -33,6 +35,7 @@ class NotificationPayload {
       postId: json['postId'] as String?,
       circleId: json['circleId'] as String?,
       taskId: json['taskId'] as String?,
+      goalId: json['goalId'] as String?,
       inquiryId: json['inquiryId'] as String?,
       reportId: json['reportId'] as String?,
       contentId: json['contentId'] as String?,
@@ -46,6 +49,7 @@ class NotificationPayload {
       if (postId != null) 'postId': postId,
       if (circleId != null) 'circleId': circleId,
       if (taskId != null) 'taskId': taskId,
+      if (goalId != null) 'goalId': goalId,
       if (inquiryId != null) 'inquiryId': inquiryId,
       if (reportId != null) 'reportId': reportId,
       if (contentId != null) 'contentId': contentId,
@@ -193,6 +197,7 @@ class NotificationService {
       postId: message.data['postId'] as String?,
       circleId: message.data['circleId'] as String?,
       taskId: message.data['taskId'] as String?,
+      goalId: message.data['goalId'] as String?,
       inquiryId: message.data['inquiryId'] as String?,
       reportId: message.data['reportId'] as String?,
       contentId: message.data['contentId'] as String?,
@@ -260,6 +265,7 @@ class NotificationService {
       postId: message.data['postId'] as String?,
       circleId: message.data['circleId'] as String?,
       taskId: message.data['taskId'] as String?,
+      goalId: message.data['goalId'] as String?,
       inquiryId: message.data['inquiryId'] as String?,
       reportId: message.data['reportId'] as String?,
       contentId: message.data['contentId'] as String?,

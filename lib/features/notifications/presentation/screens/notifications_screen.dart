@@ -279,6 +279,38 @@ class _NotificationTile extends ConsumerWidget {
         }
 
         // 遷移先を決定
+        final taskTypes = [
+          NotificationType.taskReminder,
+          NotificationType.taskScheduled,
+        ];
+        if (taskTypes.contains(notification.type) && context.mounted) {
+          if (notification.taskId != null) {
+            context.go(
+              '/tasks',
+              extra: {
+                'highlightTaskId': notification.taskId,
+                'highlightRequestId': DateTime.now().millisecondsSinceEpoch,
+                if (notification.scheduledAt != null)
+                  'targetDate': notification.scheduledAt,
+                'forceRefresh': true,
+              },
+            );
+          } else {
+            context.go('/tasks');
+          }
+          return;
+        }
+
+        if (notification.type == NotificationType.goalReminder &&
+            context.mounted) {
+          if (notification.goalId != null) {
+            context.push('/goals/detail/${notification.goalId}');
+          } else {
+            context.push('/goals');
+          }
+          return;
+        }
+
         if (notification.inquiryId != null && context.mounted) {
           // 管理者向け通知は管理者用画面へ
           final adminInquiryTypes = [

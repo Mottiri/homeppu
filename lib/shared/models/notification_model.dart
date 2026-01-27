@@ -74,6 +74,9 @@ class NotificationModel {
   final String? postId; // 関連する投稿ID
   final String? circleId; // 関連するサークルID
   final String? inquiryId; // 関連する問い合わせID（サポート通知用）
+  final String? taskId; // 関連するタスクID
+  final String? goalId; // 関連する目標ID
+  final DateTime? scheduledAt; // タスクの予定日時
   final bool isRead;
   final DateTime createdAt;
 
@@ -89,6 +92,9 @@ class NotificationModel {
     this.postId,
     this.circleId,
     this.inquiryId,
+    this.taskId,
+    this.goalId,
+    this.scheduledAt,
     this.isRead = false,
     required this.createdAt,
   });
@@ -107,6 +113,13 @@ class NotificationModel {
       postId: data['postId'],
       circleId: data['circleId'],
       inquiryId: data['inquiryId'],
+      taskId: data['taskId'],
+      goalId: data['goalId'],
+      scheduledAt: data['scheduledAt'] != null
+          ? (data['scheduledAt'] is Timestamp
+                ? (data['scheduledAt'] as Timestamp).toDate()
+                : DateTime.tryParse(data['scheduledAt'].toString()))
+          : null,
       isRead: data['isRead'] ?? false,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
@@ -124,6 +137,9 @@ class NotificationModel {
       'postId': postId,
       'circleId': circleId,
       'inquiryId': inquiryId,
+      'taskId': taskId,
+      'goalId': goalId,
+      'scheduledAt': scheduledAt == null ? null : Timestamp.fromDate(scheduledAt!),
       'isRead': isRead,
       'createdAt': Timestamp.fromDate(createdAt),
     };

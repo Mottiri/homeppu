@@ -40,6 +40,7 @@ export const executeTaskReminder = functionsV1.region(LOCATION).runWith({
             response.status(200).send("Task completed");
             return;
         }
+        const scheduledAt = taskData?.scheduledAt ?? null;
 
         // 送信済みかチェック
         const sentRef = db.collection("sentReminders").doc(`${taskId}_${reminderKey}`);
@@ -78,6 +79,7 @@ export const executeTaskReminder = functionsV1.region(LOCATION).runWith({
             isRead: false,
             createdAt: FieldValue.serverTimestamp(),
             taskId,
+            scheduledAt,
             reminderKey,
             clientType: type,
         });
