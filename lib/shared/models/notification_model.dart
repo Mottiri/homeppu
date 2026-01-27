@@ -12,6 +12,7 @@ enum NotificationType {
   // タスク関連
   taskReminder,
   taskScheduled,
+  goalReminder,
   // サポート（問い合わせ）関連
   inquiryReply, // 運営から返信があった
   inquiryStatusChanged, // ステータスが変更された
@@ -45,6 +46,7 @@ NotificationCategory getCategoryFromType(NotificationType type) {
       return NotificationCategory.circle;
     case NotificationType.taskReminder:
     case NotificationType.taskScheduled:
+    case NotificationType.goalReminder:
       return NotificationCategory.task;
     case NotificationType.inquiryReply:
     case NotificationType.inquiryStatusChanged:
@@ -147,6 +149,8 @@ class NotificationModel {
         return NotificationType.taskReminder;
       case 'task_scheduled':
         return NotificationType.taskScheduled;
+      case 'goal_reminder':
+        return NotificationType.goalReminder;
       // サポート関連
       case 'inquiry_reply':
         return NotificationType.inquiryReply;

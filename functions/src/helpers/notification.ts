@@ -27,7 +27,7 @@ export async function sendPushOnly(
 
         // チャンネルIDの決定
         let channelId = "default_channel";
-        if (data?.type === "task_reminder" || data?.type === "task_due") {
+        if (data?.type === "task_reminder" || data?.type === "task_due" || data?.type === "goal_reminder") {
             channelId = "task_reminders";
         }
 

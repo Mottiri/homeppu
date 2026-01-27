@@ -53,6 +53,7 @@ export { onPostCreated } from "./triggers/posts";
 export { onNotificationCreated, onCommentCreatedNotify, onReactionAddedNotify } from "./triggers/notifications";
 export { onTaskUpdated, scheduleTaskReminders, scheduleTaskRemindersOnCreate } from "./triggers/tasks";
 export { onReactionCreated } from "./triggers/reactions";
+export { scheduleGoalReminders, scheduleGoalRemindersOnCreate } from "./triggers/goals";
 
 // ===============================================
 // Scheduled
@@ -60,7 +61,7 @@ export { onReactionCreated } from "./triggers/reactions";
 export { scheduleAIPosts } from "./scheduled/ai-posts";
 export { checkGhostCircles, evolveCircleAIs, triggerEvolveCircleAIs } from "./scheduled/circles";
 export { cleanupOrphanedMedia, cleanupResolvedInquiries, cleanupReports, cleanupBannedUsers } from "./scheduled/cleanup";
-export { executeTaskReminder } from "./scheduled/reminders";
+export { executeTaskReminder, executeGoalReminder } from "./scheduled/reminders";
 
 // ===============================================
 // Circle AI

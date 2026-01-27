@@ -43,6 +43,7 @@ functions/src/
 |---------|------|-------------|
 | `circles.ts` | サークル管理 | ゴースト検出（毎日3:30）、AI成長（毎月1日） |
 | `cleanup.ts` | クリーンアップ | 孤立メディア・問い合わせ・レポート削除（毎日深夜） |
+| `reminders.ts` | タスク/目標リマインダー通知 | Cloud Tasks（HTTP） |
 | `ai-posts.ts` | AI投稿 | AI自動投稿スケジュール |
 
 ### triggers/ - Firestoreトリガー
@@ -53,6 +54,7 @@ functions/src/
 | `posts.ts` | 投稿 | 作成時AIコメントスケジュール |
 | `notifications.ts` | 通知 | 通知ドキュメント作成時の自動プッシュ送信 + コメント/リアクション通知作成 |
 | `tasks.ts` | タスク | 更新時リマインダースケジュール |
+| `goals.ts` | 目標 | 作成/更新時リマインダースケジュール |
 
 補足（2026-01-25）:
 - `users/{userId}/notifications/{notificationId}` の作成で `onNotificationCreated` が自動でFCM送信
@@ -144,6 +146,7 @@ functions/src/
 | サークル管理 | `callable/circles.ts`, `triggers/circles.ts` |
 | サークルAI | `circle-ai/*.ts` |
 | タスク管理 | `callable/tasks.ts`, `triggers/tasks.ts` |
+| 目標リマインダー | `triggers/goals.ts`, `scheduled/reminders.ts` |
 | 通報機能 | `callable/reports.ts` |
 | 問い合わせ | `callable/inquiries.ts` |
 | 通知・プッシュ | `triggers/notifications.ts`, `helpers/notification.ts` |

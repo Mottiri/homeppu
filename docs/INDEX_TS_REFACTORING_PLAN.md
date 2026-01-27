@@ -1,4 +1,4 @@
-# index.ts 分割リファクタリング計画
+﻿# index.ts 分割リファクタリング計画
 
 ## 進捗サマリー
 
@@ -13,6 +13,7 @@
 | Phase 7: スケジュール・HTTP | ✅ 完了・テスト済 | 2026-01-14 |
 
 **2026-01-26 追記**: index.ts に残っていた重い関数を分離し、HTTP/Callable/Triggers/Scheduledへ整理（AI生成、コメント/リアクション、リマインダー、画像モデレーションなど）。
+**2026-01-26 追記**: 目標リマインダー関連の関数（`executeGoalReminder`, `scheduleGoalReminders*`）が分割時に欠落していたため復活。`triggers/goals.ts` と `scheduled/reminders.ts` に再配置。
 
 ## 現状分析
 
@@ -116,6 +117,7 @@ functions/src/
 │   ├── notifications.ts        # onNotificationCreated, onNotificationCreatedPush
 │   ├── reactions.ts            # onReactionCreated, onCommentCreatedNotify
 │   ├── tasks.ts                # onTaskUpdated, scheduleTaskReminders*
+│   ├── goals.ts                # scheduleGoalReminders*
 │   └── circles.ts              # onCircleCreated, onCircleUpdated
 ├── callable/
 │   ├── posts.ts                # createPostWithModeration, createPostWithRateLimit
@@ -764,6 +766,7 @@ export const CLOUD_TASK_FUNCTIONS = {
   generateAIReactionV1: "generateAIReactionV1",
   executeAIPostGeneration: "executeAIPostGeneration",
   executeTaskReminder: "executeTaskReminder",
+  executeGoalReminder: "executeGoalReminder",
   cleanupDeletedCircle: "cleanupDeletedCircle",
   executeCircleAIPost: "executeCircleAIPost",
 } as const;
@@ -1248,3 +1251,5 @@ if (!await verifyCloudTasksRequest(request, CLOUD_TASK_FUNCTIONS.generateAIComme
 - Firebase Functions では、すべてのexportが `index.ts` から見える必要がある
 - 分割後も `index.ts` で再エクスポートすれば既存の呼び出しに影響なし
 - Cloud Functions のデプロイ名は export 名で決まるため、リネーム不要
+
+
