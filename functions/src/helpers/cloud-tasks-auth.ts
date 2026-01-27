@@ -1,5 +1,5 @@
 import { OAuth2Client } from "google-auth-library";
-import * as functionsV1 from "firebase-functions/v1";
+import type { Request } from "express";
 import { PROJECT_ID, LOCATION } from "../config/constants";
 
 const authClient = new OAuth2Client();
@@ -31,7 +31,7 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
  * 3. audience（呼び出し先関数URL）の一致
  */
 export async function verifyCloudTasksRequest(
-  request: functionsV1.https.Request,
+  request: Request,
   functionName: string
 ): Promise<boolean> {
   const expectedAudience = `https://${LOCATION}-${PROJECT_ID}.cloudfunctions.net/${functionName}`;

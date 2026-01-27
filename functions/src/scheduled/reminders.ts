@@ -4,6 +4,7 @@
  */
 
 import * as functionsV1 from "firebase-functions/v1";
+import { onRequest } from "firebase-functions/v2/https";
 
 import { db, FieldValue } from "../helpers/firebase";
 import { LOCATION } from "../config/constants";
@@ -105,9 +106,9 @@ export const executeTaskReminder = functionsV1.region(LOCATION).runWith({
 /**
  * 目標リマインダー通知を実行するCloud Tasks用のHTTPエンドポイント
  */
-export const executeGoalReminder = functionsV1.region(LOCATION).runWith({
-    timeoutSeconds: 30,
-}).https.onRequest(async (request, response) => {
+export const executeGoalReminder = onRequest(
+    { region: LOCATION, timeoutSeconds: 30 },
+    async (request, response) => {
     // Cloud Tasks からのリクエストを OIDC トークンで検証（動的インポート）
     const { verifyCloudTasksRequest } = await import("../helpers/cloud-tasks-auth");
     if (!await verifyCloudTasksRequest(request, "executeGoalReminder")) {
