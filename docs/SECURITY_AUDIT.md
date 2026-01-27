@@ -1,4 +1,4 @@
-# セキュリティ監査レポート
+﻿# セキュリティ監査レポート
 
 **作成日**: 2026年1月7日
 **最終更新**: 2026年1月12日（#15 Cloud Tasks OIDC認証対応完了）
@@ -467,12 +467,12 @@ static const FirebaseOptions android = FirebaseOptions(
 
 ---
 
-### 15. 【中】onRequest関数の認証が不十分
+### 15. 【中】onRequest関数の認証が不十分（対応済み）
 
-**ファイル**: `functions/src/index.ts`
+**ファイル**: `functions/src/http/ai-generation.ts`, `functions/src/scheduled/reminders.ts`, `functions/src/callable/admin.ts` など
 
-**問題内容**:  
-以下の`onRequest`（HTTP関数）は、適切な認証チェックが不十分です：
+**問題内容（修正前）**:  
+以下の`onRequest`（HTTP関数）は、修正前は認証が不十分だったが現在は修正済み：
 
 | 関数名 | 行番号 | 問題 |
 |--------|--------|------|
@@ -480,7 +480,7 @@ static const FirebaseOptions android = FirebaseOptions(
 | `cleanUpUserFollows` | 4140 | ハードコードシークレット（#4で既出） |
 | `executeGoalReminder` | 6820 | Bearer tokenチェックはあるが、トークンの検証が不十分 |
 
-**現在のコード (executeGoalReminder)**:
+**旧コード (executeGoalReminder / 修正前)**:
 ```typescript
 export const executeGoalReminder = onRequest(
   { region: "asia-northeast1" },
@@ -496,11 +496,16 @@ export const executeGoalReminder = onRequest(
 );
 ```
 
-**リスク**:  
+**対応状況（2026-01-27）**:
+- generateAIReactionV1: Cloud Tasks OIDC検証（verifyCloudTasksRequest）を実装済み
+- cleanUpUserFollows: callable/admin.ts に移動し admin チェックを実施
+- executeGoalReminder: scheduled/reminders.ts で OIDC検証を実装
+
+**修正前リスク**:  
 - 任意のBearerトークンを送信すれば認証をバイパス可能
 - Cloud Tasks以外からの不正なリクエストを受け入れる可能性
 
-**推奨対応**:  
+**推奨対応（完了）**:  
 Cloud Tasksからの呼び出しには、OIDCトークンを使用し、正しく検証する：
 
 ```typescript
@@ -1264,3 +1269,6 @@ if (!await verifyCloudTasksRequest(request, "関数名")) {
   - `functions/src/config/constants.ts`（新規）
   - `functions/src/index.ts`
 - **テスト結果**: 全関数で正常動作を確認
+
+
+
