@@ -6,8 +6,9 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { db, FieldValue, Timestamp } from "../helpers/firebase";
+import { requireAuth } from "../helpers/auth";
 import { LOCATION } from "../config/constants";
-import { AUTH_ERRORS, VALIDATION_ERRORS } from "../config/messages";
+import { VALIDATION_ERRORS } from "../config/messages";
 
 /**
  * タスクを作成
@@ -18,11 +19,7 @@ import { AUTH_ERRORS, VALIDATION_ERRORS } from "../config/messages";
 export const createTask = onCall(
   { region: LOCATION },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
-    }
-
-    const userId = request.auth.uid;
+    const userId = requireAuth(request);
     const {
       content,
       emoji,
@@ -190,11 +187,7 @@ export const createTask = onCall(
 export const getTasks = onCall(
   { region: LOCATION },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
-    }
-
-    const userId = request.auth.uid;
+    const userId = requireAuth(request);
     const { type } = request.data;
 
     let query: FirebaseFirestore.Query<FirebaseFirestore.DocumentData> = db

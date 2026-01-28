@@ -4,7 +4,7 @@
  */
 
 import * as functionsV1 from "firebase-functions/v1";
-import { CloudTasksClient } from "@google-cloud/tasks";
+import { scheduleHttpTask } from "../helpers/cloud-tasks";
 
 import { db, FieldValue } from "../helpers/firebase";
 import { PROJECT_ID, LOCATION } from "../config/constants";
@@ -30,7 +30,6 @@ export const scheduleAIPosts = functionsV1.region(LOCATION).runWith({
     // ============================================
 
     try {
-        const tasksClient = new CloudTasksClient();
         const project = process.env.GCLOUD_PROJECT || PROJECT_ID;
         const queue = "generate-ai-posts";
 
@@ -57,8 +56,6 @@ export const scheduleAIPosts = functionsV1.region(LOCATION).runWith({
         const postedAIIds: string[] = [];
 
         const url = `https://${LOCATION}-${project}.cloudfunctions.net/executeAIPostGeneration`;
-        const parent = tasksClient.queuePath(project, LOCATION, queue);
-
         for (const persona of selectedAIs) {
             // 0〜6時間後のランダムな時間にスケジュール
             const delayMinutes = Math.floor(Math.random() * 360);
@@ -71,23 +68,16 @@ export const scheduleAIPosts = functionsV1.region(LOCATION).runWith({
                 postTimeIso: scheduleTime.toISOString(),
             };
 
-            const task = {
-                httpRequest: {
-                    httpMethod: "POST" as const,
-                    url: url,
-                    body: Buffer.from(JSON.stringify(payload)).toString("base64"),
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": "Bearer internal-token",
-                    },
-                },
-                scheduleTime: {
-                    seconds: Math.floor(scheduleTime.getTime() / 1000),
-                },
-            };
-
             try {
-                await tasksClient.createTask({ parent, task });
+                await scheduleHttpTask({
+                    queue,
+                    url,
+                    payload,
+                    scheduleTime,
+                    headers: { "Authorization": "Bearer internal-token" },
+                    projectId: project,
+                    location: LOCATION,
+                });
                 console.log(`Scheduled post for ${persona.name} at ${scheduleTime.toISOString()}`);
                 postedAIIds.push(persona.id);
             } catch (error) {

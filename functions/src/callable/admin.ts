@@ -8,6 +8,7 @@ import * as functionsV1 from "firebase-functions/v1";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 
 import { db } from "../helpers/firebase";
+import { requireAdmin, requireAuth } from "../helpers/auth";
 import { isAdmin } from "../helpers/admin";
 import { LOCATION } from "../config/constants";
 import {
@@ -25,10 +26,8 @@ import {
 export const cleanUpUserFollows = onCall(
     { region: LOCATION, timeoutSeconds: 540 },
     async (request) => {
-        if (!request.auth) {
-            throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
-        }
-        const userIsAdmin = await isAdmin(request.auth.uid);
+        const userId = requireAuth(request);
+        const userIsAdmin = await isAdmin(userId);
         if (!userIsAdmin) {
             throw new HttpsError("permission-denied", AUTH_ERRORS.ADMIN_REQUIRED);
         }
@@ -70,7 +69,7 @@ export const cleanUpUserFollows = onCall(
                 }
             }
 
-            console.log(`cleanUpUserFollows completed by admin ${request.auth.uid}. Updated ${updatedCount} users.`);
+            console.log(`cleanUpUserFollows completed by admin ${userId}. Updated ${updatedCount} users.`);
             return { success: true, updatedCount, message: SUCCESS_MESSAGES.usersUpdated(updatedCount) };
 
         } catch (error) {
@@ -175,10 +174,8 @@ export const deleteAllAIUsers = functionsV1.region(LOCATION).runWith({
 export const cleanupOrphanedCircleAIs = onCall(
     { region: LOCATION, timeoutSeconds: 300 },
     async (request) => {
-        if (!request.auth) {
-            throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
-        }
-        const userIsAdmin = await isAdmin(request.auth.uid);
+        const userId = requireAuth(request);
+        const userIsAdmin = await isAdmin(userId);
         if (!userIsAdmin) {
             throw new HttpsError("permission-denied", AUTH_ERRORS.ADMIN_REQUIRED);
         }
@@ -224,10 +221,7 @@ export const cleanupOrphanedCircleAIs = onCall(
  * 管理者権限を設定（既存の管理者のみが実行可能）
  */
 export const setAdminRole = onCall(async (request) => {
-    const callerId = request.auth?.uid;
-    if (!callerId) {
-        throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED_ALT);
-    }
+    const callerId = requireAuth(request);
 
     const callerIsAdmin = await isAdmin(callerId);
     if (!callerIsAdmin) {
@@ -254,10 +248,7 @@ export const setAdminRole = onCall(async (request) => {
  * 管理者権限を削除（既存の管理者のみが実行可能）
  */
 export const removeAdminRole = onCall(async (request) => {
-    const callerId = request.auth?.uid;
-    if (!callerId) {
-        throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED_ALT);
-    }
+    const callerId = requireAuth(request);
 
     const callerIsAdmin = await isAdmin(callerId);
     if (!callerIsAdmin) {
@@ -294,16 +285,14 @@ export const removeAdminRole = onCall(async (request) => {
 export const banUser = onCall(
     { region: LOCATION },
     async (request) => {
-        if (!request.auth?.token.admin) {
-            throw new HttpsError("permission-denied", AUTH_ERRORS.ADMIN_REQUIRED);
-        }
+        const adminId = await requireAdmin(request);
 
         const { userId, reason } = request.data;
         if (!userId || !reason) {
             throw new HttpsError("invalid-argument", VALIDATION_ERRORS.USER_ID_AND_REASON_REQUIRED);
         }
 
-        if (userId === request.auth.uid) {
+        if (userId === adminId) {
             throw new HttpsError("invalid-argument", VALIDATION_ERRORS.SELF_BAN_NOT_ALLOWED);
         }
 
@@ -316,7 +305,7 @@ export const banUser = onCall(
             type: "temporary",
             reason: reason,
             bannedAt: admin.firestore.Timestamp.now(),
-            bannedBy: request.auth.uid,
+            bannedBy: adminId,
         };
 
         const batch = db.batch();
@@ -342,7 +331,7 @@ export const banUser = onCall(
 
         await admin.auth().setCustomUserClaims(userId, { banned: true, banStatus: 'temporary' });
 
-        console.log(`User ${userId} temporarily banned by ${request.auth.uid}`);
+        console.log(`User ${userId} temporarily banned by ${adminId}`);
         return { success: true };
     }
 );
@@ -353,16 +342,14 @@ export const banUser = onCall(
 export const permanentBanUser = onCall(
     { region: LOCATION },
     async (request) => {
-        if (!request.auth?.token.admin) {
-            throw new HttpsError("permission-denied", AUTH_ERRORS.ADMIN_REQUIRED);
-        }
+        const adminId = await requireAdmin(request);
 
         const { userId, reason } = request.data;
         if (!userId || !reason) {
             throw new HttpsError("invalid-argument", VALIDATION_ERRORS.USER_ID_AND_REASON_REQUIRED);
         }
 
-        if (userId === request.auth.uid) {
+        if (userId === adminId) {
             throw new HttpsError("invalid-argument", VALIDATION_ERRORS.SELF_BAN_NOT_ALLOWED);
         }
 
@@ -370,7 +357,7 @@ export const permanentBanUser = onCall(
             type: "permanent",
             reason: reason,
             bannedAt: admin.firestore.Timestamp.now(),
-            bannedBy: request.auth.uid,
+            bannedBy: adminId,
         };
 
         const batch = db.batch();
@@ -406,7 +393,7 @@ export const permanentBanUser = onCall(
             console.warn(`Auth update failed for ${userId}:`, e);
         }
 
-        console.log(`User ${userId} permanently banned by ${request.auth.uid}`);
+        console.log(`User ${userId} permanently banned by ${adminId}`);
         return { success: true };
     }
 );
@@ -417,9 +404,7 @@ export const permanentBanUser = onCall(
 export const unbanUser = onCall(
     { region: LOCATION },
     async (request) => {
-        if (!request.auth?.token.admin) {
-            throw new HttpsError("permission-denied", AUTH_ERRORS.ADMIN_REQUIRED);
-        }
+        const adminId = await requireAdmin(request);
 
         const { userId } = request.data;
         if (!userId) {
@@ -477,7 +462,7 @@ export const unbanUser = onCall(
             console.warn(`Auth update failed for ${userId}:`, e);
         }
 
-        console.log(`User ${userId} unbanned by ${request.auth.uid}`);
+        console.log(`User ${userId} unbanned by ${adminId}`);
         return { success: true };
     }
 );

@@ -6,12 +6,12 @@
 import * as admin from "firebase-admin";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { CloudTasksClient } from "@google-cloud/tasks";
+import { scheduleHttpTask } from "../helpers/cloud-tasks";
 
 import { db, FieldValue } from "../helpers/firebase";
 import { PROJECT_ID, LOCATION, AI_MODELS } from "../config/constants";
 import { geminiApiKey } from "../config/secrets";
-import { isAdmin } from "../helpers/admin";
+import { requireAdmin } from "../helpers/auth";
 import {
     AIPersona,
     AI_PERSONAS,
@@ -60,13 +60,7 @@ export const initializeAIAccounts = onCall(
     { region: LOCATION, secrets: [geminiApiKey], timeoutSeconds: 300 },
     async (request) => {
         // セキュリティ: 管理者権限チェック
-        if (!request.auth) {
-            throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
-        }
-        const userIsAdmin = await isAdmin(request.auth.uid);
-        if (!userIsAdmin) {
-            throw new HttpsError("permission-denied", AUTH_ERRORS.ADMIN_REQUIRED);
-        }
+        await requireAdmin(request);
 
         const apiKey = geminiApiKey.value();
         if (!apiKey) {
@@ -180,18 +174,10 @@ export const generateAIPosts = onCall(
     { region: LOCATION },
     async (request) => {
         // セキュリティ: 管理者権限チェック
-        if (!request.auth) {
-            throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
-        }
-        const userIsAdmin = await isAdmin(request.auth.uid);
-        if (!userIsAdmin) {
-            throw new HttpsError("permission-denied", AUTH_ERRORS.ADMIN_REQUIRED);
-        }
+        await requireAdmin(request);
 
-        const tasksClient = new CloudTasksClient();
         const project = process.env.GCLOUD_PROJECT || PROJECT_ID;
         const queue = "generate-ai-posts";
-        const parent = tasksClient.queuePath(project, LOCATION, queue);
 
         const url = `https://${LOCATION}-${project}.cloudfunctions.net/executeAIPostGeneration`;
 
@@ -208,22 +194,15 @@ export const generateAIPosts = onCall(
                 postTimeIso: scheduleTime.toISOString(),
             };
 
-            const task = {
-                httpRequest: {
-                    httpMethod: "POST" as const,
-                    url: url,
-                    body: Buffer.from(JSON.stringify(payload)).toString("base64"),
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": "Bearer internal-token",
-                    },
-                },
-                scheduleTime: {
-                    seconds: Math.floor(scheduleTime.getTime() / 1000),
-                },
-            };
-
-            await tasksClient.createTask({ parent, task });
+            await scheduleHttpTask({
+                queue,
+                url,
+                payload,
+                scheduleTime,
+                headers: { "Authorization": "Bearer internal-token" },
+                projectId: project,
+                location: LOCATION,
+            });
             taskCount++;
         }
 

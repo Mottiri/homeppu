@@ -10,8 +10,9 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as functionsV1 from "firebase-functions/v1";
 import * as admin from "firebase-admin";
-import { CloudTasksClient } from "@google-cloud/tasks";
+import { scheduleHttpTask } from "../helpers/cloud-tasks";
 import { db, FieldValue } from "../helpers/firebase";
+import { requireAuth } from "../helpers/auth";
 import { isAdmin } from "../helpers/admin";
 import { deleteStorageFileFromUrl } from "../helpers/storage";
 import { PROJECT_ID, LOCATION } from "../config/constants";
@@ -38,12 +39,8 @@ export const deleteCircle = onCall(
     memory: "256MiB",
   },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED_ALT);
-    }
-
     const { circleId, reason } = request.data;
-    const userId = request.auth.uid;
+    const userId = requireAuth(request, AUTH_ERRORS.UNAUTHENTICATED_ALT);
 
     if (!circleId) {
       throw new HttpsError("invalid-argument", VALIDATION_ERRORS.CIRCLE_ID_REQUIRED);
@@ -116,24 +113,17 @@ export const deleteCircle = onCall(
       const location = LOCATION;
       const queue = "circle-cleanup";
 
-      const tasksClient = new CloudTasksClient();
-      const queuePath = tasksClient.queuePath(project, location, queue);
       const targetUrl = `https://${location}-${project}.cloudfunctions.net/cleanupDeletedCircle`;
-      const serviceAccountEmail = `cloud-tasks-sa@${project}.iam.gserviceaccount.com`;
 
       const payload = { circleId, circleName };
-      const task = {
-        httpRequest: {
-          httpMethod: "POST" as const,
-          url: targetUrl,
-          body: Buffer.from(JSON.stringify(payload)).toString("base64"),
-          headers: { "Content-Type": "application/json" },
-          oidcToken: { serviceAccountEmail },
-        },
-        scheduleTime: { seconds: Math.floor(Date.now() / 1000) + 5 }, // 5秒後に開始
-      };
-
-      await tasksClient.createTask({ parent: queuePath, task });
+      await scheduleHttpTask({
+        queue,
+        url: targetUrl,
+        payload,
+        scheduleTime: new Date(Date.now() + 5 * 1000), // 5?????????
+        projectId: project,
+        location,
+      });
       console.log(`Scheduled cleanup task for circle: ${circleId}`);
 
       console.log(`=== deleteCircle SUCCESS: ${circleName} ===`);
@@ -260,22 +250,15 @@ export const cleanupDeletedCircle = functionsV1.region(LOCATION).runWith({
       if (!remainingPosts.empty) {
         // 自分自身を再スケジュール
         const project = process.env.GCLOUD_PROJECT || PROJECT_ID;
-        const tasksClient = new CloudTasksClient();
-        const queuePath = tasksClient.queuePath(project, LOCATION, "circle-cleanup");
         const targetUrl = `https://${LOCATION}-${project}.cloudfunctions.net/cleanupDeletedCircle`;
 
-        await tasksClient.createTask({
-          parent: queuePath,
-          task: {
-            httpRequest: {
-              httpMethod: "POST" as const,
-              url: targetUrl,
-              body: Buffer.from(JSON.stringify({ circleId, circleName })).toString("base64"),
-              headers: { "Content-Type": "application/json" },
-              oidcToken: { serviceAccountEmail: `cloud-tasks-sa@${project}.iam.gserviceaccount.com` },
-            },
-            scheduleTime: { seconds: Math.floor(Date.now() / 1000) + 2 },
-          },
+        await scheduleHttpTask({
+          queue: "circle-cleanup",
+          url: targetUrl,
+          payload: { circleId, circleName },
+          scheduleTime: new Date(Date.now() + 2 * 1000),
+          projectId: project,
+          location: LOCATION,
         });
 
         console.log(`Scheduled next cleanup batch for ${circleId}`);
@@ -350,11 +333,7 @@ export const approveJoinRequest = onCall(
   },
   async (request) => {
     const { requestId, circleId, circleName } = request.data;
-    const userId = request.auth?.uid;
-
-    if (!userId) {
-      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED_ALT);
-    }
+    const userId = requireAuth(request, AUTH_ERRORS.UNAUTHENTICATED_ALT);
 
     if (!requestId || !circleId) {
       throw new HttpsError("invalid-argument", VALIDATION_ERRORS.MISSING_PARAMS);
@@ -435,11 +414,7 @@ export const rejectJoinRequest = onCall(
   },
   async (request) => {
     const { requestId, circleId, circleName } = request.data;
-    const userId = request.auth?.uid;
-
-    if (!userId) {
-      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED_ALT);
-    }
+    const userId = requireAuth(request, AUTH_ERRORS.UNAUTHENTICATED_ALT);
 
     if (!requestId || !circleId) {
       throw new HttpsError("invalid-argument", VALIDATION_ERRORS.MISSING_PARAMS);
@@ -514,11 +489,7 @@ export const sendJoinRequest = onCall(
   },
   async (request) => {
     const { circleId } = request.data;
-    const userId = request.auth?.uid;
-
-    if (!userId) {
-      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED_ALT);
-    }
+    const userId = requireAuth(request, AUTH_ERRORS.UNAUTHENTICATED_ALT);
 
     if (!circleId) {
       throw new HttpsError("invalid-argument", VALIDATION_ERRORS.CIRCLE_ID_REQUIRED_ALT);

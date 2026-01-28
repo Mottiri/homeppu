@@ -7,6 +7,7 @@ import * as admin from "firebase-admin";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 
 import { db } from "../helpers/firebase";
+import { requireAuth } from "../helpers/auth";
 import { VIRTUE_CONFIG } from "../helpers/virtue";
 import { LOCATION } from "../config/constants";
 import { AUTH_ERRORS, RESOURCE_ERRORS, VALIDATION_ERRORS } from "../config/messages";
@@ -17,11 +18,7 @@ import { AUTH_ERRORS, RESOURCE_ERRORS, VALIDATION_ERRORS } from "../config/messa
 export const followUser = onCall(
     { region: LOCATION },
     async (request) => {
-        if (!request.auth) {
-            throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
-        }
-
-        const currentUserId = request.auth.uid;
+        const currentUserId = requireAuth(request);
         const { targetUserId } = request.data;
 
         if (!targetUserId) {
@@ -68,11 +65,7 @@ export const followUser = onCall(
 export const unfollowUser = onCall(
     { region: LOCATION },
     async (request) => {
-        if (!request.auth) {
-            throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
-        }
-
-        const currentUserId = request.auth.uid;
+        const currentUserId = requireAuth(request);
         const { targetUserId } = request.data;
 
         if (!targetUserId) {
@@ -109,11 +102,7 @@ export const unfollowUser = onCall(
 export const getFollowStatus = onCall(
     { region: LOCATION },
     async (request) => {
-        if (!request.auth) {
-            throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
-        }
-
-        const currentUserId = request.auth.uid;
+        const currentUserId = requireAuth(request);
         const { targetUserId } = request.data;
 
         if (!targetUserId) {
@@ -139,11 +128,7 @@ export const getFollowStatus = onCall(
 export const getVirtueHistory = onCall(
     { region: LOCATION },
     async (request) => {
-        if (!request.auth) {
-            throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
-        }
-
-        const userId = request.auth.uid;
+        const userId = requireAuth(request);
 
         const history = await db
             .collection("virtueHistory")
@@ -168,11 +153,7 @@ export const getVirtueHistory = onCall(
 export const getVirtueStatus = onCall(
     { region: LOCATION },
     async (request) => {
-        if (!request.auth) {
-            throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
-        }
-
-        const userId = request.auth.uid;
+        const userId = requireAuth(request);
         const userDoc = await db.collection("users").doc(userId).get();
 
         if (!userDoc.exists) {

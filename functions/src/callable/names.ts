@@ -7,11 +7,10 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { db, FieldValue } from "../helpers/firebase";
-import { isAdmin } from "../helpers/admin";
+import { requireAdmin, requireAuth } from "../helpers/auth";
 import { NamePart, PREFIX_PARTS, SUFFIX_PARTS } from "../ai/personas";
 import { LOCATION } from "../config/constants";
 import {
-  AUTH_ERRORS,
   RESOURCE_ERRORS,
   VALIDATION_ERRORS,
   PERMISSION_ERRORS,
@@ -25,13 +24,7 @@ export const initializeNameParts = onCall(
   { region: LOCATION },
   async (request) => {
     // セキュリティ: 管理者権限チェック
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
-    }
-    const userIsAdmin = await isAdmin(request.auth.uid);
-    if (!userIsAdmin) {
-      throw new HttpsError("permission-denied", AUTH_ERRORS.ADMIN_REQUIRED);
-    }
+    await requireAdmin(request);
 
     const batch = db.batch();
     let prefixCount = 0;
@@ -78,11 +71,7 @@ export const initializeNameParts = onCall(
 export const getNameParts = onCall(
   { region: LOCATION },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
-    }
-
-    const userId = request.auth.uid;
+    const userId = requireAuth(request);
 
     // ユーザーのアンロック済みパーツを取得
     const userDoc = await db.collection("users").doc(userId).get();
@@ -136,11 +125,7 @@ export const getNameParts = onCall(
 export const updateUserName = onCall(
   { region: LOCATION },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
-    }
-
-    const userId = request.auth.uid;
+    const userId = requireAuth(request);
     const { prefixId, suffixId } = request.data;
 
     if (!prefixId || !suffixId) {

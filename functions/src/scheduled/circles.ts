@@ -8,7 +8,7 @@
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as functionsV1 from "firebase-functions/v1";
-import { CloudTasksClient } from "@google-cloud/tasks";
+import { scheduleHttpTask } from "../helpers/cloud-tasks";
 import { db, FieldValue } from "../helpers/firebase";
 import { isAdmin } from "../helpers/admin";
 import { PROJECT_ID, LOCATION } from "../config/constants";
@@ -125,22 +125,15 @@ export const checkGhostCircles = onSchedule(
 
           // Cloud Tasksでバックグラウンド削除をスケジュール
           const project = process.env.GCLOUD_PROJECT || PROJECT_ID;
-          const tasksClient = new CloudTasksClient();
-          const queuePath = tasksClient.queuePath(project, LOCATION, "circle-cleanup");
           const targetUrl = `https://${LOCATION}-${project}.cloudfunctions.net/cleanupDeletedCircle`;
 
-          await tasksClient.createTask({
-            parent: queuePath,
-            task: {
-              httpRequest: {
-                httpMethod: "POST" as const,
-                url: targetUrl,
-                body: Buffer.from(JSON.stringify({ circleId, circleName })).toString("base64"),
-                headers: { "Content-Type": "application/json" },
-                oidcToken: { serviceAccountEmail: `cloud-tasks-sa@${project}.iam.gserviceaccount.com` },
-              },
-              scheduleTime: { seconds: Math.floor(Date.now() / 1000) + 5 },
-            },
+          await scheduleHttpTask({
+            queue: "circle-cleanup",
+            url: targetUrl,
+            payload: { circleId, circleName },
+            scheduleTime: new Date(Date.now() + 5 * 1000),
+            projectId: project,
+            location: LOCATION,
           });
 
           // オーナーに削除完了通知

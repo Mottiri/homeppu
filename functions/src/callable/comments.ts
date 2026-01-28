@@ -7,6 +7,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 import { db, FieldValue } from "../helpers/firebase";
+import { requireAuth } from "../helpers/auth";
 import { geminiApiKey } from "../config/secrets";
 import { AI_MODELS, LOCATION } from "../config/constants";
 import {
@@ -92,12 +93,8 @@ export const createCommentWithModeration = onCall(
     },
     async (request) => {
         // 認証チェック
-        if (!request.auth) {
-            throw new HttpsError("unauthenticated", AUTH_ERRORS.USER_MUST_BE_LOGGED_IN);
-        }
-
         const { postId, content, userDisplayName, userAvatarIndex } = request.data;
-        const userId = request.auth.uid;
+        const userId = requireAuth(request, AUTH_ERRORS.USER_MUST_BE_LOGGED_IN);
 
         if (!postId || !content) {
             throw new HttpsError("invalid-argument", VALIDATION_ERRORS.MISSING_POST_ID_CONTENT);
@@ -167,11 +164,7 @@ export const addUserReaction = onCall(
     { region: LOCATION, enforceAppCheck: false },
     async (request) => {
         const { postId, reactionType } = request.data;
-        const userId = request.auth?.uid;
-
-        if (!userId) {
-            throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
-        }
+        const userId = requireAuth(request);
 
         if (!postId || !reactionType) {
             throw new HttpsError("invalid-argument", VALIDATION_ERRORS.POST_ID_REACTION_REQUIRED);

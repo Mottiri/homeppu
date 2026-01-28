@@ -5,10 +5,10 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { db, FieldValue } from "../helpers/firebase";
+import { requireAuth } from "../helpers/auth";
 import { isAdmin, getAdminUids } from "../helpers/admin";
 import { LOCATION } from "../config/constants";
 import {
-  AUTH_ERRORS,
   VALIDATION_ERRORS,
   NOTIFICATION_TITLES,
   NOTIFICATION_BODIES,
@@ -24,11 +24,7 @@ import {
 export const reportContent = onCall(
   { region: LOCATION },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
-    }
-
-    const reporterId = request.auth.uid;
+    const reporterId = requireAuth(request);
     const { contentId, contentType, reason, targetUserId } = request.data;
 
     if (!contentId || !contentType || !reason || !targetUserId) {

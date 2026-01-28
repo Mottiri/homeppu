@@ -4,7 +4,7 @@
  */
 
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
-import { CloudTasksClient } from "@google-cloud/tasks";
+import { scheduleHttpTask } from "../helpers/cloud-tasks";
 
 import { db, FieldValue, Timestamp as FirestoreTimestamp } from "../helpers/firebase";
 import { LOCATION, PROJECT_ID } from "../config/constants";
@@ -173,13 +173,10 @@ export const scheduleTaskReminders = onDocumentUpdated(
 
         console.log(`[Reminder] Scheduling reminders for task ${taskId}`);
 
-        const tasksClient = new CloudTasksClient();
         const project = process.env.GCLOUD_PROJECT || PROJECT_ID;
         const location = LOCATION;
 
-        const queuePath = tasksClient.queuePath(project, location, TASK_REMINDER_QUEUE);
         const targetUrl = `https://${location}-${project}.cloudfunctions.net/executeTaskReminder`;
-        const serviceAccountEmail = `cloud-tasks-sa@${project}.iam.gserviceaccount.com`;
 
         const now = new Date();
 
@@ -210,24 +207,24 @@ export const scheduleTaskReminders = onDocumentUpdated(
                 };
 
                 try {
-                    const [task] = await tasksClient.createTask({
-                        parent: queuePath,
-                        task: {
-                            httpRequest: {
-                                httpMethod: "POST",
-                                url: targetUrl,
-                                body: Buffer.from(JSON.stringify(payload)).toString("base64"),
-                                headers: { "Content-Type": "application/json" },
-                                oidcToken: { serviceAccountEmail },
-                            },
-                            scheduleTime: { seconds: Math.floor(reminderTime.getTime() / 1000) },
-                        },
+                    const taskName = await scheduleHttpTask({
+                        queue: TASK_REMINDER_QUEUE,
+                        url: targetUrl,
+                        payload,
+                        scheduleTime: reminderTime,
+                        projectId: project,
+                        location,
                     });
+
+                    if (!taskName) {
+                        console.error(`[Reminder] Failed to schedule: ${reminderKey}`);
+                        continue;
+                    }
 
                     await db.collection("scheduledReminders").add({
                         taskId,
                         reminderKey,
-                        cloudTaskName: task.name,
+                        cloudTaskName: taskName,
                         scheduledFor: FirestoreTimestamp.fromDate(reminderTime),
                         createdAt: FieldValue.serverTimestamp(),
                     });
@@ -251,29 +248,28 @@ export const scheduleTaskReminders = onDocumentUpdated(
             };
 
             try {
-                const [task] = await tasksClient.createTask({
-                    parent: queuePath,
-                    task: {
-                        httpRequest: {
-                            httpMethod: "POST",
-                            url: targetUrl,
-                            body: Buffer.from(JSON.stringify(payload)).toString("base64"),
-                            headers: { "Content-Type": "application/json" },
-                            oidcToken: { serviceAccountEmail },
-                        },
-                        scheduleTime: { seconds: Math.floor(scheduledAt.getTime() / 1000) },
-                    },
+                const taskName = await scheduleHttpTask({
+                    queue: TASK_REMINDER_QUEUE,
+                    url: targetUrl,
+                    payload,
+                    scheduleTime: scheduledAt,
+                    projectId: project,
+                    location,
                 });
 
-                await db.collection("scheduledReminders").add({
-                    taskId,
-                    reminderKey: "on_time",
-                    cloudTaskName: task.name,
-                    scheduledFor: FirestoreTimestamp.fromDate(scheduledAt),
-                    createdAt: FieldValue.serverTimestamp(),
-                });
+                if (!taskName) {
+                    console.error(`[Reminder] Failed to schedule on-time: ${taskId}`);
+                } else {
+                    await db.collection("scheduledReminders").add({
+                        taskId,
+                        reminderKey: "on_time",
+                        cloudTaskName: taskName,
+                        scheduledFor: FirestoreTimestamp.fromDate(scheduledAt),
+                        createdAt: FieldValue.serverTimestamp(),
+                    });
 
-                console.log(`[Reminder] Scheduled on-time: ${taskId} at ${scheduledAt.toISOString()}`);
+                    console.log(`[Reminder] Scheduled on-time: ${taskId} at ${scheduledAt.toISOString()}`);
+                }
             } catch (error) {
                 console.error(`[Reminder] Failed to schedule on-time`, error);
             }
@@ -306,13 +302,10 @@ export const scheduleTaskRemindersOnCreate = onDocumentCreated(
 
         console.log(`[Reminder] Scheduling reminders for new task ${taskId}`);
 
-        const tasksClient = new CloudTasksClient();
         const project = process.env.GCLOUD_PROJECT || PROJECT_ID;
         const location = LOCATION;
 
-        const queuePath = tasksClient.queuePath(project, location, TASK_REMINDER_QUEUE);
         const targetUrl = `https://${location}-${project}.cloudfunctions.net/executeTaskReminder`;
-        const serviceAccountEmail = `cloud-tasks-sa@${project}.iam.gserviceaccount.com`;
 
         const now = new Date();
 
@@ -340,24 +333,24 @@ export const scheduleTaskRemindersOnCreate = onDocumentCreated(
                 };
 
                 try {
-                    const [task] = await tasksClient.createTask({
-                        parent: queuePath,
-                        task: {
-                            httpRequest: {
-                                httpMethod: "POST",
-                                url: targetUrl,
-                                body: Buffer.from(JSON.stringify(payload)).toString("base64"),
-                                headers: { "Content-Type": "application/json" },
-                                oidcToken: { serviceAccountEmail },
-                            },
-                            scheduleTime: { seconds: Math.floor(reminderTime.getTime() / 1000) },
-                        },
+                    const taskName = await scheduleHttpTask({
+                        queue: TASK_REMINDER_QUEUE,
+                        url: targetUrl,
+                        payload,
+                        scheduleTime: reminderTime,
+                        projectId: project,
+                        location,
                     });
+
+                    if (!taskName) {
+                        console.error(`[Reminder] Failed to schedule: ${reminderKey}`);
+                        continue;
+                    }
 
                     await db.collection("scheduledReminders").add({
                         taskId,
                         reminderKey,
-                        cloudTaskName: task.name,
+                        cloudTaskName: taskName,
                         scheduledFor: FirestoreTimestamp.fromDate(reminderTime),
                         createdAt: FieldValue.serverTimestamp(),
                     });
@@ -381,29 +374,28 @@ export const scheduleTaskRemindersOnCreate = onDocumentCreated(
             };
 
             try {
-                const [task] = await tasksClient.createTask({
-                    parent: queuePath,
-                    task: {
-                        httpRequest: {
-                            httpMethod: "POST",
-                            url: targetUrl,
-                            body: Buffer.from(JSON.stringify(payload)).toString("base64"),
-                            headers: { "Content-Type": "application/json" },
-                            oidcToken: { serviceAccountEmail },
-                        },
-                        scheduleTime: { seconds: Math.floor(scheduledAt.getTime() / 1000) },
-                    },
+                const taskName = await scheduleHttpTask({
+                    queue: TASK_REMINDER_QUEUE,
+                    url: targetUrl,
+                    payload,
+                    scheduleTime: scheduledAt,
+                    projectId: project,
+                    location,
                 });
 
-                await db.collection("scheduledReminders").add({
-                    taskId,
-                    reminderKey: "on_time",
-                    cloudTaskName: task.name,
-                    scheduledFor: FirestoreTimestamp.fromDate(scheduledAt),
-                    createdAt: FieldValue.serverTimestamp(),
-                });
+                if (!taskName) {
+                    console.error(`[Reminder] Failed to schedule on-time: ${taskId}`);
+                } else {
+                    await db.collection("scheduledReminders").add({
+                        taskId,
+                        reminderKey: "on_time",
+                        cloudTaskName: taskName,
+                        scheduledFor: FirestoreTimestamp.fromDate(scheduledAt),
+                        createdAt: FieldValue.serverTimestamp(),
+                    });
 
-                console.log(`[Reminder] Scheduled on-time: ${taskId}`);
+                    console.log(`[Reminder] Scheduled on-time: ${taskId}`);
+                }
             } catch (error) {
                 console.error(`[Reminder] Failed to schedule on-time`, error);
             }

@@ -5,7 +5,7 @@
 
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { CloudTasksClient } from "@google-cloud/tasks";
+import { scheduleHttpTask } from "../helpers/cloud-tasks";
 
 import { db } from "../helpers/firebase";
 import { PROJECT_ID, LOCATION, QUEUE_NAME, AI_MODELS } from "../config/constants";
@@ -171,9 +171,9 @@ export const onPostCreated = onDocumentCreated(
         const delays = Array.from({ length: selectedPersonas.length }, (_, i) => (i + 1) * 2 + Math.floor(Math.random() * 2))
             .sort((a, b) => a - b);
 
+        const project = process.env.GCLOUD_PROJECT || PROJECT_ID;
+
         // Cloud Tasks クライアント
-        const tasksClient = new CloudTasksClient();
-        const queuePath = tasksClient.queuePath(process.env.GCLOUD_PROJECT || PROJECT_ID, LOCATION, QUEUE_NAME);
 
         for (let i = 0; i < selectedPersonas.length; i++) {
             const persona = selectedPersonas[i];
@@ -202,29 +202,18 @@ export const onPostCreated = onDocumentCreated(
                     circleRules: isCirclePost ? circleRules : "",
                 };
 
-                const targetUrl = `https://${LOCATION}-${process.env.GCLOUD_PROJECT}.cloudfunctions.net/generateAICommentV1`;
-                const serviceAccountEmail = `cloud-tasks-sa@${process.env.GCLOUD_PROJECT}.iam.gserviceaccount.com`;
+                const targetUrl = `https://${LOCATION}-${project}.cloudfunctions.net/generateAICommentV1`;
 
-                console.log(`Enqueuing task for ${persona.name} to ${targetUrl} with SA ${serviceAccountEmail}`);
+                console.log(`Enqueuing task for ${persona.name} to ${targetUrl}`);
 
-                const task = {
-                    httpRequest: {
-                        httpMethod: "POST" as const,
-                        url: targetUrl,
-                        body: Buffer.from(JSON.stringify(payload)).toString("base64"),
-                        headers: {
-                            "Content-Type": "application/json",
-                        },
-                        oidcToken: {
-                            serviceAccountEmail: serviceAccountEmail,
-                        },
-                    },
-                    scheduleTime: {
-                        seconds: Math.floor(scheduleTime.getTime() / 1000),
-                    },
-                };
-
-                await tasksClient.createTask({ parent: queuePath, task });
+                await scheduleHttpTask({
+                    queue: QUEUE_NAME,
+                    url: targetUrl,
+                    payload,
+                    scheduleTime,
+                    projectId: project,
+                    location: LOCATION,
+                });
 
                 console.log(`Task enqueued for ${persona.name}: delay=${delayMinutes}m, time=${scheduleTime.toISOString()}`);
                 totalComments++;
@@ -255,30 +244,18 @@ export const onPostCreated = onDocumentCreated(
                 reactionType,
             };
 
-            const project = process.env.GCLOUD_PROJECT || PROJECT_ID;
             const url = `https://${LOCATION}-${project}.cloudfunctions.net/generateAIReactionV1`;
-            const serviceAccountEmail = `cloud-tasks-sa@${project}.iam.gserviceaccount.com`;
-
-            const task = {
-                httpRequest: {
-                    httpMethod: "POST" as const,
-                    url,
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": "Bearer secret-token",
-                    },
-                    body: Buffer.from(JSON.stringify(payload)).toString("base64"),
-                    oidcToken: {
-                        serviceAccountEmail: serviceAccountEmail,
-                    },
-                },
-                scheduleTime: {
-                    seconds: Math.floor(scheduleTime.getTime() / 1000),
-                },
-            };
 
             try {
-                await tasksClient.createTask({ parent: queuePath, task });
+                await scheduleHttpTask({
+                    queue: QUEUE_NAME,
+                    url,
+                    payload,
+                    scheduleTime,
+                    headers: { "Authorization": "Bearer secret-token" },
+                    projectId: project,
+                    location: LOCATION,
+                });
             } catch (error) {
                 console.error(`Error enqueuing reaction for ${persona.name}:`, error);
             }

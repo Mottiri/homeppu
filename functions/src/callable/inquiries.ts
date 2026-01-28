@@ -8,6 +8,7 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { db, FieldValue } from "../helpers/firebase";
+import { requireAuth } from "../helpers/auth";
 import { isAdmin, getAdminUids } from "../helpers/admin";
 import { appendInquiryToSpreadsheet } from "../helpers/spreadsheet";
 import { sheetsServiceAccountKey } from "../config/secrets";
@@ -28,11 +29,7 @@ import {
 export const createInquiry = onCall(
   { region: LOCATION },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
-    }
-
-    const userId = request.auth.uid;
+    const userId = requireAuth(request);
     const { category, subject, content, imageUrl } = request.data;
 
     if (!category || !subject || !content) {
@@ -115,11 +112,7 @@ export const createInquiry = onCall(
 export const sendInquiryMessage = onCall(
   { region: LOCATION },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
-    }
-
-    const userId = request.auth.uid;
+    const userId = requireAuth(request);
     const { inquiryId, content, imageUrl } = request.data;
 
     if (!inquiryId || !content) {
@@ -217,11 +210,7 @@ export const sendInquiryMessage = onCall(
 export const sendInquiryReply = onCall(
   { region: LOCATION },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
-    }
-
-    const adminId = request.auth.uid;
+    const adminId = requireAuth(request);
     const { inquiryId, content } = request.data;
 
     // 管理者チェック
@@ -306,11 +295,7 @@ export const sendInquiryReply = onCall(
 export const updateInquiryStatus = onCall(
   { region: LOCATION, secrets: [sheetsServiceAccountKey] },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
-    }
-
-    const adminId = request.auth.uid;
+    const adminId = requireAuth(request);
     const {
       inquiryId,
       status,

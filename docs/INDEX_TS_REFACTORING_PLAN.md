@@ -1,4 +1,4 @@
-﻿# index.ts 分割リファクタリング計画
+﻿﻿# index.ts 分割リファクタリング計画
 
 ## 進捗サマリー
 
@@ -13,7 +13,8 @@
 | Phase 7: スケジュール・HTTP | ✅ 完了・テスト済 | 2026-01-14 |
 
 **2026-01-26 追記**: index.ts に残っていた重い関数を分離し、HTTP/Callable/Triggers/Scheduledへ整理（AI生成、コメント/リアクション、リマインダー、画像モデレーションなど）。
-**2026-01-26 追記**: 目標リマインダー関連の関数（`executeGoalReminder`, `scheduleGoalReminders*`）が分割時に欠落していたため復活。`triggers/goals.ts` と `scheduled/reminders.ts` に再配置。
+**2026-01-27 追記**: `executeGoalReminder` は GCF v2（`onRequest`）に統一。
+NOTE 2026-01-27: helpers/auth.ts applied to callable/reports.ts, callable/tasks.ts, callable/names.ts, callable/posts.ts, callable/comments.ts, callable/users.ts, callable/inquiries.ts, callable/admin.ts, callable/ai.ts, callable/circles.ts.
 
 ## 現状分析
 
@@ -36,6 +37,7 @@ functions/src/
 ├── helpers/
 │   ├── admin.ts             ✅ isAdmin, getAdminUids
 │   ├── cloud-tasks-auth.ts  ✅ OIDC認証検証（デバッグログ付き）
+    - cloud-tasks.ts       DONE Cloud Tasks共通化（部分適用）
 │   ├── firebase.ts          ✅ Firebase Admin SDK 共有インスタンス（Phase 3で追加）
 │   ├── spreadsheet.ts       ✅ appendInquiryToSpreadsheet（Phase 3で追加）
 │   └── storage.ts           ✅ deleteStorageFileFromUrl
@@ -92,8 +94,69 @@ Container Healthcheck failed - onCircleUpdated, moderateImageCallable
 
 ---
 
-## 提案するファイル構成
+## 現行のファイル構成（2026-01-27 時点）
 
+```
+functions/src/
+  - index.ts
+  - ai/
+    - personas.ts
+    - provider.ts
+    - prompts/
+      - bio-generation.ts
+      - comment.ts
+      - index.ts
+      - media-analysis.ts
+      - moderation.ts
+      - post-generation.ts
+  - callable/
+    - admin.ts
+    - ai.ts
+    - circles.ts
+    - comments.ts
+    - inquiries.ts
+    - names.ts
+    - posts.ts
+    - reports.ts
+    - tasks.ts
+    - users.ts
+  - circle-ai/
+    - generator.ts
+    - posts.ts
+  - config/
+    - collections.ts
+    - constants.ts
+    - messages.ts
+    - secrets.ts
+  - helpers/
+    - admin.ts
+    - auth.ts
+    - cloud-tasks-auth.ts
+    - cloud-tasks.ts
+    - firebase.ts
+    - media-analysis.ts
+    - moderation.ts
+    - notification.ts
+    - spreadsheet.ts
+    - storage.ts
+    - virtue.ts
+  - http/
+    - ai-generation.ts
+    - image-moderation.ts
+  - scheduled/
+    - ai-posts.ts
+    - circles.ts
+    - cleanup.ts
+    - reminders.ts
+  - triggers/
+    - circles.ts
+    - goals.ts
+    - notifications.ts
+    - posts.ts
+    - reactions.ts
+    - tasks.ts
+  - types/
+    - index.ts
 ```
 functions/src/
 ├── index.ts                    # 再エクスポートのみ（約50行）
@@ -106,7 +169,7 @@ functions/src/
 │   ├── admin.ts                # isAdmin, getAdminUids
 │   ├── notification.ts         # sendPushOnly
 │   ├── storage.ts              # deleteStorageFileFromUrl
-│   ├── sheets.ts               # appendInquiryToSpreadsheet
+│   ├── spreadsheet.ts               # appendInquiryToSpreadsheet
 │   └── virtue.ts               # VIRTUE_CONFIG, penalizeUser
 ├── ai/
 │   ├── provider.ts             # 既存（AIProviderFactory）
@@ -218,14 +281,14 @@ functions/src/
 | 関数 | テスト結果 | ログ確認 |
 |------|-----------|----------|
 | `createInquiry` | ✅ 成功 | `Created inquiry: 0n87mbyNbsBeTvb1yMGK` |
-| `sendInquiryMessage` | ✅ 成功 | `Added message to inquiry: ...` |
-| `sendInquiryReply` | ✅ 成功 | `Sent reply to inquiry: ...` |
-| `updateInquiryStatus` | ✅ 成功 | `Updated inquiry status: ... -> in_progress`, `-> resolved` |
+| `sendInquiryMessage` | ✅ 成功 | `Added message to inquiry: ..` |
+| `sendInquiryReply` | ✅ 成功 | `Sent reply to inquiry: ..` |
+| `updateInquiryStatus` | ✅ 成功 | `Updated inquiry status: .. -> in_progress`, `-> resolved` |
 | `createTask` | ✅ 成功 | インスタンス起動・正常動作確認 |
 | `getTasks` | ✅ 成功 | インスタンス起動・正常動作確認 |
 | `getNameParts` | ✅ 成功 | 正常に呼び出し完了 |
-| `updateUserName` | ✅ 成功 | `User ... changed name to: まったり🐼パンダ` |
-| `reportContent` | ✅ 成功 | `Sent admin notification for report ...` |
+| `updateUserName` | ✅ 成功 | `User .. changed name to: まったり🐼パンダ` |
+| `reportContent` | ✅ 成功 | `Sent admin notification for report ..` |
 
 **備考**:
 - `helpers/firebase.ts` による共有インスタンスパターンが正常に動作
@@ -238,11 +301,8 @@ functions/src/
 
 | ファイル | 抽出対象 | 行数 | ステータス |
 |---------|---------|------|----------|
-| `callable/circles.ts` | deleteCircle, cleanupDeletedCircle, approveJoinRequest, rejectJoinRequest, sendJoinRequest | 580行 | ✅ 完了 |
 | `triggers/circles.ts` | onCircleCreated, onCircleUpdated | 230行 | ✅ 完了 |
 | `circle-ai/generator.ts` | generateCircleAIPersona | 90行 | ✅ 完了 |
-| `circle-ai/posts.ts` | generateCircleAIPosts, executeCircleAIPost, triggerCircleAIPosts | 420行 | ✅ 完了 |
-| `scheduled/circles.ts` | checkGhostCircles, evolveCircleAIs, triggerEvolveCircleAIs | 290行 | ✅ 完了 |
 
 **効果**: サークル機能を1ディレクトリに集約、約1,610行をindex.tsから分離
 
@@ -350,7 +410,6 @@ Generated AI 3: [name] ([id])
 
 | ファイル | 抽出対象 | 行数 |
 |---------|---------|------|
-| `triggers/posts.ts` | onPostCreated, onPostDeleted | 500行 |
 | `callable/posts.ts` | createPostWithModeration等 | 450行 |
 | `callable/comments.ts` | createCommentWithModeration, addUserReaction | 180行 |
 | `triggers/reactions.ts` | onReactionCreated, onReactionAddedNotify | 120行 |
@@ -370,12 +429,10 @@ Generated AI 3: [name] ([id])
 
 | ファイル | 抽出対象 | 行数 |
 |---------|---------|------|
-| `scheduled/ai-posts.ts` | scheduleAIPosts | 120行 |
 | `scheduled/cleanup.ts` | cleanupReports, cleanupOrphanedMedia等 | 380行 |
 | `scheduled/reminders.ts` | executeTaskReminder, executeGoalReminder等 | 450行 |
 | `http/ai-generation.ts` | executeAIPostGeneration, generateAICommentV1等 | 350行 |
 
-> **運用メモ**: AI自動投稿（scheduleAIPosts）は現在無効化中（`scheduled/ai-posts.ts` 内で早期return）。  
 > 需要と負荷を見ながら再有効化を判断する方針。
 ---
 
@@ -385,8 +442,8 @@ Generated AI 3: [name] ([id])
 ```typescript
 // 新ファイル（例: helpers/admin.ts）
 import * as admin from "firebase-admin";
-export async function isAdmin(uid: string): Promise<boolean> { ... }
-export async function getAdminUids(): Promise<string[]> { ... }
+export async function isAdmin(uid: string): Promise<boolean> { .. }
+export async function getAdminUids(): Promise<string[]> { .. }
 
 // index.ts
 export { isAdmin, getAdminUids } from "./helpers/admin";
@@ -428,7 +485,7 @@ export const Timestamp = admin.firestore.Timestamp;
 
 ```typescript
 // callable/xxx.ts での使用例
-import { db, FieldValue, Timestamp } from "../helpers/firebase";
+import { db, FieldValue, Timestamp } from "./helpers/firebase";
 
 // そのまま使用可能
 await db.collection("users").doc(userId).get();
@@ -446,7 +503,9 @@ await db.collection("users").doc(userId).get();
 
 ---
 
-## 重複パターンの共通化
+## 重複パターンの共通化（部分実装）
+
+NOTE: helpers/auth.ts applied to callable/reports.ts, callable/tasks.ts, callable/names.ts, callable/posts.ts, callable/comments.ts, callable/users.ts, callable/inquiries.ts, callable/admin.ts, callable/ai.ts, callable/circles.ts.
 
 ### 発見された重複パターン
 
@@ -464,7 +523,7 @@ await db.collection("users").doc(userId).get();
 
 ### 共通化計画
 
-#### 1. エラーメッセージ定数化（優先度：高）
+#### 1. エラーメッセージ定数化（計画・未実装）
 
 **現状**: 同じエラーメッセージがハードコードで散在
 
@@ -510,7 +569,9 @@ throw new HttpsError("not-found", ErrorMessages.USER_NOT_FOUND);
 
 ---
 
-#### 2. 認証ヘルパー関数（優先度：高）
+#### 2. 認証ヘルパー関数（一部実装）
+
+※ `helpers/auth.ts` を `callable/reports.ts` / `callable/tasks.ts` / `callable/names.ts` に適用済み。
 
 **現状**: 各関数で同じ認証チェックを繰り返し
 
@@ -560,18 +621,18 @@ export async function requireAdmin(request: CallableRequest): Promise<string> {
 // 使用例（Before: 5行 → After: 1行）
 export const followUser = onCall(async (request) => {
   const userId = requireAuth(request);  // これだけ！
-  // ...
+  // ..
 });
 
 export const deleteAllAIUsers = onCall(async (request) => {
   const adminId = await requireAdmin(request);  // これだけ！
-  // ...
+  // ..
 });
 ```
 
 ---
 
-#### 3. 通知ヘルパー関数（優先度：高）
+#### 3. 通知ヘルパー関数（実装済み）
 
 **現状**: 通知作成が17箇所で類似パターン
 
@@ -615,7 +676,7 @@ export async function createNotification(options: NotificationOptions): Promise<
       body,
       isRead: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      ...data,
+      ..data,
     });
 
   console.log(`Notification created: ${type} for user ${userId}`);
@@ -634,7 +695,7 @@ export async function createNotificationsForUsers(
   for (const userId of userIds) {
     const ref = db.collection("users").doc(userId).collection("notifications").doc();
     batch.set(ref, {
-      ...options,
+      ..options,
       isRead: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
@@ -665,20 +726,30 @@ await createNotificationsForUsers(adminUids, {
 
 ---
 
-#### 4. Cloud Tasks ヘルパー（優先度：中）
+#### 4. Cloud Tasks ヘルパー（一部実装）
+
+NOTE: helpers/cloud-tasks.ts applied to:
+- callable/ai.ts (generateAIPosts)
+- callable/circles.ts (deleteCircle / cleanupDeletedCircle)
+- scheduled/ai-posts.ts (scheduleAIPosts)
+- scheduled/circles.ts (checkGhostCircles)
+- triggers/posts.ts (onPostCreated)
+- triggers/tasks.ts (scheduleTaskReminders / scheduleTaskRemindersOnCreate)
+- triggers/goals.ts (scheduleGoalReminders / scheduleGoalRemindersOnCreate)
+- circle-ai/posts.ts (generateCircleAIPosts)
 
 **現状**: 16箇所でCloud Tasksを作成
 
 ```typescript
 // helpers/cloud-tasks.ts
-interface TaskOptions {
+type HttpTaskOptions {
   queue: string;
   url: string;
   payload: Record<string, unknown>;
   scheduleTime?: Date;
 }
 
-export async function scheduleTask(options: TaskOptions): Promise<string> {
+export async function scheduleHttpTask(options: HttpTaskOptions): Promise<string | undefined> {
   const tasksClient = new CloudTasksClient();
   const project = process.env.GCLOUD_PROJECT || PROJECT_ID;
   const parent = tasksClient.queuePath(project, LOCATION, options.queue);
@@ -693,7 +764,7 @@ export async function scheduleTask(options: TaskOptions): Promise<string> {
         serviceAccountEmail: `${project}@appspot.gserviceaccount.com`,
       },
     },
-    ...(options.scheduleTime && {
+    ..(options.scheduleTime && {
       scheduleTime: {
         seconds: Math.floor(options.scheduleTime.getTime() / 1000),
       },
@@ -730,10 +801,10 @@ functions/src/
 │   ├── errors.ts       # ErrorMessages【新規】
 │   ├── notification.ts # createNotification【新規】
 │   ├── storage.ts      # deleteStorageFileFromUrl（既存を移動）
-│   ├── cloud-tasks.ts  # scheduleTask【新規】
+│   ├── cloud-tasks.ts  # scheduleHttpTask【新規】
 │   ├── cloud-tasks-auth.ts # verifyCloudTasksRequest【新規・セキュリティ#15】
 │   └── index.ts        # 再エクスポート
-└── ...
+└── ..
 ```
 
 ### Cloud TasksリクエストのOIDC認証（セキュリティ#15対応）
@@ -776,7 +847,7 @@ export const CLOUD_TASK_FUNCTIONS = {
 // helpers/cloud-tasks-auth.ts
 import { OAuth2Client } from "google-auth-library";
 import * as functionsV1 from "firebase-functions/v1";
-import { PROJECT_ID, LOCATION } from "../config/constants";
+import { PROJECT_ID, LOCATION } from "./config/constants";
 
 const authClient = new OAuth2Client();
 
@@ -865,7 +936,7 @@ export const CLOUD_TASK_FUNCTIONS = {
 
 // 使用例
 if (!await verifyCloudTasksRequest(request, CLOUD_TASK_FUNCTIONS.generateAICommentV1)) {
-  // ...
+  // ..
 }
 ```
 

@@ -8,6 +8,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 import { db, FieldValue } from "../helpers/firebase";
+import { requireAuth } from "../helpers/auth";
 import { geminiApiKey } from "../config/secrets";
 import { isAdmin, getAdminUids } from "../helpers/admin";
 import { ModerationResult, MediaItem } from "../types";
@@ -29,14 +30,7 @@ import {
 export const createPostWithRateLimit = onCall(
     { region: LOCATION },
     async (request) => {
-        if (!request.auth) {
-            throw new HttpsError(
-                "unauthenticated",
-                AUTH_ERRORS.UNAUTHENTICATED
-            );
-        }
-
-        const userId = request.auth.uid;
+        const userId = requireAuth(request);
         const data = request.data;
 
         // レート制限チェック（1分間に5投稿まで）
@@ -90,12 +84,7 @@ export const createPostWithModeration = onCall(
     async (request) => {
         console.log("=== createPostWithModeration START ===");
 
-        if (!request.auth) {
-            console.log("ERROR: Not authenticated");
-            throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
-        }
-
-        const userId = request.auth.uid;
+        const userId = requireAuth(request);
         const { content, userDisplayName, userAvatarIndex, postMode, circleId, mediaItems } = request.data;
         console.log(`User: ${userId}, Content: ${content?.substring(0, 30)}...`);
 
