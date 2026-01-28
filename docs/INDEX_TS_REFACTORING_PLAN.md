@@ -523,7 +523,7 @@ NOTE: helpers/auth.ts applied to callable/reports.ts, callable/tasks.ts, callabl
 
 ### 共通化計画
 
-#### 1. エラーメッセージ定数化（計画・未実装）
+#### 1. エラーメッセージ定数化（実装・部分適用）
 
 **現状**: 同じエラーメッセージがハードコードで散在
 
@@ -566,6 +566,11 @@ export const ErrorMessages = {
 throw new HttpsError("unauthenticated", ErrorMessages.UNAUTHENTICATED);
 throw new HttpsError("not-found", ErrorMessages.USER_NOT_FOUND);
 ```
+
+**2026-01-28 追記**:
+- `helpers/errors.ts` を追加
+- `helpers/auth.ts` と `http/image-moderation.ts` に適用
+- 既存の `HttpsError` 置換は段階的に対応予定
 
 ---
 

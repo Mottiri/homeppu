@@ -10,6 +10,8 @@ import { AI_MODELS, LOCATION } from "../config/constants";
 import { geminiApiKey } from "../config/secrets";
 import { IMAGE_MODERATION_CALLABLE_PROMPT } from "../ai/prompts/moderation";
 import { MediaModerationResult } from "../types";
+import { requireAuth } from "../helpers/auth";
+import { ErrorMessages } from "../helpers/errors";
 
 /**
  * アップロード前の画像をモデレーション
@@ -21,13 +23,11 @@ export const moderateImageCallable = onCall(
         const { imageBase64, mimeType = "image/jpeg" } = request.data;
 
         if (!imageBase64) {
-            throw new HttpsError("invalid-argument", "imageBase64 is required");
+            throw new HttpsError("invalid-argument", ErrorMessages.IMAGE_BASE64_REQUIRED);
         }
 
         // 認証チェック
-        if (!request.auth) {
-            throw new HttpsError("unauthenticated", "Authentication required");
-        }
+        requireAuth(request, ErrorMessages.UNAUTHENTICATED_EN);
 
         try {
             const apiKey = geminiApiKey.value();

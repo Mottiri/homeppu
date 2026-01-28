@@ -1,11 +1,14 @@
 import { CallableRequest, HttpsError } from "firebase-functions/v2/https";
-import { AUTH_ERRORS } from "../config/messages";
+import { ErrorMessages } from "./errors";
 import { isAdmin } from "./admin";
 
 /**
  * Require authenticated user and return uid.
  */
-export function requireAuth(request: CallableRequest, message: string = AUTH_ERRORS.UNAUTHENTICATED): string {
+export function requireAuth(
+  request: CallableRequest,
+  message: string = ErrorMessages.UNAUTHENTICATED
+): string {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", message);
   }
@@ -20,7 +23,7 @@ export async function requireAdmin(request: CallableRequest): Promise<string> {
   const uid = requireAuth(request);
   const adminStatus = await isAdmin(uid);
   if (!adminStatus) {
-    throw new HttpsError("permission-denied", AUTH_ERRORS.ADMIN_REQUIRED);
+    throw new HttpsError("permission-denied", ErrorMessages.ADMIN_REQUIRED);
   }
 
   return uid;
