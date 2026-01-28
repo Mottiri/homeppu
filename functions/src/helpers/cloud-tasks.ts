@@ -42,5 +42,5 @@ export async function scheduleHttpTask(options: HttpTaskOptions): Promise<string
   };
 
   const [response] = await tasksClient.createTask({ parent, task });
-  return response.name;
+  return response.name ?? undefined;
 }

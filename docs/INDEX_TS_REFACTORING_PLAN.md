@@ -274,7 +274,7 @@ functions/src/
 
 **効果**: 約920行をindex.tsから分離、個別機能のテスト・保守が容易に
 
-**注意**: cleanupResolvedInquiries（スケジューラー）とそのヘルパー関数（deleteInquiryWithArchive, sendDeletionWarning）はindex.tsに残置
+NOTE: cleanupResolvedInquiries moved to scheduled/cleanup.ts (index.ts exports only).
 
 #### Phase 3 テスト結果（2026-01-13 実施）
 
@@ -992,7 +992,7 @@ if (!await verifyCloudTasksRequest(request, CLOUD_TASK_FUNCTIONS.generateAIComme
 5. **callable/names.ts** を作成（名前パーツ全体）
 6. **ai/personas.ts** を作成（AIキャラ定義）
 7. 動作確認・デプロイテスト
-8. 残りを順次分離
+8. Remaining splits are complete (index.ts exports only).
 
 ---
 
