@@ -157,6 +157,26 @@ functions/src/
 
 ---
 
+## 🧭 運用/手動用 関数の扱い方針（2026-01-28）
+
+以下は **運用・手動実行向け** の関数です。  
+現状は維持しますが、**今後も運用で使わないなら削除候補** とします。
+
+- `cleanUpUserFollows`
+- `cleanupOrphanedCircleAIs`
+- `triggerCircleAIPosts`
+- `triggerEvolveCircleAIs`
+
+**権限付与系** は将来の運用で必要になる可能性があるため、**現状維持** とします。
+
+- `setAdminRole`
+- `removeAdminRole`
+
+**タスク系 Callable**（`createTask`, `getTasks`）は、現状は維持しますが、  
+クライアント側のFirestore直接操作を維持する方針の場合は **将来削除候補** とします。
+
+---
+
 ## ⚠️ 注意事項
 
 1. **リージョン**: 必ず `LOCATION` 定数を使用
