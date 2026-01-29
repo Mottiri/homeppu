@@ -229,7 +229,18 @@ class _BanAppealScreenState extends ConsumerState<BanAppealScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('サポートへの問い合わせ'),
-        automaticallyImplyLeading: widget.appealId != null, // 管理者モードなら戻れる
+        automaticallyImplyLeading: false,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: AppMessages.label.back,
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/profile');
+            }
+          },
+        ),
         actions: _isAdminMode && widget.targetUserId != null
             ? [
                 IconButton(

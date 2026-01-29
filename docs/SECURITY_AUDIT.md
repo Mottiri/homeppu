@@ -39,7 +39,7 @@
 | 7 | **高** | deleteAllAIUsersに管理者チェックなし | `functions/src/index.ts` |
 | 8 | **中** | Storageの後方互換性パスで他者ファイル削除可能 | `firebase/storage.rules` |
 | 9 | **中** | サークル画像が認証済みユーザーなら誰でも削除可能 | `firebase/storage.rules` |
-| 10 | **低** | ユーザーのメールアドレスが全ユーザーに公開 | `firebase/firestore.rules` |
+| 10 | ~~**低**~~ | ユーザーのメールアドレスが全ユーザーに公開 ✅ 完了 | `firebase/firestore.rules` |
 | 11 | **低** | Google SheetsスプレッドシートIDのハードコード | `functions/src/index.ts` |
 | 12 | **中** | google-services.jsonが.gitignoreに未登録 | `.gitignore`, `android/app/` |
 | 13 | **低** | banAppealsとban_appealsの重複コレクション | `firebase/firestore.rules` |
@@ -355,6 +355,9 @@ match /circles/{circleId}/{imageType}/{fileName} {
 ---
 
 ### 10. 【低】ユーザーのメールアドレスが全ユーザーに公開
+
+**対応状況**: ✅ 完了（2026-01-29）
+**対応内容**: publicUsers 分離と users 読み取り制限により、一般ユーザーが他人のメールアドレスへアクセスできない構成に変更済み。
 
 **ファイル**: `firebase/firestore.rules` 行46-48
 
@@ -811,7 +814,6 @@ match /circles/{circleId} {
 | **中** | #8, #9 Storage削除権限の見直し |
 | **中** | #12 google-services.jsonを.gitignoreに追加 |
 | ~~**中**~~ | ~~#15 onRequest関数の認証強化~~ ✅ 完了 |
-| **低** | #10 メールアドレス公開の検討 |
 | **低** | #11 スプレッドシートID移行（任意） |
 | **低** | #13 banAppeals重複コレクションの整理 |
 | **低** | #17 App Checkの有効化検討 |
@@ -994,7 +996,6 @@ match /circles/{circleId} {
 
 **残りの対応項目**（未対応）:
 - #8, #9: Storage削除権限の見直し
-- #10: メールアドレス公開の検討
 - #11: スプレッドシートID移行
 - #13: banAppeals重複コレクションの整理
 - #15: onRequest関数の認証強化
@@ -1027,7 +1028,6 @@ match /circles/{circleId} {
 ---
 
 **残りの対応項目**（未対応）:
-- #10: メールアドレス公開の検討
 - #11: スプレッドシートID移行
 - #13: banAppeals重複コレクションの整理
 - #15: onRequest関数の認証強化
@@ -1242,7 +1242,6 @@ if (!await verifyCloudTasksRequest(request, "関数名")) {
 ---
 
 **残りの対応項目**（未対応）:
-- #10: メールアドレス公開の検討
 - #11: スプレッドシートID移行
 - #13: banAppeals重複コレクションの整理
 - #16: createPostWithRateLimitの入力バリデーション（リファクタリング時に対応）
@@ -1275,6 +1274,7 @@ if (!await verifyCloudTasksRequest(request, "関数名")) {
   - `functions/src/config/constants.ts`（新規）
   - `functions/src/index.ts`
 - **テスト結果**: 全関数で正常動作を確認
+
 
 
 
