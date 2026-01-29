@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -975,128 +976,99 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
       tabs: tabs,
     );
 
-    return Scaffold(
-      resizeToAvoidBottomInset: false, // キーボード表示時に背景がリサイズされてオーバーフローするのを防ぐ
-      backgroundColor: Colors.grey.shade50,
-      appBar: _isEditMode
-          ? TaskEditModeBar(
-              selectedCount: _selectedTaskIds.length,
-              onClose: () => _toggleEditMode(false),
-              onDelete: _selectedTaskIds.isEmpty ? null : _deleteSelectedTasks,
-              bottom: filterBar,
-            )
-          : AppBar(
-              title: const Text('やることリスト'),
-              centerTitle: true,
-              elevation: 0,
-              backgroundColor: Colors.transparent,
-              foregroundColor: Colors.black87,
-              bottom: filterBar,
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.flag_outlined),
-                  onPressed: () => context.push('/goals'),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.calendar_month),
-                  onPressed: () async {
-                    final selectedDate = await context.push<DateTime>(
-                      '/monthly-calendar',
-                      extra: {'initialDate': _selectedDate, 'tasks': _taskData},
-                    );
-
-                    if (selectedDate != null && mounted) {
-                      _setSelectedDate(
-                        selectedDate,
-                        jumpToPage: true,
-                        clearHighlight: true,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark,
+      child: Scaffold(
+        resizeToAvoidBottomInset: false, // キーボード表示時に背景がリサイズされてオーバーフローするのを防ぐ
+        backgroundColor: Colors.grey.shade50,
+        appBar: _isEditMode
+            ? TaskEditModeBar(
+                selectedCount: _selectedTaskIds.length,
+                onClose: () => _toggleEditMode(false),
+                onDelete: _selectedTaskIds.isEmpty ? null : _deleteSelectedTasks,
+                bottom: filterBar,
+                systemOverlayStyle: SystemUiOverlayStyle.dark,
+              )
+            : AppBar(
+                title: const Text('やることリスト'),
+                centerTitle: true,
+                elevation: 0,
+                backgroundColor: Colors.transparent,
+                foregroundColor: Colors.black87,
+                systemOverlayStyle: SystemUiOverlayStyle.dark,
+                bottom: filterBar,
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.flag_outlined),
+                    onPressed: () => context.push('/goals'),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.calendar_month),
+                    onPressed: () async {
+                      final selectedDate = await context.push<DateTime>(
+                        '/monthly-calendar',
+                        extra: {'initialDate': _selectedDate, 'tasks': _taskData},
                       );
-                    }
-                  },
-                ),
-              ],
-            ),
-      body: Stack(
-        children: [
-          // Main content
-          Column(
-            children: [
-              TaskCalendarHeader(
-                selectedDate: _selectedDate,
-                onDateSelected: (date) {
-                  _setSelectedDate(
-                    date,
-                    jumpToPage: true,
-                    clearHighlight: true,
-                  );
-                },
-                taskData: _taskData,
-              ),
-              Expanded(
-                child: _isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : PageView.builder(
-                        controller: _pageController,
-                        physics: const PageScrollPhysics(),
-                        onPageChanged: (index) {
-                          if (_suppressNextPageChange) {
-                            _suppressNextPageChange = false;
-                            return;
-                          }
-                          final newDate = _getDateFromIndex(index);
-                          _setSelectedDate(newDate, clearHighlight: true);
-                        },
-                        itemBuilder: (context, index) {
-                          final date = _getDateFromIndex(index);
-                          final shakeAnimation =
-                              Tween<double>(begin: -0.02, end: 0.02).animate(
-                                CurvedAnimation(
-                                  parent: _shakeController,
-                                  curve: Curves.easeInOut,
-                                ),
-                              );
 
-                          return TabBarView(
-                            controller: _tabController,
-                            physics: const NeverScrollableScrollPhysics(),
-                            children: [
-                              TaskListView(
-                                tasks: _defaultTasks,
-                                type: 'task',
-                                category: null,
-                                targetDate: date,
-                                isEditMode: _isEditMode,
-                                selectedTaskIds: _selectedTaskIds,
-                                highlightTaskId: _highlightTaskId,
-                                hasScrolledToHighlight: _hasScrolledToHighlight,
-                                scrollController: _taskListScrollController,
-                                shakeAnimation: shakeAnimation,
-                                isFabVisible: _isFabVisible,
-                                onFabVisibilityChanged: (isVisible) {
-                                  setState(() => _isFabVisible = isVisible);
-                                },
-                                onTapTask: _showTaskDetail,
-                                onCompleteTask: _completeTask,
-                                onUncompleteTask: _uncompleteTask,
-                                onDeleteTask: _deleteTask,
-                                onToggleSelection: _toggleTaskSelection,
-                                onLongPressTask: (task) {
-                                  if (!_isEditMode) {
-                                    _toggleEditMode(true);
-                                    _toggleTaskSelection(task.id);
-                                  }
-                                },
-                                onConfirmDismiss: () => _confirmDelete(1),
-                                onExitEditMode: () => _toggleEditMode(false),
-                                onDismissHighlight: () =>
-                                    setState(() => _highlightTaskId = null),
-                                onHighlightScrolled: _handleHighlightScrolled,
-                              ),
-                              ..._categories.map(
-                                (cat) => TaskListView(
-                                  tasks: _categoryTasks[cat.id] ?? [],
-                                  type: 'custom',
-                                  category: cat,
+                      if (selectedDate != null && mounted) {
+                        _setSelectedDate(
+                          selectedDate,
+                          jumpToPage: true,
+                          clearHighlight: true,
+                        );
+                      }
+                    },
+                  ),
+                ],
+              ),
+        body: Stack(
+          children: [
+            // Main content
+            Column(
+              children: [
+                TaskCalendarHeader(
+                  selectedDate: _selectedDate,
+                  onDateSelected: (date) {
+                    _setSelectedDate(
+                      date,
+                      jumpToPage: true,
+                      clearHighlight: true,
+                    );
+                  },
+                  taskData: _taskData,
+                ),
+                Expanded(
+                  child: _isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : PageView.builder(
+                          controller: _pageController,
+                          physics: const PageScrollPhysics(),
+                          onPageChanged: (index) {
+                            if (_suppressNextPageChange) {
+                              _suppressNextPageChange = false;
+                              return;
+                            }
+                            final newDate = _getDateFromIndex(index);
+                            _setSelectedDate(newDate, clearHighlight: true);
+                          },
+                          itemBuilder: (context, index) {
+                            final date = _getDateFromIndex(index);
+                            final shakeAnimation =
+                                Tween<double>(begin: -0.02, end: 0.02).animate(
+                                  CurvedAnimation(
+                                    parent: _shakeController,
+                                    curve: Curves.easeInOut,
+                                  ),
+                                );
+
+                            return TabBarView(
+                              controller: _tabController,
+                              physics: const NeverScrollableScrollPhysics(),
+                              children: [
+                                TaskListView(
+                                  tasks: _defaultTasks,
+                                  type: 'task',
+                                  category: null,
                                   targetDate: date,
                                   isEditMode: _isEditMode,
                                   selectedTaskIds: _selectedTaskIds,
@@ -1125,37 +1097,71 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
                                       setState(() => _highlightTaskId = null),
                                   onHighlightScrolled: _handleHighlightScrolled,
                                 ),
-                              ),
-                              const SizedBox(),
-                            ],
-                          );
-                        },
-                      ),
-              ),
-            ],
-          ),
-          // Confetti animation for milestone celebrations
-          Align(
-            alignment: Alignment.topCenter,
-            child: ConfettiWidget(
-              confettiController: _confettiController,
-              blastDirectionality: BlastDirectionality.explosive,
-              shouldLoop: false,
-              colors: const [
-                Colors.green,
-                Colors.blue,
-                Colors.pink,
-                Colors.orange,
-                Colors.purple,
-                Colors.yellow,
+                                ..._categories.map(
+                                  (cat) => TaskListView(
+                                    tasks: _categoryTasks[cat.id] ?? [],
+                                    type: 'custom',
+                                    category: cat,
+                                    targetDate: date,
+                                    isEditMode: _isEditMode,
+                                    selectedTaskIds: _selectedTaskIds,
+                                    highlightTaskId: _highlightTaskId,
+                                    hasScrolledToHighlight: _hasScrolledToHighlight,
+                                    scrollController: _taskListScrollController,
+                                    shakeAnimation: shakeAnimation,
+                                    isFabVisible: _isFabVisible,
+                                    onFabVisibilityChanged: (isVisible) {
+                                      setState(() => _isFabVisible = isVisible);
+                                    },
+                                    onTapTask: _showTaskDetail,
+                                    onCompleteTask: _completeTask,
+                                    onUncompleteTask: _uncompleteTask,
+                                    onDeleteTask: _deleteTask,
+                                    onToggleSelection: _toggleTaskSelection,
+                                    onLongPressTask: (task) {
+                                      if (!_isEditMode) {
+                                        _toggleEditMode(true);
+                                        _toggleTaskSelection(task.id);
+                                      }
+                                    },
+                                    onConfirmDismiss: () => _confirmDelete(1),
+                                    onExitEditMode: () => _toggleEditMode(false),
+                                    onDismissHighlight: () =>
+                                        setState(() => _highlightTaskId = null),
+                                    onHighlightScrolled: _handleHighlightScrolled,
+                                  ),
+                                ),
+                                const SizedBox(),
+                              ],
+                            );
+                          },
+                        ),
+                ),
               ],
-              numberOfParticles: 30,
-              gravity: 0.2,
             ),
-          ),
-        ],
+            // Confetti animation for milestone celebrations
+            Align(
+              alignment: Alignment.topCenter,
+              child: ConfettiWidget(
+                confettiController: _confettiController,
+                blastDirectionality: BlastDirectionality.explosive,
+                shouldLoop: false,
+                colors: const [
+                  Colors.green,
+                  Colors.blue,
+                  Colors.pink,
+                  Colors.orange,
+                  Colors.purple,
+                  Colors.yellow,
+                ],
+                numberOfParticles: 30,
+                gravity: 0.2,
+              ),
+            ),
+          ],
+        ),
+        // FABは削除（ボトムナビの中央ボタンに移動）
       ),
-      // FABは削除（ボトムナビの中央ボタンに移動）
     );
   }
 

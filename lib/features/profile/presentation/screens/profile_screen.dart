@@ -1,4 +1,5 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -278,22 +279,28 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Widget _buildLoading() {
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(gradient: AppColors.warmGradient),
-        child: const Center(
-          child: CircularProgressIndicator(color: AppColors.primary),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark,
+      child: Scaffold(
+        body: Container(
+          decoration: const BoxDecoration(gradient: AppColors.warmGradient),
+          child: const Center(
+            child: CircularProgressIndicator(color: AppColors.primary),
+          ),
         ),
       ),
     );
   }
 
   Widget _buildError() {
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(gradient: AppColors.warmGradient),
-        child: Center(
-          child: Text(AppMessages.error.general),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark,
+      child: Scaffold(
+        body: Container(
+          decoration: const BoxDecoration(gradient: AppColors.warmGradient),
+          child: Center(
+            child: Text(AppMessages.error.general),
+          ),
         ),
       ),
     );
@@ -301,11 +308,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   Widget _buildProfile(UserModel? user) {
     if (user == null) {
-      return Scaffold(
-        appBar: _isOwnProfile ? null : AppBar(title: const Text('プロフィール')),
-        body: Container(
-          decoration: const BoxDecoration(gradient: AppColors.warmGradient),
-          child: const Center(child: Text('ユーザーが見つからないよ 😢')),
+      return AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.dark,
+        child: Scaffold(
+          appBar: _isOwnProfile ? null : AppBar(title: const Text('プロフィール')),
+          body: Container(
+            decoration: const BoxDecoration(gradient: AppColors.warmGradient),
+            child: const Center(child: Text('ユーザーが見つからないよ 😢')),
+          ),
         ),
       );
     }
@@ -331,8 +341,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       }
     }
 
-    return Scaffold(
-      body: Container(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark,
+      child: Scaffold(
+        body: Container(
         decoration: const BoxDecoration(gradient: AppColors.warmGradient),
         child: SafeArea(
           child: InfiniteScrollListener(
@@ -450,6 +462,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }
@@ -640,3 +653,4 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 }
+

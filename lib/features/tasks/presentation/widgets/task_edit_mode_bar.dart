@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class TaskEditModeBar extends StatelessWidget implements PreferredSizeWidget {
   final int selectedCount;
   final VoidCallback onClose;
   final VoidCallback? onDelete;
   final PreferredSizeWidget? bottom;
+  final SystemUiOverlayStyle? systemOverlayStyle;
 
   const TaskEditModeBar({
     super.key,
@@ -12,6 +14,7 @@ class TaskEditModeBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onClose,
     this.onDelete,
     this.bottom,
+    this.systemOverlayStyle,
   });
 
   @override
@@ -31,6 +34,7 @@ class TaskEditModeBar extends StatelessWidget implements PreferredSizeWidget {
       elevation: 0,
       backgroundColor: Colors.orange.shade50,
       foregroundColor: Colors.black87,
+      systemOverlayStyle: systemOverlayStyle,
       leading: IconButton(
         icon: const Icon(Icons.close),
         onPressed: onClose,
