@@ -8,6 +8,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_messages.dart';
 import '../../../../core/utils/dialog_helper.dart';
 import '../../../../core/utils/snackbar_helper.dart';
+import '../../../../shared/models/user_model.dart';
 import '../../../../shared/providers/auth_provider.dart';
 
 class BanAppealScreen extends ConsumerStatefulWidget {
@@ -226,133 +227,140 @@ class _BanAppealScreenState extends ConsumerState<BanAppealScreen> {
     // ユーザー情報取得（状態が変わっている可能性があるためwatch）
     final userAsync = ref.watch(currentUserProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('サポートへの問い合わせ'),
-        automaticallyImplyLeading: false,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          tooltip: AppMessages.label.back,
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go('/profile');
-            }
-          },
-        ),
-        actions: _isAdminMode && widget.targetUserId != null
-            ? [
-                IconButton(
-                  icon: const Icon(Icons.person),
-                  tooltip: 'ユーザープロフィールを見る',
-                  onPressed: () {
-                    context.push('/profile/${widget.targetUserId}');
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.check_circle_outline),
-                  tooltip: '対応完了（チャット削除）',
-                  onPressed: () => _showDeleteConfirmDialog(context),
-                ),
-              ]
-            : null,
-      ),
-      body: userAsync.when(
-        data: (user) {
-          if (user == null) {
-            return Center(child: Text(AppMessages.admin.appealLoginRequired));
-          }
+    return userAsync.when(
+      data: (user) {
+        if (user == null) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('サポートへの問い合わせ')),
+            body: Center(child: Text(AppMessages.admin.appealLoginRequired)),
+          );
+        }
 
-          // まだチャットが始まっていない場合
-          if (_currentAppealId == null) {
-            return _buildEmptyState();
-          }
-
-          // チャット画面
-          return Column(
-            children: [
-              // BAN理由などの表示エリア（オプション）
-              if (!_isAdminMode)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  color: Colors.grey.shade100,
-                  child: Row(
-                    children: [
-                      const Icon(Icons.info_outline, color: Colors.grey),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          user.banStatus == 'permanent'
-                              ? AppMessages.admin.appealPermanentNotice
-                              : AppMessages.admin.appealTemporaryNotice,
-                          style: const TextStyle(fontSize: 12),
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('サポートへの問い合わせ'),
+            automaticallyImplyLeading: false,
+            leading: _shouldShowBackButton(user)
+                ? IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    tooltip: AppMessages.label.back,
+                    onPressed: () {
+                      if (context.canPop()) {
+                        context.pop();
+                      } else {
+                        context.go('/profile');
+                      }
+                    },
+                  )
+                : null,
+            actions: _isAdminMode && widget.targetUserId != null
+                ? [
+                    IconButton(
+                      icon: const Icon(Icons.person),
+                      tooltip: 'ユーザープロフィールを見る',
+                      onPressed: () {
+                        context.push('/profile/${widget.targetUserId}');
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.check_circle_outline),
+                      tooltip: '対応完了（チャット削除）',
+                      onPressed: () => _showDeleteConfirmDialog(context),
+                    ),
+                  ]
+                : null,
+          ),
+          body: _currentAppealId == null
+              ? _buildEmptyState()
+              : Column(
+                  children: [
+                    // BAN理由などの表示エリア（オプション）
+                    if (!_isAdminMode)
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        color: Colors.grey.shade100,
+                        child: Row(
+                          children: [
+                            const Icon(Icons.info_outline, color: Colors.grey),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                user.banStatus == 'permanent'
+                                    ? AppMessages.admin.appealPermanentNotice
+                                    : AppMessages.admin.appealTemporaryNotice,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
+                    Expanded(
+                      child: StreamBuilder<DocumentSnapshot>(
+                        stream: FirebaseFirestore.instance
+                            .collection('banAppeals')
+                            .doc(_currentAppealId)
+                            .snapshots(),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) {
+                            return const Center(
+                              child: CircularProgressIndicator(),
+                            );
+                          }
+
+                          final data =
+                              snapshot.data!.data() as Map<String, dynamic>?;
+                          if (data == null) return _buildEmptyState();
+
+                          final messages =
+                              (data['messages'] as List<dynamic>? ?? [])
+                                  .map((m) => m as Map<String, dynamic>)
+                                  .toList()
+                                ..sort((a, b) {
+                                  // 降順ソート（新しいものが上）
+                                  final ta =
+                                      (a['createdAt'] as Timestamp?)?.toDate() ??
+                                      DateTime.now();
+                                  final tb =
+                                      (b['createdAt'] as Timestamp?)?.toDate() ??
+                                      DateTime.now();
+                                  return tb.compareTo(ta);
+                                });
+
+                          // 未読メッセージがあれば既読に更新（非同期で実行）
+                          _markMessagesAsRead();
+
+                          return ListView.builder(
+                            controller: _scrollController,
+                            reverse: true, // 新しいメッセージを下に表示するため、リストは逆順にして下から積み上げ
+                            padding: const EdgeInsets.all(16),
+                            itemCount: messages.length,
+                            itemBuilder: (context, index) {
+                              final msg = messages[index];
+                              final isMe = msg['senderId'] == user.uid;
+                              final timestamp =
+                                  (msg['createdAt'] as Timestamp?)?.toDate();
+
+                              return _buildMessageBubble(
+                                content: msg['content'] as String,
+                                isMe: isMe,
+                                timestamp: timestamp,
+                                isAdmin: msg['isAdmin'] as bool? ?? false,
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                    _buildInputArea(),
+                  ],
                 ),
-              Expanded(
-                child: StreamBuilder<DocumentSnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection('banAppeals')
-                      .doc(_currentAppealId)
-                      .snapshots(),
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-
-                    final data = snapshot.data!.data() as Map<String, dynamic>?;
-                    if (data == null) return _buildEmptyState();
-
-                    final messages =
-                        (data['messages'] as List<dynamic>? ?? [])
-                            .map((m) => m as Map<String, dynamic>)
-                            .toList()
-                          ..sort((a, b) {
-                            // 降順ソート（新しいものが上）
-                            final ta =
-                                (a['createdAt'] as Timestamp?)?.toDate() ??
-                                DateTime.now();
-                            final tb =
-                                (b['createdAt'] as Timestamp?)?.toDate() ??
-                                DateTime.now();
-                            return tb.compareTo(ta);
-                          });
-
-                    // 未読メッセージがあれば既読に更新（非同期で実行）
-                    _markMessagesAsRead();
-
-                    return ListView.builder(
-                      controller: _scrollController,
-                      reverse: true, // 新しいメッセージを下に表示するため、リストは逆順にして下から積み上げ
-                      padding: const EdgeInsets.all(16),
-                      itemCount: messages.length,
-                      itemBuilder: (context, index) {
-                        final msg = messages[index];
-                        final isMe = msg['senderId'] == user.uid;
-                        final timestamp = (msg['createdAt'] as Timestamp?)
-                            ?.toDate();
-
-                        return _buildMessageBubble(
-                          content: msg['content'] as String,
-                          isMe: isMe,
-                          timestamp: timestamp,
-                          isAdmin: msg['isAdmin'] as bool? ?? false,
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-              _buildInputArea(),
-            ],
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) =>
-            Center(child: Text(AppMessages.error.withDetail(e.toString()))),
+        );
+      },
+      loading: () => const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => Scaffold(
+        body: Center(child: Text(AppMessages.error.withDetail(e.toString()))),
       ),
     );
   }
@@ -391,6 +399,11 @@ class _BanAppealScreenState extends ConsumerState<BanAppealScreen> {
         _buildInputArea(isNew: true),
       ],
     );
+  }
+
+  bool _shouldShowBackButton(UserModel user) {
+    if (_isAdminMode) return true;
+    return user.banStatus != 'permanent';
   }
 
   Widget _buildInputArea({bool isNew = false}) {

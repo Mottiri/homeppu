@@ -434,11 +434,10 @@ export const permanentBanUser = onCall(
         await batch.commit();
 
         try {
-            await admin.auth().updateUser(userId, { disabled: true });
-            await admin.auth().revokeRefreshTokens(userId);
+            // ログインは許可するため、disabledは設定しない
             await admin.auth().setCustomUserClaims(userId, { banned: true, banStatus: 'permanent' });
         } catch (e) {
-            console.warn(`Auth update failed for ${userId}:`, e);
+            console.warn(`Auth claims update failed for ${userId}:`, e);
         }
 
         console.log(`User ${userId} permanently banned by ${adminId}`);
