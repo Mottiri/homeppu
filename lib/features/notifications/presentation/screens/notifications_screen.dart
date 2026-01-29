@@ -325,6 +325,13 @@ class _NotificationTile extends ConsumerWidget {
           }
         } else if (notification.postId != null && context.mounted) {
           context.push('/post/${notification.postId}');
+        } else if (notification.type == NotificationType.adminReport &&
+            context.mounted) {
+          if (notification.contentId != null) {
+            context.push('/admin/reports/content/${notification.contentId}');
+          } else {
+            context.push('/admin/reports');
+          }
         } else if (notification.circleId != null && context.mounted) {
           // 拒否/削除通知は遷移しない
           final noNavigateTypes = [

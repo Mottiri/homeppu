@@ -80,6 +80,8 @@ class NotificationModel {
   final String? inquiryId; // 関連する問い合わせID（サポート通知用）
   final String? taskId; // 関連するタスクID
   final String? goalId; // 関連する目標ID
+  final String? reportId; // 関連する通報ID
+  final String? contentId; // 通報対象コンテンツID
   final DateTime? scheduledAt; // タスクの予定日時
   final bool isRead;
   final DateTime createdAt;
@@ -98,6 +100,8 @@ class NotificationModel {
     this.inquiryId,
     this.taskId,
     this.goalId,
+    this.reportId,
+    this.contentId,
     this.scheduledAt,
     this.isRead = false,
     required this.createdAt,
@@ -119,6 +123,8 @@ class NotificationModel {
       inquiryId: data['inquiryId'],
       taskId: data['taskId'],
       goalId: data['goalId'],
+      reportId: data['reportId'],
+      contentId: data['contentId'],
       scheduledAt: data['scheduledAt'] != null
           ? (data['scheduledAt'] is Timestamp
                 ? (data['scheduledAt'] as Timestamp).toDate()
@@ -143,6 +149,8 @@ class NotificationModel {
       'inquiryId': inquiryId,
       'taskId': taskId,
       'goalId': goalId,
+      'reportId': reportId,
+      'contentId': contentId,
       'scheduledAt': scheduledAt == null ? null : Timestamp.fromDate(scheduledAt!),
       'isRead': isRead,
       'createdAt': Timestamp.fromDate(createdAt),

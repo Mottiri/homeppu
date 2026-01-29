@@ -28,7 +28,6 @@ import '../../features/admin/presentation/screens/admin_review_screen.dart';
 import '../../features/admin/presentation/screens/admin_inquiry_list_screen.dart';
 import '../../features/admin/presentation/screens/admin_inquiry_detail_screen.dart';
 import '../../features/admin/presentation/screens/admin_reports_screen.dart';
-import '../../features/admin/presentation/screens/admin_report_detail_screen.dart';
 import '../../features/admin/presentation/screens/admin_report_content_screen.dart';
 import '../../features/settings/presentation/screens/inquiry_list_screen.dart';
 import '../../features/settings/presentation/screens/inquiry_form_screen.dart';
@@ -327,16 +326,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/admin/reports',
         name: 'adminReports',
         builder: (context, state) => const AdminReportsScreen(),
-      ),
-
-      // 管理者用通報詳細（個別通報 - 旧画面、互換性のため残す）
-      GoRoute(
-        path: '/admin/reports/:reportId',
-        name: 'adminReportDetail',
-        builder: (context, state) {
-          final reportId = state.pathParameters['reportId']!;
-          return AdminReportDetailScreen(reportId: reportId);
-        },
       ),
 
       // 管理者用通報詳細（コンテンツ単位 - 新画面）

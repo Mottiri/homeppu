@@ -169,7 +169,7 @@ class _AdminReportContentScreenState
                                   ),
                                 ),
                                 Text(
-                                  '累計通報: $reportCount件',
+                                  '投稿者の累計被通報: $reportCount件',
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: reportCount > 0

@@ -190,7 +190,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
 
       if (circle.isPublic) {
         // 公開サークル: 即参加
-        await circleService.joinCircle(widget.circleId, userId);
+        await circleService.joinCircle(widget.circleId);
         if (mounted) {
           SnackBarHelper.showSuccess(context, AppMessages.success.circleJoined);
         }
@@ -237,7 +237,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
     if (confirm == true) {
       try {
         final circleService = ref.read(circleServiceProvider);
-        await circleService.leaveCircle(widget.circleId, userId);
+        await circleService.leaveCircle(widget.circleId);
 
         if (mounted) {
           // 状態をリセット

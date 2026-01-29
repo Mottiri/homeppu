@@ -140,8 +140,6 @@ class _HomeppuAppState extends ConsumerState<HomeppuApp> {
       case 'admin_report':
         if (payload.contentId != null) {
           router.push('/admin/reports/content/${payload.contentId}');
-        } else if (payload.reportId != null) {
-          router.push('/admin/reports/${payload.reportId}');
         } else {
           router.push('/admin/reports');
         }

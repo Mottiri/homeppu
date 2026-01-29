@@ -264,7 +264,7 @@ class CircleService {
   }
 
   // サークル参加
-  Future<void> joinCircle(String circleId, String _userId) async {
+  Future<void> joinCircle(String circleId) async {
     final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
     final callable = functions.httpsCallable('joinCircle');
 
@@ -272,7 +272,7 @@ class CircleService {
   }
 
   // サークル退会
-  Future<void> leaveCircle(String circleId, String _userId) async {
+  Future<void> leaveCircle(String circleId) async {
     final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
     final callable = functions.httpsCallable('leaveCircle');
 
