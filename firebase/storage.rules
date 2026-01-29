@@ -1,71 +1,68 @@
-rules_version = '2';
+﻿rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // 認証チェック
+    // 隱崎ｨｼ繝√ぉ繝・け
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    // 管理者チェック（Custom Claims使用）
-    function isAdmin() {
+    // 邂｡逅・・メ繧ｧ繝・け・・ustom Claims菴ｿ逕ｨ・・    function isAdmin() {
       return request.auth != null && request.auth.token.admin == true;
     }
     
-    // 画像サイズ制限（10MB）
-    function isValidImageSize() {
+    function circleData(circleId) {
+      return firestore.get(/databases/$(database)/documents/circles/$(circleId)).data;
+    }
+
+    function isCircleOwnerOrSubOwner(circleId) {
+      let data = circleData(circleId);
+      return data.ownerId == request.auth.uid || data.subOwnerId == request.auth.uid;
+    }
+
+    function isCircleOwnerOrSubOwnerOrAdmin(circleId) {
+      return isAdmin() || isCircleOwnerOrSubOwner(circleId);
+    }
+    
+    // 逕ｻ蜒上し繧､繧ｺ蛻ｶ髯撰ｼ・0MB・・    function isValidImageSize() {
       return request.resource.size < 10 * 1024 * 1024;
     }
     
-    // 動画サイズ制限（100MB）
-    function isValidVideoSize() {
+    // 蜍慕判繧ｵ繧､繧ｺ蛻ｶ髯撰ｼ・00MB・・    function isValidVideoSize() {
       return request.resource.size < 100 * 1024 * 1024;
     }
     
-    // ファイルサイズ制限（50MB）
-    function isValidFileSize() {
+    // 繝輔ぃ繧､繝ｫ繧ｵ繧､繧ｺ蛻ｶ髯撰ｼ・0MB・・    function isValidFileSize() {
       return request.resource.size < 50 * 1024 * 1024;
     }
     
-    // プロフィール画像サイズ（5MB）
-    function isValidProfileSize() {
+    // 繝励Ο繝輔ぅ繝ｼ繝ｫ逕ｻ蜒上し繧､繧ｺ・・MB・・    function isValidProfileSize() {
       return request.resource.size < 5 * 1024 * 1024;
     }
     
-    // 画像ファイルのみ許可
+    // 逕ｻ蜒上ヵ繧｡繧､繝ｫ縺ｮ縺ｿ險ｱ蜿ｯ
     function isImage() {
       return request.resource.contentType.matches('image/.*');
     }
     
-    // 動画ファイルのみ許可
+    // 蜍慕判繝輔ぃ繧､繝ｫ縺ｮ縺ｿ險ｱ蜿ｯ
     function isVideo() {
       return request.resource.contentType.matches('video/.*');
     }
     
-    // 許可されるファイルタイプ
-    function isAllowedFile() {
-      return request.resource.contentType.matches('application/pdf')
-          || request.resource.contentType.matches('application/msword')
-          || request.resource.contentType.matches('application/vnd.openxmlformats-officedocument.*')
-          || request.resource.contentType.matches('application/vnd.ms-excel')
-          || request.resource.contentType.matches('text/plain')
-          || request.resource.contentType.matches('application/zip');
-    }
-    
-    // ユーザーヘッダー画像
-    match /headers/{fileName} {
+    // 險ｱ蜿ｯ縺輔ｌ繧九ヵ繧｡繧､繝ｫ繧ｿ繧､繝・
+// 繝ｦ繝ｼ繧ｶ繝ｼ繝倥ャ繝繝ｼ逕ｻ蜒・    match /headers/{fileName} {
       allow read: if isAuthenticated();
-      // ファイル名がユーザーIDで始まる場合のみ書き込み可能
+      // 繝輔ぃ繧､繝ｫ蜷阪′繝ｦ繝ｼ繧ｶ繝ｼID縺ｧ蟋九∪繧句ｴ蜷医・縺ｿ譖ｸ縺崎ｾｼ縺ｿ蜿ｯ閭ｽ
       allow write: if isAuthenticated() 
                    && fileName.matches(request.auth.uid + '.*')
                    && isValidImageSize() 
                    && isImage();
-      // 本人のみ削除可能
+      // 譛ｬ莠ｺ縺ｮ縺ｿ蜑企勁蜿ｯ閭ｽ
       allow delete: if isAuthenticated() 
                     && fileName.matches(request.auth.uid + '.*');
     }
 
-    // ユーザープロフィール画像
-    match /users/{userId}/profile/{fileName} {
+    // 繝ｦ繝ｼ繧ｶ繝ｼ繝励Ο繝輔ぅ繝ｼ繝ｫ逕ｻ蜒・    match /users/{userId}/profile/{fileName} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() 
                    && request.auth.uid == userId 
@@ -73,92 +70,72 @@ service firebase.storage {
                    && isImage();
     }
     
-    // 投稿メディア - 画像
-    match /posts/{userId}/images/{fileName} {
+    // 謚慕ｨｿ繝｡繝・ぅ繧｢ - 逕ｻ蜒・    match /posts/{userId}/images/{fileName} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() 
                    && request.auth.uid == userId 
                    && isValidImageSize() 
                    && isImage();
-      // 本人のみ削除可能
+      // 譛ｬ莠ｺ縺ｮ縺ｿ蜑企勁蜿ｯ閭ｽ
       allow delete: if isAuthenticated() && request.auth.uid == userId;
     }
     
-    // 投稿メディア - 動画
+    // 謚慕ｨｿ繝｡繝・ぅ繧｢ - 蜍慕判
     match /posts/{userId}/videos/{fileName} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() 
                    && request.auth.uid == userId 
                    && isValidVideoSize() 
                    && isVideo();
-      // 本人のみ削除可能
+      // 譛ｬ莠ｺ縺ｮ縺ｿ蜑企勁蜿ｯ閭ｽ
       allow delete: if isAuthenticated() && request.auth.uid == userId;
     }
     
-    // 投稿メディア - ファイル
-    match /posts/{userId}/files/{fileName} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() 
-                   && request.auth.uid == userId 
-                   && isValidFileSize() 
-                   && isAllowedFile();
-      // 本人のみ削除可能
-      allow delete: if isAuthenticated() && request.auth.uid == userId;
-    }
-    
-    // 投稿メディア - 動画サムネイル
+    // 謚慕ｨｿ繝｡繝・ぅ繧｢ - 繝輔ぃ繧､繝ｫ
+// 謚慕ｨｿ繝｡繝・ぅ繧｢ - 蜍慕判繧ｵ繝繝阪う繝ｫ
     match /posts/{userId}/thumbnails/{fileName} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() 
                    && request.auth.uid == userId 
                    && isValidProfileSize()  // 5MB limit for thumbnails
                    && isImage();
-      // 本人のみ削除可能
+      // 譛ｬ莠ｺ縺ｮ縺ｿ蜑企勁蜿ｯ閭ｽ
       allow delete: if isAuthenticated() && request.auth.uid == userId;
     }
     
-    // 後方互換性：古い形式の投稿画像
-    match /posts/{postId}/{fileName} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() 
-                   && isValidImageSize() 
-                   && isImage();
-      // 削除はCloud Functionsで自動処理、クライアントからは管理者のみ
-      allow delete: if isAdmin();
-    }
-    
-    // サークル画像（アイコン・ヘッダー）
+    // 蠕梧婿莠呈鋤諤ｧ・壼商縺・ｽ｢蠑上・謚慕ｨｿ逕ｻ蜒・
     match /circles/{circleId}/{imageType}/{fileName} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() 
-                   && isValidProfileSize() 
+      allow write: if isAuthenticated()
+                   && isCircleOwnerOrSubOwnerOrAdmin(circleId)
+                   && isValidProfileSize()
                    && isImage();
-      // 削除はCloud Functionsで自動処理、クライアントからは管理者のみ
-      allow delete: if isAdmin();
     }
-    // タスク添付ファイル (画像・ファイル)
+    // 繧ｿ繧ｹ繧ｯ豺ｻ莉倥ヵ繧｡繧､繝ｫ (逕ｻ蜒上・繝輔ぃ繧､繝ｫ)
     match /task_attachments/{userId}/{taskId}/{fileName} {
       allow read: if isAuthenticated() && request.auth.uid == userId;
       allow write: if isAuthenticated() 
                    && request.auth.uid == userId 
                    && isValidFileSize(); // 50MB limit
-      // 本人のみ削除可能
+      // 譛ｬ莠ｺ縺ｮ縺ｿ蜑企勁蜿ｯ閭ｽ
       allow delete: if isAuthenticated() && request.auth.uid == userId;
     }
 
-    // 問い合わせ添付画像（ユーザーIDごとに分離）
-    match /inquiries/{userId}/{fileName} {
-      // 本人または管理者のみ読み取り可能
+    // 蝠上＞蜷医ｏ縺帶ｷｻ莉倡判蜒擾ｼ医Θ繝ｼ繧ｶ繝ｼID縺斐→縺ｫ蛻・屬・・    match /inquiries/{userId}/{fileName} {
+      // 譛ｬ莠ｺ縺ｾ縺溘・邂｡逅・・・縺ｿ隱ｭ縺ｿ蜿悶ｊ蜿ｯ閭ｽ
       allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-      // 本人のみ書き込み可能
+      // 譛ｬ莠ｺ縺ｮ縺ｿ譖ｸ縺崎ｾｼ縺ｿ蜿ｯ閭ｽ
       allow write: if isAuthenticated()
                    && request.auth.uid == userId
                    && isValidProfileSize()  // 5MB limit
                    && isImage();
-      // 管理者のみ削除可能
+      // 邂｡逅・・・縺ｿ蜑企勁蜿ｯ閭ｽ
       allow delete: if isAdmin();
     }
   }
 }
+
+
+
 
 

@@ -216,3 +216,45 @@ export const addUserReaction = onCall(
         };
     }
 );
+
+export const removeUserReaction = onCall(
+    { region: LOCATION, enforceAppCheck: false },
+    async (request) => {
+        const { postId, reactionType } = request.data;
+        const userId = requireAuth(request);
+
+        if (!postId || !reactionType) {
+            throw new HttpsError("invalid-argument", VALIDATION_ERRORS.POST_ID_REACTION_REQUIRED);
+        }
+
+        const reactionSnapshot = await db.collection("reactions")
+            .where("postId", "==", postId)
+            .where("userId", "==", userId)
+            .where("reactionType", "==", reactionType)
+            .limit(1)
+            .get();
+
+        if (reactionSnapshot.empty) {
+            return { success: true, removed: false };
+        }
+
+        const reactionRef = reactionSnapshot.docs[0].ref;
+        const postRef = db.collection("posts").doc(postId);
+
+        await db.runTransaction(async (transaction) => {
+            const postSnap = await transaction.get(postRef);
+            const reactions = postSnap.data()?.reactions ?? {};
+            const currentCount = Number(reactions[reactionType] ?? 0);
+
+            if (currentCount > 0) {
+                transaction.update(postRef, {
+                    [`reactions.${reactionType}`]: FieldValue.increment(-1),
+                });
+            }
+
+            transaction.delete(reactionRef);
+        });
+
+        return { success: true, removed: true };
+    }
+);

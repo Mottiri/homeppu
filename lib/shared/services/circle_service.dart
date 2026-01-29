@@ -264,33 +264,19 @@ class CircleService {
   }
 
   // サークル参加
-  Future<void> joinCircle(String circleId, String userId) async {
-    await _firestore.collection('circles').doc(circleId).update({
-      'memberIds': FieldValue.arrayUnion([userId]),
-      'memberCount': FieldValue.increment(1),
-    });
+  Future<void> joinCircle(String circleId, String _userId) async {
+    final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+    final callable = functions.httpsCallable('joinCircle');
+
+    await callable.call({'circleId': circleId});
   }
 
   // サークル退会
-  Future<void> leaveCircle(String circleId, String userId) async {
-    // まずサークル情報を取得して副オーナーかどうか確認
-    final circleDoc = await _firestore
-        .collection('circles')
-        .doc(circleId)
-        .get();
-    final circleData = circleDoc.data();
+  Future<void> leaveCircle(String circleId, String _userId) async {
+    final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+    final callable = functions.httpsCallable('leaveCircle');
 
-    final updateData = <String, dynamic>{
-      'memberIds': FieldValue.arrayRemove([userId]),
-      'memberCount': FieldValue.increment(-1),
-    };
-
-    // 副オーナーが退会する場合はsubOwnerIdをクリア
-    if (circleData?['subOwnerId'] == userId) {
-      updateData['subOwnerId'] = null;
-    }
-
-    await _firestore.collection('circles').doc(circleId).update(updateData);
+    await callable.call({'circleId': circleId});
   }
 
   // ユーザーが参加しているサークル一覧
@@ -485,17 +471,6 @@ class CircleService {
           'isRead': false,
           'createdAt': FieldValue.serverTimestamp(),
         });
-  }
-
-  // 投稿カウントをインクリメント（人間ユーザーの投稿時）
-  // recentActivityとlastHumanPostAtも同時に更新
-  Future<void> incrementPostCount(String circleId) async {
-    final now = DateTime.now();
-    await _firestore.collection('circles').doc(circleId).update({
-      'postCount': FieldValue.increment(1),
-      'recentActivity': Timestamp.fromDate(now),
-      'lastHumanPostAt': Timestamp.fromDate(now),
-    });
   }
 
   /// サークルを削除（Cloud Function経由）

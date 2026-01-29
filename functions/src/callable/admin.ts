@@ -11,6 +11,7 @@ import { db } from "../helpers/firebase";
 import { requireAdmin, requireAuth } from "../helpers/auth";
 import { isAdmin } from "../helpers/admin";
 import { LOCATION } from "../config/constants";
+import { buildPublicUserData } from "../helpers/public-users";
 import {
     AUTH_ERRORS,
     RESOURCE_ERRORS,
@@ -333,6 +334,53 @@ export const banUser = onCall(
 
         console.log(`User ${userId} temporarily banned by ${adminId}`);
         return { success: true };
+    }
+);
+
+/**
+ * 管理者用: 既存ユーザーをpublicUsersへ一括同期
+ */
+export const backfillPublicUsers = onCall(
+    { region: LOCATION, timeoutSeconds: 540 },
+    async (request) => {
+        const userId = requireAuth(request);
+        const userIsAdmin = await isAdmin(userId);
+        if (!userIsAdmin) {
+            throw new HttpsError("permission-denied", AUTH_ERRORS.ADMIN_REQUIRED);
+        }
+
+        const rawPageSize = Number(request.data?.pageSize ?? 500);
+        const pageSize = Math.min(Math.max(rawPageSize, 1), 500);
+
+        let lastDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+        let totalUpdated = 0;
+
+        while (true) {
+            let query = db.collection("users")
+                .orderBy(admin.firestore.FieldPath.documentId())
+                .limit(pageSize);
+
+            if (lastDoc) {
+                query = query.startAfter(lastDoc);
+            }
+
+            const snapshot = await query.get();
+            if (snapshot.empty) break;
+
+            const batch = db.batch();
+            snapshot.docs.forEach((doc) => {
+                const publicData = buildPublicUserData(doc.data());
+                batch.set(db.collection("publicUsers").doc(doc.id), publicData, { merge: true });
+            });
+
+            await batch.commit();
+            totalUpdated += snapshot.size;
+            lastDoc = snapshot.docs[snapshot.docs.length - 1];
+
+            if (snapshot.size < pageSize) break;
+        }
+
+        return { success: true, updatedCount: totalUpdated };
     }
 );
 

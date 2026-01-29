@@ -78,7 +78,7 @@ class MembersListScreen extends ConsumerWidget {
 
               return FutureBuilder<DocumentSnapshot>(
                 future: FirebaseFirestore.instance
-                    .collection('users')
+                    .collection('publicUsers')
                     .doc(memberId)
                     .get(),
                 builder: (context, snapshot) {

@@ -10,7 +10,6 @@ import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/models/post_model.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/providers/moderation_provider.dart';
-import '../../../../shared/services/circle_service.dart';
 import '../../../../shared/services/media_service.dart';
 import '../../../../shared/services/moderation_service.dart';
 import '../../../../shared/services/nsfw_detector_service.dart';
@@ -248,12 +247,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         mediaItems: uploadedMedia,
         circleId: widget.circleId, // サークルIDを渡す
       );
-
-      // サークル投稿の場合、postCountをインクリメント
-      if (widget.circleId != null) {
-        final circleService = ref.read(circleServiceProvider);
-        await circleService.incrementPostCount(widget.circleId!);
-      }
 
       // 徳ポイント状態を更新
       ref.invalidate(virtueStatusProvider);

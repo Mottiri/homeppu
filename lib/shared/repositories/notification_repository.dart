@@ -133,6 +133,8 @@ class NotificationRepository {
           'admin_report',
           'post_deleted',
           'post_hidden',
+          'user_banned',
+          'user_unbanned',
         ];
     }
   }

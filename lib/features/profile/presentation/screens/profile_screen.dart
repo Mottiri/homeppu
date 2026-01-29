@@ -39,6 +39,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _isOwnProfile = false;
   bool _isFollowing = false;
   bool _isFollowLoading = false;
+  bool _isAdminViewer = false;
+  ProviderSubscription<AsyncValue<bool>>? _adminSubscription;
   final _followService = FollowService();
   final _userPostsListKey = GlobalKey<ProfilePostsListState>();
   final ScrollController _scrollController = ScrollController();
@@ -72,8 +74,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   @override
   void initState() {
     super.initState();
+    _isAdminViewer = ref.read(isAdminProvider).valueOrNull ?? false;
     _generateHeaderAndColors();
-    _loadUser();
+    _loadUser(forceAdmin: _isAdminViewer);
+    _adminSubscription = ref.listenManual<AsyncValue<bool>>(
+      isAdminProvider,
+      (previous, next) {
+        final isAdmin = next.valueOrNull ?? false;
+        if (_isAdminViewer != isAdmin) {
+          _isAdminViewer = isAdmin;
+          final currentUser = ref.read(currentUserProvider).valueOrNull;
+          final isOwn = widget.userId == null || widget.userId == currentUser?.uid;
+          if (!isOwn) {
+            _loadUser(forceAdmin: isAdmin);
+          }
+        }
+      },
+    );
     // 初回レイアウト後にスクロール可能か評価
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _updateScrollable();
@@ -82,6 +99,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   @override
   void dispose() {
+    _adminSubscription?.close();
     _scrollController.dispose();
     super.dispose();
   }
@@ -146,8 +164,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
-  Future<void> _loadUser() async {
+  Future<void> _loadUser({bool? forceAdmin}) async {
     final currentUser = ref.read(currentUserProvider).valueOrNull;
+    final isAdmin = forceAdmin ?? (ref.read(isAdminProvider).valueOrNull ?? false);
+    final collectionName = isAdmin ? 'users' : 'publicUsers';
 
     debugPrint('ProfileScreen: Loading user with userId: ${widget.userId}');
     debugPrint('ProfileScreen: Current user uid: ${currentUser?.uid}');
@@ -169,7 +189,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           'ProfileScreen: Fetching user from Firestore: ${widget.userId}',
         );
         final doc = await FirebaseFirestore.instance
-            .collection('users')
+            .collection(collectionName)
             .doc(widget.userId)
             .get();
 

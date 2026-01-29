@@ -41,7 +41,10 @@ class ProfileFollowingUserItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<DocumentSnapshot>(
-      future: FirebaseFirestore.instance.collection('users').doc(userId).get(),
+      future: FirebaseFirestore.instance
+          .collection('publicUsers')
+          .doc(userId)
+          .get(),
       builder: (context, snapshot) {
         if (!snapshot.hasData || !snapshot.data!.exists) {
           return const SizedBox.shrink();

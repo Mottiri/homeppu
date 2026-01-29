@@ -23,6 +23,8 @@ enum NotificationType {
   adminReport, // 新規通報（管理者向け）
   postDeleted, // 投稿削除通知（ユーザー向け）
   postHidden, // 投稿非表示通知（ユーザー向け）
+  userBanned, // BAN通知（ユーザー向け）
+  userUnbanned, // BAN解除通知（ユーザー向け）
 }
 
 /// 通知のカテゴリ（タブ分類用）
@@ -56,6 +58,8 @@ NotificationCategory getCategoryFromType(NotificationType type) {
     case NotificationType.adminReport:
     case NotificationType.postDeleted:
     case NotificationType.postHidden:
+    case NotificationType.userBanned:
+    case NotificationType.userUnbanned:
       return NotificationCategory.support;
     case NotificationType.system:
       return NotificationCategory.timeline; // システム通知はTLに分類
@@ -185,6 +189,10 @@ class NotificationModel {
         return NotificationType.postDeleted;
       case 'post_hidden':
         return NotificationType.postHidden;
+      case 'user_banned':
+        return NotificationType.userBanned;
+      case 'user_unbanned':
+        return NotificationType.userUnbanned;
       default:
         return NotificationType.system;
     }

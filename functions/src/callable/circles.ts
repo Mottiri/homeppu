@@ -567,3 +567,123 @@ export const sendJoinRequest = onCall(
     }
   }
 );
+
+// Join a public circle
+export const joinCircle = onCall(
+  {
+    region: LOCATION,
+  },
+  async (request) => {
+    const { circleId } = request.data;
+    const userId = requireAuth(request, AUTH_ERRORS.UNAUTHENTICATED_ALT);
+
+    if (!circleId) {
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.CIRCLE_ID_REQUIRED);
+    }
+
+    const userDoc = await db.collection("users").doc(userId).get();
+    if (userDoc.exists && userDoc.data()?.isBanned) {
+      throw new HttpsError("permission-denied", AUTH_ERRORS.BANNED);
+    }
+
+    const circleRef = db.collection("circles").doc(circleId);
+
+    try {
+      await db.runTransaction(async (tx) => {
+        const circleDoc = await tx.get(circleRef);
+        if (!circleDoc.exists) {
+          throw new HttpsError("not-found", RESOURCE_ERRORS.CIRCLE_NOT_FOUND);
+        }
+
+        const circleData = circleDoc.data()!;
+        if (circleData.isDeleted) {
+          throw new HttpsError("failed-precondition", "circle_deleted");
+        }
+
+        const isPublic = circleData.isPublic !== false;
+        if (!isPublic) {
+          throw new HttpsError("failed-precondition", "circle_invite_only");
+        }
+
+        const memberIds: string[] = circleData.memberIds || [];
+        if (memberIds.includes(userId)) {
+          return;
+        }
+
+        const memberCount: number = circleData.memberCount ?? memberIds.length;
+        const maxMembers: number = circleData.maxMembers ?? 20;
+        if (memberCount >= maxMembers) {
+          throw new HttpsError("failed-precondition", "circle_full");
+        }
+
+        tx.update(circleRef, {
+          memberIds: admin.firestore.FieldValue.arrayUnion(userId),
+          memberCount: admin.firestore.FieldValue.increment(1),
+        });
+      });
+
+      return { success: true };
+    } catch (error) {
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+      console.error("joinCircle error:", error);
+      throw new HttpsError("internal", "joinCircle failed");
+    }
+  }
+);
+
+// Leave a circle (owner cannot leave)
+export const leaveCircle = onCall(
+  {
+    region: LOCATION,
+  },
+  async (request) => {
+    const { circleId } = request.data;
+    const userId = requireAuth(request, AUTH_ERRORS.UNAUTHENTICATED_ALT);
+
+    if (!circleId) {
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.CIRCLE_ID_REQUIRED);
+    }
+
+    const circleRef = db.collection("circles").doc(circleId);
+
+    try {
+      await db.runTransaction(async (tx) => {
+        const circleDoc = await tx.get(circleRef);
+        if (!circleDoc.exists) {
+          throw new HttpsError("not-found", RESOURCE_ERRORS.CIRCLE_NOT_FOUND);
+        }
+
+        const circleData = circleDoc.data()!;
+        if (circleData.ownerId === userId) {
+          throw new HttpsError("permission-denied", "owner_cannot_leave");
+        }
+
+        const memberIds: string[] = circleData.memberIds || [];
+        if (!memberIds.includes(userId)) {
+          return;
+        }
+
+        const updates: Record<string, unknown> = {
+          memberIds: admin.firestore.FieldValue.arrayRemove(userId),
+          memberCount: admin.firestore.FieldValue.increment(-1),
+        };
+
+        if (circleData.subOwnerId === userId) {
+          updates.subOwnerId = null;
+        }
+
+        tx.update(circleRef, updates);
+      });
+
+      return { success: true };
+    } catch (error) {
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+      console.error("leaveCircle error:", error);
+      throw new HttpsError("internal", "leaveCircle failed");
+    }
+  }
+);

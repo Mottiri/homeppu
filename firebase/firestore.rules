@@ -2,59 +2,54 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ユーザー認証チェック
+    // Auth helpers
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    // 本人かどうかチェック
     function isOwner(userId) {
       return request.auth.uid == userId;
     }
 
-    // BANされていないかチェック（より厳密に）
-    // isBannedやbanStatusが存在しない場合はBANされていないとみなす
+    // BAN check (isBanned / banStatus)
     function isNotBanned() {
       let userData = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-      return (userData.isBanned == null || userData.isBanned == false) && 
+      return (userData.isBanned == null || userData.isBanned == false) &&
              (userData.banStatus == null || userData.banStatus == 'none');
     }
 
-    // 管理者チェック（Custom Claims使用）
     function isAdmin() {
       return request.auth != null && request.auth.token.admin == true;
     }
 
-    // サークルの副オーナーチェック
+    // Circle ownership helpers
     function isCircleSubOwner(circleId) {
       return exists(/databases/$(database)/documents/circles/$(circleId)) &&
              get(/databases/$(database)/documents/circles/$(circleId)).data.subOwnerId == request.auth.uid;
     }
 
-    // サークルのオーナーまたは副オーナーチェック
     function isCircleOwnerOrSubOwner(circleId) {
       let circleData = get(/databases/$(database)/documents/circles/$(circleId)).data;
       return circleData.ownerId == request.auth.uid || circleData.subOwnerId == request.auth.uid;
     }
 
-    // サークルのオーナー、副オーナー、または管理者チェック
     function isCircleOwnerOrSubOwnerOrAdmin(circleId) {
       return isAdmin() || isCircleOwnerOrSubOwner(circleId);
     }
     
-    // ユーザーコレクション
+    // 繝ｦ繝ｼ繧ｶ繝ｼ繧ｳ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
     match /users/{userId} {
-      // 読み取り: 認証済みユーザー
-      allow read: if isAuthenticated();
+      // 隱ｭ縺ｿ蜿悶ｊ: 隱崎ｨｼ貂医∩繝ｦ繝ｼ繧ｶ繝ｼ
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
       
-      // 作成: 本人のみ
+      // 菴懈・: 譛ｬ莠ｺ縺ｮ縺ｿ
       allow create: if isAuthenticated() && isOwner(userId);
       
-      // 更新: 本人のみ（特定フィールドは変更不可）
-      allow update: if isAuthenticated() && isOwner(userId) && 
+      // 譖ｴ譁ｰ: 譛ｬ莠ｺ縺ｮ縺ｿ・育音螳壹ヵ繧｣繝ｼ繝ｫ繝峨・螟画峩荳榊庄・・
+allow update: if isAuthenticated() && isOwner(userId) && 
         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['virtue', 'isBanned', 'banStatus', 'banHistory', 'permanentBanScheduledDeletionAt', 'warningCount', 'isAI', 'createdAt']);
 
-      // カテゴリサブコレクション
+      // 繧ｫ繝・ざ繝ｪ繧ｵ繝悶さ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
       match /categories/{categoryId} {
         allow read: if isAuthenticated() && isOwner(userId);
         allow create: if isAuthenticated() && isOwner(userId);
@@ -62,102 +57,106 @@ service cloud.firestore {
         allow delete: if isAuthenticated() && isOwner(userId);
       }
 
-      // 通知サブコレクション
+      // 騾夂衍繧ｵ繝悶さ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
       match /notifications/{notificationId} {
          allow read: if isAuthenticated() && isOwner(userId);
-         allow update: if isAuthenticated() && isOwner(userId); // 既読更新用
-         allow delete: if isAuthenticated() && isOwner(userId); // 削除用
-         // 管理者は通知を作成可能
+         allow update: if isAuthenticated() && isOwner(userId); // 譌｢隱ｭ譖ｴ譁ｰ逕ｨ
+         allow delete: if isAuthenticated() && isOwner(userId); // 蜑企勁逕ｨ
+         // 邂｡逅・・・騾夂衍繧剃ｽ懈・蜿ｯ閭ｽ
          allow create: if isAdmin();
       }
     }
     
-    // BAN異議申し立てコレクション
+    // BAN逡ｰ隴ｰ逕ｳ縺礼ｫ九※繧ｳ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
+    match /publicUsers/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+    
     match /banAppeals/{appealId} {
-      // 読み取り: 管理者 または 本人
+      // 隱ｭ縺ｿ蜿悶ｊ: 邂｡逅・・縺ｾ縺溘・ 譛ｬ莠ｺ
       allow read: if isAuthenticated() && (
         isAdmin() || 
         resource.data.bannedUserId == request.auth.uid
       );
       
-      // 作成: 管理者 または 本人
+      // 菴懈・: 邂｡逅・・縺ｾ縺溘・ 譛ｬ莠ｺ
       allow create: if isAuthenticated() && (
         isAdmin() || 
         request.resource.data.bannedUserId == request.auth.uid
       );
       
-      // 更新: 管理者 または 本人
+      // 譖ｴ譁ｰ: 邂｡逅・・縺ｾ縺溘・ 譛ｬ莠ｺ
       allow update: if isAuthenticated() && (
         isAdmin() || 
         resource.data.bannedUserId == request.auth.uid
       );
     }
     
-    // 名前パーツマスタコレクション
-    // 読み取り: 認証済みユーザー（名前生成に必要）
-    // 書き込み: Cloud Functionsのみ（クライアントからは不可）
-    match /nameParts/{partId} {
+    // 蜷榊燕繝代・繝・・繧ｹ繧ｿ繧ｳ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
+    // 隱ｭ縺ｿ蜿悶ｊ: 隱崎ｨｼ貂医∩繝ｦ繝ｼ繧ｶ繝ｼ・亥錐蜑咲函謌舌↓蠢・ｦ・ｼ・    // 譖ｸ縺崎ｾｼ縺ｿ: Cloud Functions縺ｮ縺ｿ・医け繝ｩ繧､繧｢繝ｳ繝医°繧峨・荳榊庄・・
+match /nameParts/{partId} {
       allow read: if isAuthenticated();
       allow write: if false;
     }
 
 
 
-    // タスクコレクション
+    // 繧ｿ繧ｹ繧ｯ繧ｳ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
     match /tasks/{taskId} {
-      // 読み取り: 本人のみ
+      // 隱ｭ縺ｿ蜿悶ｊ: 譛ｬ莠ｺ縺ｮ縺ｿ
       allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
       
-      // 作成: 本人のみ
+      // 菴懈・: 譛ｬ莠ｺ縺ｮ縺ｿ
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       
-      // 更新: 本人のみ
+      // 譖ｴ譁ｰ: 譛ｬ莠ｺ縺ｮ縺ｿ
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
       
-      // 削除: 本人のみ (存在しないドキュメントの削除も許可してエラーを防ぐ)
+      // 蜑企勁: 譛ｬ莠ｺ縺ｮ縺ｿ (蟄伜惠縺励↑縺・ラ繧ｭ繝･繝｡繝ｳ繝医・蜑企勁繧りｨｱ蜿ｯ縺励※繧ｨ繝ｩ繝ｼ繧帝亟縺・
       allow delete: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid);
     }
 
-    // 目標コレクション
+    // 逶ｮ讓吶さ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
     match /goals/{goalId} {
-      // 読み取り: 本人 または 公開設定がtrueの場合
-      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || resource.data.isPublic == true);
+      // 隱ｭ縺ｿ蜿悶ｊ: 譛ｬ莠ｺ 縺ｾ縺溘・ 蜈ｬ髢玖ｨｭ螳壹′true縺ｮ蝣ｴ蜷・
+allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || resource.data.isPublic == true);
       
-      // 作成: 本人のみ
+      // 菴懈・: 譛ｬ莠ｺ縺ｮ縺ｿ
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       
-      // 更新: 本人のみ
+      // 譖ｴ譁ｰ: 譛ｬ莠ｺ縺ｮ縺ｿ
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
       
-      // 削除: 本人のみ
+      // 蜑企勁: 譛ｬ莠ｺ縺ｮ縺ｿ
       allow delete: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid);
     }
     
-    // 投稿コレクション
+    // 謚慕ｨｿ繧ｳ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
     match /posts/{postId} {
-      // 読み取り: 認証済みユーザー
+      // 隱ｭ縺ｿ蜿悶ｊ: 隱崎ｨｼ貂医∩繝ｦ繝ｼ繧ｶ繝ｼ
       allow read: if isAuthenticated();
       
-      // 作成: 認証済みでBANされていないユーザー
-      // 作成: クライアントからの直接作成を禁止（Cloud Functions経由のみ）
-      allow create: if false;
+      // 菴懈・: 隱崎ｨｼ貂医∩縺ｧBAN縺輔ｌ縺ｦ縺・↑縺・Θ繝ｼ繧ｶ繝ｼ
+      // 菴懈・: 繧ｯ繝ｩ繧､繧｢繝ｳ繝医°繧峨・逶ｴ謗･菴懈・繧堤ｦ∵ｭ｢・・loud Functions邨檎罰縺ｮ縺ｿ・・
+allow create: if false;
       
-      // 更新: 投稿者のみ（リアクションは誰でも更新可能、サークルオーナー/副オーナーはピン留めも可能、管理者はneedsReview）
-      allow update: if isAuthenticated() && (
-        (isOwner(resource.data.userId) && isNotBanned()) ||
-        // リアクション・コメント数の更新はBANされていないユーザーのみ
-        (isNotBanned() &&
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions', 'commentCount'])) ||
-        // サークルオーナーまたは副オーナーはピン留めフィールドを更新可能
+      // 譖ｴ譁ｰ: 謚慕ｨｿ閠・・縺ｿ・医Μ繧｢繧ｯ繧ｷ繝ｧ繝ｳ縺ｯ隱ｰ縺ｧ繧よ峩譁ｰ蜿ｯ閭ｽ縲√し繝ｼ繧ｯ繝ｫ繧ｪ繝ｼ繝翫・/蜑ｯ繧ｪ繝ｼ繝翫・縺ｯ繝斐Φ逡吶ａ繧ょ庄閭ｽ縲∫ｮ｡逅・・・needsReview・・
+allow update: if isAuthenticated() && (
+        (isOwner(resource.data.userId) &&
+         isNotBanned() &&
+         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['reactions', 'commentCount'])) ||
+        // 繝ｪ繧｢繧ｯ繧ｷ繝ｧ繝ｳ繝ｻ繧ｳ繝｡繝ｳ繝域焚縺ｮ譖ｴ譁ｰ縺ｯBAN縺輔ｌ縺ｦ縺・↑縺・Θ繝ｼ繧ｶ繝ｼ縺ｮ縺ｿ
+        // 繧ｵ繝ｼ繧ｯ繝ｫ繧ｪ繝ｼ繝翫・縺ｾ縺溘・蜑ｯ繧ｪ繝ｼ繝翫・縺ｯ繝斐Φ逡吶ａ繝輔ぅ繝ｼ繝ｫ繝峨ｒ譖ｴ譁ｰ蜿ｯ閭ｽ
         (resource.data.circleId != null &&
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isPinned', 'isPinnedTop']) &&
          exists(/databases/$(database)/documents/circles/$(resource.data.circleId)) &&
          isCircleOwnerOrSubOwner(resource.data.circleId)) ||
-        // 管理者は全ての更新が可能
+        // 邂｡逅・・・蜈ｨ縺ｦ縺ｮ譖ｴ譁ｰ縺悟庄閭ｽ
         isAdmin()
       );
 
-      // 削除: 投稿者 または サークル投稿の場合はサークルオーナーも可、管理者は削除可能
+      // 蜑企勁: 謚慕ｨｿ閠・縺ｾ縺溘・ 繧ｵ繝ｼ繧ｯ繝ｫ謚慕ｨｿ縺ｮ蝣ｴ蜷医・繧ｵ繝ｼ繧ｯ繝ｫ繧ｪ繝ｼ繝翫・繧ょ庄縲∫ｮ｡逅・・・蜑企勁蜿ｯ閭ｽ
       allow delete: if isAuthenticated() && (
         (isOwner(resource.data.userId) && isNotBanned()) ||
         (resource.data.circleId != null &&
@@ -167,17 +166,17 @@ service cloud.firestore {
       );
     }
     
-    // コメントコレクション
+    // 繧ｳ繝｡繝ｳ繝医さ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
     match /comments/{commentId} {
-      // 読み取り: 認証済みユーザー
+      // 隱ｭ縺ｿ蜿悶ｊ: 隱崎ｨｼ貂医∩繝ｦ繝ｼ繧ｶ繝ｼ
       allow read: if isAuthenticated();
       
-      // 作成: 認証済みでBANされていないユーザー
+      // 菴懈・: 隱崎ｨｼ貂医∩縺ｧBAN縺輔ｌ縺ｦ縺・↑縺・Θ繝ｼ繧ｶ繝ｼ
       allow create: if isAuthenticated() && isNotBanned() && 
         request.resource.data.userId == request.auth.uid;
       
-      // 削除: コメント投稿者 または 元投稿の所有者 または サークルオーナー または 管理者
-      allow delete: if isAuthenticated() && (
+      // 蜑企勁: 繧ｳ繝｡繝ｳ繝域兜遞ｿ閠・縺ｾ縺溘・ 蜈・兜遞ｿ縺ｮ謇譛芽・縺ｾ縺溘・ 繧ｵ繝ｼ繧ｯ繝ｫ繧ｪ繝ｼ繝翫・ 縺ｾ縺溘・ 邂｡逅・・
+allow delete: if isAuthenticated() && (
         isOwner(resource.data.userId) ||
         isOwner(get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.userId) ||
         (get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.circleId != null &&
@@ -186,17 +185,17 @@ service cloud.firestore {
       );
     }
     
-    // リアクションコレクション
+    // 繝ｪ繧｢繧ｯ繧ｷ繝ｧ繝ｳ繧ｳ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
     match /reactions/{reactionId} {
-      // 読み取り: 認証済みユーザー
+      // 隱ｭ縺ｿ蜿悶ｊ: 隱崎ｨｼ貂医∩繝ｦ繝ｼ繧ｶ繝ｼ
       allow read: if isAuthenticated();
       
-      // 作成: 認証済みでBANされていないユーザー
+      // 菴懈・: 隱崎ｨｼ貂医∩縺ｧBAN縺輔ｌ縺ｦ縺・↑縺・Θ繝ｼ繧ｶ繝ｼ
       allow create: if isAuthenticated() && isNotBanned() && 
         request.resource.data.userId == request.auth.uid;
       
-      // 削除: リアクションした本人 または 元投稿の所有者 または サークルオーナー または 管理者
-      allow delete: if isAuthenticated() && (
+      // 蜑企勁: 繝ｪ繧｢繧ｯ繧ｷ繝ｧ繝ｳ縺励◆譛ｬ莠ｺ 縺ｾ縺溘・ 蜈・兜遞ｿ縺ｮ謇譛芽・縺ｾ縺溘・ 繧ｵ繝ｼ繧ｯ繝ｫ繧ｪ繝ｼ繝翫・ 縺ｾ縺溘・ 邂｡逅・・
+allow delete: if isAuthenticated() && (
         isOwner(resource.data.userId) ||
         isOwner(get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.userId) ||
         (get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.circleId != null &&
@@ -205,174 +204,118 @@ service cloud.firestore {
       );
     }
 
-    // サークルコレクション
+    // 繧ｵ繝ｼ繧ｯ繝ｫ繧ｳ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
     match /circles/{circleId} {
-      // 読み取り: AIモードサークルは作成者のみ、それ以外は認証済みユーザー誰でも
-      allow read: if isAuthenticated() && (
+      // 隱ｭ縺ｿ蜿悶ｊ: AI繝｢繝ｼ繝峨し繝ｼ繧ｯ繝ｫ縺ｯ菴懈・閠・・縺ｿ縲√◎繧御ｻ･螟悶・隱崎ｨｼ貂医∩繝ｦ繝ｼ繧ｶ繝ｼ隱ｰ縺ｧ繧・
+allow read: if isAuthenticated() && (
         resource.data.aiMode != "aiOnly" ||
         resource.data.ownerId == request.auth.uid ||
         isAdmin()
       );
       
-      // 作成: 認証済みでBANされていないユーザー（管理者はBANチェックスキップ）
-      allow create: if isAuthenticated() && (isNotBanned() || isAdmin());
+      // 菴懈・: 隱崎ｨｼ貂医∩縺ｧBAN縺輔ｌ縺ｦ縺・↑縺・Θ繝ｼ繧ｶ繝ｼ・育ｮ｡逅・・・BAN繝√ぉ繝・け繧ｹ繧ｭ繝・・・・
+allow create: if isAuthenticated() && (isNotBanned() || isAdmin());
       
-      // 更新: オーナー、または管理者、またはメンバー追加・削除操作、またはメンバーによるpostCount更新
+      // 譖ｴ譁ｰ: 繧ｪ繝ｼ繝翫・縲√∪縺溘・邂｡逅・・√∪縺溘・繝｡繝ｳ繝舌・霑ｽ蜉繝ｻ蜑企勁謫堺ｽ懊√∪縺溘・繝｡繝ｳ繝舌・縺ｫ繧医ｋpostCount譖ｴ譁ｰ
       allow update: if isAuthenticated() && (
-        (isOwner(resource.data.ownerId) && isNotBanned()) ||
-        isAdmin() ||
-        // メンバー追加・削除（自分自身のみ）
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberIds', 'memberCount']) &&
-         (request.auth.uid in request.resource.data.memberIds || request.auth.uid in resource.data.memberIds)) ||
-        // 副オーナー退会時のsubOwnerIdクリア（自分が副オーナーで退会する場合）
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberIds', 'memberCount', 'subOwnerId']) &&
-         resource.data.subOwnerId == request.auth.uid &&
-         request.resource.data.subOwnerId == null &&
-         request.auth.uid in resource.data.memberIds &&
-         !(request.auth.uid in request.resource.data.memberIds)) ||
-        // postCount更新（メンバーのみ）
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['postCount']) &&
-         request.auth.uid in resource.data.memberIds)
+        (isCircleOwnerOrSubOwner(circleId) && isNotBanned()) ||
+        isAdmin()
       );
       
-      // 削除: オーナー（BANされていない）または管理者のみ
+      // 蜑企勁: 繧ｪ繝ｼ繝翫・・・AN縺輔ｌ縺ｦ縺・↑縺・ｼ峨∪縺溘・邂｡逅・・・縺ｿ
       allow delete: if isAuthenticated() && ((isOwner(resource.data.ownerId) && isNotBanned()) || isAdmin());
     }
     
-    // サークル参加申請コレクション
+    // 繧ｵ繝ｼ繧ｯ繝ｫ蜿ょ刈逕ｳ隲九さ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
     match /circleJoinRequests/{requestId} {
-      // 読み取り: サークルオーナー、副オーナー、管理者、または申請者
-      allow read: if isAuthenticated() && (
+      // 隱ｭ縺ｿ蜿悶ｊ: 繧ｵ繝ｼ繧ｯ繝ｫ繧ｪ繝ｼ繝翫・縲∝憶繧ｪ繝ｼ繝翫・縲∫ｮ｡逅・・√∪縺溘・逕ｳ隲玖・
+allow read: if isAuthenticated() && (
         resource.data.userId == request.auth.uid ||
         isCircleOwnerOrSubOwnerOrAdmin(resource.data.circleId)
       );
       
-      // 作成: 認証済みユーザー（BANされていない）
-      allow create: if isAuthenticated() && isNotBanned() && request.resource.data.userId == request.auth.uid;
+      // 菴懈・: 隱崎ｨｼ貂医∩繝ｦ繝ｼ繧ｶ繝ｼ・・AN縺輔ｌ縺ｦ縺・↑縺・ｼ・
+allow create: if isAuthenticated() && isNotBanned() && request.resource.data.userId == request.auth.uid;
       
-      // 更新: 注意! isCircleOwnerOrSubOwnerOrAdmin は circleId を引数に取るが、
-      // ここでは resource.data.circleId を使う必要がある。
-      // サークルオーナーまたは副オーナーまたは管理者（承認/拒否）
-      // BAN中のオーナー/副オーナーは操作不可
+      // 譖ｴ譁ｰ: 豕ｨ諢・ isCircleOwnerOrSubOwnerOrAdmin 縺ｯ circleId 繧貞ｼ墓焚縺ｫ蜿悶ｋ縺後・      // 縺薙％縺ｧ縺ｯ resource.data.circleId 繧剃ｽｿ縺・ｿ・ｦ√′縺ゅｋ縲・      // 繧ｵ繝ｼ繧ｯ繝ｫ繧ｪ繝ｼ繝翫・縺ｾ縺溘・蜑ｯ繧ｪ繝ｼ繝翫・縺ｾ縺溘・邂｡逅・・ｼ域価隱・諡貞凄・・      // BAN荳ｭ縺ｮ繧ｪ繝ｼ繝翫・/蜑ｯ繧ｪ繝ｼ繝翫・縺ｯ謫堺ｽ應ｸ榊庄
       allow update: if isAuthenticated() && isNotBanned() && 
         isCircleOwnerOrSubOwnerOrAdmin(resource.data.circleId);
       
-      // 削除: 申請者またはサークルオーナー/副オーナー/管理者（BANされていない）
-      allow delete: if isAuthenticated() && isNotBanned() && (
+      // 蜑企勁: 逕ｳ隲玖・∪縺溘・繧ｵ繝ｼ繧ｯ繝ｫ繧ｪ繝ｼ繝翫・/蜑ｯ繧ｪ繝ｼ繝翫・/邂｡逅・・ｼ・AN縺輔ｌ縺ｦ縺・↑縺・ｼ・
+allow delete: if isAuthenticated() && isNotBanned() && (
         resource.data.userId == request.auth.uid ||
         isCircleOwnerOrSubOwnerOrAdmin(resource.data.circleId)
       );
     }
     
     
-    // 徳ポイント履歴コレクション
+    // 蠕ｳ繝昴う繝ｳ繝亥ｱ･豁ｴ繧ｳ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
     match /virtueHistory/{historyId} {
-      // 読み取り: 本人のみ
+      // 隱ｭ縺ｿ蜿悶ｊ: 譛ｬ莠ｺ縺ｮ縺ｿ
       allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      // 書き込み: Cloud Functionsのみ
+      // 譖ｸ縺崎ｾｼ縺ｿ: Cloud Functions縺ｮ縺ｿ
       allow write: if false;
     }
     
-    // モデレーション済みコンテンツ（管理用）
-    match /moderatedContent/{contentId} {
-      // すべてCloud Functionsで管理
-      allow read, write: if false;
+    // 繝｢繝・Ξ繝ｼ繧ｷ繝ｧ繝ｳ貂医∩繧ｳ繝ｳ繝・Φ繝・ｼ育ｮ｡逅・畑・・
+match /moderatedContent/{contentId} {
+      // 縺吶∋縺ｦCloud Functions縺ｧ邂｡逅・
+allow read, write: if false;
     }
 
-    // 問い合わせコレクション
+    // 蝠上＞蜷医ｏ縺帙さ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
     match /inquiries/{inquiryId} {
-      // 読み取り: 管理者は全件、ユーザーは自分のみ
+      // 隱ｭ縺ｿ蜿悶ｊ: 邂｡逅・・・蜈ｨ莉ｶ縲√Θ繝ｼ繧ｶ繝ｼ縺ｯ閾ｪ蛻・・縺ｿ
       allow read: if isAuthenticated() && (
         isAdmin() ||
         resource.data.userId == request.auth.uid
       );
 
-      // 更新: 本人（hasUnreadReply, userViewing）または管理者
-      allow update: if isAuthenticated() && (
+      // 譖ｴ譁ｰ: 譛ｬ莠ｺ・・asUnreadReply, userViewing・峨∪縺溘・邂｡逅・・
+allow update: if isAuthenticated() && (
         isAdmin() ||
         (resource.data.userId == request.auth.uid &&
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hasUnreadReply', 'userViewing']))
       );
 
-      // 作成・削除: Cloud Functionsのみ
+      // 菴懈・繝ｻ蜑企勁: Cloud Functions縺ｮ縺ｿ
       allow create, delete: if false;
 
-      // メッセージサブコレクション
+      // 繝｡繝・そ繝ｼ繧ｸ繧ｵ繝悶さ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
       match /messages/{messageId} {
-        // 読み取り: 管理者または問い合わせオーナー
+        // 隱ｭ縺ｿ蜿悶ｊ: 邂｡逅・・∪縺溘・蝠上＞蜷医ｏ縺帙が繝ｼ繝翫・
         allow read: if isAuthenticated() && (
           isAdmin() ||
           get(/databases/$(database)/documents/inquiries/$(inquiryId)).data.userId == request.auth.uid
         );
-        // 書き込み: Cloud Functionsのみ
+        // 譖ｸ縺崎ｾｼ縺ｿ: Cloud Functions縺ｮ縺ｿ
         allow create, delete: if false;
       }
     }
 
-    // BAN異議申し立てチャットコレクション
-    match /ban_appeals/{appealId} {
-      // 読み取り: 管理者または該当ユーザー
-      allow read: if isAuthenticated() && (
-        isAdmin() ||
-        resource.data.bannedUserId == request.auth.uid
-      );
-      
-      // 作成: 該当ユーザー（BANされていても作成可能）
-      allow create: if isAuthenticated() && 
-        request.resource.data.bannedUserId == request.auth.uid;
-      
-      // 更新: 管理者または該当ユーザー（メッセージ追加）
-      allow update: if isAuthenticated() && (
-        isAdmin() ||
-        resource.data.bannedUserId == request.auth.uid
-      );
-      
-      // 削除: 管理者のみ
-      allow delete: if isAdmin();
-    }
 
-    // banAppealsコレクション（別名）
-    match /banAppeals/{appealId} {
-      // 読み取り: 管理者または該当ユーザー
-      allow read: if isAuthenticated() && (
-        isAdmin() ||
-        resource.data.bannedUserId == request.auth.uid
-      );
-      
-      // 作成: 該当ユーザー（BANされていても作成可能）
-      allow create: if isAuthenticated() && 
-        request.resource.data.bannedUserId == request.auth.uid;
-      
-      // 更新: 管理者または該当ユーザー（メッセージ追加）
-      allow update: if isAuthenticated() && (
-        isAdmin() ||
-        resource.data.bannedUserId == request.auth.uid
-      );
-      
-      // 削除: 管理者のみ
-      allow delete: if isAdmin();
-    }
-
-    // 通報コレクション
+    // 騾壼ｱ繧ｳ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
     match /reports/{reportId} {
-      // 管理者のみ読み取り可能
+      // 邂｡逅・・・縺ｿ隱ｭ縺ｿ蜿悶ｊ蜿ｯ閭ｽ
       allow read: if isAdmin();
-      // 管理者のみ更新可能（ステータス変更）
-      allow update: if isAdmin();
-      // 作成・削除はCloud Functionsのみ
+      // 邂｡逅・・・縺ｿ譖ｴ譁ｰ蜿ｯ閭ｽ・医せ繝・・繧ｿ繧ｹ螟画峩・・
+allow update: if isAdmin();
+      // 菴懈・繝ｻ蜑企勁縺ｯCloud Functions縺ｮ縺ｿ
       allow create, delete: if false;
     }
 
-    // 要審査投稿コレクション（管理者専用）
-    match /pendingReviews/{reviewId} {
-      // 管理者のみ読み取り可能
+    // 隕∝ｯｩ譟ｻ謚慕ｨｿ繧ｳ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ・育ｮ｡逅・・ｰら畑・・
+match /pendingReviews/{reviewId} {
+      // 邂｡逅・・・縺ｿ隱ｭ縺ｿ蜿悶ｊ蜿ｯ閭ｽ
       allow read: if isAdmin();
-      // 管理者のみ更新可能（承認/削除後の状態更新）
-      allow update: if isAdmin();
-      // 作成・削除はCloud Functionsのみ
+      // 邂｡逅・・・縺ｿ譖ｴ譁ｰ蜿ｯ閭ｽ・域価隱・蜑企勁蠕後・迥ｶ諷区峩譁ｰ・・
+allow update: if isAdmin();
+      // 菴懈・繝ｻ蜑企勁縺ｯCloud Functions縺ｮ縺ｿ
       allow create, delete: if false;
     }
   }
 }
+
+
 
 

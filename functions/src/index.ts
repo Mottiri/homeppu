@@ -17,7 +17,7 @@ export {
     sendInquiryReply,
     updateInquiryStatus,
 } from "./callable/inquiries";
-export { createCommentWithModeration, addUserReaction } from "./callable/comments";
+export { createCommentWithModeration, addUserReaction, removeUserReaction } from "./callable/comments";
 export { createPostWithRateLimit, createPostWithModeration } from "./callable/posts";
 export { initializeAIAccounts, generateAIPosts } from "./callable/ai";
 export {
@@ -26,6 +26,8 @@ export {
     approveJoinRequest,
     rejectJoinRequest,
     sendJoinRequest,
+    joinCircle,
+    leaveCircle,
 } from "./callable/circles";
 export {
     followUser,
@@ -38,6 +40,7 @@ export {
     cleanUpUserFollows,
     deleteAllAIUsers,
     cleanupOrphanedCircleAIs,
+    backfillPublicUsers,
     setAdminRole,
     removeAdminRole,
     banUser,
@@ -54,11 +57,11 @@ export { onNotificationCreated, onCommentCreatedNotify, onReactionAddedNotify } 
 export { onTaskUpdated, scheduleTaskReminders, scheduleTaskRemindersOnCreate } from "./triggers/tasks";
 export { onReactionCreated } from "./triggers/reactions";
 export { scheduleGoalReminders, scheduleGoalRemindersOnCreate } from "./triggers/goals";
+export { onUserCreated, onUserUpdated, onUserDeleted } from "./triggers/users";
 
 // ===============================================
 // Scheduled
 // ===============================================
-export { scheduleAIPosts } from "./scheduled/ai-posts";
 export { checkGhostCircles, evolveCircleAIs, triggerEvolveCircleAIs } from "./scheduled/circles";
 export { cleanupOrphanedMedia, cleanupResolvedInquiries, cleanupReports, cleanupBannedUsers } from "./scheduled/cleanup";
 export { executeTaskReminder, executeGoalReminder } from "./scheduled/reminders";

@@ -123,7 +123,7 @@ class _JoinRequestCardState extends State<_JoinRequestCard>
 
     try {
       final doc = await FirebaseFirestore.instance
-          .collection('users')
+          .collection('publicUsers')
           .doc(userId)
           .get();
       if (doc.exists && mounted) {

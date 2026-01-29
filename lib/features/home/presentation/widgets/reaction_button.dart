@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
 import '../../../../core/constants/app_colors.dart';
@@ -73,11 +72,13 @@ class _ReactionButtonState extends ConsumerState<ReactionButton>
     if (_isReacted) {
       setState(() => _isReacted = false);
       try {
-        final postRef = FirebaseFirestore.instance
-            .collection('posts')
-            .doc(widget.postId);
-        await postRef.update({
-          'reactions.${widget.type.value}': FieldValue.increment(-1),
+        final functions = FirebaseFunctions.instanceFor(
+          region: 'asia-northeast1',
+        );
+        final callable = functions.httpsCallable('removeUserReaction');
+        await callable.call({
+          'postId': widget.postId,
+          'reactionType': widget.type.value,
         });
       } catch (e) {
         setState(() => _isReacted = true);

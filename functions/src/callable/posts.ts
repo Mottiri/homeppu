@@ -61,6 +61,19 @@ export const createPostWithRateLimit = onCall(
             isVisible: true,
         });
 
+        const circleId = data?.circleId as string | undefined | null;
+        if (circleId) {
+            try {
+                await db.collection("circles").doc(circleId).update({
+                    postCount: FieldValue.increment(1),
+                    recentActivity: FieldValue.serverTimestamp(),
+                    lastHumanPostAt: FieldValue.serverTimestamp(),
+                });
+            } catch (error) {
+                console.error("Failed to update circle counters:", error);
+            }
+        }
+
         // ユーザーの投稿数を更新
         await db.collection("users").doc(userId).update({
             totalPosts: FieldValue.increment(1),
@@ -420,6 +433,18 @@ ${content}
                 } catch (metadataError) {
                     console.error(`Failed to update metadata for ${item.url}:`, metadataError);
                 }
+            }
+        }
+
+        if (circleId) {
+            try {
+                await db.collection("circles").doc(circleId).update({
+                    postCount: FieldValue.increment(1),
+                    recentActivity: FieldValue.serverTimestamp(),
+                    lastHumanPostAt: FieldValue.serverTimestamp(),
+                });
+            } catch (error) {
+                console.error("Failed to update circle counters:", error);
             }
         }
 
