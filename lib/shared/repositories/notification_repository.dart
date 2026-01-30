@@ -116,6 +116,9 @@ class NotificationRepository {
           'join_request_approved',
           'join_request_rejected',
           'circle_deleted',
+          'circle_settings_changed',
+          'circle_ghost_warning',
+          'circle_ghost_deleted',
         ];
       case NotificationCategory.task:
         return const [
@@ -131,6 +134,7 @@ class NotificationRepository {
           'inquiry_user_reply',
           'inquiry_deletion_warning',
           'admin_report',
+          'review_needed',
           'post_deleted',
           'post_hidden',
           'user_banned',

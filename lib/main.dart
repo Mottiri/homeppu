@@ -90,6 +90,17 @@ class _HomeppuAppState extends ConsumerState<HomeppuApp> {
       case 'circle_deleted':
         router.go('/circles');
         break;
+      case 'circle_settings_changed':
+      case 'circle_ghost_warning':
+        if (payload.circleId != null) {
+          router.push('/circle/${payload.circleId}');
+        } else {
+          router.go('/circles');
+        }
+        break;
+      case 'circle_ghost_deleted':
+        router.go('/circles');
+        break;
 
       // タスク関連
       case 'task_reminder':
@@ -143,6 +154,9 @@ class _HomeppuAppState extends ConsumerState<HomeppuApp> {
         } else {
           router.push('/admin/reports');
         }
+        break;
+      case 'review_needed':
+        router.push('/admin-review');
         break;
 
       // 投稿削除・非表示

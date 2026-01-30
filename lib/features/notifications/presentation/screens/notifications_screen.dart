@@ -301,6 +301,19 @@ class _NotificationTile extends ConsumerWidget {
           return;
         }
 
+        if (notification.type == NotificationType.reviewNeeded &&
+            context.mounted) {
+          context.push('/admin-review');
+          return;
+        }
+
+        if ((notification.type == NotificationType.circleDeleted ||
+                notification.type == NotificationType.circleGhostDeleted) &&
+            context.mounted) {
+          context.go('/circles');
+          return;
+        }
+
         if (notification.type == NotificationType.goalReminder &&
             context.mounted) {
           if (notification.goalId != null) {
@@ -337,9 +350,18 @@ class _NotificationTile extends ConsumerWidget {
           final noNavigateTypes = [
             NotificationType.joinRequestRejected,
             NotificationType.circleDeleted,
+            NotificationType.circleGhostDeleted,
           ];
           if (!noNavigateTypes.contains(notification.type)) {
             context.push('/circle/${notification.circleId}');
+          }
+        } else if (context.mounted) {
+          final circleFallbackTypes = [
+            NotificationType.circleSettingsChanged,
+            NotificationType.circleGhostWarning,
+          ];
+          if (circleFallbackTypes.contains(notification.type)) {
+            context.go('/circles');
           }
         }
       },

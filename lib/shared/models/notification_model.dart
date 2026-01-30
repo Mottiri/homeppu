@@ -9,6 +9,9 @@ enum NotificationType {
   joinRequestApproved,
   joinRequestRejected,
   circleDeleted,
+  circleSettingsChanged,
+  circleGhostWarning,
+  circleGhostDeleted,
   // タスク関連
   taskReminder,
   taskScheduled,
@@ -21,6 +24,7 @@ enum NotificationType {
   inquiryDeletionWarning, // 削除予告通知
   // 管理者向け
   adminReport, // 新規通報（管理者向け）
+  reviewNeeded, // モデレーションの要対応（管理者向け）
   postDeleted, // 投稿削除通知（ユーザー向け）
   postHidden, // 投稿非表示通知（ユーザー向け）
   userBanned, // BAN通知（ユーザー向け）
@@ -45,6 +49,9 @@ NotificationCategory getCategoryFromType(NotificationType type) {
     case NotificationType.joinRequestApproved:
     case NotificationType.joinRequestRejected:
     case NotificationType.circleDeleted:
+    case NotificationType.circleSettingsChanged:
+    case NotificationType.circleGhostWarning:
+    case NotificationType.circleGhostDeleted:
       return NotificationCategory.circle;
     case NotificationType.taskReminder:
     case NotificationType.taskScheduled:
@@ -56,6 +63,7 @@ NotificationCategory getCategoryFromType(NotificationType type) {
     case NotificationType.inquiryUserReply:
     case NotificationType.inquiryDeletionWarning:
     case NotificationType.adminReport:
+    case NotificationType.reviewNeeded:
     case NotificationType.postDeleted:
     case NotificationType.postHidden:
     case NotificationType.userBanned:
@@ -173,6 +181,12 @@ class NotificationModel {
         return NotificationType.joinRequestRejected;
       case 'circle_deleted':
         return NotificationType.circleDeleted;
+      case 'circle_settings_changed':
+        return NotificationType.circleSettingsChanged;
+      case 'circle_ghost_warning':
+        return NotificationType.circleGhostWarning;
+      case 'circle_ghost_deleted':
+        return NotificationType.circleGhostDeleted;
       case 'task_reminder':
         return NotificationType.taskReminder;
       case 'task_scheduled':
@@ -193,6 +207,8 @@ class NotificationModel {
       // 管理者・ユーザー向け
       case 'admin_report':
         return NotificationType.adminReport;
+      case 'review_needed':
+        return NotificationType.reviewNeeded;
       case 'post_deleted':
         return NotificationType.postDeleted;
       case 'post_hidden':
