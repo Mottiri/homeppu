@@ -563,6 +563,14 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     if (_selectedFilters.contains(_FilterOption.hasPosts)) {
       filteredCircles = filteredCircles.where((c) => c.postCount > 0).toList();
     }
+    final hasPublicFilter = _selectedFilters.contains(_FilterOption.publicOnly);
+    final hasInviteFilter =
+        _selectedFilters.contains(_FilterOption.inviteOnly);
+    if (hasPublicFilter && !hasInviteFilter) {
+      filteredCircles = filteredCircles.where((c) => c.isPublic).toList();
+    } else if (hasInviteFilter && !hasPublicFilter) {
+      filteredCircles = filteredCircles.where((c) => !c.isPublic).toList();
+    }
 
     // 並び順適用
     switch (_selectedSort) {
@@ -709,6 +717,10 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         return AppMessages.circle.filterHasSpace;
       case _FilterOption.hasPosts:
         return AppMessages.circle.filterHasPosts;
+      case _FilterOption.publicOnly:
+        return AppMessages.circle.filterPublic;
+      case _FilterOption.inviteOnly:
+        return AppMessages.circle.filterInviteOnly;
     }
   }
 
@@ -791,17 +803,9 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   Widget _buildFilterDropdown() {
     final hasActiveFilter = _selectedFilters.isNotEmpty;
 
-    return PopupMenuButton<_FilterOption>(
-      onSelected: (value) {
-        setState(() {
-          if (_selectedFilters.contains(value)) {
-            _selectedFilters.remove(value);
-          } else {
-            _selectedFilters.add(value);
-          }
-        });
-        _loadCircles();
-      },
+    return InkWell(
+      onTap: _openFilterSheet,
+      borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
@@ -841,29 +845,137 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
           ],
         ),
       ),
-      itemBuilder: (context) => _FilterOption.values.map((option) {
-        final isSelected = _selectedFilters.contains(option);
-        return PopupMenuItem<_FilterOption>(
-          value: option,
-          child: Row(
-            children: [
-              Icon(
-                isSelected ? Icons.check_box : Icons.check_box_outline_blank,
-                size: 18,
-                color: isSelected ? AppColors.primary : Colors.grey[600],
+    );
+  }
+
+  void _openFilterSheet() {
+    final tempFilters = Set<_FilterOption>.from(_selectedFilters);
+
+    void toggleFilter(
+      _FilterOption option,
+      void Function(void Function()) setModalState,
+    ) {
+      setModalState(() {
+        if (tempFilters.contains(option)) {
+          tempFilters.remove(option);
+        } else {
+          if (option == _FilterOption.publicOnly) {
+            tempFilters.remove(_FilterOption.inviteOnly);
+          } else if (option == _FilterOption.inviteOnly) {
+            tempFilters.remove(_FilterOption.publicOnly);
+          }
+          tempFilters.add(option);
+        }
+      });
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final hasFilters = tempFilters.isNotEmpty;
+            return SafeArea(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final maxHeight = constraints.maxHeight * 0.8;
+                  return ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: maxHeight),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                          child: Row(
+                            children: [
+                              Text(
+                                AppMessages.circle.filterLabel,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const Spacer(),
+                              TextButton(
+                                onPressed: hasFilters
+                                    ? () => setModalState(
+                                          () => tempFilters.clear(),
+                                        )
+                                    : null,
+                                child: const Text('全解除'),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Flexible(
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Column(
+                              children: [
+                                ..._FilterOption.values.map((option) {
+                                  final isSelected =
+                                      tempFilters.contains(option);
+                                  return CheckboxListTile(
+                                    value: isSelected,
+                                    onChanged: (_) =>
+                                        toggleFilter(option, setModalState),
+                                    activeColor: AppColors.primary,
+                                    title: Text(_filterLabel(option)),
+                                    dense: true,
+                                    controlAffinity:
+                                        ListTileControlAffinity.leading,
+                                  );
+                                }),
+                              ],
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  child: const Text('キャンセル'),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: () {
+                                    if (!mounted) return;
+                                    setState(() {
+                                      _selectedFilters
+                                        ..clear()
+                                        ..addAll(tempFilters);
+                                    });
+                                    Navigator.pop(context);
+                                    _loadCircles();
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primary,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                  child: const Text('適用'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
-              const SizedBox(width: 8),
-              Text(
-                _filterLabel(option),
-                style: TextStyle(
-                  color: isSelected ? AppColors.primary : Colors.grey[800],
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         );
-      }).toList(),
+      },
     );
   }
 }
@@ -1295,7 +1407,9 @@ enum _SortOption {
 /// フィルターオプション
 enum _FilterOption {
   hasSpace(Icons.person_add),
-  hasPosts(Icons.article);
+  hasPosts(Icons.article),
+  publicOnly(Icons.public),
+  inviteOnly(Icons.lock);
 
   final IconData icon;
   const _FilterOption(this.icon);

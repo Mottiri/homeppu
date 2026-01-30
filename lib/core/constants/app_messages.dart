@@ -369,6 +369,8 @@ class _CircleMessages {
   String get sortHumanPostOldest => '人間投稿古い順';
   String get filterHasSpace => '空きあり';
   String get filterHasPosts => '投稿あり';
+  String get filterPublic => '公開';
+  String get filterInviteOnly => '招待制';
 }
 
 /// ホーム関連メッセージ
