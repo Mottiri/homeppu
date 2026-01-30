@@ -10,9 +10,11 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../core/constants/app_messages.dart';
 import '../../../../shared/models/post_model.dart';
 import '../../../../shared/models/comment_model.dart';
+import '../../../../shared/models/user_model.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/providers/moderation_provider.dart';
 import '../../../../shared/services/moderation_service.dart';
+import '../../../../shared/services/circle_service.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
 import '../../../../shared/widgets/report_dialog.dart';
 
@@ -116,6 +118,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
 
     // ユーザーのヘッダー色を取得
     final currentUser = ref.watch(currentUserProvider).valueOrNull;
+    final isAdmin = ref.watch(isAdminProvider).valueOrNull ?? false;
     final primaryColor = currentUser?.headerPrimaryColor != null
         ? Color(currentUser!.headerPrimaryColor!)
         : AppColors.primary;
@@ -214,7 +217,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                         ),
                         // 投稿本体（PostCardウィジェットを再利用）
                         SliverToBoxAdapter(
-                          child: PostCard(post: post, isDetailView: true),
+                          child: _buildPostCard(post, currentUser, isAdmin),
                         ),
 
                         // コメントヘッダー
@@ -406,6 +409,44 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildPostCard(
+    PostModel post,
+    UserModel? currentUser,
+    bool isAdmin,
+  ) {
+    if (post.circleId == null) {
+      return PostCard(post: post, isDetailView: true);
+    }
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('circles')
+          .doc(post.circleId)
+          .snapshots(),
+      builder: (context, snapshot) {
+        final data = snapshot.data?.data() as Map<String, dynamic>?;
+        final ownerId = data?['ownerId'] as String?;
+        final subOwnerId = data?['subOwnerId'] as String?;
+        final currentUserId = currentUser?.uid;
+        final canManagePins =
+            currentUserId != null &&
+            (currentUserId == ownerId || currentUserId == subOwnerId || isAdmin);
+
+        return PostCard(
+          post: post,
+          isDetailView: true,
+          isCircleOwner: canManagePins,
+          onPinToggle: canManagePins
+              ? (isPinned) async {
+                  final circleService = ref.read(circleServiceProvider);
+                  await circleService.togglePinPost(post.id, isPinned);
+                }
+              : null,
+        );
+      },
     );
   }
 }
