@@ -46,6 +46,42 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
   bool _isScrollable = false; // レイアウト後に再評価
   final ScrollController _scrollController = ScrollController();
 
+  void _updatePinnedState(String postId, {required bool isPinned, bool clearTop = false}) {
+    if (!mounted) return;
+    bool changed = false;
+    final updated = _posts.map((post) {
+      if (post.id != postId) return post;
+      final next = post.copyWith(
+        isPinned: isPinned,
+        isPinnedTop: clearTop ? false : post.isPinnedTop,
+      );
+      changed = true;
+      return next;
+    }).toList();
+    if (changed) {
+      setState(() => _posts = updated);
+    }
+  }
+
+  void _setTopPinned(String postId) {
+    if (!mounted) return;
+    bool changed = false;
+    final updated = _posts.map((post) {
+      if (post.id == postId) {
+        if (!post.isPinned || !post.isPinnedTop) changed = true;
+        return post.copyWith(isPinned: true, isPinnedTop: true);
+      }
+      if (post.isPinnedTop) {
+        changed = true;
+        return post.copyWith(isPinnedTop: false);
+      }
+      return post;
+    }).toList();
+    if (changed) {
+      setState(() => _posts = updated);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -564,10 +600,16 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                                   post.circleId!,
                                   post.id,
                                 );
+                                _setTopPinned(post.id);
                               } else if (value == 'unpin') {
                                 await circleService.togglePinPost(
                                   post.id,
                                   false,
+                                );
+                                _updatePinnedState(
+                                  post.id,
+                                  isPinned: false,
+                                  clearTop: true,
                                 );
                               }
                             },
@@ -905,11 +947,11 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                               post.id,
                               isPinned,
                             );
-                            setState(() {
-                              _posts[index] = post.copyWith(
-                                isPinned: isPinned,
-                              );
-                            });
+                            _updatePinnedState(
+                              post.id,
+                              isPinned: isPinned,
+                              clearTop: !isPinned,
+                            );
                           }
                         : null,
                     onPostDeleted: (index) {
