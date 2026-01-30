@@ -90,14 +90,22 @@ enum ReactionRarity {
   epic, // ????
 }
 
+/// ???????????
+enum ReactionUnlockType {
+  free,
+  virtue, // ???????
+  subscription, // ????
+}
+
+
 
 /// リアクションの種類（7種類のスタンプ）
 enum ReactionType {
   heart('heart', '??', '???', 0xFFFF6B6B, ReactionRarity.common),
   praise('praise', '??', '???', 0xFFFFD93D, ReactionRarity.common),
   clap('clap', '??', '??', 0xFFFFDAB9, ReactionRarity.common),
-  shine('shine', '?', '????', 0xFF6BCB77, ReactionRarity.rare),
-  star('star', '?', '???', 0xFFFFD700, ReactionRarity.rare),
+  shine('shine', '?', '????', 0xFF6BCB77, ReactionRarity.rare, virtueCost: 100),
+  star('star', '?', '???', 0xFFFFD700, ReactionRarity.rare, virtueCost: 100),
   rainbow('rainbow', '??', '??', 0xFFFFB7C5, ReactionRarity.epic),
   hundred('hundred', '??', '100?', 0xFFFF4500, ReactionRarity.epic);
 
@@ -106,17 +114,46 @@ enum ReactionType {
     this.emoji,
     this.label,
     this.colorValue,
-    this.rarity,
-  );
+    this.rarity, {
+    this.virtueCost,
+  });
 
   final String value;
   final String emoji;
   final String label;
   final int colorValue;
   final ReactionRarity rarity;
+  final int? virtueCost; // ?????????rare???
 
   /// ???????assets/reactions/{value}.png?
   String get assetPath => 'assets/reactions/$value.png';
+
+  String get purchaseKey => 'reaction_$value';
+
+  ReactionUnlockType get unlockType {
+    switch (rarity) {
+      case ReactionRarity.common:
+        return ReactionUnlockType.free;
+      case ReactionRarity.rare:
+        return ReactionUnlockType.virtue;
+      case ReactionRarity.epic:
+        return ReactionUnlockType.subscription;
+    }
+  }
+
+  bool isUnlocked({
+    required bool isSubscriber,
+    required Set<String> unlockedItems,
+  }) {
+    switch (unlockType) {
+      case ReactionUnlockType.free:
+        return true;
+      case ReactionUnlockType.virtue:
+        return unlockedItems.contains(purchaseKey);
+      case ReactionUnlockType.subscription:
+        return isSubscriber;
+    }
+  }
 
   Color get rarityColor {
     switch (rarity) {

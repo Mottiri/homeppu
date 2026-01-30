@@ -207,6 +207,14 @@ class _ConfirmMessages {
   String get updateRecurrenceTitle => '繰り返し設定の変更';
   String get updateNotificationTitle => '通知設定の変更';
 
+  // 徳ポイント・サブスク購入
+  String get purchaseVirtueTitle => '徳ポイント購入';
+  String purchaseVirtueMessage(int cost) =>
+      'このアイテムを$cost徳ポイントで購入しますか？';
+  String get subscriptionOnlyTitle => 'サブスク限定';
+  String subscriptionOnlyMessage() =>
+      'このアイテムはサブスク課金限定のアイテムだよ！';
+
   // アカウント削除
   String get deleteAccount => '本当にアカウントを削除する？\nすべてのデータが消えちゃうよ😢';
 }
@@ -228,6 +236,8 @@ class _LabelMessages {
   String get backToHome => 'ホームへ戻る';
   String get yes => 'はい';
   String get no => 'いいえ';
+  String get purchase => '購入する';
+  String get subscribe => '詳細';
   String get done => '完了';
   String get edit => '編集';
   String get create => '作成';

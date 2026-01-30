@@ -29,6 +29,8 @@ class UserModel {
   final String? namePrefix; // 形容詞パーツのID
   final String? nameSuffix; // 名詞パーツのID
   final List<String> unlockedNameParts; // アンロック済みパーツID
+  final List<String> unlockedReactionStamps; // アンロック済みリアクションスタンプID
+  final bool isSubscriber; // サブスク加入状態
   final DateTime? lastNameChangeAt; // 最後に名前を変更した日時
   final String? fcmToken; // プッシュ通知用トークン
   final Map<String, bool> notificationSettings; // 通知設定
@@ -64,6 +66,8 @@ class UserModel {
     this.namePrefix,
     this.nameSuffix,
     this.unlockedNameParts = const [],
+    this.unlockedReactionStamps = const [],
+    this.isSubscriber = false,
     this.lastNameChangeAt,
 
     this.fcmToken,
@@ -113,6 +117,9 @@ class UserModel {
       namePrefix: data['namePrefix'],
       nameSuffix: data['nameSuffix'],
       unlockedNameParts: List<String>.from(data['unlockedNameParts'] ?? []),
+      unlockedReactionStamps:
+          List<String>.from(data['unlockedReactionStamps'] ?? []),
+      isSubscriber: data['isSubscriber'] ?? false,
       lastNameChangeAt: (data['lastNameChangeAt'] as Timestamp?)?.toDate(),
 
       fcmToken: data['fcmToken'],
@@ -158,6 +165,8 @@ class UserModel {
       'namePrefix': namePrefix,
       'nameSuffix': nameSuffix,
       'unlockedNameParts': unlockedNameParts,
+      'unlockedReactionStamps': unlockedReactionStamps,
+      'isSubscriber': isSubscriber,
       if (lastNameChangeAt != null)
         'lastNameChangeAt': Timestamp.fromDate(lastNameChangeAt!),
       'notificationSettings': notificationSettings,
@@ -196,6 +205,8 @@ class UserModel {
     String? namePrefix,
     String? nameSuffix,
     List<String>? unlockedNameParts,
+    List<String>? unlockedReactionStamps,
+    bool? isSubscriber,
     DateTime? lastNameChangeAt,
     String? fcmToken,
     Map<String, bool>? notificationSettings,
@@ -233,6 +244,9 @@ class UserModel {
       namePrefix: namePrefix ?? this.namePrefix,
       nameSuffix: nameSuffix ?? this.nameSuffix,
       unlockedNameParts: unlockedNameParts ?? this.unlockedNameParts,
+      unlockedReactionStamps:
+          unlockedReactionStamps ?? this.unlockedReactionStamps,
+      isSubscriber: isSubscriber ?? this.isSubscriber,
       lastNameChangeAt: lastNameChangeAt ?? this.lastNameChangeAt,
       fcmToken: fcmToken ?? this.fcmToken,
       notificationSettings: notificationSettings ?? this.notificationSettings,

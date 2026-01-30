@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:timeago/timeago.dart' as timeago;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -17,6 +18,7 @@ import '../../../../shared/widgets/video_player_screen.dart';
 import '../../../../shared/services/post_service.dart';
 import '../../../../shared/services/recent_reactions_service.dart';
 import '../../../../shared/services/reaction_limit_service.dart';
+import '../../../../shared/providers/auth_provider.dart';
 import 'reaction_background.dart';
 
 /// 投稿カード
@@ -691,7 +693,7 @@ class _MediaGrid extends StatelessWidget {
 }
 
 /// LINEスタイルのリアクションオーバーレイダイアログ
-class _ReactionOverlayDialog extends StatefulWidget {
+class _ReactionOverlayDialog extends ConsumerStatefulWidget {
   final String postId;
   final void Function(String reactionType) onReactionTap;
 
@@ -701,10 +703,11 @@ class _ReactionOverlayDialog extends StatefulWidget {
   });
 
   @override
-  State<_ReactionOverlayDialog> createState() => _ReactionOverlayDialogState();
+  ConsumerState<_ReactionOverlayDialog> createState() =>
+      _ReactionOverlayDialogState();
 }
 
-class _ReactionOverlayDialogState extends State<_ReactionOverlayDialog>
+class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
     with TickerProviderStateMixin {
   // バーに表示するスタンプ数
   static const _visibleCount = 5;
@@ -810,6 +813,17 @@ class _ReactionOverlayDialogState extends State<_ReactionOverlayDialog>
 
   @override
   Widget build(BuildContext context) {
+    final user = ref.watch(currentUserProvider).valueOrNull;
+    final unlockedStamps = user?.unlockedReactionStamps.toSet() ?? <String>{};
+    final isSubscriber = user?.isSubscriber ?? false;
+
+    bool isLocked(ReactionType type) {
+      return !type.isUnlocked(
+        isSubscriber: isSubscriber,
+        unlockedItems: unlockedStamps,
+      );
+    }
+
     return Stack(
       children: [
         // 背景タップで閉じる
@@ -836,9 +850,13 @@ class _ReactionOverlayDialogState extends State<_ReactionOverlayDialog>
               children: [
                 // 5つのスタンプ
                 ...List.generate(_barStamps.length, (index) {
+                  final stamp = _barStamps[index];
                   return ScaleTransition(
                     scale: _scaleAnimations[index],
-                    child: _buildStampButton(_barStamps[index]),
+                    child: _buildStampButton(
+                      stamp,
+                      isLocked: isLocked(stamp),
+                    ),
                   );
                 }),
                 // ＋アイコン
@@ -855,12 +873,13 @@ class _ReactionOverlayDialogState extends State<_ReactionOverlayDialog>
             bottom: 180,
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              children: List.generate(_extendedStamps.length, (index) {
-                return TweenAnimationBuilder<double>(
-                  tween: Tween(begin: 0.0, end: 1.0),
-                  duration: Duration(milliseconds: 300 + (index * 80)),
-                  curve: Curves.elasticOut,
-                  builder: (context, value, child) {
+                children: List.generate(_extendedStamps.length, (index) {
+                  final stamp = _extendedStamps[index];
+                  return TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0.0, end: 1.0),
+                    duration: Duration(milliseconds: 300 + (index * 80)),
+                    curve: Curves.elasticOut,
+                    builder: (context, value, child) {
                     return Transform.scale(
                       scale: value,
                       child: Opacity(
@@ -869,23 +888,105 @@ class _ReactionOverlayDialogState extends State<_ReactionOverlayDialog>
                       ),
                     );
                   },
-                  child: _buildSmallStampButton(_extendedStamps[index]),
-                );
-              }),
-            ),
+                    child: _buildSmallStampButton(
+                      stamp,
+                      isLocked: isLocked(stamp),
+                    ),
+                  );
+                }),
+              ),
           ),
       ],
     );
   }
 
-  Widget _buildStampButton(ReactionType type) {
+  void _onStampTap(ReactionType type, {required bool isLocked}) {
+    if (!isLocked) {
+      widget.onReactionTap(type.value);
+      return;
+    }
+
+    _showLockedDialog(type);
+  }
+
+  Future<void> _showLockedDialog(ReactionType type) async {
+    if (!mounted) return;
+    switch (type.unlockType) {
+      case ReactionUnlockType.free:
+        return;
+      case ReactionUnlockType.virtue:
+        final cost = type.virtueCost ?? 0;
+        await showDialog<void>(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: Text(AppMessages.confirm.purchaseVirtueTitle),
+              content: Text(AppMessages.confirm.purchaseVirtueMessage(cost)),
+              actions: [
+                SizedBox(
+                  width: double.infinity,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: Text(AppMessages.label.cancel),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: Text(AppMessages.label.purchase),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+        return;
+      case ReactionUnlockType.subscription:
+        await showDialog<void>(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: Text(AppMessages.confirm.subscriptionOnlyTitle),
+              content: Text(AppMessages.confirm.subscriptionOnlyMessage()),
+              actions: [
+                SizedBox(
+                  width: double.infinity,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: Text(AppMessages.label.cancel),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: Text(AppMessages.label.subscribe),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+        return;
+    }
+  }
+
+  Widget _buildStampButton(ReactionType type, {required bool isLocked}) {
     return GestureDetector(
-      onTap: () => widget.onReactionTap(type.value),
+      onTap: () => _onStampTap(type, isLocked: isLocked),
       child: _buildStampGlow(
         type,
         size: 56,
         emojiSize: 40,
         padding: const EdgeInsets.all(6),
+        isLocked: isLocked,
       ),
     );
   }
@@ -912,14 +1013,15 @@ class _ReactionOverlayDialogState extends State<_ReactionOverlayDialog>
     );
   }
 
-  Widget _buildSmallStampButton(ReactionType type) {
+  Widget _buildSmallStampButton(ReactionType type, {required bool isLocked}) {
     return GestureDetector(
-      onTap: () => widget.onReactionTap(type.value),
+      onTap: () => _onStampTap(type, isLocked: isLocked),
       child: _buildStampGlow(
         type,
         size: 48,
         emojiSize: 32,
         padding: const EdgeInsets.all(4),
+        isLocked: isLocked,
       ),
     );
   }
@@ -929,8 +1031,11 @@ class _ReactionOverlayDialogState extends State<_ReactionOverlayDialog>
     required double size,
     required double emojiSize,
     required EdgeInsets padding,
+    required bool isLocked,
   }) {
-    final glowColor = type.rarityColor.withValues(alpha: 0.55);
+    final glowColor = type.rarityColor.withValues(
+      alpha: isLocked ? 0.25 : 0.55,
+    );
     final glowSize = size * 1.05;
     return Container(
       padding: padding,
@@ -951,15 +1056,35 @@ class _ReactionOverlayDialogState extends State<_ReactionOverlayDialog>
               ],
             ),
           ),
-          Image.asset(
-            type.assetPath,
-            width: size,
-            height: size,
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) {
-              return Text(type.emoji, style: TextStyle(fontSize: emojiSize));
-            },
+          Opacity(
+            opacity: isLocked ? 0.5 : 1.0,
+            child: Image.asset(
+              type.assetPath,
+              width: size,
+              height: size,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) {
+                return Text(type.emoji, style: TextStyle(fontSize: emojiSize));
+              },
+            ),
           ),
+          if (isLocked)
+            Positioned(
+              right: 2,
+              bottom: 2,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.55),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.lock,
+                  size: 12,
+                  color: Colors.white,
+                ),
+              ),
+            ),
         ],
       ),
     );
