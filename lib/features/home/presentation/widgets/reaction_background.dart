@@ -167,9 +167,6 @@ class _ReactionBackgroundState extends State<ReactionBackground>
   ) {
     final random = Random(iconData.seed);
 
-    // ランダムな位置 (-10% 〜 110%)
-    final left = random.nextDouble() * parentWidth * 1.2 - (parentWidth * 0.1);
-    final top = random.nextDouble() * parentHeight * 1.2 - (parentHeight * 0.1);
 
     // ランダムな回転 (-45度 〜 +45度)
     final angle = (random.nextDouble() - 0.5) * 1.5;
@@ -177,7 +174,15 @@ class _ReactionBackgroundState extends State<ReactionBackground>
     // ランダムなサイズ (24 〜 56)
     final baseSize = 24.0 + random.nextDouble() * 32.0;
 
-    // アニメーション中かどうかチェック
+    // ???????????????????????????????
+    const padding = 4.0;
+    final maxLeft =
+        (parentWidth - baseSize - padding * 2).clamp(0.0, parentWidth);
+    final maxTop =
+        (parentHeight - baseSize - padding * 2).clamp(0.0, parentHeight);
+    final left = padding + random.nextDouble() * maxLeft;
+    final top = padding + random.nextDouble() * maxTop;
+
     final controller = _animatingIcons[iconData.animationKey];
     final isAnimating = controller != null && controller.isAnimating;
 

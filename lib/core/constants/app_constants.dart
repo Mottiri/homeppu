@@ -1,3 +1,6 @@
+import 'package:flutter/material.dart';
+import 'app_colors.dart';
+
 /// アプリ全体の定数
 class AppConstants {
   AppConstants._();
@@ -80,23 +83,49 @@ enum ReactionCategory {
   final String label;
 }
 
+/// ??????????
+enum ReactionRarity {
+  common,
+  rare, // ?????
+  epic, // ????
+}
+
+
 /// リアクションの種類（7種類のスタンプ）
 enum ReactionType {
-  heart('heart', '❤️', 'ハート', 0xFFFF6B6B),
-  praise('praise', '✨', 'すごい', 0xFFFFD93D),
-  shine('shine', '💫', 'キラキラ', 0xFF6BCB77),
-  clap('clap', '👏', '拍手', 0xFFFFDAB9),
-  star('star', '⭐', 'スター', 0xFFFFD700),
-  hundred('hundred', '💯', '100点', 0xFFFF4500),
-  rainbow('rainbow', '🌈', 'にじ', 0xFFFFB7C5);
+  heart('heart', '??', '???', 0xFFFF6B6B, ReactionRarity.common),
+  praise('praise', '??', '???', 0xFFFFD93D, ReactionRarity.common),
+  clap('clap', '??', '??', 0xFFFFDAB9, ReactionRarity.common),
+  shine('shine', '?', '????', 0xFF6BCB77, ReactionRarity.rare),
+  star('star', '?', '???', 0xFFFFD700, ReactionRarity.rare),
+  rainbow('rainbow', '??', '??', 0xFFFFB7C5, ReactionRarity.epic),
+  hundred('hundred', '??', '100?', 0xFFFF4500, ReactionRarity.epic);
 
-  const ReactionType(this.value, this.emoji, this.label, this.colorValue);
+  const ReactionType(
+    this.value,
+    this.emoji,
+    this.label,
+    this.colorValue,
+    this.rarity,
+  );
 
   final String value;
   final String emoji;
   final String label;
   final int colorValue;
+  final ReactionRarity rarity;
 
-  /// アセットパス（assets/reactions/{value}.png）
+  /// ???????assets/reactions/{value}.png?
   String get assetPath => 'assets/reactions/$value.png';
+
+  Color get rarityColor {
+    switch (rarity) {
+      case ReactionRarity.common:
+        return AppColors.rarityCommon;
+      case ReactionRarity.rare:
+        return AppColors.rarityRare;
+      case ReactionRarity.epic:
+        return AppColors.rarityEpic;
+    }
+  }
 }

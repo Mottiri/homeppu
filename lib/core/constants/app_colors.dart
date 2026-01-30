@@ -41,6 +41,11 @@ class AppColors {
   static const Color virtue = Color(0xFFB794F4); // 徳ポイント
   static const Color comment = Color(0xFF4DB6AC); // コメント（ティール）
 
+  // レア度カラー（枠色用）
+  static const Color rarityCommon = Color(0xFFB0BEC5);
+  static const Color rarityRare = Color(0xFF64B5F6);
+  static const Color rarityEpic = Color(0xFF9575CD);
+
   // システムカラー
   static const Color success = Color(0xFF81C784);
   static const Color warning = Color(0xFFFFB74D);

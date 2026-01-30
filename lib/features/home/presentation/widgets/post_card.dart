@@ -881,17 +881,11 @@ class _ReactionOverlayDialogState extends State<_ReactionOverlayDialog>
   Widget _buildStampButton(ReactionType type) {
     return GestureDetector(
       onTap: () => widget.onReactionTap(type.value),
-      child: Container(
+      child: _buildStampGlow(
+        type,
+        size: 56,
+        emojiSize: 40,
         padding: const EdgeInsets.all(6),
-        child: Image.asset(
-          type.assetPath,
-          width: 56,
-          height: 56,
-          fit: BoxFit.contain,
-          errorBuilder: (context, error, stackTrace) {
-            return Text(type.emoji, style: const TextStyle(fontSize: 40));
-          },
-        ),
       ),
     );
   }
@@ -921,17 +915,52 @@ class _ReactionOverlayDialogState extends State<_ReactionOverlayDialog>
   Widget _buildSmallStampButton(ReactionType type) {
     return GestureDetector(
       onTap: () => widget.onReactionTap(type.value),
-      child: Container(
+      child: _buildStampGlow(
+        type,
+        size: 48,
+        emojiSize: 32,
         padding: const EdgeInsets.all(4),
-        child: Image.asset(
-          type.assetPath,
-          width: 48,
-          height: 48,
-          fit: BoxFit.contain,
-          errorBuilder: (context, error, stackTrace) {
-            return Text(type.emoji, style: const TextStyle(fontSize: 32));
-          },
-        ),
+      ),
+    );
+  }
+
+  Widget _buildStampGlow(
+    ReactionType type, {
+    required double size,
+    required double emojiSize,
+    required EdgeInsets padding,
+  }) {
+    final glowColor = type.rarityColor.withValues(alpha: 0.55);
+    final glowSize = size * 1.05;
+    return Container(
+      padding: padding,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: glowSize,
+            height: glowSize,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: glowColor,
+                  blurRadius: 8,
+                  spreadRadius: 0,
+                ),
+              ],
+            ),
+          ),
+          Image.asset(
+            type.assetPath,
+            width: size,
+            height: size,
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) {
+              return Text(type.emoji, style: TextStyle(fontSize: emojiSize));
+            },
+          ),
+        ],
       ),
     );
   }
