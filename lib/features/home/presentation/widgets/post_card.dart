@@ -25,7 +25,7 @@ import '../../../../shared/services/virtue_shop_service.dart';
 import 'reaction_background.dart';
 
 /// 投稿カード
-class PostCard extends StatefulWidget {
+class PostCard extends ConsumerStatefulWidget {
   final PostModel post;
   final VoidCallback? onDeleted;
   final bool isCircleOwner; // サークルオーナーかどうか
@@ -42,10 +42,10 @@ class PostCard extends StatefulWidget {
   });
 
   @override
-  State<PostCard> createState() => _PostCardState();
+  ConsumerState<PostCard> createState() => _PostCardState();
 }
 
-class _PostCardState extends State<PostCard> {
+class _PostCardState extends ConsumerState<PostCard> {
   bool _isDeleting = false;
   bool _isNavigating = false; // ナビゲーション中フラグ（ダブルタップ防止）
   late Map<String, int> _localReactions; // ローカルでリアクション数を管理
@@ -138,21 +138,25 @@ class _PostCardState extends State<PostCard> {
       return;
     }
 
+    final isAdmin = await ref.read(isAdminProvider.future);
+    int? remaining;
     // この投稿へのリアクション回数をチェック
-    final canReact = await ReactionLimitService.canReact(post.id);
-    if (!canReact) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppMessages.error.reactionLimitReached),
-            duration: Duration(seconds: 2),
-          ),
-        );
+    if (!isAdmin) {
+      final canReact = await ReactionLimitService.canReact(post.id);
+      if (!canReact) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(AppMessages.error.reactionLimitReached),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
       }
-      return;
-    }
 
-    final remaining = await ReactionLimitService.getRemainingReactions(post.id);
+      remaining = await ReactionLimitService.getRemainingReactions(post.id);
+    }
 
     if (!mounted) return;
 
@@ -168,16 +172,18 @@ class _PostCardState extends State<PostCard> {
               postId: post.id,
               onReactionTap: (reactionType) async {
                 // 残り回数チェック
-                final currentRemaining = remaining - sessionCount;
-                if (currentRemaining <= 0) {
-                  Navigator.of(dialogContext).pop();
-                  ScaffoldMessenger.of(this.context).showSnackBar(
-                    SnackBar(
-                      content: Text(AppMessages.error.reactionLimitReached),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                  return;
+                if (!isAdmin) {
+                  final currentRemaining = remaining! - sessionCount;
+                  if (currentRemaining <= 0) {
+                    Navigator.of(dialogContext).pop();
+                    ScaffoldMessenger.of(this.context).showSnackBar(
+                      SnackBar(
+                        content: Text(AppMessages.error.reactionLimitReached),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                    return;
+                  }
                 }
 
                 // awaitの前にscaffoldMessengerとnavigatorを取得
@@ -187,18 +193,20 @@ class _PostCardState extends State<PostCard> {
                 _addReaction(reactionType);
                 _sendReactionToServer(reactionType);
                 RecentReactionsService.addReaction(reactionType);
-                await ReactionLimitService.incrementReactionCount(post.id);
-                sessionCount++;
+                if (!isAdmin) {
+                  await ReactionLimitService.incrementReactionCount(post.id);
+                  sessionCount++;
 
-                // 残り0回でダイアログを閉じる
-                if (remaining - sessionCount <= 0) {
-                  navigator.pop();
-                  scaffoldMessenger.showSnackBar(
-                    SnackBar(
-                      content: Text(AppMessages.error.reactionLimitReached),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
+                  // 残り0回でダイアログを閉じる
+                  if (remaining! - sessionCount <= 0) {
+                    navigator.pop();
+                    scaffoldMessenger.showSnackBar(
+                      SnackBar(
+                        content: Text(AppMessages.error.reactionLimitReached),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  }
                 }
               },
             );
