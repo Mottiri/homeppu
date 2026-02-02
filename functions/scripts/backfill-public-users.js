@@ -23,6 +23,7 @@ function buildPublicUserData(data) {
     displayName: data.displayName || "",
     bio: data.bio || null,
     avatarIndex: data.avatarIndex || 0,
+    avatarParts: data.avatarParts || null,
     postMode: data.postMode || "ai",
     isAI: data.isAI || false,
     totalPosts: data.totalPosts || 0,

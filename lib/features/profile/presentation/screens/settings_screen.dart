@@ -15,7 +15,9 @@ import '../../../../core/constants/app_messages.dart';
 import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../core/utils/dialog_helper.dart';
 import '../../../../shared/providers/auth_provider.dart';
-import '../../../../shared/widgets/avatar_selector.dart';
+import '../../../../shared/widgets/avatar_parts_selector.dart';
+import '../../../../shared/models/avatar_parts_model.dart';
+import '../../../../core/constants/avatar_assets.dart';
 import '../../../../shared/services/inquiry_service.dart';
 import '../../../../shared/services/nsfw_detector_service.dart';
 import '../../../../shared/services/color_extraction_service.dart';
@@ -46,6 +48,8 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _bioController = TextEditingController();
   int _selectedAvatarIndex = 0;
+  AvatarParts? _avatarParts;
+  bool _avatarPartsDirty = false;
   bool _isLoading = false;
   bool _hasChanges = false;
   bool _isUploadingHeader = false;
@@ -61,6 +65,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (user != null) {
       _bioController.text = user.bio ?? '';
       _selectedAvatarIndex = user.avatarIndex;
+      _avatarParts = user.avatarParts ?? AvatarAssets.defaultParts();
+      _avatarPartsDirty = false;
     }
   }
 
@@ -295,6 +301,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         displayName: user.displayName, // 現在の名前を維持
         bio: _bioController.text.trim(),
         avatarIndex: _selectedAvatarIndex,
+        avatarParts: _avatarPartsDirty ? _avatarParts : null,
       );
 
       if (mounted) {
@@ -366,17 +373,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
                     // アバター
                     Center(
-                      child: AvatarSelector(
-                        selectedIndex: _selectedAvatarIndex,
-                        onSelected: (index) {
+                      child: AvatarPartsSelector(
+                        parts: _avatarParts ?? AvatarAssets.defaultParts(),
+                        onChanged: (parts) {
                           setState(() {
-                            _selectedAvatarIndex = index;
+                            _avatarParts = parts;
+                            _avatarPartsDirty = true;
                             _hasChanges = true;
                           });
                         },
-                        size: 70,
+                        previewSize: 96,
                       ),
                     ),
+
 
                     const SizedBox(height: 24),
 

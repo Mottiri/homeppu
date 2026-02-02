@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/user_model.dart';
+import '../models/avatar_parts_model.dart';
 import '../../core/constants/app_constants.dart';
 
 /// FirebaseAuthインスタンス
@@ -168,6 +169,7 @@ class AuthService {
     String? displayName,
     String? bio,
     int? avatarIndex,
+    AvatarParts? avatarParts,
     String? postMode,
     Map<String, bool>? notificationSettings,
     Map<String, bool>? autoPostSettings,
@@ -177,6 +179,7 @@ class AuthService {
     if (displayName != null) updates['displayName'] = displayName;
     if (bio != null) updates['bio'] = bio;
     if (avatarIndex != null) updates['avatarIndex'] = avatarIndex;
+    if (avatarParts != null) updates['avatarParts'] = avatarParts.toMap();
     if (postMode != null) updates['postMode'] = postMode;
     if (notificationSettings != null) {
       updates['notificationSettings'] = notificationSettings;

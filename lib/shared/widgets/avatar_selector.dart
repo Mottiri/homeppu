@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../models/avatar_parts_model.dart';
+import 'avatar_parts_widget.dart';
 
 /// プリセットアバターのリスト
 const List<String> presetAvatars = [
@@ -120,16 +122,28 @@ class AvatarWidget extends StatelessWidget {
   final int avatarIndex;
   final double size;
   final Color? backgroundColor;
+  final AvatarParts? avatarParts;
+  final BorderRadius? borderRadius;
 
   const AvatarWidget({
     super.key,
     required this.avatarIndex,
     this.size = 40,
     this.backgroundColor,
+    this.avatarParts,
+    this.borderRadius,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (avatarParts != null) {
+      return AvatarPartsWidget(
+        parts: avatarParts!,
+        size: size,
+        backgroundColor: backgroundColor,
+        borderRadius: borderRadius,
+      );
+    }
     final safeIndex = avatarIndex.clamp(0, presetAvatars.length - 1);
 
     return Container(

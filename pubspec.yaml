@@ -93,6 +93,11 @@ flutter:
     - assets/images/headers/
     - assets/icons/
     - assets/avatars/
+    - assets/avatars/base/
+    - assets/avatars/hair/
+    - assets/avatars/eyes/
+    - assets/avatars/mouth/
+    - assets/avatars/eyebrows/
     - assets/reactions/
   
   # フォントはGoogle Fontsパッケージで動的に読み込み

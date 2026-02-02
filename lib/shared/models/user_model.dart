@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'ban_record_model.dart';
+import 'avatar_parts_model.dart';
 
 /// ユーザーモデル
 class UserModel {
@@ -7,7 +8,8 @@ class UserModel {
   final String email;
   final String displayName;
   final String? bio;
-  final int avatarIndex; // プリセットアバターのインデックス
+  final int avatarIndex;
+  final AvatarParts? avatarParts; // プリセットアバターのインデックス
   final String postMode; // 'ai', 'mix', 'human'
   final int virtue; // 徳ポイント
   final bool isAI; // AIアカウントかどうか
@@ -46,6 +48,7 @@ class UserModel {
     required this.displayName,
     this.bio,
     this.avatarIndex = 0,
+    this.avatarParts,
     this.postMode = 'ai', // デフォルトはAIモード（安心スタート）
     this.virtue = 100,
     this.isAI = false,
@@ -96,6 +99,7 @@ class UserModel {
       displayName: data['displayName'] ?? 'ゲスト',
       bio: data['bio'],
       avatarIndex: data['avatarIndex'] ?? 0,
+      avatarParts: AvatarParts.fromMap(data['avatarParts']),
       postMode: data['postMode'] ?? 'ai', // デフォルトはAIモード
       virtue: data['virtue'] ?? 100,
       isAI: data['isAI'] ?? false,
@@ -142,6 +146,7 @@ class UserModel {
       'displayName': displayName,
       'bio': bio,
       'avatarIndex': avatarIndex,
+      if (avatarParts != null) 'avatarParts': avatarParts!.toMap(),
       'postMode': postMode,
       'virtue': virtue,
       'isAI': isAI,
@@ -185,6 +190,7 @@ class UserModel {
     String? displayName,
     String? bio,
     int? avatarIndex,
+    AvatarParts? avatarParts,
     String? postMode,
     int? virtue,
     bool? isAI,
@@ -222,6 +228,7 @@ class UserModel {
       displayName: displayName ?? this.displayName,
       bio: bio ?? this.bio,
       avatarIndex: avatarIndex ?? this.avatarIndex,
+      avatarParts: avatarParts ?? this.avatarParts,
       postMode: postMode ?? this.postMode,
       virtue: virtue ?? this.virtue,
       isAI: isAI ?? this.isAI,

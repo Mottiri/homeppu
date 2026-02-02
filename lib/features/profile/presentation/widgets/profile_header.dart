@@ -136,7 +136,9 @@ class ProfileHeader extends StatelessWidget {
                       ),
                       child: AvatarWidget(
                         avatarIndex: user.avatarIndex,
+                        avatarParts: user.avatarParts,
                         size: 100,
+                        borderRadius: BorderRadius.circular(22),
                       ),
                     ),
                   ),

@@ -60,7 +60,12 @@ class ProfileFollowingUserItem extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                AvatarWidget(avatarIndex: user.avatarIndex, size: 56),
+                AvatarWidget(
+                  avatarIndex: user.avatarIndex,
+                  avatarParts: user.avatarParts,
+                  size: 56,
+                  borderRadius: BorderRadius.circular(14),
+                ),
                 const SizedBox(height: 8),
                 Text(
                   user.displayName,
