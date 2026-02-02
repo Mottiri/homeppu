@@ -30,7 +30,7 @@ class AvatarPartsSelector extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         _buildPartRow(
-          label: 'Hair',
+          label: '髪',
           ids: AvatarAssets.hairIds,
           selectedId: parts.hairId,
           buildPreviewParts: (id) => parts.copyWith(hairId: id),
@@ -38,7 +38,7 @@ class AvatarPartsSelector extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         _buildPartRow(
-          label: 'Brows',
+          label: '眉',
           ids: AvatarAssets.eyebrowsIds,
           selectedId: parts.eyebrowsId,
           buildPreviewParts: (id) => parts.copyWith(eyebrowsId: id),
@@ -46,7 +46,7 @@ class AvatarPartsSelector extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         _buildPartRow(
-          label: 'Eyes',
+          label: '目',
           ids: AvatarAssets.eyesIds,
           selectedId: parts.eyesId,
           buildPreviewParts: (id) => parts.copyWith(eyesId: id),
@@ -54,7 +54,7 @@ class AvatarPartsSelector extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         _buildPartRow(
-          label: 'Mouth',
+          label: '口',
           ids: AvatarAssets.mouthIds,
           selectedId: parts.mouthId,
           buildPreviewParts: (id) => parts.copyWith(mouthId: id),

@@ -114,7 +114,7 @@ class ProfileHeader extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.all(5),
                     decoration: BoxDecoration(
-                      shape: BoxShape.circle,
+                      borderRadius: BorderRadius.circular(28),
                       gradient: LinearGradient(
                         colors: [primaryAccent, secondaryAccent],
                         begin: Alignment.topLeft,
@@ -130,8 +130,8 @@ class ProfileHeader extends StatelessWidget {
                     ),
                     child: Container(
                       padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(24),
                         color: Colors.white,
                       ),
                       child: AvatarWidget(

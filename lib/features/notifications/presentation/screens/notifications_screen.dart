@@ -8,7 +8,7 @@ import '../../../../core/constants/app_messages.dart';
 import '../../../../shared/models/notification_model.dart';
 import '../../../../shared/repositories/notification_repository.dart';
 import '../../../../shared/providers/auth_provider.dart';
-import '../../../../shared/widgets/avatar_selector.dart';
+import '../../../../shared/widgets/public_user_avatar.dart';
 
 class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
@@ -246,7 +246,8 @@ class _NotificationTile extends ConsumerWidget {
             context.push('/profile/${notification.senderId}');
           }
         },
-        child: AvatarWidget(
+        child: PublicUserAvatar(
+          userId: notification.senderId,
           avatarIndex: int.tryParse(notification.senderAvatarUrl) ?? 0,
           size: 40,
         ),

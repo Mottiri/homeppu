@@ -15,7 +15,7 @@ import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/providers/moderation_provider.dart';
 import '../../../../shared/services/moderation_service.dart';
 import '../../../../shared/services/circle_service.dart';
-import '../../../../shared/widgets/avatar_selector.dart';
+import '../../../../shared/widgets/public_user_avatar.dart';
 import '../../../../shared/widgets/report_dialog.dart';
 
 import '../../../home/presentation/widgets/post_card.dart';
@@ -471,7 +471,11 @@ class _CommentTile extends StatelessWidget {
           // アバター（タップでプロフィールへ）
           GestureDetector(
             onTap: () => _navigateToProfile(context),
-            child: AvatarWidget(avatarIndex: comment.userAvatarIndex, size: 36),
+            child: PublicUserAvatar(
+              userId: comment.userId,
+              avatarIndex: comment.userAvatarIndex,
+              size: 36,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(

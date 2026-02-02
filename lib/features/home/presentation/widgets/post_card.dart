@@ -12,7 +12,7 @@ import '../../../../core/constants/app_messages.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../shared/models/post_model.dart';
-import '../../../../shared/widgets/avatar_selector.dart';
+import '../../../../shared/widgets/public_user_avatar.dart';
 import '../../../../shared/widgets/report_dialog.dart';
 import '../../../../shared/widgets/video_player_screen.dart';
 import '../../../../shared/services/post_service.dart';
@@ -274,7 +274,8 @@ class _PostCardState extends ConsumerState<PostCard> {
                           await context.push('/profile/${post.userId}');
                           if (mounted) _isNavigating = false;
                         },
-                        child: AvatarWidget(
+                        child: PublicUserAvatar(
+                          userId: post.userId,
                           avatarIndex: post.userAvatarIndex,
                           size: 44,
                         ),

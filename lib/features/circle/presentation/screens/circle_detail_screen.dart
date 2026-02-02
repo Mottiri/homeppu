@@ -9,6 +9,7 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../shared/models/circle_model.dart';
 import '../../../../shared/models/post_model.dart';
 import '../../../../shared/providers/auth_provider.dart';
+import '../../../../shared/providers/public_user_provider.dart';
 import '../../../../shared/services/circle_service.dart';
 import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../core/utils/dialog_helper.dart';
@@ -95,7 +96,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
   }
 
   /// 投稿リストを読み込み
-  Future<void> _loadPosts() async {
+  Future<void> _loadPosts({bool invalidateAvatarCache = false}) async {
     setState(() => _isLoadingPosts = true);
 
     try {
@@ -110,6 +111,13 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
       final posts = snapshot.docs
           .map((doc) => PostModel.fromFirestore(doc))
           .toList();
+
+      if (invalidateAvatarCache) {
+        final userIds = posts.map((post) => post.userId).toSet();
+        for (final userId in userIds) {
+          ref.invalidate(publicUserAvatarPartsProvider(userId));
+        }
+      }
 
       if (mounted) {
         setState(() {
@@ -135,6 +143,8 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
   }
 
   /// スクロール可能かを再評価
+  Future<void> _refreshPosts() => _loadPosts(invalidateAvatarCache: true);
+
   void _updateScrollable() {
     if (!mounted) return;
     final scrollable =
@@ -766,7 +776,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
             hasMore: _hasMorePosts,
             onLoadMore: _loadMorePosts,
             child: RefreshIndicator(
-              onRefresh: _loadPosts,
+              onRefresh: _refreshPosts,
               color: AppColors.primary,
               child: CustomScrollView(
                 controller: _scrollController,

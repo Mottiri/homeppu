@@ -1,0 +1,4 @@
+root = true
+
+[*.md]
+charset = utf-8

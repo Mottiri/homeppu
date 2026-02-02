@@ -10,6 +10,7 @@ import '../../../../core/utils/dialog_helper.dart';
 import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/services/circle_service.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
+import '../../../../shared/models/avatar_parts_model.dart';
 
 class JoinRequestsScreen extends ConsumerWidget {
   final String circleId;
@@ -125,7 +126,7 @@ class _JoinRequestCardState extends State<_JoinRequestCard>
       final doc = await FirebaseFirestore.instance
           .collection('publicUsers')
           .doc(userId)
-          .get();
+          .get(const GetOptions(source: Source.serverAndCache));
       if (doc.exists && mounted) {
         setState(() {
           _userInfo = doc.data();
@@ -222,6 +223,8 @@ class _JoinRequestCardState extends State<_JoinRequestCard>
               onTap: () => _navigateToProfile(context),
               child: AvatarWidget(
                 avatarIndex: _userInfo?['avatarIndex'] ?? 0,
+                avatarParts: AvatarParts.fromMap(_userInfo?['avatarParts']),
+                borderRadius: BorderRadius.circular(14),
                 size: 48,
               ),
             ),

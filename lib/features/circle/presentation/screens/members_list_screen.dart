@@ -6,6 +6,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_messages.dart';
 import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
+import '../../../../shared/models/avatar_parts_model.dart';
 import '../../../../shared/services/circle_service.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/models/circle_model.dart';
@@ -80,7 +81,7 @@ class MembersListScreen extends ConsumerWidget {
                 future: FirebaseFirestore.instance
                     .collection('publicUsers')
                     .doc(memberId)
-                    .get(),
+                    .get(const GetOptions(source: Source.serverAndCache)),
                 builder: (context, snapshot) {
                   if (!snapshot.hasData) {
                     return _buildLoadingCard();
@@ -90,8 +91,18 @@ class MembersListScreen extends ConsumerWidget {
                       snapshot.data!.data() as Map<String, dynamic>?;
                   if (userData == null) return const SizedBox.shrink();
 
-                  final displayName = userData['displayName'] ?? 'ユーザー';
-                  final avatarIndex = userData['avatarIndex'] ?? 0;
+                  final currentUser =
+                      ref.watch(currentUserProvider).valueOrNull;
+                  final isSelf = currentUser?.uid == memberId;
+                  final displayName = isSelf
+                      ? (currentUser?.displayName ?? userData['displayName'])
+                      : (userData['displayName'] ?? 'User');
+                  final avatarIndex = isSelf
+                      ? (currentUser?.avatarIndex ?? userData['avatarIndex'] ?? 0)
+                      : (userData['avatarIndex'] ?? 0);
+                  final avatarParts = isSelf
+                      ? currentUser?.avatarParts
+                      : AvatarParts.fromMap(userData['avatarParts']);
 
                   return _buildMemberCard(
                     context,
@@ -99,6 +110,7 @@ class MembersListScreen extends ConsumerWidget {
                     memberId: memberId,
                     displayName: displayName,
                     avatarIndex: avatarIndex,
+                    avatarParts: avatarParts,
                     isOwner: isOwner,
                     isSubOwner: isSubOwner,
                     canAppoint: isCurrentUserOwner && !isOwner && !isSubOwner,
@@ -152,6 +164,7 @@ class MembersListScreen extends ConsumerWidget {
     required String memberId,
     required String displayName,
     required int avatarIndex,
+    AvatarParts? avatarParts,
     required bool isOwner,
     required bool isSubOwner,
     required bool canAppoint,
@@ -176,7 +189,12 @@ class MembersListScreen extends ConsumerWidget {
         ),
         child: Row(
           children: [
-            AvatarWidget(avatarIndex: avatarIndex, size: 48),
+            AvatarWidget(
+              avatarIndex: avatarIndex,
+              avatarParts: avatarParts,
+              borderRadius: BorderRadius.circular(14),
+              size: 48,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(

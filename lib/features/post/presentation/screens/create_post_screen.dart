@@ -377,6 +377,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                           children: [
                             AvatarWidget(
                               avatarIndex: user.avatarIndex,
+                              avatarParts: user.avatarParts,
                               size: 48,
                             ),
                             const SizedBox(width: 12),

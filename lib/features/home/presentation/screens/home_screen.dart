@@ -10,6 +10,7 @@ import '../../../../shared/models/post_model.dart';
 import '../../../../shared/models/user_model.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/repositories/notification_repository.dart';
+import '../../../../shared/providers/public_user_provider.dart';
 import '../widgets/post_card.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../shared/widgets/infinite_scroll_listener.dart';
@@ -322,7 +323,7 @@ class _TimelineTab extends StatelessWidget {
 }
 
 /// 投稿リスト（プル更新方式 + 無限スクロール）
-class _PostsList extends StatefulWidget {
+class _PostsList extends ConsumerStatefulWidget {
   final Query query;
   final bool isAIViewer;
   final String? currentUserId;
@@ -336,10 +337,10 @@ class _PostsList extends StatefulWidget {
   });
 
   @override
-  State<_PostsList> createState() => _PostsListState();
+  ConsumerState<_PostsList> createState() => _PostsListState();
 }
 
-class _PostsListState extends State<_PostsList> {
+class _PostsListState extends ConsumerState<_PostsList> {
   List<PostModel> _posts = [];
   DocumentSnapshot? _lastDocument;
   bool _hasMore = true;
@@ -364,7 +365,7 @@ class _PostsListState extends State<_PostsList> {
   }
 
   /// 初回読み込み & プルダウン時の読み込み
-  Future<void> _loadPosts() async {
+  Future<void> _loadPosts({bool invalidateAvatarCache = false}) async {
     setState(() {
       _isLoading = true;
       _hasError = false;
@@ -389,6 +390,13 @@ class _PostsListState extends State<_PostsList> {
             .toList();
       }
 
+      if (invalidateAvatarCache) {
+        final userIds = posts.map((post) => post.userId).toSet();
+        for (final userId in userIds) {
+          ref.invalidate(publicUserAvatarPartsProvider(userId));
+        }
+      }
+
       setState(() {
         _posts = posts;
         _lastDocument = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
@@ -405,6 +413,8 @@ class _PostsListState extends State<_PostsList> {
   }
 
   /// 追加読み込み（無限スクロール）
+  Future<void> _refreshPosts() => _loadPosts(invalidateAvatarCache: true);
+
   Future<void> _loadMorePosts() async {
     if (!_hasMore || _isLoadingMore || _lastDocument == null) return;
 
@@ -481,7 +491,7 @@ class _PostsListState extends State<_PostsList> {
 
     if (_posts.isEmpty) {
       return RefreshIndicator(
-        onRefresh: _loadPosts,
+        onRefresh: _refreshPosts,
         color: AppColors.primary,
         child: ListView(
           children: [
@@ -516,7 +526,7 @@ class _PostsListState extends State<_PostsList> {
       hasMore: _hasMore,
       onLoadMore: _loadMorePosts,
       child: RefreshIndicator(
-        onRefresh: _loadPosts,
+        onRefresh: _refreshPosts,
         color: AppColors.primary,
         child: ListView.builder(
           primary: false,
