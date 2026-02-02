@@ -196,65 +196,65 @@ export interface NamePart {
   id: string;
   text: string;
   category: string;
-  rarity: "normal" | "rare" | "super_rare" | "ultra_rare";
+  rarity: "common" | "rare" | "epic";
   order: number;
 }
 
 // 形容詞パーツ（前半）のマスタデータ
 export const PREFIX_PARTS: NamePart[] = [
   // ポジティブ系（ノーマル）
-  { id: "pre_01", text: "がんばる", category: "positive", rarity: "normal", order: 1 },
-  { id: "pre_02", text: "キラキラ", category: "positive", rarity: "normal", order: 2 },
-  { id: "pre_03", text: "全力", category: "positive", rarity: "normal", order: 3 },
-  { id: "pre_04", text: "輝く", category: "positive", rarity: "normal", order: 4 },
-  { id: "pre_05", text: "前向き", category: "positive", rarity: "normal", order: 5 },
+  { id: "pre_01", text: "がんばる", category: "positive", rarity: "common", order: 1 },
+  { id: "pre_02", text: "キラキラ", category: "positive", rarity: "common", order: 2 },
+  { id: "pre_03", text: "全力", category: "positive", rarity: "common", order: 3 },
+  { id: "pre_04", text: "輝く", category: "positive", rarity: "common", order: 4 },
+  { id: "pre_05", text: "前向き", category: "positive", rarity: "common", order: 5 },
   // ゆるい系（ノーマル）
-  { id: "pre_06", text: "のんびり", category: "relaxed", rarity: "normal", order: 6 },
-  { id: "pre_07", text: "まったり", category: "relaxed", rarity: "normal", order: 7 },
-  { id: "pre_08", text: "ゆるふわ", category: "relaxed", rarity: "normal", order: 8 },
-  { id: "pre_09", text: "ぼちぼち", category: "relaxed", rarity: "normal", order: 9 },
-  { id: "pre_10", text: "ほのぼの", category: "relaxed", rarity: "normal", order: 10 },
+  { id: "pre_06", text: "のんびり", category: "relaxed", rarity: "common", order: 6 },
+  { id: "pre_07", text: "まったり", category: "relaxed", rarity: "common", order: 7 },
+  { id: "pre_08", text: "ゆるふわ", category: "relaxed", rarity: "common", order: 8 },
+  { id: "pre_09", text: "ぼちぼち", category: "relaxed", rarity: "common", order: 9 },
+  { id: "pre_10", text: "ほのぼの", category: "relaxed", rarity: "common", order: 10 },
   // 努力系（ノーマル）
-  { id: "pre_11", text: "コツコツ", category: "effort", rarity: "normal", order: 11 },
-  { id: "pre_12", text: "もくもく", category: "effort", rarity: "normal", order: 12 },
-  { id: "pre_13", text: "ひたむき", category: "effort", rarity: "normal", order: 13 },
-  { id: "pre_14", text: "地道な", category: "effort", rarity: "normal", order: 14 },
+  { id: "pre_11", text: "コツコツ", category: "effort", rarity: "common", order: 11 },
+  { id: "pre_12", text: "もくもく", category: "effort", rarity: "common", order: 12 },
+  { id: "pre_13", text: "ひたむき", category: "effort", rarity: "common", order: 13 },
+  { id: "pre_14", text: "地道な", category: "effort", rarity: "common", order: 14 },
   // 動物っぽい系（レア）
   { id: "pre_15", text: "もふもふ", category: "animal", rarity: "rare", order: 15 },
   { id: "pre_16", text: "ぴょんぴょん", category: "animal", rarity: "rare", order: 16 },
   { id: "pre_17", text: "わんわん", category: "animal", rarity: "rare", order: 17 },
   { id: "pre_18", text: "にゃんにゃん", category: "animal", rarity: "rare", order: 18 },
   // おもしろ系（スーパーレア）
-  { id: "pre_19", text: "伝説の", category: "funny", rarity: "super_rare", order: 19 },
-  { id: "pre_20", text: "覚醒した", category: "funny", rarity: "super_rare", order: 20 },
-  { id: "pre_21", text: "無敵の", category: "funny", rarity: "super_rare", order: 21 },
-  { id: "pre_22", text: "最強の", category: "funny", rarity: "super_rare", order: 22 },
+  { id: "pre_19", text: "伝説の", category: "funny", rarity: "epic", order: 19 },
+  { id: "pre_20", text: "覚醒した", category: "funny", rarity: "epic", order: 20 },
+  { id: "pre_21", text: "無敵の", category: "funny", rarity: "epic", order: 21 },
+  { id: "pre_22", text: "最強の", category: "funny", rarity: "epic", order: 22 },
   // ウルトラレア
-  { id: "pre_23", text: "神に愛された", category: "legendary", rarity: "ultra_rare", order: 23 },
-  { id: "pre_24", text: "運命の", category: "legendary", rarity: "ultra_rare", order: 24 },
-  { id: "pre_25", text: "永遠の", category: "legendary", rarity: "ultra_rare", order: 25 },
+  { id: "pre_23", text: "神に愛された", category: "legendary", rarity: "epic", order: 23 },
+  { id: "pre_24", text: "運命の", category: "legendary", rarity: "epic", order: 24 },
+  { id: "pre_25", text: "永遠の", category: "legendary", rarity: "epic", order: 25 },
 ];
 
 // 名詞パーツ（後半）のマスタデータ
 export const SUFFIX_PARTS: NamePart[] = [
   // 動物（ノーマル）
-  { id: "suf_01", text: "🐰うさぎ", category: "animal", rarity: "normal", order: 1 },
-  { id: "suf_02", text: "🐱ねこ", category: "animal", rarity: "normal", order: 2 },
-  { id: "suf_03", text: "🐶いぬ", category: "animal", rarity: "normal", order: 3 },
-  { id: "suf_04", text: "🐼パンダ", category: "animal", rarity: "normal", order: 4 },
-  { id: "suf_05", text: "🐻くま", category: "animal", rarity: "normal", order: 5 },
-  { id: "suf_06", text: "🐢かめ", category: "animal", rarity: "normal", order: 6 },
+  { id: "suf_01", text: "🐰うさぎ", category: "animal", rarity: "common", order: 1 },
+  { id: "suf_02", text: "🐱ねこ", category: "animal", rarity: "common", order: 2 },
+  { id: "suf_03", text: "🐶いぬ", category: "animal", rarity: "common", order: 3 },
+  { id: "suf_04", text: "🐼パンダ", category: "animal", rarity: "common", order: 4 },
+  { id: "suf_05", text: "🐻くま", category: "animal", rarity: "common", order: 5 },
+  { id: "suf_06", text: "🐢かめ", category: "animal", rarity: "common", order: 6 },
   // 自然（ノーマル）
-  { id: "suf_07", text: "🌸さくら", category: "nature", rarity: "normal", order: 7 },
-  { id: "suf_08", text: "🌻ひまわり", category: "nature", rarity: "normal", order: 8 },
-  { id: "suf_09", text: "⭐ほし", category: "nature", rarity: "normal", order: 9 },
-  { id: "suf_10", text: "🌙つき", category: "nature", rarity: "normal", order: 10 },
-  { id: "suf_11", text: "☀️たいよう", category: "nature", rarity: "normal", order: 11 },
+  { id: "suf_07", text: "🌸さくら", category: "nature", rarity: "common", order: 7 },
+  { id: "suf_08", text: "🌻ひまわり", category: "nature", rarity: "common", order: 8 },
+  { id: "suf_09", text: "⭐ほし", category: "nature", rarity: "common", order: 9 },
+  { id: "suf_10", text: "🌙つき", category: "nature", rarity: "common", order: 10 },
+  { id: "suf_11", text: "☀️たいよう", category: "nature", rarity: "common", order: 11 },
   // 食べ物（ノーマル）
-  { id: "suf_12", text: "🍙おにぎり", category: "food", rarity: "normal", order: 12 },
-  { id: "suf_13", text: "🍩ドーナツ", category: "food", rarity: "normal", order: 13 },
-  { id: "suf_14", text: "🍮プリン", category: "food", rarity: "normal", order: 14 },
-  { id: "suf_15", text: "🍰ケーキ", category: "food", rarity: "normal", order: 15 },
+  { id: "suf_12", text: "🍙おにぎり", category: "food", rarity: "common", order: 12 },
+  { id: "suf_13", text: "🍩ドーナツ", category: "food", rarity: "common", order: 13 },
+  { id: "suf_14", text: "🍮プリン", category: "food", rarity: "common", order: 14 },
+  { id: "suf_15", text: "🍰ケーキ", category: "food", rarity: "common", order: 15 },
   // 職業風（レア）
   { id: "suf_16", text: "チャレンジャー", category: "occupation", rarity: "rare", order: 16 },
   { id: "suf_17", text: "ファイター", category: "occupation", rarity: "rare", order: 17 },
@@ -265,15 +265,15 @@ export const SUFFIX_PARTS: NamePart[] = [
   { id: "suf_21", text: "🦁ライオン", category: "animal", rarity: "rare", order: 21 },
   { id: "suf_22", text: "🦄ユニコーン", category: "animal", rarity: "rare", order: 22 },
   // おもしろ系（スーパーレア）
-  { id: "suf_23", text: "勇者", category: "funny", rarity: "super_rare", order: 23 },
-  { id: "suf_24", text: "魔王", category: "funny", rarity: "super_rare", order: 24 },
-  { id: "suf_25", text: "賢者", category: "funny", rarity: "super_rare", order: 25 },
-  { id: "suf_26", text: "修行僧", category: "funny", rarity: "super_rare", order: 26 },
-  { id: "suf_27", text: "冒険者", category: "funny", rarity: "super_rare", order: 27 },
+  { id: "suf_23", text: "勇者", category: "funny", rarity: "epic", order: 23 },
+  { id: "suf_24", text: "魔王", category: "funny", rarity: "epic", order: 24 },
+  { id: "suf_25", text: "賢者", category: "funny", rarity: "epic", order: 25 },
+  { id: "suf_26", text: "修行僧", category: "funny", rarity: "epic", order: 26 },
+  { id: "suf_27", text: "冒険者", category: "funny", rarity: "epic", order: 27 },
   // ウルトラレア
-  { id: "suf_28", text: "🐉ドラゴン", category: "legendary", rarity: "ultra_rare", order: 28 },
-  { id: "suf_29", text: "🔥不死鳥", category: "legendary", rarity: "ultra_rare", order: 29 },
-  { id: "suf_30", text: "覇王", category: "legendary", rarity: "ultra_rare", order: 30 },
+  { id: "suf_28", text: "🐉ドラゴン", category: "legendary", rarity: "epic", order: 28 },
+  { id: "suf_29", text: "🔥不死鳥", category: "legendary", rarity: "epic", order: 29 },
+  { id: "suf_30", text: "覇王", category: "legendary", rarity: "epic", order: 30 },
 ];
 
 // AIペルソナの型定義
@@ -406,8 +406,8 @@ export const BIO_TEMPLATES: Record<string, Record<string, string[]>> = {
 };
 
 // AIが使用可能な名前パーツ（ノーマルとレアのみ、スーパーレア以上は使用不可）
-export const AI_USABLE_PREFIXES = PREFIX_PARTS.filter((p) => p.rarity === "normal" || p.rarity === "rare");
-export const AI_USABLE_SUFFIXES = SUFFIX_PARTS.filter((p) => p.rarity === "normal" || p.rarity === "rare");
+export const AI_USABLE_PREFIXES = PREFIX_PARTS.filter((p) => p.rarity === "common" || p.rarity === "rare");
+export const AI_USABLE_SUFFIXES = SUFFIX_PARTS.filter((p) => p.rarity === "common" || p.rarity === "rare");
 
 // AIペルソナを生成する関数
 export function generateAIPersona(index: number): AIPersona {

@@ -116,6 +116,7 @@ class _SuccessMessages {
 
   // 汎用
   String get saved => '保存しました';
+  String get purchaseCompleted => '購入しました';
   String get copied => 'コピーしました';
 }
 
@@ -131,6 +132,7 @@ class _ErrorMessages {
   String get permissionDenied => 'この操作はできないみたい';
   String get banned => 'アカウントが制限されているため、この操作はできません';
   String get accountSuspended => 'アカウントが停止されています';
+  String get notEnoughVirtue => '徳ポイントが足りません。';
   String get notFoundTitle => 'あれ？ページが見つからないよ';
   String get notFoundDescription => '大丈夫、ホームに戻ろう！';
 

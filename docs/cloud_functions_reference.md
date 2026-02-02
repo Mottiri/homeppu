@@ -29,6 +29,7 @@ functions/src/
 |---------|------|---------|
 | `admin.ts` | 邂｡逅・・ｩ溯・ | `setAdminRole`, `removeAdminRole`, `banUser`, `permanentBanUser`, `unbanUser`, `deleteAllAIUsers`, `cleanupOrphanedCircleAIs` |
 | `users.ts` | 繝ｦ繝ｼ繧ｶ繝ｼ讖溯・ | `followUser`, `unfollowUser`, `getFollowStatus`, `getVirtueHistory`, `getVirtueStatus` |
+| `virtue_shop.ts` | 徳ポイントショップ | `getVirtueShopConfig`, `purchaseVirtueItem` |
 | `posts.ts` | 謚慕ｨｿ菴懈・ | `createPostWithRateLimit`, `createPostWithModeration` |
 | `circles.ts` | 繧ｵ繝ｼ繧ｯ繝ｫ邂｡逅・| `deleteCircle`, `approveJoinRequest`, `rejectJoinRequest`, `sendJoinRequest` |
 | `tasks.ts` | 繧ｿ繧ｹ繧ｯ邂｡逅・| `createTask`, `getTasks` |

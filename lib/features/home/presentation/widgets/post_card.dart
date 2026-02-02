@@ -19,6 +19,9 @@ import '../../../../shared/services/post_service.dart';
 import '../../../../shared/services/recent_reactions_service.dart';
 import '../../../../shared/services/reaction_limit_service.dart';
 import '../../../../shared/providers/auth_provider.dart';
+import '../../../../shared/providers/moderation_provider.dart';
+import '../../../../shared/providers/virtue_shop_provider.dart';
+import '../../../../shared/services/virtue_shop_service.dart';
 import 'reaction_background.dart';
 
 /// 投稿カード
@@ -709,6 +712,8 @@ class _ReactionOverlayDialog extends ConsumerStatefulWidget {
 
 class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
     with TickerProviderStateMixin {
+  final _virtueShopService = VirtueShopService();
+  OverlayEntry? _toastEntry;
   // バーに表示するスタンプ数
   static const _visibleCount = 5;
 
@@ -805,17 +810,60 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
 
   @override
   void dispose() {
+    _toastEntry?.remove();
     for (final controller in _controllers) {
       controller.dispose();
     }
     super.dispose();
   }
 
+  void _showOverlayToast(String message, {bool isError = false}) {
+    _toastEntry?.remove();
+    final safeBottom = MediaQuery.of(context).viewPadding.bottom;
+    final bottom = safeBottom + 12;
+    final overlay = Overlay.of(context, rootOverlay: true);
+    if (overlay == null) return;
+
+    _toastEntry = OverlayEntry(
+      builder: (context) {
+        return Positioned(
+          left: 16,
+          right: 16,
+          bottom: bottom,
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: (isError ? AppColors.error : AppColors.success)
+                    .withValues(alpha: 0.95),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    overlay.insert(_toastEntry!);
+
+    Future.delayed(const Duration(seconds: 2), () {
+      _toastEntry?.remove();
+      _toastEntry = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    ref.watch(virtueShopConfigProvider);
     final user = ref.watch(currentUserProvider).valueOrNull;
     final unlockedStamps = user?.unlockedReactionStamps.toSet() ?? <String>{};
     final isSubscriber = user?.isSubscriber ?? false;
+    final safeBottom = MediaQuery.of(context).viewPadding.bottom;
 
     bool isLocked(ReactionType type) {
       return !type.isUnlocked(
@@ -842,7 +890,7 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
         Positioned(
           left: 16,
           right: 16,
-          bottom: 100,
+          bottom: 100 + safeBottom,
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -870,7 +918,7 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
         if (_showExtendedList)
           Positioned(
             right: 40,
-            bottom: 180,
+            bottom: 180 + safeBottom,
             child: Column(
               mainAxisSize: MainAxisSize.min,
                 children: List.generate(_extendedStamps.length, (index) {
@@ -915,32 +963,68 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
       case ReactionUnlockType.free:
         return;
       case ReactionUnlockType.virtue:
-        final cost = type.virtueCost ?? 0;
+        final config = ref.read(virtueShopConfigProvider).valueOrNull;
+        final cost = config?.costForReaction(type.value);
+        if (cost == null || cost <= 0) {
+          _showOverlayToast(
+            AppMessages.error.loadFailed('価格情報'),
+            isError: true,
+          );
+          return;
+        }
+
+        bool isProcessing = false;
         await showDialog<void>(
           context: context,
           builder: (context) {
-            return AlertDialog(
-              title: Text(AppMessages.confirm.purchaseVirtueTitle),
-              content: Text(AppMessages.confirm.purchaseVirtueMessage(cost)),
-              actions: [
-                SizedBox(
-                  width: double.infinity,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: Text(AppMessages.label.cancel),
+            return StatefulBuilder(
+              builder: (context, setDialogState) {
+                return AlertDialog(
+                  title: Text(AppMessages.confirm.purchaseVirtueTitle),
+                  content: Text(AppMessages.confirm.purchaseVirtueMessage(cost)),
+                  actions: [
+                    SizedBox(
+                      width: double.infinity,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            onPressed: isProcessing
+                                ? null
+                                : () => Navigator.of(context).pop(),
+                            child: Text(AppMessages.label.cancel),
+                          ),
+                          const SizedBox(width: 8),
+                          TextButton(
+                            onPressed: isProcessing
+                                ? null
+                                : () async {
+                                    setDialogState(() => isProcessing = true);
+                                    final success =
+                                        await _purchaseReactionStamp(type);
+                                    if (mounted && success) {
+                                      Navigator.of(context).pop();
+                                    }
+                                    if (mounted) {
+                                      setDialogState(() => isProcessing = false);
+                                    }
+                                  },
+                            child: isProcessing
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Text(AppMessages.label.purchase),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: Text(AppMessages.label.purchase),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+                    ),
+                  ],
+                );
+              },
             );
           },
         );
@@ -975,6 +1059,35 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
           },
         );
         return;
+    }
+  }
+
+  Future<bool> _purchaseReactionStamp(ReactionType type) async {
+    try {
+      await _virtueShopService.purchaseVirtueItem(
+        itemType: 'reaction_stamp',
+        itemId: type.value,
+      );
+      ref.invalidate(currentUserProvider);
+      ref.invalidate(virtueStatusProvider);
+      ref.invalidate(virtueHistoryProvider);
+      if (mounted) {
+        _showOverlayToast(AppMessages.success.purchaseCompleted);
+      }
+      return true;
+    } on FirebaseFunctionsException catch (e) {
+      if (mounted) {
+        final message = e.message == AppMessages.error.notEnoughVirtue
+            ? AppMessages.error.notEnoughVirtue
+            : AppMessages.error.general;
+        _showOverlayToast(message, isError: true);
+      }
+      return false;
+    } catch (_) {
+      if (mounted) {
+        _showOverlayToast(AppMessages.error.general, isError: true);
+      }
+      return false;
     }
   }
 

@@ -32,6 +32,7 @@ export const COLLECTIONS = {
 export const SUB_COLLECTIONS = {
     userNotifications: (userId: string) => `users/${userId}/notifications`,
     userVirtueHistory: (userId: string) => `users/${userId}/virtueHistory`,
+    userPurchases: (userId: string) => `users/${userId}/purchases`,
 } as const;
 
 // コレクション名の型

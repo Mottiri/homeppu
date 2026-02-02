@@ -1,10 +1,10 @@
-/// 名前パーツモデル
+// Name part model
 class NamePartModel {
   final String id;
   final String text;
   final String category;
-  final String rarity;  // 'normal', 'rare', 'super_rare', 'ultra_rare'
-  final String type;    // 'prefix', 'suffix'
+  final String rarity; // 'common', 'rare', 'epic'
+  final String type; // 'prefix', 'suffix'
   final int order;
   final bool unlocked;
 
@@ -19,46 +19,47 @@ class NamePartModel {
   });
 
   factory NamePartModel.fromMap(Map<String, dynamic> map) {
+    final rawRarity = map['rarity'] ?? 'common';
+    final rarity = (rawRarity == 'common' || rawRarity == 'rare' || rawRarity == 'epic')
+        ? rawRarity
+        : 'common';
     return NamePartModel(
       id: map['id'] ?? '',
       text: map['text'] ?? '',
       category: map['category'] ?? '',
-      rarity: map['rarity'] ?? 'normal',
+      rarity: rarity,
       type: map['type'] ?? 'prefix',
       order: map['order'] ?? 0,
       unlocked: map['unlocked'] ?? false,
     );
   }
 
-  /// レア度に応じた色を取得
+  bool get isCommon => rarity == 'common';
+
   int get rarityColor {
     switch (rarity) {
+      case 'common':
+        return 0xFFB0BEC5;
       case 'rare':
-        return 0xFF4FC3F7;  // 水色
-      case 'super_rare':
-        return 0xFFFFD54F;  // 金色
-      case 'ultra_rare':
-        return 0xFFE040FB;  // 紫
+        return 0xFF64B5F6;
+      case 'epic':
+        return 0xFF9575CD;
       default:
-        return 0xFF9E9E9E;  // グレー
+        return 0xFFB0BEC5;
     }
   }
 
-  /// レア度の表示名を取得
   String get rarityDisplayName {
     switch (rarity) {
       case 'rare':
         return 'レア';
-      case 'super_rare':
-        return 'スーパーレア';
-      case 'ultra_rare':
-        return 'ウルトラレア';
+      case 'epic':
+        return 'エピック';
       default:
-        return 'ノーマル';
+        return '一般';
     }
   }
 
-  /// カテゴリの表示名を取得
   String get categoryDisplayName {
     switch (category) {
       case 'positive':
@@ -80,9 +81,7 @@ class NamePartModel {
       case 'occupation':
         return '職業風';
       default:
-        return category;
+        return 'その他';
     }
   }
 }
-
-

@@ -158,10 +158,11 @@ class VirtueDetailDialog extends ConsumerWidget {
       ),
       content: SizedBox(
         width: double.maxFinite,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             // 現在の徳ポイント
             Container(
               padding: const EdgeInsets.all(16),
@@ -202,43 +203,6 @@ class VirtueDetailDialog extends ConsumerWidget {
               AppMessages.virtue.description,
               style: Theme.of(context).textTheme.bodyMedium,
             ),
-            const SizedBox(height: 8),
-            Text(
-              AppMessages.virtue.guidelines,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
-            ),
-
-            if (status.needsWarning) ...[
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.warning.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: AppColors.warning.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const Text('⚠️', style: TextStyle(fontSize: 20)),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        AppMessages.virtue.lowWarning,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.warning,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-
             const SizedBox(height: 16),
             const Divider(),
             const SizedBox(height: 8),
@@ -264,55 +228,50 @@ class VirtueDetailDialog extends ConsumerWidget {
                   );
                 }
 
-                return SizedBox(
-                  height: 150,
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: history.take(5).length,
-                    itemBuilder: (context, index) {
-                      final item = history[index];
-                      final isPositive = item.change > 0;
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: isPositive
-                                    ? AppColors.success.withValues(alpha: 0.1)
-                                    : AppColors.error.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                isPositive
-                                    ? '+${item.change}'
-                                    : '${item.change}',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: isPositive
-                                      ? AppColors.success
-                                      : AppColors.error,
-                                ),
+                return ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: history.take(5).length,
+                  itemBuilder: (context, index) {
+                    final item = history[index];
+                    final isPositive = item.change > 0;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isPositive
+                                  ? AppColors.success.withValues(alpha: 0.1)
+                                  : AppColors.error.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              isPositive ? '+${item.change}' : '${item.change}',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color:
+                                    isPositive ? AppColors.success : AppColors.error,
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                item.reason,
-                                style: Theme.of(context).textTheme.bodySmall,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              item.reason,
+                              style: Theme.of(context).textTheme.bodySmall,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 );
               },
               loading: () => const Center(
@@ -320,7 +279,8 @@ class VirtueDetailDialog extends ConsumerWidget {
               ),
               error: (e, _) => Text(AppMessages.virtue.historyLoadFailed),
             ),
-          ],
+            ],
+          ),
         ),
       ),
       actions: [

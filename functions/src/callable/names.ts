@@ -90,10 +90,10 @@ export const getNameParts = onCall(
       const partId = doc.id;
 
       // ノーマルは最初からアンロック、それ以外はアンロック済みリストに含まれているか確認
-      const isUnlocked = data.rarity === "normal" || unlockedParts.includes(partId);
+      const isUnlocked = data.rarity === "common" || unlockedParts.includes(partId);
 
       // AIはスーパーレア以上を持てない
-      if (isAI && (data.rarity === "super_rare" || data.rarity === "ultra_rare")) {
+      if (isAI && data.rarity === "epic") {
         return;
       }
 
@@ -155,8 +155,8 @@ export const updateUserName = onCall(
     const suffixData = suffixDoc.data() as NamePart;
 
     // アンロック済みか確認（ノーマルは最初からOK）
-    const prefixUnlocked = prefixData.rarity === "normal" || unlockedParts.includes(prefixId);
-    const suffixUnlocked = suffixData.rarity === "normal" || unlockedParts.includes(suffixId);
+    const prefixUnlocked = prefixData.rarity === "common" || unlockedParts.includes(prefixId);
+    const suffixUnlocked = suffixData.rarity === "common" || unlockedParts.includes(suffixId);
 
     if (!prefixUnlocked || !suffixUnlocked) {
       throw new HttpsError("permission-denied", PERMISSION_ERRORS.PARTS_NOT_UNLOCKED);

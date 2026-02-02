@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_messages.dart';
 import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/models/name_part_model.dart';
+import '../../../../shared/providers/moderation_provider.dart';
 import '../../../../shared/services/name_parts_service.dart';
+import '../../../../shared/services/virtue_shop_service.dart';
 import '../../../../shared/providers/auth_provider.dart';
+import '../../../../shared/providers/virtue_shop_provider.dart';
 
 /// 名前編集画面
 class NameEditScreen extends ConsumerStatefulWidget {
@@ -16,6 +20,7 @@ class NameEditScreen extends ConsumerStatefulWidget {
 
 class _NameEditScreenState extends ConsumerState<NameEditScreen> {
   final _namePartsService = NamePartsService();
+  final _virtueShopService = VirtueShopService();
 
   bool _isLoading = true;
   String? _error;
@@ -66,7 +71,7 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
         id: '',
         text: AppMessages.profile.namePartPlaceholder,
         category: '',
-        rarity: 'normal',
+        rarity: 'common',
         type: 'prefix',
         order: 0,
       ),
@@ -77,7 +82,7 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
         id: '',
         text: AppMessages.profile.namePartPlaceholder,
         category: '',
-        rarity: 'normal',
+        rarity: 'common',
         type: 'suffix',
         order: 0,
       ),
@@ -122,6 +127,7 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final virtueShopConfig = ref.watch(virtueShopConfigProvider).valueOrNull;
     return Scaffold(
       appBar: AppBar(
         title: Text(AppMessages.profile.nameEditTitle),
@@ -197,8 +203,8 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
                         Expanded(
                           child: TabBarView(
                             children: [
-                              _buildPartsList(_prefixes, true),
-                              _buildPartsList(_suffixes, false),
+                              _buildPartsList(_prefixes, true, virtueShopConfig),
+                              _buildPartsList(_suffixes, false, virtueShopConfig),
                             ],
                           ),
                         ),
@@ -211,7 +217,11 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
     );
   }
 
-  Widget _buildPartsList(List<NamePartModel> parts, bool isPrefix) {
+  Widget _buildPartsList(
+    List<NamePartModel> parts,
+    bool isPrefix,
+    VirtueShopConfig? config,
+  ) {
     // カテゴリでグループ化
     final Map<String, List<NamePartModel>> grouped = {};
     for (final part in parts) {
@@ -249,7 +259,13 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
                     : _selectedSuffixId == part.id;
                 final isLocked = !part.unlocked;
 
-                return _buildPartChip(part, isSelected, isLocked, isPrefix);
+                return _buildPartChip(
+                  part,
+                  isSelected,
+                  isLocked,
+                  isPrefix,
+                  config,
+                );
               }).toList(),
             ),
             const SizedBox(height: 16),
@@ -264,17 +280,12 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
     bool isSelected,
     bool isLocked,
     bool isPrefix,
+    VirtueShopConfig? config,
   ) {
     return GestureDetector(
       onTap: isLocked
           ? () {
-              SnackBarHelper.showInfo(
-                context,
-                AppMessages.profile.lockedPartMessage(
-                  part.text,
-                  part.rarityDisplayName,
-                ),
-              );
+              _showPurchaseDialog(part, config);
             }
           : () {
               setState(() {
@@ -297,10 +308,10 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
           border: Border.all(
             color: isSelected
                 ? Theme.of(context).colorScheme.primary
-                : part.rarity != 'normal'
+                : !part.isCommon
                 ? Color(part.rarityColor)
                 : Colors.grey[300]!,
-            width: part.rarity != 'normal' ? 2 : 1,
+            width: !part.isCommon ? 2 : 1,
           ),
           boxShadow: isSelected
               ? [
@@ -332,27 +343,117 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               ),
             ),
-            if (part.rarity != 'normal' && !isLocked) ...[
-              const SizedBox(width: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Color(part.rarityColor).withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  part.rarityDisplayName,
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: Color(part.rarityColor),
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _showPurchaseDialog(
+    NamePartModel part,
+    VirtueShopConfig? config,
+  ) async {
+    if (config == null) {
+      SnackBarHelper.showError(
+        context,
+        AppMessages.error.loadFailed('価格情報'),
+      );
+      return;
+    }
+
+    final cost = config.costForNamePart(part.rarity);
+    if (cost == null || cost <= 0) {
+      SnackBarHelper.showError(
+        context,
+        AppMessages.error.loadFailed('価格情報'),
+      );
+      return;
+    }
+
+    bool isProcessing = false;
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text(AppMessages.confirm.purchaseVirtueTitle),
+              content: Text(AppMessages.confirm.purchaseVirtueMessage(cost)),
+              actions: [
+                SizedBox(
+                  width: double.infinity,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: isProcessing
+                            ? null
+                            : () => Navigator.of(context).pop(),
+                        child: Text(AppMessages.label.cancel),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton(
+                        onPressed: isProcessing
+                            ? null
+                            : () async {
+                                setDialogState(() => isProcessing = true);
+                                final success = await _purchaseNamePart(part);
+                                if (mounted && success) {
+                                  Navigator.of(context).pop();
+                                }
+                                if (mounted) {
+                                  setDialogState(() => isProcessing = false);
+                                }
+                              },
+                        child: isProcessing
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : Text(AppMessages.label.purchase),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<bool> _purchaseNamePart(NamePartModel part) async {
+    try {
+      await _virtueShopService.purchaseVirtueItem(
+        itemType: 'name_part',
+        itemId: part.id,
+      );
+      ref.invalidate(currentUserProvider);
+      ref.invalidate(virtueStatusProvider);
+      ref.invalidate(virtueHistoryProvider);
+      await _loadNameParts();
+      if (mounted) {
+        SnackBarHelper.showSuccess(
+          context,
+          AppMessages.success.purchaseCompleted,
+        );
+      }
+      return true;
+    } on FirebaseFunctionsException catch (e) {
+      if (mounted) {
+        final message = e.message == AppMessages.error.notEnoughVirtue
+            ? AppMessages.error.notEnoughVirtue
+            : AppMessages.error.general;
+        SnackBarHelper.showError(context, message);
+      }
+      return false;
+    } catch (_) {
+      if (mounted) {
+        SnackBarHelper.showError(context, AppMessages.error.general);
+      }
+      return false;
+    }
   }
 }
