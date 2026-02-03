@@ -2,10 +2,12 @@ import 'package:cloud_functions/cloud_functions.dart';
 
 class VirtueShopConfig {
   final Map<String, int> namePartCostsByRarity;
+  final Map<String, int> avatarPartCostsByRarity;
   final Map<String, int> reactionCostsById;
 
   const VirtueShopConfig({
     required this.namePartCostsByRarity,
+    required this.avatarPartCostsByRarity,
     required this.reactionCostsById,
   });
 
@@ -20,13 +22,19 @@ class VirtueShopConfig {
       )..removeWhere((key, value) => value <= 0);
     }
 
+    final namePartCostsByRarity = toIntMap(map['namePartCostsByRarity']);
+    final avatarPartCostsByRarity = map['avatarPartCostsByRarity'] != null
+        ? toIntMap(map['avatarPartCostsByRarity'])
+        : namePartCostsByRarity;
     return VirtueShopConfig(
-      namePartCostsByRarity: toIntMap(map['namePartCostsByRarity']),
+      namePartCostsByRarity: namePartCostsByRarity,
+      avatarPartCostsByRarity: avatarPartCostsByRarity,
       reactionCostsById: toIntMap(map['reactionCostsById']),
     );
   }
 
   int? costForNamePart(String rarity) => namePartCostsByRarity[rarity];
+  int? costForAvatarPart(String rarity) => avatarPartCostsByRarity[rarity];
   int? costForReaction(String reactionId) => reactionCostsById[reactionId];
 }
 

@@ -1,14 +1,22 @@
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_messages.dart';
 import '../../../../core/constants/avatar_assets.dart';
+import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/models/avatar_parts_model.dart';
+import '../../../../shared/providers/auth_provider.dart';
+import '../../../../shared/providers/moderation_provider.dart';
+import '../../../../shared/providers/virtue_shop_provider.dart';
+import '../../../../shared/services/virtue_shop_service.dart';
 import '../../../../shared/widgets/avatar_parts_widget.dart';
 
 enum _AvatarPartCategory { hair, eyebrows, eyes, mouth }
 
-class AvatarEditScreen extends StatefulWidget {
+class AvatarEditScreen extends ConsumerStatefulWidget {
   final AvatarParts initialParts;
 
   const AvatarEditScreen({
@@ -17,12 +25,13 @@ class AvatarEditScreen extends StatefulWidget {
   });
 
   @override
-  State<AvatarEditScreen> createState() => _AvatarEditScreenState();
+  ConsumerState<AvatarEditScreen> createState() => _AvatarEditScreenState();
 }
 
-class _AvatarEditScreenState extends State<AvatarEditScreen> {
+class _AvatarEditScreenState extends ConsumerState<AvatarEditScreen> {
   late AvatarParts _parts;
   _AvatarPartCategory _category = _AvatarPartCategory.hair;
+  final _virtueShopService = VirtueShopService();
 
   @override
   void initState() {
@@ -95,8 +104,168 @@ class _AvatarEditScreenState extends State<AvatarEditScreen> {
     }
   }
 
+  String _rarityForId(String id) {
+    return AvatarAssets.partRarity[id] ?? 'common';
+  }
+
+  bool _isUnlocked({
+    required String id,
+    required String rarity,
+    required bool isAdmin,
+    required bool isSubscriber,
+    required List<String> unlockedAvatarParts,
+  }) {
+    if (isAdmin) return true;
+    if (rarity == 'common') return true;
+    if (rarity == 'epic') return isSubscriber;
+    return unlockedAvatarParts.contains(id);
+  }
+
+  Color _rarityBorderColor(String rarity, bool isSelected) {
+    if (rarity == 'rare') return AppColors.rarityRare;
+    if (rarity == 'epic') return AppColors.rarityEpic;
+    return isSelected ? AppColors.primary : AppColors.surfaceVariant;
+  }
+
+  Future<void> _showLockedDialog({
+    required String id,
+    required String rarity,
+  }) async {
+    if (!mounted) return;
+    if (rarity == 'rare') {
+      final config = ref.read(virtueShopConfigProvider).valueOrNull;
+      final cost = config?.costForAvatarPart(rarity);
+      if (cost == null || cost <= 0) {
+        SnackBarHelper.showError(
+          context,
+          AppMessages.error.loadFailed('価格情報'),
+        );
+        return;
+      }
+
+      bool isProcessing = false;
+      await showDialog<void>(
+        context: context,
+        builder: (context) {
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              return AlertDialog(
+                title: Text(AppMessages.confirm.purchaseVirtueTitle),
+                content: Text(AppMessages.confirm.purchaseVirtueMessage(cost)),
+                actions: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: isProcessing
+                              ? null
+                              : () => Navigator.of(context).pop(),
+                          child: Text(AppMessages.label.cancel),
+                        ),
+                        const SizedBox(width: 8),
+                        TextButton(
+                          onPressed: isProcessing
+                              ? null
+                              : () async {
+                                  setDialogState(() => isProcessing = true);
+                                  final success = await _purchaseAvatarPart(id);
+                                  if (mounted && success) {
+                                    Navigator.of(context).pop();
+                                    setState(() {
+                                      _parts = _withPart(id);
+                                    });
+                                  }
+                                  if (mounted) {
+                                    setDialogState(() => isProcessing = false);
+                                  }
+                                },
+                          child: isProcessing
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : Text(AppMessages.label.purchase),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+      return;
+    }
+
+    if (rarity == 'epic') {
+      await showDialog<void>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: Text(AppMessages.confirm.subscriptionOnlyTitle),
+            content: Text(AppMessages.confirm.subscriptionOnlyMessage()),
+            actions: [
+              SizedBox(
+                width: double.infinity,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: Text(AppMessages.label.cancel),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: Text(AppMessages.label.subscribe),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    }
+  }
+
+  Future<bool> _purchaseAvatarPart(String id) async {
+    try {
+      await _virtueShopService.purchaseVirtueItem(
+        itemType: 'avatar_part',
+        itemId: id,
+      );
+      ref.invalidate(currentUserProvider);
+      ref.invalidate(virtueStatusProvider);
+      ref.invalidate(virtueHistoryProvider);
+      if (mounted) {
+        SnackBarHelper.showSuccess(context, AppMessages.success.purchaseCompleted);
+      }
+      return true;
+    } on FirebaseFunctionsException catch (e) {
+      if (mounted) {
+        final message = e.message == AppMessages.error.notEnoughVirtue
+            ? AppMessages.error.notEnoughVirtue
+            : AppMessages.error.general;
+        SnackBarHelper.showError(context, message);
+      }
+      return false;
+    } catch (_) {
+      if (mounted) {
+        SnackBarHelper.showError(context, AppMessages.error.general);
+      }
+      return false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    // 価格情報を事前に読み込む（ロックタップ時のnull回避）
+    ref.watch(virtueShopConfigProvider);
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -154,6 +323,10 @@ class _AvatarEditScreenState extends State<AvatarEditScreen> {
   }
 
   Widget _buildPartsGrid() {
+    final user = ref.watch(currentUserProvider).valueOrNull;
+    final isAdmin = ref.watch(isAdminProvider).valueOrNull ?? false;
+    final isSubscriber = user?.isSubscriber ?? false;
+    final unlockedAvatarParts = user?.unlockedAvatarParts ?? const <String>[];
     final ids = _currentIds;
     return Container(
       padding: const EdgeInsets.all(12),
@@ -168,8 +341,23 @@ class _AvatarEditScreenState extends State<AvatarEditScreen> {
         itemBuilder: (context, index) {
           final id = ids[index];
           final isSelected = id == _selectedId;
+          final rarity = _rarityForId(id);
+          final isLocked = !_isUnlocked(
+            id: id,
+            rarity: rarity,
+            isAdmin: isAdmin,
+            isSubscriber: isSubscriber,
+            unlockedAvatarParts: unlockedAvatarParts,
+          );
+          final borderColor = _rarityBorderColor(rarity, isSelected);
           return GestureDetector(
-            onTap: () => setState(() => _parts = _withPart(id)),
+            onTap: () {
+              if (isLocked) {
+                _showLockedDialog(id: id, rarity: rarity);
+                return;
+              }
+              setState(() => _parts = _withPart(id));
+            },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 150),
               decoration: BoxDecoration(
@@ -177,16 +365,40 @@ class _AvatarEditScreenState extends State<AvatarEditScreen> {
                     ? AppColors.primaryLight
                     : AppColors.surfaceVariant,
                 borderRadius: BorderRadius.circular(16),
-                border: isSelected
-                    ? Border.all(color: AppColors.primary, width: 2)
-                    : null,
+                border: Border.all(
+                  color: borderColor,
+                  width: isSelected || rarity != 'common' ? 2 : 1,
+                ),
               ),
               child: Center(
-                child: AvatarPartsWidget(
-                  parts: _withPart(id),
-                  size: 72,
-                  backgroundColor: Colors.transparent,
-                  borderRadius: BorderRadius.circular(14),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    AvatarPartsWidget(
+                      parts: _withPart(id),
+                      size: 72,
+                      backgroundColor: Colors.transparent,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    if (isLocked)
+                      Positioned(
+                        right: 6,
+                        bottom: 6,
+                        child: Container(
+                          width: 16,
+                          height: 16,
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.45),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.lock,
+                            size: 10,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),

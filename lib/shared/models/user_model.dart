@@ -32,6 +32,7 @@ class UserModel {
   final String? nameSuffix; // 名詞パーツのID
   final List<String> unlockedNameParts; // アンロック済みパーツID
   final List<String> unlockedReactionStamps; // アンロック済みリアクションスタンプID
+  final List<String> unlockedAvatarParts; // アンロック済みアバターパーツID
   final bool isSubscriber; // サブスク加入状態
   final DateTime? lastNameChangeAt; // 最後に名前を変更した日時
   final String? fcmToken; // プッシュ通知用トークン
@@ -70,6 +71,7 @@ class UserModel {
     this.nameSuffix,
     this.unlockedNameParts = const [],
     this.unlockedReactionStamps = const [],
+    this.unlockedAvatarParts = const [],
     this.isSubscriber = false,
     this.lastNameChangeAt,
 
@@ -123,6 +125,8 @@ class UserModel {
       unlockedNameParts: List<String>.from(data['unlockedNameParts'] ?? []),
       unlockedReactionStamps:
           List<String>.from(data['unlockedReactionStamps'] ?? []),
+      unlockedAvatarParts:
+          List<String>.from(data['unlockedAvatarParts'] ?? []),
       isSubscriber: data['isSubscriber'] ?? false,
       lastNameChangeAt: (data['lastNameChangeAt'] as Timestamp?)?.toDate(),
 
@@ -171,6 +175,7 @@ class UserModel {
       'nameSuffix': nameSuffix,
       'unlockedNameParts': unlockedNameParts,
       'unlockedReactionStamps': unlockedReactionStamps,
+      'unlockedAvatarParts': unlockedAvatarParts,
       'isSubscriber': isSubscriber,
       if (lastNameChangeAt != null)
         'lastNameChangeAt': Timestamp.fromDate(lastNameChangeAt!),
@@ -212,6 +217,7 @@ class UserModel {
     String? nameSuffix,
     List<String>? unlockedNameParts,
     List<String>? unlockedReactionStamps,
+    List<String>? unlockedAvatarParts,
     bool? isSubscriber,
     DateTime? lastNameChangeAt,
     String? fcmToken,
@@ -253,6 +259,7 @@ class UserModel {
       unlockedNameParts: unlockedNameParts ?? this.unlockedNameParts,
       unlockedReactionStamps:
           unlockedReactionStamps ?? this.unlockedReactionStamps,
+      unlockedAvatarParts: unlockedAvatarParts ?? this.unlockedAvatarParts,
       isSubscriber: isSubscriber ?? this.isSubscriber,
       lastNameChangeAt: lastNameChangeAt ?? this.lastNameChangeAt,
       fcmToken: fcmToken ?? this.fcmToken,

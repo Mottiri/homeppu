@@ -10,14 +10,42 @@ import { requireAuth } from "../helpers/auth";
 import { COLLECTIONS } from "../config/collections";
 import { LOCATION } from "../config/constants";
 
-type VirtueItemType = "name_part" | "reaction_stamp";
+type VirtueItemType = "name_part" | "reaction_stamp" | "avatar_part";
 
 type VirtueShopConfig = {
     namePartCostsByRarity: Record<string, number>;
+    avatarPartCostsByRarity: Record<string, number>;
     reactionCostsById: Record<string, number>;
 };
 
 const SETTINGS_DOC_ID = "virtueShop";
+
+const AVATAR_PART_RARITY: Record<string, string> = {
+    // hair
+    hair_01: "common",
+    hair_02: "common",
+    hair_03: "epic",
+    hair_04: "rare",
+    // eyebrows
+    eyebrows_01: "common",
+    eyebrows_02: "common",
+    eyebrows_03: "common",
+    eyebrows_04: "epic",
+    eyebrows_05: "rare",
+    eyebrows_06: "rare",
+    // eyes
+    eyes_01: "common",
+    eyes_02: "common",
+    eyes_03: "epic",
+    eyes_04: "rare",
+    eyes_05: "rare",
+    // mouth
+    mouth_01: "common",
+    mouth_02: "common",
+    mouth_03: "epic",
+    mouth_04: "rare",
+    mouth_05: "rare",
+};
 
 function toNumberMap(value: unknown): Record<string, number> {
     if (!value || typeof value !== "object") return {};
@@ -32,8 +60,13 @@ function toNumberMap(value: unknown): Record<string, number> {
 
 function readVirtueShopConfig(data: Record<string, unknown> | undefined): VirtueShopConfig {
     const namePartCostsByRarity = toNumberMap(data?.namePartCostsByRarity);
+    const avatarPartCostsByRarity = Object.keys(
+        toNumberMap(data?.avatarPartCostsByRarity)
+    ).length
+        ? toNumberMap(data?.avatarPartCostsByRarity)
+        : namePartCostsByRarity;
     const reactionCostsById = toNumberMap(data?.reactionCostsById);
-    return { namePartCostsByRarity, reactionCostsById };
+    return { namePartCostsByRarity, avatarPartCostsByRarity, reactionCostsById };
 }
 
 export const getVirtueShopConfig = onCall(
@@ -48,6 +81,7 @@ export const getVirtueShopConfig = onCall(
         const config = readVirtueShopConfig(doc.data() as Record<string, unknown>);
         return {
             namePartCostsByRarity: config.namePartCostsByRarity,
+            avatarPartCostsByRarity: config.avatarPartCostsByRarity,
             reactionCostsById: config.reactionCostsById,
         };
     }
@@ -63,7 +97,7 @@ export const purchaseVirtueItem = onCall(
             throw new HttpsError("invalid-argument", "itemType and itemId are required");
         }
 
-        if (itemType !== "name_part" && itemType !== "reaction_stamp") {
+        if (itemType !== "name_part" && itemType !== "reaction_stamp" && itemType !== "avatar_part") {
             throw new HttpsError("invalid-argument", "invalid itemType");
         }
 
@@ -85,7 +119,7 @@ export const purchaseVirtueItem = onCall(
             const userData = userSnap.data() || {};
 
             let cost = 0;
-            let unlockField: "unlockedNameParts" | "unlockedReactionStamps";
+            let unlockField: "unlockedNameParts" | "unlockedReactionStamps" | "unlockedAvatarParts";
             let unlockValue = "";
             let purchaseKey = "";
 
@@ -105,7 +139,7 @@ export const purchaseVirtueItem = onCall(
                 unlockField = "unlockedNameParts";
                 unlockValue = partRef.id;
                 purchaseKey = `virtue_name_part_${partRef.id}`;
-            } else {
+            } else if (itemType === "reaction_stamp") {
                 cost = config.reactionCostsById[itemId] ?? 0;
                 if (!cost || cost <= 0) {
                     throw new HttpsError("failed-precondition", "Cost not configured");
@@ -114,6 +148,19 @@ export const purchaseVirtueItem = onCall(
                 unlockField = "unlockedReactionStamps";
                 unlockValue = `reaction_${itemId}`;
                 purchaseKey = `virtue_reaction_stamp_${itemId}`;
+            } else {
+                const rarity = AVATAR_PART_RARITY[itemId] ?? "";
+                if (!rarity) {
+                    throw new HttpsError("not-found", "avatar part not found");
+                }
+                cost = config.avatarPartCostsByRarity[rarity] ?? 0;
+                if (!cost || cost <= 0) {
+                    throw new HttpsError("failed-precondition", "Cost not configured");
+                }
+
+                unlockField = "unlockedAvatarParts";
+                unlockValue = itemId;
+                purchaseKey = `virtue_avatar_part_${itemId}`;
             }
 
             const unlockedList: string[] = userData[unlockField] || [];

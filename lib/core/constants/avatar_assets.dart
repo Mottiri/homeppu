@@ -9,6 +9,33 @@ class AvatarAssets {
   static const List<String> mouthIds = ['mouth_01', 'mouth_02', 'mouth_03', 'mouth_04', 'mouth_05'];
   static const List<String> eyebrowsIds = ['eyebrows_01', 'eyebrows_02', 'eyebrows_03', 'eyebrows_04', 'eyebrows_05', 'eyebrows_06'];
 
+  static const Map<String, String> partRarity = {
+    // hair
+    'hair_01': 'common',
+    'hair_02': 'common',
+    'hair_03': 'epic',
+    'hair_04': 'rare',
+    // eyebrows
+    'eyebrows_01': 'common',
+    'eyebrows_02': 'common',
+    'eyebrows_03': 'common',
+    'eyebrows_04': 'epic',
+    'eyebrows_05': 'rare',
+    'eyebrows_06': 'rare',
+    // eyes
+    'eyes_01': 'common',
+    'eyes_02': 'common',
+    'eyes_03': 'epic',
+    'eyes_04': 'rare',
+    'eyes_05': 'rare',
+    // mouth
+    'mouth_01': 'common',
+    'mouth_02': 'common',
+    'mouth_03': 'epic',
+    'mouth_04': 'rare',
+    'mouth_05': 'rare',
+  };
+
   static String hairPath(String id) => 'assets/avatars/hair/$id.png';
   static String eyesPath(String id) => 'assets/avatars/eyes/$id.png';
   static String mouthPath(String id) => 'assets/avatars/mouth/$id.png';

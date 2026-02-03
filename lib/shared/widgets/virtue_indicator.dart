@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_messages.dart';
+import '../providers/auth_provider.dart';
 import '../providers/moderation_provider.dart';
 import '../services/moderation_service.dart';
 
@@ -139,7 +140,9 @@ class VirtueDetailDialog extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(currentUserProvider).valueOrNull;
     final historyAsync = ref.watch(virtueHistoryProvider);
+    final currentVirtue = user?.virtue ?? status.virtue;
 
     return AlertDialog(
       title: Row(
@@ -175,26 +178,19 @@ class VirtueDetailDialog extends ConsumerWidget {
                 ),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    '${status.virtue}',
-                    style: TextStyle(
-                      fontSize: 48,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.virtue,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      '$currentVirtue',
+                      style: TextStyle(
+                        fontSize: 48,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.virtue,
+                      ),
                     ),
-                  ),
-                  Text(
-                    ' / ${status.maxVirtue}',
-                    style: TextStyle(
-                      fontSize: 20,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
             ),
             const SizedBox(height: 16),
 

@@ -10,6 +10,7 @@ class AvatarPartsWidget extends StatelessWidget {
   final Color? backgroundColor;
   final BorderRadius? borderRadius;
   static const double _eyesScale = 0.5;
+  static const Map<String, double> _eyesScaleOverrides = {'eyes_03': 0.47};
   static const double _mouthScale = 0.6;
   static const Map<String, double> _mouthScaleOverrides = {'mouth_03': 0.3};
   static const Map<String, Offset> _mouthOffsetOverrides = {
@@ -19,8 +20,17 @@ class AvatarPartsWidget extends StatelessWidget {
   //static const double _baseScale = 1.08;
   static const double _hairScale = 1.45;
   static const double _eyebrowsScale = 0.52;
+  static const Map<String, double> _eyebrowsScaleOverrides = {
+    'eyebrows_04': 0.46,
+  };
   static const Offset _eyebrowsOffset = Offset(0, -9);
+  static const Map<String, Offset> _eyebrowsOffsetOverrides = {
+    'eyebrows_04': Offset(0, -1),
+  };
   static const Offset _eyesOffset = Offset(0, -2);
+  static const Map<String, Offset> _eyesOffsetOverrides = {
+    'eyes_03': Offset(0, 0.5),
+  };
   static const Offset _mouthOffset = Offset(0, 17);
 
   const AvatarPartsWidget({
@@ -37,6 +47,11 @@ class AvatarPartsWidget extends StatelessWidget {
     final unit = size / 100.0;
     final mouthOffset =
         _mouthOffset + (_mouthOffsetOverrides[parts.mouthId] ?? Offset.zero);
+    final eyebrowsOffset =
+        _eyebrowsOffset +
+        (_eyebrowsOffsetOverrides[parts.eyebrowsId] ?? Offset.zero);
+    final eyesOffset =
+        _eyesOffset + (_eyesOffsetOverrides[parts.eyesId] ?? Offset.zero);
     return ClipRRect(
       borderRadius: radius,
       child: Container(
@@ -54,17 +69,18 @@ class AvatarPartsWidget extends StatelessWidget {
             _buildLayer(
               AvatarAssets.eyebrowsPath(parts.eyebrowsId),
               size: size,
-              scale: _eyebrowsScale,
+              scale:
+                  _eyebrowsScaleOverrides[parts.eyebrowsId] ?? _eyebrowsScale,
               offset: Offset(
-                _eyebrowsOffset.dx * unit,
-                _eyebrowsOffset.dy * unit,
+                eyebrowsOffset.dx * unit,
+                eyebrowsOffset.dy * unit,
               ),
             ),
             _buildLayer(
               AvatarAssets.eyesPath(parts.eyesId),
               size: size,
-              scale: _eyesScale,
-              offset: Offset(_eyesOffset.dx * unit, _eyesOffset.dy * unit),
+              scale: _eyesScaleOverrides[parts.eyesId] ?? _eyesScale,
+              offset: Offset(eyesOffset.dx * unit, eyesOffset.dy * unit),
             ),
             _buildLayer(
               AvatarAssets.mouthPath(parts.mouthId),
