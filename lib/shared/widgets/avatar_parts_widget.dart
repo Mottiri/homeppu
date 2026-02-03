@@ -11,6 +11,10 @@ class AvatarPartsWidget extends StatelessWidget {
   final BorderRadius? borderRadius;
   static const double _eyesScale = 0.5;
   static const double _mouthScale = 0.6;
+  static const Map<String, double> _mouthScaleOverrides = {'mouth_03': 0.3};
+  static const Map<String, Offset> _mouthOffsetOverrides = {
+    'mouth_03': Offset(0, 1),
+  };
   //いったん髪と輪郭を同一で作成するためBaseは廃止
   //static const double _baseScale = 1.08;
   static const double _hairScale = 1.45;
@@ -31,6 +35,8 @@ class AvatarPartsWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final radius = borderRadius ?? BorderRadius.circular(size * 0.22);
     final unit = size / 100.0;
+    final mouthOffset =
+        _mouthOffset + (_mouthOffsetOverrides[parts.mouthId] ?? Offset.zero);
     return ClipRRect(
       borderRadius: radius,
       child: Container(
@@ -63,8 +69,8 @@ class AvatarPartsWidget extends StatelessWidget {
             _buildLayer(
               AvatarAssets.mouthPath(parts.mouthId),
               size: size,
-              scale: _mouthScale,
-              offset: Offset(_mouthOffset.dx * unit, _mouthOffset.dy * unit),
+              scale: _mouthScaleOverrides[parts.mouthId] ?? _mouthScale,
+              offset: Offset(mouthOffset.dx * unit, mouthOffset.dy * unit),
             ),
           ],
         ),
