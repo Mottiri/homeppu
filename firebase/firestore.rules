@@ -47,7 +47,20 @@ service cloud.firestore {
       
       // 譖ｴ譁ｰ: 譛ｬ莠ｺ縺ｮ縺ｿ・育音螳壹ヵ繧｣繝ｼ繝ｫ繝峨・螟画峩荳榊庄・・
 allow update: if isAuthenticated() && isOwner(userId) && 
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['virtue', 'isBanned', 'banStatus', 'banHistory', 'permanentBanScheduledDeletionAt', 'warningCount', 'isAI', 'createdAt']);
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'virtue',
+          'isBanned',
+          'banStatus',
+          'banHistory',
+          'permanentBanScheduledDeletionAt',
+          'warningCount',
+          'isAI',
+          'createdAt',
+          'isSubscriber',
+          'unlockedNameParts',
+          'unlockedReactionStamps',
+          'unlockedAvatarParts'
+        ]);
 
       // 繧ｫ繝・ざ繝ｪ繧ｵ繝悶さ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
       match /categories/{categoryId} {
