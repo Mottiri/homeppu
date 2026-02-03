@@ -15,7 +15,7 @@ class AvatarPartsWidget extends StatelessWidget {
   //static const double _baseScale = 1.08;
   static const double _hairScale = 1.45;
   static const double _eyebrowsScale = 0.52;
-  static const Offset _eyebrowsOffset = Offset(0, -7);
+  static const Offset _eyebrowsOffset = Offset(0, -9);
   static const Offset _eyesOffset = Offset(0, -2);
   static const Offset _mouthOffset = Offset(0, 17);
 

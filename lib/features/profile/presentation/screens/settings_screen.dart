@@ -15,9 +15,9 @@ import '../../../../core/constants/app_messages.dart';
 import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../core/utils/dialog_helper.dart';
 import '../../../../shared/providers/auth_provider.dart';
-import '../../../../shared/widgets/avatar_parts_selector.dart';
 import '../../../../shared/models/avatar_parts_model.dart';
 import '../../../../core/constants/avatar_assets.dart';
+import '../../../../shared/widgets/avatar_parts_widget.dart';
 import '../../../../shared/services/inquiry_service.dart';
 import '../../../../shared/services/nsfw_detector_service.dart';
 import '../../../../shared/services/color_extraction_service.dart';
@@ -373,16 +373,56 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
                     // アバター
                     Center(
-                      child: AvatarPartsSelector(
-                        parts: _avatarParts ?? AvatarAssets.defaultParts(),
-                        onChanged: (parts) {
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: () async {
+                          final result = await context.push<AvatarParts>(
+                            '/avatar-edit',
+                            extra: _avatarParts ?? AvatarAssets.defaultParts(),
+                          );
+                          if (!mounted || result == null) return;
                           setState(() {
-                            _avatarParts = parts;
+                            _avatarParts = result;
                             _avatarPartsDirty = true;
                             _hasChanges = true;
                           });
                         },
-                        previewSize: 96,
+                        child: Column(
+                          children: [
+                            Stack(
+                              children: [
+                                AvatarPartsWidget(
+                                  parts:
+                                      _avatarParts ?? AvatarAssets.defaultParts(),
+                                  size: 96,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                Positioned(
+                                  right: 0,
+                                  bottom: 0,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: const BoxDecoration(
+                                      color: AppColors.primary,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.edit,
+                                      size: 14,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'タップして編集',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
 

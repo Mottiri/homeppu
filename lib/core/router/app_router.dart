@@ -11,6 +11,7 @@ import '../../features/post/presentation/screens/create_post_screen.dart';
 import '../../features/post/presentation/screens/post_detail_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart';
 import '../../features/profile/presentation/screens/settings_screen.dart';
+import '../../features/profile/presentation/screens/avatar_edit_screen.dart';
 import '../../features/circle/presentation/screens/circles_screen.dart';
 import '../../features/circle/presentation/screens/circle_detail_screen.dart';
 import '../../features/circle/presentation/screens/edit_circle_screen.dart';
@@ -36,8 +37,10 @@ import '../../features/admin/presentation/screens/ban_appeal_screen.dart';
 import '../../features/admin/presentation/screens/admin_ban_users_screen.dart';
 import '../../features/tasks/presentation/screens/monthly_calendar_screen.dart';
 import '../../shared/models/task_model.dart';
+import '../../shared/models/avatar_parts_model.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../constants/app_messages.dart';
+import '../constants/avatar_assets.dart';
 
 /// アプリのルーター設定
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -229,6 +232,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/settings',
         name: 'settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/avatar-edit',
+        name: 'avatarEdit',
+        builder: (context, state) {
+          final parts = state.extra is AvatarParts
+              ? state.extra! as AvatarParts
+              : AvatarAssets.defaultParts();
+          return AvatarEditScreen(initialParts: parts);
+        },
       ),
 
       // 通知

@@ -7,7 +7,7 @@ class AvatarAssets {
   static const List<String> hairIds = ['hair_01', 'hair_02', 'hair_03'];
   static const List<String> eyesIds = ['eyes_01', 'eyes_02', 'eyes_03'];
   static const List<String> mouthIds = ['mouth_01', 'mouth_02', 'mouth_03'];
-  static const List<String> eyebrowsIds = ['eyebrows_01', 'eyebrows_02', 'eyebrows_03'];
+  static const List<String> eyebrowsIds = ['eyebrows_01', 'eyebrows_02', 'eyebrows_03', 'eyebrows_04'];
 
   static String hairPath(String id) => 'assets/avatars/hair/$id.png';
   static String eyesPath(String id) => 'assets/avatars/eyes/$id.png';
