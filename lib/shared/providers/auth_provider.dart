@@ -77,6 +77,7 @@ class AuthService {
     required String password,
     required String displayName,
     int avatarIndex = 0,
+    AvatarParts? avatarParts,
     String? namePrefix,
     String? nameSuffix,
   }) async {
@@ -98,6 +99,7 @@ class AuthService {
           email: email,
           displayName: displayName,
           avatarIndex: avatarIndex,
+          avatarParts: avatarParts,
           virtue: AppConstants.virtueInitial,
           namePrefix: namePrefix,
           nameSuffix: nameSuffix,

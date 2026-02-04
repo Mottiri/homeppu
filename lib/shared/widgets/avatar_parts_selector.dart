@@ -9,12 +9,14 @@ class AvatarPartsSelector extends StatelessWidget {
   final AvatarParts parts;
   final ValueChanged<AvatarParts> onChanged;
   final double previewSize;
+  final Set<String>? allowedRarities;
 
   const AvatarPartsSelector({
     super.key,
     required this.parts,
     required this.onChanged,
     this.previewSize = 88,
+    this.allowedRarities,
   });
 
   @override
@@ -71,6 +73,15 @@ class AvatarPartsSelector extends StatelessWidget {
     required AvatarParts Function(String id) buildPreviewParts,
     required ValueChanged<String> onSelected,
   }) {
+    final filteredIds = allowedRarities == null
+        ? ids
+        : ids
+            .where(
+              (id) =>
+                  allowedRarities!.contains(AvatarAssets.partRarity[id] ?? 'common'),
+            )
+            .toList();
+    final visibleIds = filteredIds.isEmpty ? ids : filteredIds;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -86,10 +97,10 @@ class AvatarPartsSelector extends StatelessWidget {
           height: 64,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            itemCount: ids.length,
+            itemCount: visibleIds.length,
             separatorBuilder: (_, __) => const SizedBox(width: 8),
             itemBuilder: (context, index) {
-              final id = ids[index];
+              final id = visibleIds[index];
               final isSelected = id == selectedId;
               return GestureDetector(
                 onTap: () => onSelected(id),

@@ -72,16 +72,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(gradient: AppColors.warmGradient),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+      backgroundColor: Colors.transparent,
+      body: SizedBox.expand(
+        child: DecoratedBox(
+          decoration: const BoxDecoration(gradient: AppColors.warmGradient),
+          child: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                   const SizedBox(height: 40),
 
                   // ロゴ・タイトル - ステージ化されたアニメーション
@@ -223,9 +225,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       },
                       child: const Text('パスワードを忘れた？'),
                     ),
-                  ),
+                  )
+                      .animate()
+                      .fadeIn(delay: 750.ms, duration: 400.ms)
+                      .slideX(
+                        begin: 0.2,
+                        end: 0,
+                        delay: 750.ms,
+                        duration: 400.ms,
+                        curve: Curves.easeOut,
+                      ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 8),
 
                   // ログインボタン - スケールアニメーション
                   SizedBox(
@@ -261,7 +272,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        'アカウントをお持ちでない？',
+                        'はじめてですか？',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                       TextButton(
@@ -269,8 +280,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         child: const Text('新規登録'),
                       ),
                     ],
-                  ),
-                ],
+                  )
+                      .animate()
+                      .fadeIn(delay: 900.ms, duration: 400.ms)
+                      .slideY(
+                        begin: 0.2,
+                        end: 0,
+                        delay: 900.ms,
+                        duration: 400.ms,
+                        curve: Curves.easeOut,
+                      ),
+                  const SizedBox(height: 8),
+                  ],
+                ),
               ),
             ),
           ),

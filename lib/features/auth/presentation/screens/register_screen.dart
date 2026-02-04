@@ -3,8 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/avatar_assets.dart';
 import '../../../../core/constants/app_messages.dart';
 import '../../../../shared/providers/auth_provider.dart';
+import '../../../../shared/models/avatar_parts_model.dart';
+import '../../../../shared/widgets/avatar_parts_selector.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
 import '../../../../shared/models/name_part_model.dart';
 import '../widgets/auth_text_field.dart';
@@ -210,6 +213,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   int _selectedAvatarIndex = 0;
+  AvatarParts _selectedAvatarParts = AvatarAssets.defaultParts();
+  bool _useAvatarParts = true;
   bool _isLoading = false;
   String? _errorMessage;
 
@@ -252,6 +257,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         password: _passwordController.text,
         displayName: _displayName,
         avatarIndex: _selectedAvatarIndex,
+        avatarParts: _useAvatarParts ? _selectedAvatarParts : null,
         namePrefix: _selectedPrefix.id,
         nameSuffix: _selectedSuffix.id,
       );
@@ -327,14 +333,43 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   const SizedBox(height: 32),
 
                   // アバター選択
-                  Center(
-                    child: AvatarSelector(
-                      selectedIndex: _selectedAvatarIndex,
-                      onSelected: (index) {
-                        setState(() => _selectedAvatarIndex = index);
-                      },
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _AvatarModeButton(
+                          label: 'アバター',
+                          isSelected: _useAvatarParts,
+                          onTap: () => setState(() => _useAvatarParts = true),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _AvatarModeButton(
+                          label: 'アイコン',
+                          isSelected: !_useAvatarParts,
+                          onTap: () => setState(() => _useAvatarParts = false),
+                        ),
+                      ),
+                    ],
                   ),
+                  const SizedBox(height: 20),
+                  if (_useAvatarParts)
+                    AvatarPartsSelector(
+                      parts: _selectedAvatarParts,
+                      onChanged: (parts) {
+                        setState(() => _selectedAvatarParts = parts);
+                      },
+                      allowedRarities: const {'common'},
+                    )
+                  else
+                    Center(
+                      child: AvatarSelector(
+                        selectedIndex: _selectedAvatarIndex,
+                        onSelected: (index) {
+                          setState(() => _selectedAvatarIndex = index);
+                        },
+                      ),
+                    ),
 
                   const SizedBox(height: 32),
 
@@ -459,7 +494,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        'すでにアカウントをお持ち？',
+                        '登録済みですか？',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                       TextButton(
@@ -601,6 +636,49 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             style: TextStyle(fontSize: 11, color: Colors.grey[500]),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _AvatarModeButton extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _AvatarModeButton({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isSelected ? AppColors.primary : AppColors.textSecondary;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.primary.withValues(alpha: 0.12)
+              : AppColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? AppColors.primary : AppColors.textTertiary,
+            width: 1.5,
+          ),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
       ),
     );
   }

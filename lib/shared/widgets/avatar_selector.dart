@@ -47,6 +47,7 @@ class AvatarSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final previewRadius = BorderRadius.circular(size * 0.28);
     return Column(
       children: [
         // 選択中のアバター（大きく表示）
@@ -55,7 +56,7 @@ class AvatarSelector extends StatelessWidget {
           height: size,
           decoration: BoxDecoration(
             color: AppColors.primaryLight,
-            shape: BoxShape.circle,
+            borderRadius: previewRadius,
             boxShadow: [
               BoxShadow(
                 color: AppColors.primary.withValues(alpha: 0.3),
@@ -96,7 +97,7 @@ class AvatarSelector extends StatelessWidget {
                     color: isSelected
                         ? AppColors.primaryLight
                         : AppColors.surfaceVariant,
-                    shape: BoxShape.circle,
+                    borderRadius: BorderRadius.circular(14),
                     border: isSelected
                         ? Border.all(color: AppColors.primary, width: 3)
                         : null,
@@ -145,13 +146,15 @@ class AvatarWidget extends StatelessWidget {
       );
     }
     final safeIndex = avatarIndex.clamp(0, presetAvatars.length - 1);
+    final effectiveBorderRadius =
+        borderRadius ?? BorderRadius.circular(size * 0.28);
 
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         color: backgroundColor ?? AppColors.primaryLight.withValues(alpha: 0.5),
-        shape: BoxShape.circle,
+        borderRadius: effectiveBorderRadius,
       ),
       child: Center(
         child: Text(
