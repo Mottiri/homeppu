@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:go_router/go_router.dart';
 
@@ -11,6 +12,7 @@ import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
 import 'core/constants/app_constants.dart';
 import 'shared/services/notification_service.dart';
+import 'shared/services/subscription_service.dart';
 
 /// グローバルナビゲーションキー（通知タップ時のナビゲーション用）
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -20,6 +22,11 @@ void main() async {
 
   // Firebase初期化
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  final currentUser = FirebaseAuth.instance.currentUser;
+  if (currentUser != null) {
+    await SubscriptionService.instance.logIn(currentUser.uid);
+  }
 
   // バックグラウンド通知ハンドラーを設定
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);

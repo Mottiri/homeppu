@@ -8,3 +8,6 @@ export const openaiApiKey = defineSecret("OPENAI_API_KEY");
 
 // Google Sheets サービスアカウントキー
 export const sheetsServiceAccountKey = defineSecret("SHEETS_SERVICE_ACCOUNT");
+
+// RevenueCat Webhook Secret
+export const revenueCatWebhookSecret = defineSecret("REVENUECAT_WEBHOOK_SECRET");

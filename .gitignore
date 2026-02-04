@@ -4,6 +4,9 @@
 *.pyc
 *.swp
 .DS_Store
+.android/
+android/key.properties
+android/app/release.jks
 .atom/
 .build/
 .buildlog/
@@ -53,6 +56,7 @@ functions/lib/
 # Environment variables
 .env
 .env.local
+/config/revenuecat.json
 
 # Firebase config files (security)
 android/app/google-services*.json

@@ -77,3 +77,4 @@ export { generateCircleAIPosts, executeCircleAIPost, triggerCircleAIPosts } from
 // ===============================================
 export { generateAICommentV1, generateAIReactionV1, executeAIPostGeneration } from "./http/ai-generation";
 export { moderateImageCallable } from "./http/image-moderation";
+export { revenueCatWebhook } from "./http/revenuecat";

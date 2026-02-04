@@ -54,6 +54,7 @@ dependencies:
   path_provider: ^2.1.5
   confetti: ^0.8.0
   palette_generator: ^0.3.3+4
+  purchases_flutter: ^9.11.0
 
 
 dev_dependencies:

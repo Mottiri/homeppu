@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/user_model.dart';
 import '../models/avatar_parts_model.dart';
 import '../../core/constants/app_constants.dart';
+import '../services/subscription_service.dart';
 
 /// FirebaseAuthインスタンス
 final firebaseAuthProvider = Provider<FirebaseAuth>((ref) {
@@ -114,6 +115,8 @@ class AuthService {
 
         debugPrint('AuthService: User saved to Firestore successfully');
 
+        await SubscriptionService.instance.logIn(credential.user!.uid);
+
         return user;
       }
       return null;
@@ -134,6 +137,9 @@ class AuthService {
         email: email,
         password: password,
       );
+      if (credential.user != null) {
+        await SubscriptionService.instance.logIn(credential.user!.uid);
+      }
       return credential.user;
     } catch (e) {
       rethrow;
@@ -155,6 +161,7 @@ class AuthService {
         debugPrint('FCMトークン削除失敗: $e');
       }
     }
+    await SubscriptionService.instance.logOut();
     await _auth.signOut();
   }
 
