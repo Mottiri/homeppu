@@ -712,7 +712,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
             const SizedBox(height: 16),
 
-            // 通知設定
+            
+            // ?????
+            Card(
+              child: ListTile(
+                leading: const Icon(
+                  Icons.workspace_premium,
+                  color: AppColors.accent,
+                ),
+                title: Text(AppMessages.profile.premiumTitle),
+                subtitle: Text(AppMessages.profile.premiumSubtitle),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/premium'),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+// 通知設定
             Card(
               child: ExpansionTile(
                 leading: const Icon(Icons.notifications_outlined),

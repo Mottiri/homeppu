@@ -12,6 +12,7 @@ import '../../features/post/presentation/screens/post_detail_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart';
 import '../../features/profile/presentation/screens/settings_screen.dart';
 import '../../features/profile/presentation/screens/avatar_edit_screen.dart';
+import '../../features/profile/presentation/screens/subscription_screen.dart';
 import '../../features/circle/presentation/screens/circles_screen.dart';
 import '../../features/circle/presentation/screens/circle_detail_screen.dart';
 import '../../features/circle/presentation/screens/edit_circle_screen.dart';
@@ -232,6 +233,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/settings',
         name: 'settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/premium',
+        name: 'premium',
+        builder: (context, state) => const SubscriptionScreen(),
       ),
       GoRoute(
         path: '/avatar-edit',

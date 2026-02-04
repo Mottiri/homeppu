@@ -19,6 +19,7 @@ import '../../../../shared/services/post_service.dart';
 import '../../../../shared/services/recent_reactions_service.dart';
 import '../../../../shared/services/reaction_limit_service.dart';
 import '../../../../shared/providers/auth_provider.dart';
+import '../../../../shared/providers/public_user_provider.dart';
 import '../../../../shared/providers/moderation_provider.dart';
 import '../../../../shared/providers/virtue_shop_provider.dart';
 import '../../../../shared/services/virtue_shop_service.dart';
@@ -292,10 +293,19 @@ class _PostCardState extends ConsumerState<PostCard> {
                                 await context.push('/profile/${post.userId}');
                                 if (mounted) _isNavigating = false;
                               },
-                              child: Text(
-                                post.userDisplayName,
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(color: AppColors.primary),
+                              child: Consumer(
+                                builder: (context, ref, _) {
+                                  final displayName =
+                                      ref.watch(
+                                        publicUserDisplayNameProvider(post.userId),
+                                      ) ??
+                                      post.userDisplayName;
+                                  return Text(
+                                    displayName,
+                                    style: Theme.of(context).textTheme.titleMedium
+                                        ?.copyWith(color: AppColors.primary),
+                                  );
+                                },
                               ),
                             ),
                             Text(
@@ -1039,6 +1049,7 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
         );
         return;
       case ReactionUnlockType.subscription:
+        final rootContext = context;
         await showDialog<void>(
           context: context,
           builder: (context) {
@@ -1057,7 +1068,13 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
                       ),
                       const SizedBox(width: 8),
                       TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          Future.microtask(() {
+                            if (!rootContext.mounted) return;
+                            rootContext.push('/premium');
+                          });
+                        },
                         child: Text(AppMessages.label.subscribe),
                       ),
                     ],

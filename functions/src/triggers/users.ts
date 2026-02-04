@@ -76,12 +76,52 @@ async function loadSubscriptionFallback(): Promise<SubscriptionFallbackConfig> {
   };
 }
 
-async function getNamePartRarity(partId: string | null): Promise<string | null> {
+function buildNamePartIdCandidates(partId: string): string[] {
+  const trimmed = partId.trim();
+  const candidates = new Set<string>([partId, trimmed]);
+
+  if (trimmed.startsWith("prefix_pre_")) {
+    const base = trimmed.replace("prefix_pre_", "");
+    candidates.add(`prefix_${base}`);
+  } else if (trimmed.startsWith("suffix_suf_")) {
+    const base = trimmed.replace("suffix_suf_", "");
+    candidates.add(`suffix_${base}`);
+  } else if (trimmed.startsWith("prefix_") && !trimmed.startsWith("prefix_pre_")) {
+    const base = trimmed.replace("prefix_", "");
+    candidates.add(`prefix_pre_${base}`);
+    candidates.add(`prefix_pre_${base} `);
+  } else if (trimmed.startsWith("suffix_") && !trimmed.startsWith("suffix_suf_")) {
+    const base = trimmed.replace("suffix_", "");
+    candidates.add(`suffix_suf_${base}`);
+    candidates.add(`suffix_suf_${base} `);
+  }
+
+  return Array.from(candidates);
+}
+
+async function getNamePartDoc(partId: string | null) {
   if (!partId) return null;
-  const doc = await db.collection(COLLECTIONS.NAME_PARTS).doc(partId).get();
-  if (!doc.exists) return null;
+  for (const candidate of buildNamePartIdCandidates(partId)) {
+    const doc = await db.collection(COLLECTIONS.NAME_PARTS).doc(candidate).get();
+    if (doc.exists) {
+      return doc;
+    }
+  }
+  return null;
+}
+
+async function getNamePartRarity(partId: string | null): Promise<string | null> {
+  const doc = await getNamePartDoc(partId);
+  if (!doc) return null;
   const rarity = (doc.data()?.rarity as string) || null;
   return rarity;
+}
+
+async function getNamePartText(partId: string | null): Promise<string | null> {
+  const doc = await getNamePartDoc(partId);
+  if (!doc) return null;
+  const text = (doc.data()?.text as string) || null;
+  return text;
 }
 
 async function applySubscriptionFallbackIfNeeded(
@@ -139,6 +179,18 @@ async function applySubscriptionFallbackIfNeeded(
     return false;
   }
 
+  const nextPrefixId = (updates.namePrefix as string | undefined) ?? namePrefix ?? null;
+  const nextSuffixId = (updates.nameSuffix as string | undefined) ?? nameSuffix ?? null;
+  if (nextPrefixId && nextSuffixId) {
+    const [prefixText, suffixText] = await Promise.all([
+      getNamePartText(nextPrefixId),
+      getNamePartText(nextSuffixId),
+    ]);
+    if (prefixText && suffixText) {
+      updates.displayName = `${prefixText}${suffixText}`;
+    }
+  }
+
   updates.updatedAt = FieldValue.serverTimestamp();
   await db.collection(COLLECTIONS.USERS).doc(userId).update(updates);
   return true;
@@ -178,14 +230,18 @@ export const onUserUpdated = onDocumentUpdated(
     const wasSubscriber = beforeData.isSubscriber === true;
     const isSubscriber = afterData.isSubscriber === true;
 
-    if (wasSubscriber && !isSubscriber) {
+    let publicSource = afterData;
+    if (!isSubscriber) {
       const applied = await applySubscriptionFallbackIfNeeded(userId, afterData);
       if (applied) {
-        return;
+        const refreshed = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        if (refreshed.exists) {
+          publicSource = refreshed.data() as Record<string, unknown>;
+        }
       }
     }
 
-    const publicData = buildPublicUserData(afterData);
+    const publicData = buildPublicUserData(publicSource);
     await db.collection("publicUsers").doc(userId).set(publicData, { merge: true });
   }
 );

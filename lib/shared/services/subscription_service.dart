@@ -44,6 +44,25 @@ class SubscriptionService {
     }
   }
 
+  Future<Offerings?> getOfferings() async {
+    await _configureIfNeeded();
+    if (!_configured) return null;
+    try {
+      return await Purchases.getOfferings();
+    } catch (e) {
+      debugPrint('RevenueCat getOfferings failed: $e');
+      return null;
+    }
+  }
+
+  Future<void> purchasePackage(Package package) async {
+    await _configureIfNeeded();
+    if (!_configured) {
+      throw StateError('RevenueCat is not configured.');
+    }
+    await Purchases.purchasePackage(package);
+  }
+
   Future<void> logOut() async {
     if (!_configured) return;
     try {

@@ -393,7 +393,7 @@ class _PostsListState extends ConsumerState<_PostsList> {
       if (invalidateAvatarCache) {
         final userIds = posts.map((post) => post.userId).toSet();
         for (final userId in userIds) {
-          ref.invalidate(publicUserAvatarPartsProvider(userId));
+          ref.invalidate(publicUserDocProvider(userId));
         }
       }
 

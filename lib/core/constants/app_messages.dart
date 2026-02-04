@@ -135,6 +135,9 @@ class _ErrorMessages {
   String get notEnoughVirtue => '徳ポイントが足りません。';
   String get notFoundTitle => 'あれ？ページが見つからないよ';
   String get notFoundDescription => '大丈夫、ホームに戻ろう！';
+String get purchaseFailedTitle => '購入に失敗しました';
+String get purchaseFailedSupport =>
+      '購入に失敗しました。お手数ですが運営にお問い合わせください。';
 
   // 投稿関連
   String get postFailed => '投稿できなかったみたい。もう一度試してみてね';
@@ -593,6 +596,18 @@ class _ProfileMessages {
 
   // 設定画面
   String get settingsTitle => '設定';
+String get premiumTitle => 'プレミアム';
+String get premiumSubtitle => 'サブスク加入で特典を解放';
+String get premiumFeatureTitle => '特典';
+String get premiumFeatureEpic => 'Epicアイテム解放';
+String get premiumFeatureAds => '広告表示OFF';
+String get premiumFeatureCircles => 'サークル機能解放';
+String get premiumPriceLabel => '月額';
+String get premiumProcessing => '購入処理中...';
+String get premiumNotice => '反映まで数十秒かかる場合があります';
+String get premiumSubscribed => '加入済み';
+String get premiumComingSoon => '準備中';
+
   String get profileEditTitle => 'プロフィール編集';
   String get headerImageLabel => 'ヘッダー画像';
   String get defaultHeaderLabel => 'デフォルト画像';

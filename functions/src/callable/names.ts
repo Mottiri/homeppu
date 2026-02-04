@@ -78,6 +78,7 @@ export const getNameParts = onCall(
     const userData = userDoc.data();
     const unlockedParts: string[] = userData?.unlockedNameParts || [];
     const isAI = userData?.isAI || false;
+    const isSubscriber = userData?.isSubscriber === true;
 
     // 全パーツを取得
     const partsSnapshot = await db.collection("nameParts").orderBy("order").get();
@@ -90,7 +91,10 @@ export const getNameParts = onCall(
       const partId = doc.id;
 
       // ノーマルは最初からアンロック、それ以外はアンロック済みリストに含まれているか確認
-      const isUnlocked = data.rarity === "common" || unlockedParts.includes(partId);
+      const isUnlocked =
+        data.rarity === "common" ||
+        unlockedParts.includes(partId) ||
+        (isSubscriber && data.rarity === "epic");
 
       // AIはスーパーレア以上を持てない
       if (isAI && data.rarity === "epic") {
@@ -110,14 +114,50 @@ export const getNameParts = onCall(
       }
     });
 
+    const prefixIdSet = new Set(prefixes.map((part) => part.id));
+    const suffixIdSet = new Set(suffixes.map((part) => part.id));
+
+    const resolvedPrefix = resolveCurrentPartId(userData?.namePrefix, prefixIdSet);
+    const resolvedSuffix = resolveCurrentPartId(userData?.nameSuffix, suffixIdSet);
+
     return {
       prefixes,
       suffixes,
-      currentPrefix: userData?.namePrefix || null,
-      currentSuffix: userData?.nameSuffix || null,
+      currentPrefix: resolvedPrefix ?? null,
+      currentSuffix: resolvedSuffix ?? null,
     };
   }
 );
+
+function resolveCurrentPartId(
+  currentId: string | null | undefined,
+  candidates: Set<string>
+): string | null {
+  if (!currentId) return null;
+  const trimmed = currentId.trim();
+  const checks = new Set<string>([currentId, trimmed]);
+
+  if (trimmed.startsWith("prefix_pre_")) {
+    const base = trimmed.replace("prefix_pre_", "");
+    checks.add(`prefix_${base}`);
+  } else if (trimmed.startsWith("suffix_suf_")) {
+    const base = trimmed.replace("suffix_suf_", "");
+    checks.add(`suffix_${base}`);
+  } else if (trimmed.startsWith("prefix_") && !trimmed.startsWith("prefix_pre_")) {
+    const base = trimmed.replace("prefix_", "");
+    checks.add(`prefix_pre_${base}`);
+    checks.add(`prefix_pre_${base} `);
+  } else if (trimmed.startsWith("suffix_") && !trimmed.startsWith("suffix_suf_")) {
+    const base = trimmed.replace("suffix_", "");
+    checks.add(`suffix_suf_${base}`);
+    checks.add(`suffix_suf_${base} `);
+  }
+
+  for (const id of checks) {
+    if (candidates.has(id)) return id;
+  }
+  return null;
+}
 
 /**
  * ユーザー名を更新する関数
@@ -142,6 +182,7 @@ export const updateUserName = onCall(
 
     const userData = userDoc.data()!;
     const unlockedParts: string[] = userData.unlockedNameParts || [];
+    const isSubscriber = userData.isSubscriber === true;
 
     // パーツを取得
     const prefixDoc = await db.collection("nameParts").doc(prefixId).get();
@@ -155,8 +196,14 @@ export const updateUserName = onCall(
     const suffixData = suffixDoc.data() as NamePart;
 
     // アンロック済みか確認（ノーマルは最初からOK）
-    const prefixUnlocked = prefixData.rarity === "common" || unlockedParts.includes(prefixId);
-    const suffixUnlocked = suffixData.rarity === "common" || unlockedParts.includes(suffixId);
+    const prefixUnlocked =
+      prefixData.rarity === "common" ||
+      unlockedParts.includes(prefixId) ||
+      (isSubscriber && prefixData.rarity === "epic");
+    const suffixUnlocked =
+      suffixData.rarity === "common" ||
+      unlockedParts.includes(suffixId) ||
+      (isSubscriber && suffixData.rarity === "epic");
 
     if (!prefixUnlocked || !suffixUnlocked) {
       throw new HttpsError("permission-denied", PERMISSION_ERRORS.PARTS_NOT_UNLOCKED);

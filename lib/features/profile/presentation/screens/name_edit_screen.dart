@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_messages.dart';
 import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/models/name_part_model.dart';
@@ -349,10 +350,49 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
     );
   }
 
-  Future<void> _showPurchaseDialog(
+Future<void> _showPurchaseDialog(
     NamePartModel part,
     VirtueShopConfig? config,
   ) async {
+    if (part.rarity == 'epic') {
+      final rootContext = context;
+      await showDialog<void>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: Text(AppMessages.confirm.subscriptionOnlyTitle),
+            content: Text(AppMessages.confirm.subscriptionOnlyMessage()),
+            actions: [
+              SizedBox(
+                width: double.infinity,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: Text(AppMessages.label.cancel),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        Future.microtask(() {
+                          if (!rootContext.mounted) return;
+                          rootContext.push('/premium');
+                        });
+                      },
+                      child: Text(AppMessages.label.subscribe),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      );
+      return;
+    }
+
     if (config == null) {
       SnackBarHelper.showError(
         context,

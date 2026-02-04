@@ -115,7 +115,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
       if (invalidateAvatarCache) {
         final userIds = posts.map((post) => post.userId).toSet();
         for (final userId in userIds) {
-          ref.invalidate(publicUserAvatarPartsProvider(userId));
+          ref.invalidate(publicUserDocProvider(userId));
         }
       }
 

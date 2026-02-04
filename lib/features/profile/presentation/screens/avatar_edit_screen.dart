@@ -202,6 +202,7 @@ class _AvatarEditScreenState extends ConsumerState<AvatarEditScreen> {
     }
 
     if (rarity == 'epic') {
+      final rootContext = context;
       await showDialog<void>(
         context: context,
         builder: (context) {
@@ -220,7 +221,13 @@ class _AvatarEditScreenState extends ConsumerState<AvatarEditScreen> {
                     ),
                     const SizedBox(width: 8),
                     TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        Future.microtask(() {
+                          if (!rootContext.mounted) return;
+                          rootContext.push('/premium');
+                        });
+                      },
                       child: Text(AppMessages.label.subscribe),
                     ),
                   ],

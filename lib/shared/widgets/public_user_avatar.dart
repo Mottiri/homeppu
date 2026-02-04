@@ -45,9 +45,7 @@ class PublicUserAvatar extends ConsumerWidget {
       );
     }
 
-    final parts = ref
-        .watch(publicUserAvatarPartsProvider(userId))
-        .valueOrNull;
+    final parts = ref.watch(publicUserAvatarPartsProvider(userId));
     return AvatarWidget(
       avatarIndex: avatarIndex,
       avatarParts: parts,

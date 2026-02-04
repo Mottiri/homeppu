@@ -9,6 +9,10 @@ import { revenueCatWebhookSecret } from "../config/secrets";
 type RevenueCatEvent = {
     app_user_id?: string;
     appUserId?: string;
+    original_app_user_id?: string;
+    aliases?: string[];
+    transferred_to?: string[];
+    transferred_from?: string[];
     type?: string;
     product_id?: string;
     expiration_at_ms?: number;
@@ -131,9 +135,24 @@ export const revenueCatWebhook = onRequest(
 
         const payload = req.body as Record<string, unknown>;
         const event = (payload?.event ?? payload) as RevenueCatEvent;
-        const userId = String(event.app_user_id ?? event.appUserId ?? "");
+        const transferredTo = event.transferred_to ?? [];
+        const transferredUser =
+            transferredTo.find((value) => value && !value.startsWith("$RCAnonymousID:")) ??
+            transferredTo[0];
+        const userId = String(
+            event.app_user_id ??
+                event.appUserId ??
+                event.original_app_user_id ??
+                event.aliases?.[0] ??
+                transferredUser ??
+                ""
+        );
 
         if (!userId) {
+            if ((event.type || "").toUpperCase() === "TRANSFER") {
+                res.status(200).send("Ignored");
+                return;
+            }
             res.status(400).send("Missing app_user_id");
             return;
         }
