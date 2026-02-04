@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_messages.dart';
@@ -22,6 +23,8 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   Package? _package;
   bool _loading = true;
   bool _isProcessing = false;
+  static const String _androidManageUrl =
+      'https://play.google.com/store/account/subscriptions?package=com.homeppu.homeppu';
 
   @override
   void initState() {
@@ -74,6 +77,16 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
       if (mounted) {
         setState(() => _isProcessing = false);
       }
+    }
+  }
+
+  Future<void> _openManageSubscription() async {
+    final info = await SubscriptionService.instance.getCustomerInfo();
+    final urlString = info?.managementURL;
+    final uri = Uri.parse(urlString?.isNotEmpty == true ? urlString! : _androidManageUrl);
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      SnackBarHelper.showError(context, AppMessages.error.general);
     }
   }
 
@@ -211,9 +224,11 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: (!isSubscriber && !_isProcessing)
-                              ? _purchase
-                              : null,
+                          onPressed: _isProcessing
+                              ? null
+                              : isSubscriber
+                                  ? _openManageSubscription
+                                  : _purchase,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,
                             foregroundColor: Colors.white,
@@ -226,7 +241,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                           ),
                           child: Text(
                             isSubscriber
-                                ? AppMessages.profile.premiumSubscribed
+                                ? AppMessages.profile.premiumManage
                                 : AppMessages.label.purchase,
                           ),
                         ),

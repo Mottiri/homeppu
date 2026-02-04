@@ -55,6 +55,17 @@ class SubscriptionService {
     }
   }
 
+  Future<CustomerInfo?> getCustomerInfo() async {
+    await _configureIfNeeded();
+    if (!_configured) return null;
+    try {
+      return await Purchases.getCustomerInfo();
+    } catch (e) {
+      debugPrint('RevenueCat getCustomerInfo failed: $e');
+      return null;
+    }
+  }
+
   Future<void> purchasePackage(Package package) async {
     await _configureIfNeeded();
     if (!_configured) {

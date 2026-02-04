@@ -606,6 +606,7 @@ String get premiumPriceLabel => '月額';
 String get premiumProcessing => '購入処理中...';
 String get premiumNotice => '反映まで数十秒かかる場合があります';
 String get premiumSubscribed => '加入済み';
+String get premiumManage => '定期購入を管理';
 String get premiumComingSoon => '準備中';
 
   String get profileEditTitle => 'プロフィール編集';
