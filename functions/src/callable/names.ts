@@ -21,7 +21,7 @@ import {
  * 名前パーツマスタを初期化する関数（管理者用）
  */
 export const initializeNameParts = onCall(
-  { region: LOCATION },
+  { region: LOCATION, enforceAppCheck: true },
   async (request) => {
     // セキュリティ: 管理者権限チェック
     await requireAdmin(request);
@@ -69,7 +69,7 @@ export const initializeNameParts = onCall(
  * 名前パーツ一覧を取得する関数
  */
 export const getNameParts = onCall(
-  { region: LOCATION },
+  { region: LOCATION, enforceAppCheck: true },
   async (request) => {
     const userId = requireAuth(request);
 
@@ -163,7 +163,7 @@ function resolveCurrentPartId(
  * ユーザー名を更新する関数
  */
 export const updateUserName = onCall(
-  { region: LOCATION },
+  { region: LOCATION, enforceAppCheck: true },
   async (request) => {
     const userId = requireAuth(request);
     const { prefixId, suffixId } = request.data;

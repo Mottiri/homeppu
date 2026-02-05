@@ -324,7 +324,7 @@ export const executeCircleAIPost = functionsV1.region(LOCATION).runWith({
  * 最適化版：generateCircleAIPostsと同じロジックを使用
  */
 export const triggerCircleAIPosts = onCall(
-  { region: LOCATION, secrets: [geminiApiKey], timeoutSeconds: 300 },
+  { region: LOCATION, secrets: [geminiApiKey], timeoutSeconds: 300, enforceAppCheck: true },
   async (request) => {
     // セキュリティ: 管理者権限チェック
     if (!request.auth) {

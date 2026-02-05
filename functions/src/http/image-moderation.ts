@@ -18,7 +18,7 @@ import { ErrorMessages } from "../helpers/errors";
  * Base64エンコードされた画像データを受け取り、不適切かどうか判定
  */
 export const moderateImageCallable = onCall(
-    { secrets: [geminiApiKey], region: LOCATION },
+    { secrets: [geminiApiKey], region: LOCATION, enforceAppCheck: true },
     async (request) => {
         const { imageBase64, mimeType = "image/jpeg" } = request.data;
 

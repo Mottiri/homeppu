@@ -232,7 +232,7 @@ export const evolveCircleAIs = functionsV1.region(LOCATION).runWith({
  * サークルAI成長を手動トリガー（テスト用）
  */
 export const triggerEvolveCircleAIs = onCall(
-  { region: LOCATION, timeoutSeconds: 120 },
+  { region: LOCATION, timeoutSeconds: 120, enforceAppCheck: true },
   async (request) => {
     // セキュリティ: 管理者権限チェック
     if (!request.auth) {

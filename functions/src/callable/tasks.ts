@@ -17,7 +17,7 @@ import { VALIDATION_ERRORS } from "../config/messages";
  * - バッチ書き込み（500件ずつ）
  */
 export const createTask = onCall(
-  { region: LOCATION },
+  { region: LOCATION, enforceAppCheck: true },
   async (request) => {
     const userId = requireAuth(request);
     const {
@@ -185,7 +185,7 @@ export const createTask = onCall(
  * - isCompletedTodayを計算して返却
  */
 export const getTasks = onCall(
-  { region: LOCATION },
+  { region: LOCATION, enforceAppCheck: true },
   async (request) => {
     const userId = requireAuth(request);
     const { type } = request.data;

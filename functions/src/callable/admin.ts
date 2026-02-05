@@ -25,7 +25,7 @@ import {
  * 管理用: 全ユーザーのフォローリストを掃除する
  */
 export const cleanUpUserFollows = onCall(
-    { region: LOCATION, timeoutSeconds: 540 },
+    { region: LOCATION, timeoutSeconds: 540, enforceAppCheck: true },
     async (request) => {
         const userId = requireAuth(request);
         const userIsAdmin = await isAdmin(userId);
@@ -85,7 +85,8 @@ export const cleanUpUserFollows = onCall(
  */
 export const deleteAllAIUsers = functionsV1.region(LOCATION).runWith({
     timeoutSeconds: 540,
-    memory: "1GB"
+    memory: "1GB",
+    enforceAppCheck: true,
 }).https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functionsV1.https.HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
@@ -173,7 +174,7 @@ export const deleteAllAIUsers = functionsV1.region(LOCATION).runWith({
  * 孤児サークルAI（サブコレクションのみ残っている状態）を一括削除
  */
 export const cleanupOrphanedCircleAIs = onCall(
-    { region: LOCATION, timeoutSeconds: 300 },
+    { region: LOCATION, timeoutSeconds: 300, enforceAppCheck: true },
     async (request) => {
         const userId = requireAuth(request);
         const userIsAdmin = await isAdmin(userId);
@@ -221,7 +222,7 @@ export const cleanupOrphanedCircleAIs = onCall(
 /**
  * 管理者権限を設定（既存の管理者のみが実行可能）
  */
-export const setAdminRole = onCall(async (request) => {
+export const setAdminRole = onCall({ region: LOCATION, enforceAppCheck: true }, async (request) => {
     const callerId = requireAuth(request);
 
     const callerIsAdmin = await isAdmin(callerId);
@@ -248,7 +249,7 @@ export const setAdminRole = onCall(async (request) => {
 /**
  * 管理者権限を削除（既存の管理者のみが実行可能）
  */
-export const removeAdminRole = onCall(async (request) => {
+export const removeAdminRole = onCall({ region: LOCATION, enforceAppCheck: true }, async (request) => {
     const callerId = requireAuth(request);
 
     const callerIsAdmin = await isAdmin(callerId);
@@ -284,7 +285,7 @@ export const removeAdminRole = onCall(async (request) => {
  * ユーザーを一時BANにする
  */
 export const banUser = onCall(
-    { region: LOCATION },
+    { region: LOCATION, enforceAppCheck: true },
     async (request) => {
         const adminId = await requireAdmin(request);
 
@@ -341,7 +342,7 @@ export const banUser = onCall(
  * 管理者用: 既存ユーザーをpublicUsersへ一括同期
  */
 export const backfillPublicUsers = onCall(
-    { region: LOCATION, timeoutSeconds: 540 },
+    { region: LOCATION, timeoutSeconds: 540, enforceAppCheck: true },
     async (request) => {
         const userId = requireAuth(request);
         const userIsAdmin = await isAdmin(userId);
@@ -388,7 +389,7 @@ export const backfillPublicUsers = onCall(
  * ユーザーを永久BANにする
  */
 export const permanentBanUser = onCall(
-    { region: LOCATION },
+    { region: LOCATION, enforceAppCheck: true },
     async (request) => {
         const adminId = await requireAdmin(request);
 
@@ -449,7 +450,7 @@ export const permanentBanUser = onCall(
  * BANを解除する
  */
 export const unbanUser = onCall(
-    { region: LOCATION },
+    { region: LOCATION, enforceAppCheck: true },
     async (request) => {
         const adminId = await requireAdmin(request);
 

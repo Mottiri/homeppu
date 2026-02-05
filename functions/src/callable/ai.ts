@@ -57,7 +57,7 @@ async function generateBioWithGemini(
  * Gemini APIでキャラクターに合ったbioを動的生成
  */
 export const initializeAIAccounts = onCall(
-    { region: LOCATION, secrets: [geminiApiKey], timeoutSeconds: 300 },
+    { region: LOCATION, secrets: [geminiApiKey], timeoutSeconds: 300, enforceAppCheck: true },
     async (request) => {
         // セキュリティ: 管理者権限チェック
         await requireAdmin(request);
@@ -171,7 +171,7 @@ export const initializeAIAccounts = onCall(
  * AI投稿生成のディスパッチャー（手動トリガー用）
  */
 export const generateAIPosts = onCall(
-    { region: LOCATION },
+    { region: LOCATION, enforceAppCheck: true },
     async (request) => {
         // セキュリティ: 管理者権限チェック
         await requireAdmin(request);

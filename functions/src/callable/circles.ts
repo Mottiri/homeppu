@@ -37,6 +37,7 @@ export const deleteCircle = onCall(
     region: LOCATION,
     timeoutSeconds: 60, // 即座にレスポンスするため短く
     memory: "256MiB",
+    enforceAppCheck: true,
   },
   async (request) => {
     const { circleId, reason } = request.data;
@@ -330,6 +331,7 @@ export const cleanupDeletedCircle = functionsV1.region(LOCATION).runWith({
 export const approveJoinRequest = onCall(
   {
     region: LOCATION,
+    enforceAppCheck: true,
   },
   async (request) => {
     const { requestId, circleId, circleName } = request.data;
@@ -411,6 +413,7 @@ export const approveJoinRequest = onCall(
 export const rejectJoinRequest = onCall(
   {
     region: LOCATION,
+    enforceAppCheck: true,
   },
   async (request) => {
     const { requestId, circleId, circleName } = request.data;
@@ -486,6 +489,7 @@ export const rejectJoinRequest = onCall(
 export const sendJoinRequest = onCall(
   {
     region: LOCATION,
+    enforceAppCheck: true,
   },
   async (request) => {
     const { circleId } = request.data;
@@ -572,6 +576,7 @@ export const sendJoinRequest = onCall(
 export const joinCircle = onCall(
   {
     region: LOCATION,
+    enforceAppCheck: true,
   },
   async (request) => {
     const { circleId } = request.data;
@@ -637,6 +642,7 @@ export const joinCircle = onCall(
 export const leaveCircle = onCall(
   {
     region: LOCATION,
+    enforceAppCheck: true,
   },
   async (request) => {
     const { circleId } = request.data;

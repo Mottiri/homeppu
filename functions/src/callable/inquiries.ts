@@ -27,7 +27,7 @@ import {
  * 新規問い合わせを作成
  */
 export const createInquiry = onCall(
-  { region: LOCATION },
+  { region: LOCATION, enforceAppCheck: true },
   async (request) => {
     const userId = requireAuth(request);
     const { category, subject, content, imageUrl } = request.data;
@@ -110,7 +110,7 @@ export const createInquiry = onCall(
  * ユーザーがメッセージを送信
  */
 export const sendInquiryMessage = onCall(
-  { region: LOCATION },
+  { region: LOCATION, enforceAppCheck: true },
   async (request) => {
     const userId = requireAuth(request);
     const { inquiryId, content, imageUrl } = request.data;
@@ -208,7 +208,7 @@ export const sendInquiryMessage = onCall(
  * 管理者が返信を送信
  */
 export const sendInquiryReply = onCall(
-  { region: LOCATION },
+  { region: LOCATION, enforceAppCheck: true },
   async (request) => {
     const adminId = requireAuth(request);
     const { inquiryId, content } = request.data;
@@ -293,7 +293,7 @@ export const sendInquiryReply = onCall(
  * 問い合わせステータスを変更（スプレッドシート連携オプション付き）
  */
 export const updateInquiryStatus = onCall(
-  { region: LOCATION, secrets: [sheetsServiceAccountKey] },
+  { region: LOCATION, secrets: [sheetsServiceAccountKey], enforceAppCheck: true },
   async (request) => {
     const adminId = requireAuth(request);
     const {

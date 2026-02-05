@@ -70,8 +70,8 @@ function readVirtueShopConfig(data: Record<string, unknown> | undefined): Virtue
 }
 
 export const getVirtueShopConfig = onCall(
-    { region: LOCATION },
-    async (request) => {
+  { region: LOCATION, enforceAppCheck: true },
+  async (request) => {
         requireAuth(request);
 
         const doc = await db.collection(COLLECTIONS.SETTINGS).doc(SETTINGS_DOC_ID).get();
@@ -88,8 +88,8 @@ export const getVirtueShopConfig = onCall(
 );
 
 export const purchaseVirtueItem = onCall(
-    { region: LOCATION },
-    async (request) => {
+  { region: LOCATION, enforceAppCheck: true },
+  async (request) => {
         const userId = requireAuth(request);
         const { itemType, itemId } = request.data || {};
 

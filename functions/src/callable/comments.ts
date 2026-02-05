@@ -89,6 +89,7 @@ async function penalizeUser(userId: string, penalty: number, reason: string) {
 export const createCommentWithModeration = onCall(
     {
         region: LOCATION,
+        enforceAppCheck: true,
         secrets: [geminiApiKey],
     },
     async (request) => {
@@ -161,7 +162,7 @@ export const createCommentWithModeration = onCall(
  * 1人あたり1投稿に対して最大5回までの制限あり
  */
 export const addUserReaction = onCall(
-    { region: LOCATION, enforceAppCheck: false },
+    { region: LOCATION, enforceAppCheck: true },
     async (request) => {
         const { postId, reactionType } = request.data;
         const userId = requireAuth(request);
@@ -218,7 +219,7 @@ export const addUserReaction = onCall(
 );
 
 export const removeUserReaction = onCall(
-    { region: LOCATION, enforceAppCheck: false },
+    { region: LOCATION, enforceAppCheck: true },
     async (request) => {
         const { postId, reactionType } = request.data;
         const userId = requireAuth(request);

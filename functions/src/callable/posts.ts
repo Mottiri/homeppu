@@ -28,7 +28,7 @@ import {
  * レート制限付きの投稿作成（スパム対策）
  */
 export const createPostWithRateLimit = onCall(
-    { region: LOCATION },
+    { region: LOCATION, enforceAppCheck: true },
     async (request) => {
         const userId = requireAuth(request);
         const data = request.data;
@@ -93,6 +93,7 @@ export const createPostWithModeration = onCall(
         secrets: [geminiApiKey],
         timeoutSeconds: 120,
         memory: "1GiB",
+        enforceAppCheck: true,
     },
     async (request) => {
         console.log("=== createPostWithModeration START ===");

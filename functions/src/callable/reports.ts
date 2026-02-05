@@ -22,7 +22,7 @@ import {
  * - 3件で徳ポイント減少
  */
 export const reportContent = onCall(
-  { region: LOCATION },
+  { region: LOCATION, enforceAppCheck: true },
   async (request) => {
     const reporterId = requireAuth(request);
     const { contentId, contentType, reason, targetUserId } = request.data;

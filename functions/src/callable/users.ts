@@ -16,8 +16,8 @@ import { AUTH_ERRORS, RESOURCE_ERRORS, VALIDATION_ERRORS } from "../config/messa
  * ユーザーをフォローする
  */
 export const followUser = onCall(
-    { region: LOCATION },
-    async (request) => {
+  { region: LOCATION, enforceAppCheck: true },
+  async (request) => {
         const currentUserId = requireAuth(request);
         const { targetUserId } = request.data;
 
@@ -63,8 +63,8 @@ export const followUser = onCall(
  * フォローを解除する
  */
 export const unfollowUser = onCall(
-    { region: LOCATION },
-    async (request) => {
+  { region: LOCATION, enforceAppCheck: true },
+  async (request) => {
         const currentUserId = requireAuth(request);
         const { targetUserId } = request.data;
 
@@ -100,8 +100,8 @@ export const unfollowUser = onCall(
  * フォロー状態を取得する
  */
 export const getFollowStatus = onCall(
-    { region: LOCATION },
-    async (request) => {
+  { region: LOCATION, enforceAppCheck: true },
+  async (request) => {
         const currentUserId = requireAuth(request);
         const { targetUserId } = request.data;
 
@@ -126,8 +126,8 @@ export const getFollowStatus = onCall(
  * 徳ポイント履歴を取得
  */
 export const getVirtueHistory = onCall(
-    { region: LOCATION },
-    async (request) => {
+  { region: LOCATION, enforceAppCheck: true },
+  async (request) => {
         const userId = requireAuth(request);
 
         const history = await db
@@ -151,8 +151,8 @@ export const getVirtueHistory = onCall(
  * 徳ポイントの現在値と設定を取得
  */
 export const getVirtueStatus = onCall(
-    { region: LOCATION },
-    async (request) => {
+  { region: LOCATION, enforceAppCheck: true },
+  async (request) => {
         const userId = requireAuth(request);
         const userDoc = await db.collection("users").doc(userId).get();
 
