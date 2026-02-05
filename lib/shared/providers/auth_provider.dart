@@ -18,9 +18,9 @@ final firestoreProvider = Provider<FirebaseFirestore>((ref) {
   return FirebaseFirestore.instance;
 });
 
-/// 認証状態の監視
+/// 認証状態の監視（emailVerifiedの更新も拾う）
 final authStateProvider = StreamProvider<User?>((ref) {
-  return ref.watch(firebaseAuthProvider).authStateChanges();
+  return ref.watch(firebaseAuthProvider).userChanges();
 });
 
 /// 現在のユーザー情報

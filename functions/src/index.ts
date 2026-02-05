@@ -64,7 +64,13 @@ export { onUserCreated, onUserUpdated, onUserDeleted } from "./triggers/users";
 // Scheduled
 // ===============================================
 export { checkGhostCircles, evolveCircleAIs, triggerEvolveCircleAIs } from "./scheduled/circles";
-export { cleanupOrphanedMedia, cleanupResolvedInquiries, cleanupReports, cleanupBannedUsers } from "./scheduled/cleanup";
+export {
+    cleanupOrphanedMedia,
+    cleanupResolvedInquiries,
+    cleanupReports,
+    cleanupBannedUsers,
+    cleanupUnverifiedUsers,
+} from "./scheduled/cleanup";
 export { executeTaskReminder, executeGoalReminder } from "./scheduled/reminders";
 
 // ===============================================

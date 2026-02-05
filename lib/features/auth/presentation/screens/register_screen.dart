@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/avatar_assets.dart';
 import '../../../../core/constants/app_messages.dart';
+import '../../../../core/constants/name_parts_catalog.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/models/avatar_parts_model.dart';
 import '../../../../shared/widgets/avatar_parts_selector.dart';
@@ -20,192 +21,9 @@ class RegisterScreen extends ConsumerStatefulWidget {
   ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-// 登録時に選択可能な名前パーツ（ノーマルのみ）
-final _defaultPrefixes = [
-  NamePartModel(
-    id: 'prefix_pre_01',
-    text: 'がんばる',
-    category: 'positive',
-    rarity: 'common',
-    type: 'prefix',
-    order: 1,
-    unlocked: true,
-  ),
-  NamePartModel(
-    id: 'prefix_pre_02',
-    text: 'キラキラ',
-    category: 'positive',
-    rarity: 'common',
-    type: 'prefix',
-    order: 2,
-    unlocked: true,
-  ),
-  NamePartModel(
-    id: 'prefix_pre_03',
-    text: '全力',
-    category: 'positive',
-    rarity: 'common',
-    type: 'prefix',
-    order: 3,
-    unlocked: true,
-  ),
-  NamePartModel(
-    id: 'prefix_pre_04',
-    text: '輝く',
-    category: 'positive',
-    rarity: 'common',
-    type: 'prefix',
-    order: 4,
-    unlocked: true,
-  ),
-  NamePartModel(
-    id: 'prefix_pre_05',
-    text: '前向き',
-    category: 'positive',
-    rarity: 'common',
-    type: 'prefix',
-    order: 5,
-    unlocked: true,
-  ),
-  NamePartModel(
-    id: 'prefix_pre_06',
-    text: 'のんびり',
-    category: 'relaxed',
-    rarity: 'common',
-    type: 'prefix',
-    order: 6,
-    unlocked: true,
-  ),
-  NamePartModel(
-    id: 'prefix_pre_07',
-    text: 'まったり',
-    category: 'relaxed',
-    rarity: 'common',
-    type: 'prefix',
-    order: 7,
-    unlocked: true,
-  ),
-  NamePartModel(
-    id: 'prefix_pre_08',
-    text: 'ゆるふわ',
-    category: 'relaxed',
-    rarity: 'common',
-    type: 'prefix',
-    order: 8,
-    unlocked: true,
-  ),
-  NamePartModel(
-    id: 'prefix_pre_11',
-    text: 'コツコツ',
-    category: 'effort',
-    rarity: 'common',
-    type: 'prefix',
-    order: 11,
-    unlocked: true,
-  ),
-  NamePartModel(
-    id: 'prefix_pre_12',
-    text: 'もくもく',
-    category: 'effort',
-    rarity: 'common',
-    type: 'prefix',
-    order: 12,
-    unlocked: true,
-  ),
-];
-
-final _defaultSuffixes = [
-  NamePartModel(
-    id: 'suffix_suf_01',
-    text: '🐰うさぎ',
-    category: 'animal',
-    rarity: 'common',
-    type: 'suffix',
-    order: 1,
-    unlocked: true,
-  ),
-  NamePartModel(
-    id: 'suffix_suf_02',
-    text: '🐱ねこ',
-    category: 'animal',
-    rarity: 'common',
-    type: 'suffix',
-    order: 2,
-    unlocked: true,
-  ),
-  NamePartModel(
-    id: 'suffix_suf_03',
-    text: '🐶いぬ',
-    category: 'animal',
-    rarity: 'common',
-    type: 'suffix',
-    order: 3,
-    unlocked: true,
-  ),
-  NamePartModel(
-    id: 'suffix_suf_04',
-    text: '🐼パンダ',
-    category: 'animal',
-    rarity: 'common',
-    type: 'suffix',
-    order: 4,
-    unlocked: true,
-  ),
-  NamePartModel(
-    id: 'suffix_suf_05',
-    text: '🐻くま',
-    category: 'animal',
-    rarity: 'common',
-    type: 'suffix',
-    order: 5,
-    unlocked: true,
-  ),
-  NamePartModel(
-    id: 'suffix_suf_07',
-    text: '🌸さくら',
-    category: 'nature',
-    rarity: 'common',
-    type: 'suffix',
-    order: 7,
-    unlocked: true,
-  ),
-  NamePartModel(
-    id: 'suffix_suf_08',
-    text: '🌻ひまわり',
-    category: 'nature',
-    rarity: 'common',
-    type: 'suffix',
-    order: 8,
-    unlocked: true,
-  ),
-  NamePartModel(
-    id: 'suffix_suf_09',
-    text: '⭐ほし',
-    category: 'nature',
-    rarity: 'common',
-    type: 'suffix',
-    order: 9,
-    unlocked: true,
-  ),
-  NamePartModel(
-    id: 'suffix_suf_12',
-    text: '🍙おにぎり',
-    category: 'food',
-    rarity: 'common',
-    type: 'suffix',
-    order: 12,
-    unlocked: true,
-  ),
-  NamePartModel(
-    id: 'suffix_suf_14',
-    text: '🍮プリン',
-    category: 'food',
-    rarity: 'common',
-    type: 'suffix',
-    order: 14,
-    unlocked: true,
-  ),
-];
+// 登録時に選択可能な名前パーツ（Commonのみ）
+final _defaultPrefixes = NamePartsCatalog.commonPrefixes;
+final _defaultSuffixes = NamePartsCatalog.commonSuffixes;
 
 class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
@@ -317,13 +135,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
                   // タイトル
                   Text(
-                    'アカウント作成',
+                    AppMessages.auth.registerTitle,
                     style: Theme.of(context).textTheme.displaySmall,
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '一緒に素敵な時間を過ごそう✨',
+                    AppMessages.auth.registerSubtitle,
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color: AppColors.textSecondary,
                     ),
@@ -337,7 +155,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     children: [
                       Expanded(
                         child: _AvatarModeButton(
-                          label: 'アバター',
+                          label: AppMessages.auth.registerAvatarTab,
                           isSelected: _useAvatarParts,
                           onTap: () => setState(() => _useAvatarParts = true),
                         ),
@@ -345,7 +163,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: _AvatarModeButton(
-                          label: 'アイコン',
+                          label: AppMessages.auth.registerIconTab,
                           isSelected: !_useAvatarParts,
                           onTap: () => setState(() => _useAvatarParts = false),
                         ),
@@ -407,16 +225,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   // メールアドレス
                   AuthTextField(
                     controller: _emailController,
-                    label: 'メールアドレス',
-                    hint: 'example@email.com',
+                    label: AppMessages.auth.registerEmailLabel,
+                    hint: AppMessages.auth.registerEmailHint,
                     keyboardType: TextInputType.emailAddress,
                     prefixIcon: Icons.email_outlined,
                     validator: (value) {
                       if (value == null || value.isEmpty) {
-                        return 'メールアドレスを入力してね';
+                        return AppMessages.auth.registerEmailRequired;
                       }
                       if (!value.contains('@')) {
-                        return '正しいメールアドレスを入力してね';
+                        return AppMessages.auth.registerEmailInvalid;
                       }
                       return null;
                     },
@@ -436,16 +254,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   // パスワード
                   AuthTextField(
                     controller: _passwordController,
-                    label: 'パスワード',
-                    hint: '6文字以上',
+                    label: AppMessages.auth.registerPasswordLabel,
+                    hint: AppMessages.auth.registerPasswordHint,
                     isPassword: true,
                     prefixIcon: Icons.lock_outline,
                     validator: (value) {
                       if (value == null || value.isEmpty) {
-                        return 'パスワードを入力してね';
+                        return AppMessages.auth.registerPasswordRequired;
                       }
                       if (value.length < 6) {
-                        return '6文字以上にしてね';
+                        return AppMessages.auth.registerPasswordTooShort;
                       }
                       return null;
                     },
@@ -455,13 +273,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   // パスワード確認
                   AuthTextField(
                     controller: _confirmPasswordController,
-                    label: 'パスワード（確認）',
-                    hint: 'もう一度入力',
+                    label: AppMessages.auth.registerPasswordConfirmLabel,
+                    hint: AppMessages.auth.registerPasswordConfirmHint,
                     isPassword: true,
                     prefixIcon: Icons.lock_outline,
                     validator: (value) {
                       if (value != _passwordController.text) {
-                        return 'パスワードが一致しないよ';
+                        return AppMessages.auth.registerPasswordMismatch;
                       }
                       return null;
                     },
@@ -483,7 +301,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                                 color: Colors.white,
                               ),
                             )
-                          : const Text('アカウント作成'),
+                          : Text(AppMessages.auth.registerSubmit),
                     ),
                   ),
 
@@ -494,12 +312,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        '登録済みですか？',
+                        AppMessages.auth.registerHaveAccount,
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                       TextButton(
                         onPressed: () => context.go('/login'),
-                        child: const Text('ログイン'),
+                        child: Text(AppMessages.auth.registerLogin),
                       ),
                     ],
                   ),
@@ -532,7 +350,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'なまえを選ぼう',
+            AppMessages.auth.registerNameSelectTitle,
             style: Theme.of(
               context,
             ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
@@ -557,7 +375,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           const SizedBox(height: 16),
 
           // 前半パーツ選択
-          Text('前半', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+          Text(
+            AppMessages.auth.registerNamePrefix,
+            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -595,7 +416,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           const SizedBox(height: 16),
 
           // 後半パーツ選択
-          Text('後半', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+          Text(
+            AppMessages.auth.registerNameSuffix,
+            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -632,7 +456,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
           const SizedBox(height: 8),
           Text(
-            '※登録後も設定から変更できます',
+            AppMessages.auth.registerNameNote,
             style: TextStyle(fontSize: 11, color: Colors.grey[500]),
           ),
         ],

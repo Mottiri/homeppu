@@ -1,4 +1,4 @@
-/**
+﻿/**
  * スケジュールされたクリーンアップ関数
  * Phase 7: index.ts から分離
  */
@@ -601,3 +601,61 @@ export const cleanupBannedUsers = onSchedule(
         console.log("=== cleanupBannedUsers COMPLETE ===");
     }
 );
+
+
+
+export const cleanupUnverifiedUsers = onSchedule(
+    {
+        schedule: "every 5 minutes",
+        timeZone: "Asia/Tokyo",
+        region: LOCATION,
+        timeoutSeconds: 540,
+    },
+    async () => {
+        // 未認証ユーザー（emailVerified=false）を一定時間経過後に削除
+        console.log("=== cleanupUnverifiedUsers START ===");
+        const cutoff = Date.now() - 5 * 60 * 1000;
+
+        let deleted = 0;
+        let checked = 0;
+        let nextPageToken: string | undefined;
+
+        do {
+            const result = await admin.auth().listUsers(1000, nextPageToken);
+            nextPageToken = result.pageToken;
+
+            for (const user of result.users) {
+                checked++;
+                if (user.emailVerified) continue;
+
+                const creationTime = user.metadata.creationTime
+                    ? new Date(user.metadata.creationTime).getTime()
+                    : 0;
+                if (!creationTime || creationTime > cutoff) continue;
+
+                try {
+                    const userDoc = await db.collection("users").doc(user.uid).get();
+                    if (userDoc.exists && userDoc.data()?.isAI) {
+                        continue;
+                    }
+
+                    await admin.auth().deleteUser(user.uid).catch((e) => {
+                        console.warn(`Auth delete failed for ${user.uid}:`, e);
+                    });
+                    await db.collection("users").doc(user.uid).delete().catch((e) => {
+                        console.warn(`Firestore delete failed for ${user.uid}:`, e);
+                    });
+                    deleted++;
+                } catch (error) {
+                    console.error(`Error deleting unverified user ${user.uid}:`, error);
+                }
+            }
+        } while (nextPageToken);
+
+        console.log(
+            `=== cleanupUnverifiedUsers COMPLETE: checked=${checked}, deleted=${deleted} ===`
+        );
+    }
+);
+
+

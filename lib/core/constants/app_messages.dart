@@ -247,6 +247,7 @@ class _LabelMessages {
   String get edit => '編集';
   String get create => '作成';
   String get logout => 'ログアウト';
+  String get relogin => 'ログインし直す';
   String get add => '追加';
   String get dontShowAgain => '今後表示しない';
   String get deleteThisTask => 'このタスクのみ削除';
@@ -533,6 +534,46 @@ class _AuthMessages {
   String get registerEmailAlreadyInUse => 'このメールアドレスはすでに使われているみたい📧';
   String get registerWeakPassword => 'もう少し強いパスワードにしてね🔐';
   String get registerInvalidEmail => 'メールアドレスの形式を確認してね📧';
+
+  // 新規登録 UI
+  String get registerTitle => 'アカウント作成';
+  String get registerSubtitle => '一緒に素敵な時間を過ごそう✨';
+  String get registerAvatarTab => 'アバター';
+  String get registerIconTab => 'アイコン';
+  String get registerEmailLabel => 'メールアドレス';
+  String get registerEmailHint => 'example@email.com';
+  String get registerEmailRequired => 'メールアドレスを入力してね';
+  String get registerEmailInvalid => '正しいメールアドレスを入力してね';
+  String get registerPasswordLabel => 'パスワード';
+  String get registerPasswordHint => '6文字以上';
+  String get registerPasswordRequired => 'パスワードを入力してね';
+  String get registerPasswordTooShort => '6文字以上にしてね';
+  String get registerPasswordConfirmLabel => 'パスワード（確認）';
+  String get registerPasswordConfirmHint => 'もう一度入力';
+  String get registerPasswordMismatch => 'パスワードが一致しないよ';
+  String get registerSubmit => 'アカウント作成';
+  String get registerHaveAccount => '登録済みですか？';
+  String get registerLogin => 'ログイン';
+  String get registerNameSelectTitle => 'なまえを選ぼう';
+  String get registerNamePrefix => '前半';
+  String get registerNameSuffix => '後半';
+  String get registerNameNote => '※登録後も設定から変更できます';
+
+  // メール認証
+  String verifySentTo(String email) =>
+      '$email に確認メールを送信しました。本文のURLをタップして認証を完了してください。';
+  String get verifyNoEmail =>
+      '確認メールの送信先が取得できませんでした。登録をやり直してください。';
+  String verifyResendCountdown(int seconds) => '再送まであと${seconds}秒';
+  String get verifyResendReady => '再送できます';
+  String get verifyResendAction => '再送する';
+  String get verifyRestart => '登録をやり直す';
+  String get verifyCheckAction => '認証できたらここをタップ';
+  String get verifyResent => '認証メールを再送しました';
+  String get verifyGenericError =>
+      'ごめんね、うまくいかなかったみたい。もう一度試してみてね';
+  String get verifyRequiresRecentLogin =>
+      '安全のため、もう一度ログインしてから変更してね';
 }
 
 /// 管理者関連メッセージ

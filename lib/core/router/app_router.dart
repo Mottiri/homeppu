@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/auth/presentation/screens/onboarding_screen.dart';
+import '../../features/auth/presentation/screens/email_verification_screen.dart';
 import '../../features/home/presentation/screens/home_screen.dart';
 import '../../features/home/presentation/screens/main_shell.dart';
 import '../../features/post/presentation/screens/create_post_screen.dart';
@@ -43,27 +44,64 @@ import '../../shared/providers/auth_provider.dart';
 import '../constants/app_messages.dart';
 import '../constants/avatar_assets.dart';
 
+/// 認証状態の変更を通知するためのNotifier
+class AuthStateNotifier extends ChangeNotifier {
+  AuthStateNotifier(this._ref) {
+    _ref.listen(authStateProvider, (_, __) {
+      notifyListeners();
+    });
+  }
+  final Ref _ref;
+}
+
+final _authStateNotifierProvider = Provider<AuthStateNotifier>((ref) {
+  return AuthStateNotifier(ref);
+});
+
 /// アプリのルーター設定
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authStateProvider);
+  final authNotifier = ref.watch(_authStateNotifierProvider);
 
   return GoRouter(
     initialLocation: '/home',
     debugLogDiagnostics: true,
+    refreshListenable: authNotifier,
     redirect: (context, state) {
-      final isLoggedIn = authState.valueOrNull != null;
-      final isAuthRoute =
-          state.matchedLocation == '/login' ||
-          state.matchedLocation == '/register' ||
-          state.matchedLocation == '/onboarding';
+      final currentUser = ref.read(firebaseAuthProvider).currentUser;
+      final isLoggedIn = currentUser != null;
+      final isVerified = currentUser?.emailVerified ?? false;
 
-      // 未ログインでauth以外にアクセス → ログイン画面へ
-      if (!isLoggedIn && !isAuthRoute) {
-        return '/onboarding';
+      final location = state.uri.path;
+      final isPublicAuthRoute =
+          location.startsWith('/login') ||
+          location.startsWith('/register') ||
+          location.startsWith('/onboarding');
+      final isVerifyRoute = location.startsWith('/email-verify');
+
+      // 未ログインでauth以外にアクセス → オンボーディング
+      if (!isLoggedIn) {
+        debugPrint(
+          '[ROUTER] Not logged in: location=$location, isVerifyRoute=$isVerifyRoute, isPublicAuthRoute=$isPublicAuthRoute',
+        );
+        if (isVerifyRoute) {
+          debugPrint('[ROUTER] → Redirecting to /register');
+          return '/register';
+        }
+        if (!isPublicAuthRoute) {
+          debugPrint('[ROUTER] → Redirecting to /onboarding');
+          return '/onboarding';
+        }
+        return null;
       }
 
-      // ログイン済みでauth画面にアクセス → ホームへ
-      if (isLoggedIn && isAuthRoute) {
+      // ログイン済み・未認証 → 認証待ち画面に固定
+      if (isLoggedIn && !isVerified) {
+        if (!isVerifyRoute) return '/email-verify';
+        return null;
+      }
+
+      // ログイン済み・認証済みでauth画面にアクセス → ホームへ
+      if (isLoggedIn && isVerified && (isPublicAuthRoute || isVerifyRoute)) {
         return '/home';
       }
 
@@ -85,6 +123,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/register',
         name: 'register',
         builder: (context, state) => const RegisterScreen(),
+      ),
+      GoRoute(
+        path: '/email-verify',
+        name: 'emailVerify',
+        builder: (context, state) => const EmailVerificationScreen(),
       ),
 
       // メイン画面（シェルルート）
