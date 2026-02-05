@@ -11,6 +11,7 @@ import 'firebase_options.dart';
 import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
 import 'core/constants/app_constants.dart';
+import 'shared/services/app_check_service.dart';
 import 'shared/services/notification_service.dart';
 import 'shared/services/subscription_service.dart';
 
@@ -22,6 +23,7 @@ void main() async {
 
   // Firebase初期化
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await AppCheckService.initialize();
 
   final currentUser = FirebaseAuth.instance.currentUser;
   if (currentUser != null) {
