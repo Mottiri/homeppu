@@ -630,8 +630,9 @@ class _ProfileMessages {
   String get premiumFeatureEpic => 'Epicアイテム解放';
   String get premiumFeatureAds => '広告表示OFF';
   String get premiumFeatureCircles => 'サークル機能解放';
-  String get premiumPriceLabel => '月額';
+  String get premiumPriceLabel => '/月';
   String get premiumProcessing => '購入処理中...';
+  String get premiumProcessingWait => '少々お待ちください';
   String get premiumNotice => '反映まで数十秒かかる場合があります';
   String get premiumSubscribed => '加入済み';
   String get premiumManage => '定期購入を管理';

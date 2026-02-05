@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -15,21 +17,41 @@ class SubscriptionScreen extends ConsumerStatefulWidget {
   const SubscriptionScreen({super.key});
 
   @override
-  ConsumerState<SubscriptionScreen> createState() =>
-      _SubscriptionScreenState();
+  ConsumerState<SubscriptionScreen> createState() => _SubscriptionScreenState();
 }
 
-class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
+class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
+    with SingleTickerProviderStateMixin {
   Package? _package;
   bool _loading = true;
   bool _isProcessing = false;
   static const String _androidManageUrl =
       'https://play.google.com/store/account/subscriptions?package=com.homeppu.homeppu';
 
+  // ヒーローアイコンのアニメーション
+  late AnimationController _glowController;
+  late Animation<double> _glowAnimation;
+
   @override
   void initState() {
     super.initState();
     _loadOfferings();
+
+    // グローアニメーション初期化
+    _glowController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
+
+    _glowAnimation = Tween<double>(begin: 0.15, end: 0.45).animate(
+      CurvedAnimation(parent: _glowController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _glowController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadOfferings() async {
@@ -83,7 +105,9 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   Future<void> _openManageSubscription() async {
     final info = await SubscriptionService.instance.getCustomerInfo();
     final urlString = info?.managementURL;
-    final uri = Uri.parse(urlString?.isNotEmpty == true ? urlString! : _androidManageUrl);
+    final uri = Uri.parse(
+      urlString?.isNotEmpty == true ? urlString! : _androidManageUrl,
+    );
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && mounted) {
       SnackBarHelper.showError(context, AppMessages.error.general);
@@ -128,190 +152,298 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
         Scaffold(
           appBar: AppBar(
             title: Text(AppMessages.profile.premiumTitle),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
           ),
+          extendBodyBehindAppBar: true,
           body: Container(
-            decoration: const BoxDecoration(
-              gradient: AppColors.warmGradient,
-            ),
-            child: ListView(
-              padding: const EdgeInsets.all(20),
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.06),
-                        blurRadius: 16,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        AppMessages.profile.premiumTitle,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        AppMessages.profile.premiumSubtitle,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            priceLabel,
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineMedium
-                                ?.copyWith(
-                                  color: AppColors.primaryDark,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            AppMessages.profile.premiumPriceLabel,
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                        ],
-                      ),
-                      if (_loading) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          AppMessages.loading.general,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                      const SizedBox(height: 16),
-                      Text(
-                        AppMessages.profile.premiumFeatureTitle,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 12),
-                      _buildFeatureRow(
-                        context,
-                        AppMessages.profile.premiumFeatureEpic,
-                        isReady: true,
-                      ),
-                      _buildFeatureRow(
-                        context,
-                        AppMessages.profile.premiumFeatureAds,
-                        isReady: false,
-                      ),
-                      _buildFeatureRow(
-                        context,
-                        AppMessages.profile.premiumFeatureCircles,
-                        isReady: false,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        AppMessages.profile.premiumNotice,
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: AppColors.textSecondary),
-                      ),
-                      const SizedBox(height: 20),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: _isProcessing
-                              ? null
-                              : isSubscriber
-                                  ? _openManageSubscription
-                                  : _purchase,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 14,
-                            ),
-                          ),
-                          child: Text(
-                            isSubscriber
-                                ? AppMessages.profile.premiumManage
-                                : AppMessages.label.purchase,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        if (_isProcessing)
-          Positioned.fill(
-            child: Container(
-              color: Colors.black.withOpacity(0.35),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const CircularProgressIndicator(
-                      color: Colors.white,
+            decoration: const BoxDecoration(gradient: AppColors.warmGradient),
+            child: SafeArea(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                children: [
+                  const SizedBox(height: 16),
+
+                  // ヒーローアイコン（アニメーション付き）
+                  _buildHeroIcon(),
+                  const SizedBox(height: 24),
+
+                  // 価格表示（大きく強調）
+                  _buildPriceDisplay(priceLabel),
+                  const SizedBox(height: 24),
+
+                  // 機能リストカード（ガラスモーフィズム風）
+                  _buildFeatureCard(),
+                  const SizedBox(height: 24),
+
+                  // 購入ボタン
+                  _buildPurchaseButton(isSubscriber),
+                  const SizedBox(height: 16),
+
+                  // 注意書き
+                  Text(
+                    AppMessages.profile.premiumNotice,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      AppMessages.profile.premiumProcessing,
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                  ],
-                ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
             ),
           ),
+        ),
+
+        // 購入処理中オーバーレイ（ブラー + カード）
+        if (_isProcessing) _buildProcessingOverlay(),
       ],
     );
   }
 
-  Widget _buildFeatureRow(
-    BuildContext context,
-    String text, {
-    required bool isReady,
-  }) {
+  Widget _buildHeroIcon() {
+    return AnimatedBuilder(
+      animation: _glowAnimation,
+      builder: (context, child) {
+        return Center(
+          child: Container(
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.accent.withValues(
+                    alpha: _glowAnimation.value,
+                  ),
+                  blurRadius: 30,
+                  spreadRadius: 10,
+                ),
+              ],
+            ),
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [AppColors.accent, AppColors.secondary],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.workspace_premium_rounded,
+                size: 56,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPriceDisplay(String priceLabel) {
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              priceLabel,
+              style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                color: AppColors.primaryDark,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Text(
+                AppMessages.profile.premiumPriceLabel,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (_loading) ...[
+          const SizedBox(height: 8),
+          Text(
+            AppMessages.loading.general,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildFeatureCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surface.withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            AppMessages.profile.premiumFeatureTitle,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          _buildFeatureRow(
+            AppMessages.profile.premiumFeatureEpic,
+            isReady: true,
+          ),
+          _buildFeatureRow(
+            AppMessages.profile.premiumFeatureAds,
+            isReady: false,
+          ),
+          _buildFeatureRow(
+            AppMessages.profile.premiumFeatureCircles,
+            isReady: false,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeatureRow(String text, {required bool isReady}) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         children: [
-          Icon(
-            isReady ? Icons.check_circle : Icons.schedule,
-            color: isReady ? AppColors.success : AppColors.warning,
-            size: 20,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              text,
-              style: Theme.of(context).textTheme.bodyMedium,
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isReady
+                  ? AppColors.success.withValues(alpha: 0.15)
+                  : AppColors.warning.withValues(alpha: 0.15),
             ),
+            child: Icon(
+              isReady ? Icons.check_rounded : Icons.schedule_rounded,
+              color: isReady ? AppColors.success : AppColors.warning,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(text, style: Theme.of(context).textTheme.bodyMedium),
           ),
           if (!isReady)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: AppColors.surfaceVariant,
-                borderRadius: BorderRadius.circular(10),
+                color: AppColors.warning.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
                 AppMessages.profile.premiumComingSoon,
-                style: Theme.of(context).textTheme.bodySmall,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.warning,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPurchaseButton(bool isSubscriber) {
+    return SizedBox(
+      height: 56,
+      child: ElevatedButton(
+        onPressed: _isProcessing
+            ? null
+            : isSubscriber
+            ? _openManageSubscription
+            : _purchase,
+        child: Text(
+          isSubscriber
+              ? AppMessages.profile.premiumManage
+              : AppMessages.label.purchase,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProcessingOverlay() {
+    return Positioned.fill(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+        child: Container(
+          color: Colors.black.withValues(alpha: 0.2),
+          child: Center(
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 40),
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 28),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 4,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppColors.primary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    AppMessages.profile.premiumProcessing,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    AppMessages.profile.premiumProcessingWait,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
