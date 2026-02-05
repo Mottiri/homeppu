@@ -606,7 +606,7 @@ export const cleanupBannedUsers = onSchedule(
 
 export const cleanupUnverifiedUsers = onSchedule(
     {
-        schedule: "every 5 minutes",
+        schedule: "0 4 * * *",
         timeZone: "Asia/Tokyo",
         region: LOCATION,
         timeoutSeconds: 540,
@@ -614,7 +614,7 @@ export const cleanupUnverifiedUsers = onSchedule(
     async () => {
         // 未認証ユーザー（emailVerified=false）を一定時間経過後に削除
         console.log("=== cleanupUnverifiedUsers START ===");
-        const cutoff = Date.now() - 5 * 60 * 1000;
+        const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
 
         let deleted = 0;
         let checked = 0;

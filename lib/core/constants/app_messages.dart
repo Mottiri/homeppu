@@ -87,8 +87,7 @@ class _SuccessMessages {
   String taskDeletedCount(int count) => '$count件を削除しました';
   String get categoryDeleted => 'カテゴリを削除しました';
   String get taskCompletionReverted => '完了を取り消しました';
-  String get taskCompletionRevertedWithPostDeleted =>
-      '完了を取り消しました。自動投稿を削除しました';
+  String get taskCompletionRevertedWithPostDeleted => '完了を取り消しました。自動投稿を削除しました';
   String taskCompletedWithVirtue(int streak) => '🎉 タスク完了！ (+徳ポイント)';
   String taskMilestone(int streak, String message) =>
       '🎉 $streak日連続達成！$message！';
@@ -135,9 +134,8 @@ class _ErrorMessages {
   String get notEnoughVirtue => '徳ポイントが足りません。';
   String get notFoundTitle => 'あれ？ページが見つからないよ';
   String get notFoundDescription => '大丈夫、ホームに戻ろう！';
-String get purchaseFailedTitle => '購入に失敗しました';
-String get purchaseFailedSupport =>
-      '購入に失敗しました。お手数ですが運営にお問い合わせください。';
+  String get purchaseFailedTitle => '購入に失敗しました';
+  String get purchaseFailedSupport => '購入に失敗しました。お手数ですが運営にお問い合わせください。';
 
   // 投稿関連
   String get postFailed => '投稿できなかったみたい。もう一度試してみてね';
@@ -190,8 +188,8 @@ class _ConfirmMessages {
   String get deleteTitle => '削除の確認';
   String deleteItem(String itemName, {String? additionalMessage}) =>
       additionalMessage != null
-          ? '「$itemName」を削除しますか？\n$additionalMessage'
-          : '「$itemName」を削除しますか？';
+      ? '「$itemName」を削除しますか？\n$additionalMessage'
+      : '「$itemName」を削除しますか？';
   String get deleteTasksTitle => 'タスクを削除';
   String deleteTasksMessage(int count) =>
       '$count件のタスクを削除しますか？\n\n'
@@ -214,11 +212,9 @@ class _ConfirmMessages {
 
   // 徳ポイント・サブスク購入
   String get purchaseVirtueTitle => '徳ポイント購入';
-  String purchaseVirtueMessage(int cost) =>
-      'このアイテムを$cost徳ポイントで購入しますか？';
+  String purchaseVirtueMessage(int cost) => 'このアイテムを$cost徳ポイントで購入しますか？';
   String get subscriptionOnlyTitle => 'サブスク限定';
-  String subscriptionOnlyMessage() =>
-      'このアイテムはサブスク課金限定のアイテムだよ！';
+  String subscriptionOnlyMessage() => 'このアイテムはサブスク課金限定のアイテムだよ！';
 
   // アカウント削除
   String get deleteAccount => '本当にアカウントを削除する？\nすべてのデータが消えちゃうよ😢';
@@ -291,8 +287,7 @@ class _CircleMessages {
   const _CircleMessages();
 
   String get joinRequestTitle => '参加申請';
-  String get joinRequestMessage =>
-      'このサークルは招待制です。\nオーナーに参加申請を送信しますか？';
+  String get joinRequestMessage => 'このサークルは招待制です。\nオーナーに参加申請を送信しますか？';
   String get joinRequestConfirm => '申請する';
   String get joinRequestSent => '参加申請を送信しました';
   String get joinRequestsTitle => '参加申請';
@@ -316,8 +311,7 @@ class _CircleMessages {
   String subOwnerAssignConfirm(String name) => '$name さんを副オーナーに任命しますか？';
   String subOwnerAssignDescription(String name) =>
       '$name さんを副オーナーに任命しますか？\n\n副オーナーはピン留めや参加承認などの権限を持ちます。';
-  String subOwnerRemoveConfirm(String name) =>
-      '$name さんの副オーナー権限を解除しますか？';
+  String subOwnerRemoveConfirm(String name) => '$name さんの副オーナー権限を解除しますか？';
   String subOwnerAssigned(String name) => '$name さんを副オーナーに任命しました';
   String subOwnerRemoved(String name) => '$name さんの副オーナー権限を解除しました';
   String get subOwnerAssignFailed => '任命に失敗しました';
@@ -399,8 +393,7 @@ class _HomeMessages {
   String get emptyPostsTitle => 'まだ投稿がないよ';
   String get emptyPostsDescription => '最初の投稿をしてみよう！';
   String get emptyFollowingTitle => 'まだ誰もフォローしていないよ';
-  String get emptyFollowingDescription =>
-      '「おすすめ」タブで気になる人を\n見つけてフォローしてみよう！';
+  String get emptyFollowingDescription => '「おすすめ」タブで気になる人を\n見つけてフォローしてみよう！';
 }
 
 /// 目標関連メッセージ
@@ -427,8 +420,7 @@ class _GoalMessages {
   String get emptyTasksDescription => 'タスクを作成して目標に紐づけよう';
   String get taskAddPrompt => 'タスクを追加してください';
   String get deleteGoalTitle => '目標を削除';
-  String get deleteGoalMessage =>
-      '紐づいているすべてのタスクも削除されます。\nこの操作は取り消せません。';
+  String get deleteGoalMessage => '紐づいているすべてのタスクも削除されます。\nこの操作は取り消せません。';
   String get congratsTitle => 'おめでとう！🎉';
   String get hallOfFamePrompt => '目標を「殿堂入り」にしますか？';
   String get deleteFutureTasksNote => '未来のタスクがあれば削除されます';
@@ -461,14 +453,11 @@ class _OnboardingMessages {
   String get alreadyHaveAccount => 'すでにアカウントをお持ちの方';
 
   String get page1Title => 'ようこそ、ほめっぷへ';
-  String get page1Description =>
-      '世界一優しいSNSへようこそ！\nここでは誰もがあなたを応援してくれるよ';
+  String get page1Description => '世界一優しいSNSへようこそ！\nここでは誰もがあなたを応援してくれるよ';
   String get page2Title => 'たくさん褒められよう';
-  String get page2Description =>
-      '日常の小さなことを投稿するだけで\nAIや仲間から温かい言葉が届くよ';
+  String get page2Description => '日常の小さなことを投稿するだけで\nAIや仲間から温かい言葉が届くよ';
   String get page3Title => 'ポジティブな空間';
-  String get page3Description =>
-      'ネガティブな言葉は一切なし\n安心して自分を表現してね';
+  String get page3Description => 'ネガティブな言葉は一切なし\n安心して自分を表現してね';
 }
 
 /// 通知関連メッセージ
@@ -513,8 +502,7 @@ class _InquiryMessages {
   String get contentHint => 'お問い合わせ内容を詳しく記入してください';
   String get contentRequired => '内容を入力してください';
   String get screenshotOptional => 'スクリーンショット（任意）';
-  String get screenshotHelp =>
-      'バグ報告の場合は画面のスクリーンショットを添付すると解決が早くなります';
+  String get screenshotHelp => 'バグ報告の場合は画面のスクリーンショットを添付すると解決が早くなります';
   String get attachImage => '画像を添付';
   String get messageHint => 'メッセージを入力...';
   String get imageOnlyMessage => '（画像を添付しました）';
@@ -560,20 +548,21 @@ class _AuthMessages {
   String get registerNameNote => '※登録後も設定から変更できます';
 
   // メール認証
-  String verifySentTo(String email) =>
-      '$email に確認メールを送信しました。本文のURLをタップして認証を完了してください。';
-  String get verifyNoEmail =>
-      '確認メールの送信先が取得できませんでした。登録をやり直してください。';
+  String get verifyTitle => '認証メールを送信しました';
+  String verifySentTo(String email) => email;
+  String get verifySentToPrefix => '送信先: ';
+  String get verifyNoEmail => '確認メールの送信先が取得できませんでした。登録をやり直してください。';
+  String get verifyStep1 => '1. お使いのメールアプリを開く';
+  String get verifyStep2 => '2. ほめっぷ運営からのメールを確認';
+  String get verifyStep3 => '3. メール内のURLをタップして\n認証を完了してください';
   String verifyResendCountdown(int seconds) => '再送まであと${seconds}秒';
   String get verifyResendReady => '再送できます';
   String get verifyResendAction => '再送する';
   String get verifyRestart => '登録をやり直す';
   String get verifyCheckAction => '認証できたらここをタップ';
   String get verifyResent => '認証メールを再送しました';
-  String get verifyGenericError =>
-      'ごめんね、うまくいかなかったみたい。もう一度試してみてね';
-  String get verifyRequiresRecentLogin =>
-      '安全のため、もう一度ログインしてから変更してね';
+  String get verifyGenericError => 'ごめんね、うまくいかなかったみたい。もう一度試してみてね';
+  String get verifyRequiresRecentLogin => '安全のため、もう一度ログインしてから変更してね';
 }
 
 /// 管理者関連メッセージ
@@ -592,10 +581,8 @@ class _AdminMessages {
   String get approveFailed => '承認に失敗しました';
   String get deleteFailed => '削除に失敗しました';
   String get deletePostTitle => '投稿を削除';
-  String get deletePostMessage =>
-      'この投稿を削除しますか？\nこの操作は取り消せません。';
-  String get deletePostWithNotifyMessage =>
-      'この投稿を削除しますか？\n投稿者に通知が送信されます。';
+  String get deletePostMessage => 'この投稿を削除しますか？\nこの操作は取り消せません。';
+  String get deletePostWithNotifyMessage => 'この投稿を削除しますか？\n投稿者に通知が送信されます。';
   String reportBatchResolved(int count) => '$count件の通報を処理しました';
   String get falseReportDismissed => '虚偽判定しました';
   String get reportResolved => '問題なしとして処理しました';
@@ -637,18 +624,18 @@ class _ProfileMessages {
 
   // 設定画面
   String get settingsTitle => '設定';
-String get premiumTitle => 'プレミアム';
-String get premiumSubtitle => 'サブスク加入で特典を解放';
-String get premiumFeatureTitle => '特典';
-String get premiumFeatureEpic => 'Epicアイテム解放';
-String get premiumFeatureAds => '広告表示OFF';
-String get premiumFeatureCircles => 'サークル機能解放';
-String get premiumPriceLabel => '月額';
-String get premiumProcessing => '購入処理中...';
-String get premiumNotice => '反映まで数十秒かかる場合があります';
-String get premiumSubscribed => '加入済み';
-String get premiumManage => '定期購入を管理';
-String get premiumComingSoon => '準備中';
+  String get premiumTitle => 'プレミアム';
+  String get premiumSubtitle => 'サブスク加入で特典を解放';
+  String get premiumFeatureTitle => '特典';
+  String get premiumFeatureEpic => 'Epicアイテム解放';
+  String get premiumFeatureAds => '広告表示OFF';
+  String get premiumFeatureCircles => 'サークル機能解放';
+  String get premiumPriceLabel => '月額';
+  String get premiumProcessing => '購入処理中...';
+  String get premiumNotice => '反映まで数十秒かかる場合があります';
+  String get premiumSubscribed => '加入済み';
+  String get premiumManage => '定期購入を管理';
+  String get premiumComingSoon => '準備中';
 
   String get profileEditTitle => 'プロフィール編集';
   String get headerImageLabel => 'ヘッダー画像';
@@ -675,8 +662,7 @@ String get premiumComingSoon => '準備中';
   String get goalAutoPostSubtitle => '目標を達成した時に自動で投稿します';
   String get privacyTitle => '公開範囲';
   String privacyCurrent(String label) => '現在: $label';
-  String get privacyInfo =>
-      '次回以降の投稿から適用されます\n過去の投稿は変わりません';
+  String get privacyInfo => '次回以降の投稿から適用されます\n過去の投稿は変わりません';
   String privacyChangeTitle(String label) => '$labelに変更';
   String privacyChangeMessage(String label) =>
       '公開範囲を「$label」に変更しますか？\n\n次回以降の投稿から適用されます。';
@@ -718,14 +704,12 @@ class _VirtueMessages {
   String get shortLabel => '徳';
   String get warningLabel => '⚠️ 注意';
   String get title => '徳ポイント';
-  String get description =>
-      '徳ポイントは、ほめっぷでの行いを表す指標だよ☺️';
+  String get description => '徳ポイントは、ほめっぷでの行いを表す指標だよ☺️';
   String get guidelines =>
       '• ポジティブな投稿で徳が上がるよ\n'
       '• ネガティブな発言をすると下がるよ\n'
       '• 0になると投稿できなくなるよ';
-  String get lowWarning =>
-      '徳ポイントが少なくなっているよ。ポジティブな投稿を心がけてね！';
+  String get lowWarning => '徳ポイントが少なくなっているよ。ポジティブな投稿を心がけてね！';
   String get historyTitle => '履歴';
   String get historyEmpty => 'まだ履歴がないよ';
   String get historyLoadFailed => '履歴を読み込めませんでした';
