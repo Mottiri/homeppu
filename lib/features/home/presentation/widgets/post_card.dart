@@ -113,8 +113,7 @@ class _PostCardState extends ConsumerState<PostCard> {
     // BANユーザーチェック（キャッシュ済みプロバイダーから即時取得）
     final cachedUser = ref.read(currentUserProvider).valueOrNull;
     if (cachedUser != null &&
-        (cachedUser.isBanned ||
-            (cachedUser.banStatus != 'none'))) {
+        (cachedUser.isBanned || (cachedUser.banStatus != 'none'))) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -187,12 +186,13 @@ class _PostCardState extends ConsumerState<PostCard> {
     if (!mounted) return;
 
     final initialUser = ref.read(currentUserProvider).valueOrNull;
-    Map<String, RewardedReactionUnlock> sessionUnlocks = _adjustUnlocksForPending(
-      Map<String, RewardedReactionUnlock>.from(
-        initialUser?.rewardedReactionUnlocks ?? {},
-      ),
-      userId: currentUserId,
-    );
+    Map<String, RewardedReactionUnlock> sessionUnlocks =
+        _adjustUnlocksForPending(
+          Map<String, RewardedReactionUnlock>.from(
+            initialUser?.rewardedReactionUnlocks ?? {},
+          ),
+          userId: currentUserId,
+        );
     bool hasSyncedUnlocks = false;
     bool isSyncingUnlocks = false;
 
@@ -217,9 +217,7 @@ class _PostCardState extends ConsumerState<PostCard> {
                     .get(const GetOptions(source: Source.server));
                 final data = doc.data();
                 sessionUnlocks = _adjustUnlocksForPending(
-                  _parseRewardedUnlocks(
-                    data?['rewardedReactionUnlocks'],
-                  ),
+                  _parseRewardedUnlocks(data?['rewardedReactionUnlocks']),
                   userId: currentUserId,
                 );
                 hasSyncedUnlocks = true;
@@ -263,11 +261,10 @@ class _PostCardState extends ConsumerState<PostCard> {
 
                 final user = ref.read(currentUserProvider).valueOrNull;
                 final isSubscriber = user?.isSubscriber ?? false;
-                final reaction =
-                    ReactionType.values.firstWhere(
-                      (type) => type.value == reactionType,
-                      orElse: () => ReactionType.heart,
-                    );
+                final reaction = ReactionType.values.firstWhere(
+                  (type) => type.value == reactionType,
+                  orElse: () => ReactionType.heart,
+                );
                 final isEpic =
                     reaction.unlockType == ReactionUnlockType.subscription;
                 final isEpicNonSubscriber = isEpic && !isSubscriber;
@@ -306,18 +303,15 @@ class _PostCardState extends ConsumerState<PostCard> {
                     userId: currentUserId,
                   );
                 }
-                ReactionSyncService.enqueue(
-                  currentUserId,
-                  () async {
-                    await _sendReactionToServer(reactionType);
-                    if (isEpicNonSubscriber) {
-                      ReactionSyncService.decrementPending(
-                        reactionType,
-                        userId: currentUserId,
-                      );
-                    }
-                  },
-                );
+                ReactionSyncService.enqueue(currentUserId, () async {
+                  await _sendReactionToServer(reactionType);
+                  if (isEpicNonSubscriber) {
+                    ReactionSyncService.decrementPending(
+                      reactionType,
+                      userId: currentUserId,
+                    );
+                  }
+                });
                 unawaited(RecentReactionsService.addReaction(reactionType));
                 if (!isAdmin) {
                   await ReactionLimitService.incrementReactionCount(
@@ -346,9 +340,7 @@ class _PostCardState extends ConsumerState<PostCard> {
   }
 
   /// リアクションをサーバーに送信
-  Future<void> _sendReactionToServer(
-    String reactionType,
-  ) async {
+  Future<void> _sendReactionToServer(String reactionType) async {
     try {
       final functions = FirebaseFunctions.instanceFor(
         region: 'asia-northeast1',
@@ -378,15 +370,12 @@ class _PostCardState extends ConsumerState<PostCard> {
 
   /// サーバーから取得した残数からペンディング（キュー未処理）分を差し引く
   Map<String, RewardedReactionUnlock> _adjustUnlocksForPending(
-    Map<String, RewardedReactionUnlock> unlocks,
-    {String? userId}
-  ) {
+    Map<String, RewardedReactionUnlock> unlocks, {
+    String? userId,
+  }) {
     final adjusted = <String, RewardedReactionUnlock>{};
     for (final entry in unlocks.entries) {
-      final pending = ReactionSyncService.getPending(
-        entry.key,
-        userId: userId,
-      );
+      final pending = ReactionSyncService.getPending(entry.key, userId: userId);
       final adjustedRemaining = entry.value.remaining - pending;
       if (adjustedRemaining > 0) {
         adjusted[entry.key] = RewardedReactionUnlock(
@@ -469,12 +458,16 @@ class _PostCardState extends ConsumerState<PostCard> {
                                 builder: (context, ref, _) {
                                   final displayName =
                                       ref.watch(
-                                        publicUserDisplayNameProvider(post.userId),
+                                        publicUserDisplayNameProvider(
+                                          post.userId,
+                                        ),
                                       ) ??
                                       post.userDisplayName;
                                   return Text(
                                     displayName,
-                                    style: Theme.of(context).textTheme.titleMedium
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
                                         ?.copyWith(color: AppColors.primary),
                                   );
                                 },
@@ -1131,13 +1124,13 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
             bottom: 180 + safeBottom,
             child: Column(
               mainAxisSize: MainAxisSize.min,
-                children: List.generate(_extendedStamps.length, (index) {
-                  final stamp = _extendedStamps[index];
-                  return TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0.0, end: 1.0),
-                    duration: Duration(milliseconds: 300 + (index * 80)),
-                    curve: Curves.elasticOut,
-                    builder: (context, value, child) {
+              children: List.generate(_extendedStamps.length, (index) {
+                final stamp = _extendedStamps[index];
+                return TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  duration: Duration(milliseconds: 300 + (index * 80)),
+                  curve: Curves.elasticOut,
+                  builder: (context, value, child) {
                     return Transform.scale(
                       scale: value,
                       child: Opacity(
@@ -1146,14 +1139,14 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
                       ),
                     );
                   },
-                    child: _buildSmallStampButton(
-                      stamp,
-                      isLocked: isLocked(stamp),
-                      remainingCount: remainingCount(stamp),
-                    ),
-                  );
-                }),
-              ),
+                  child: _buildSmallStampButton(
+                    stamp,
+                    isLocked: isLocked(stamp),
+                    remainingCount: remainingCount(stamp),
+                  ),
+                );
+              }),
+            ),
           ),
       ],
     );
@@ -1192,7 +1185,9 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
               builder: (context, setDialogState) {
                 return AlertDialog(
                   title: Text(AppMessages.confirm.purchaseVirtueTitle),
-                  content: Text(AppMessages.confirm.purchaseVirtueMessage(cost)),
+                  content: Text(
+                    AppMessages.confirm.purchaseVirtueMessage(cost),
+                  ),
                   actions: [
                     SizedBox(
                       width: double.infinity,
@@ -1217,7 +1212,9 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
                                       Navigator.of(context).pop();
                                     }
                                     if (mounted) {
-                                      setDialogState(() => isProcessing = false);
+                                      setDialogState(
+                                        () => isProcessing = false,
+                                      );
                                     }
                                   },
                             child: isProcessing
@@ -1245,74 +1242,130 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
         bool isProcessing = false;
         await showDialog<void>(
           context: context,
-          builder: (context) {
-            final message = AppMessages.confirm.subscriptionOnlyMessageWithRewarded(
-              AppConstants.rewardedReactionHours,
-              AppConstants.rewardedReactionUses,
-            );
-            return AlertDialog(
-              title: Text(AppMessages.confirm.subscriptionOnlyTitle),
-              content: Text(message),
-              actions: [
-                SizedBox(
-                  width: double.infinity,
-                  child: StatefulBuilder(
-                    builder: (context, setDialogState) {
-                      return Wrap(
-                        alignment: WrapAlignment.end,
-                        runAlignment: WrapAlignment.center,
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          TextButton(
-                            onPressed: isProcessing
-                                ? null
-                                : () => Navigator.of(context).pop(),
-                            child: Text(AppMessages.label.cancel),
+          barrierColor: Colors.black.withValues(alpha: 0.5),
+          builder: (dialogContext) {
+            return StatefulBuilder(
+              builder: (context, setDialogState) {
+                return Dialog(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    constraints: const BoxConstraints(maxWidth: 340),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // スタンププレビュー（グロー付き）
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                AppColors.rarityEpic.withValues(alpha: 0.2),
+                                AppColors.rarityEpic.withValues(alpha: 0.1),
+                              ],
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.rarityEpic.withValues(
+                                  alpha: 0.3,
+                                ),
+                                blurRadius: 16,
+                                spreadRadius: 4,
+                              ),
+                            ],
                           ),
-                          TextButton(
-                            onPressed: isProcessing
-                                ? null
-                                : () async {
-                                    setDialogState(() => isProcessing = true);
-                                    final success =
-                                        await _handleRewardedUnlock(type);
-                                    if (!mounted) return;
-                                    setDialogState(
-                                      () => isProcessing = false,
-                                    );
-                                    if (success) {
-                                      Navigator.of(context).pop();
-                                    }
-                                  },
-                            child: isProcessing
-                                ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : Text(AppMessages.label.watchAd),
+                          child: Image.asset(
+                            type.assetPath,
+                            width: 64,
+                            height: 64,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Text(
+                                type.emoji,
+                                style: const TextStyle(fontSize: 48),
+                              );
+                            },
                           ),
-                          TextButton(
-                            onPressed: isProcessing
-                                ? null
-                                : () {
-                                  Navigator.of(context).pop();
+                        ),
+                        const SizedBox(height: 16),
+                        // タイトル
+                        Text(
+                          'Epicスタンプ',
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary,
+                              ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'このスタンプはプレミアム限定です',
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: AppColors.textSecondary),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 24),
+                        // 広告視聴オプション
+                        _EpicUnlockOptionCard(
+                          icon: Icons.play_circle_outline,
+                          iconColor: AppColors.info,
+                          title: '広告を見て解放',
+                          subtitle:
+                              '${AppConstants.rewardedReactionUses}回 / ${AppConstants.rewardedReactionHours}時間',
+                          isLoading: isProcessing,
+                          onTap: isProcessing
+                              ? null
+                              : () async {
+                                  setDialogState(() => isProcessing = true);
+                                  final success = await _handleRewardedUnlock(
+                                    type,
+                                  );
+                                  if (!mounted) return;
+                                  setDialogState(() => isProcessing = false);
+                                  if (success) {
+                                    Navigator.of(dialogContext).pop();
+                                  }
+                                },
+                        ),
+                        const SizedBox(height: 12),
+                        // プレミアム加入オプション
+                        _EpicUnlockOptionCard(
+                          icon: Icons.workspace_premium,
+                          iconColor: AppColors.praise,
+                          title: 'プレミアム加入',
+                          subtitle: '全Epicスタンプ無制限',
+                          isPremium: true,
+                          onTap: isProcessing
+                              ? null
+                              : () {
+                                  Navigator.of(dialogContext).pop();
                                   Future.microtask(() {
                                     if (!rootContext.mounted) return;
                                     rootContext.push('/premium');
                                   });
                                 },
-                            child: Text(AppMessages.label.subscribe),
+                        ),
+                        const SizedBox(height: 20),
+                        // キャンセルボタン
+                        TextButton(
+                          onPressed: isProcessing
+                              ? null
+                              : () => Navigator.of(dialogContext).pop(),
+                          child: Text(
+                            AppMessages.label.cancel,
+                            style: TextStyle(color: AppColors.textSecondary),
                           ),
-                        ],
-                      );
-                    },
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                );
+              },
             );
           },
         );
@@ -1361,10 +1414,7 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
 
     if (!rewarded) {
       if (mounted) {
-        _showOverlayToast(
-          AppMessages.error.rewardedAdFailed,
-          isError: true,
-        );
+        _showOverlayToast(AppMessages.error.rewardedAdFailed, isError: true);
       }
       return false;
     }
@@ -1488,11 +1538,7 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               boxShadow: [
-                BoxShadow(
-                  color: glowColor,
-                  blurRadius: 8,
-                  spreadRadius: 0,
-                ),
+                BoxShadow(color: glowColor, blurRadius: 8, spreadRadius: 0),
               ],
             ),
           ),
@@ -1518,11 +1564,7 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
                   color: Colors.black.withValues(alpha: 0.55),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
-                  Icons.lock,
-                  size: 12,
-                  color: Colors.white,
-                ),
+                child: const Icon(Icons.lock, size: 12, color: Colors.white),
               ),
             ),
           if (!isLocked && remainingCount != null)
@@ -1546,6 +1588,108 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// Epicスタンプ解放オプションカード
+class _EpicUnlockOptionCard extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  final bool isPremium;
+  final bool isLoading;
+  final VoidCallback? onTap;
+
+  const _EpicUnlockOptionCard({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    this.isPremium = false,
+    this.isLoading = false,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = isPremium
+        ? AppColors.praise.withValues(alpha: 0.5)
+        : AppColors.info.withValues(alpha: 0.3);
+    final bgGradient = isPremium
+        ? LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppColors.praise.withValues(alpha: 0.08),
+              AppColors.praise.withValues(alpha: 0.02),
+            ],
+          )
+        : LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppColors.info.withValues(alpha: 0.05),
+              AppColors.info.withValues(alpha: 0.02),
+            ],
+          );
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            gradient: bgGradient,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: borderColor, width: 1.5),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: isLoading
+                    ? const Padding(
+                        padding: EdgeInsets.all(10),
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(icon, color: iconColor, size: 24),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: AppColors.textHint, size: 20),
+            ],
+          ),
+        ),
       ),
     );
   }
