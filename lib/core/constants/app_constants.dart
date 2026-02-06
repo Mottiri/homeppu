@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../shared/models/user_model.dart';
 import 'app_colors.dart';
 
 /// アプリ全体の定数
@@ -20,6 +21,10 @@ class AppConstants {
   static const String reactionPraise = 'praise'; // すごい
   static const String reactionCheer = 'cheer'; // がんばれ
   static const String reactionEmpathy = 'empathy'; // わかる
+
+  // リアクション一時解放（リワード）
+  static const int rewardedReactionUses = 25;
+  static const int rewardedReactionHours = 24;
 
   // システムメッセージ（フレンドリーなトーン）
   static const Map<String, String> friendlyMessages = {
@@ -144,6 +149,8 @@ enum ReactionType {
   bool isUnlocked({
     required bool isSubscriber,
     required Set<String> unlockedItems,
+    Map<String, RewardedReactionUnlock>? rewardedUnlocks,
+    DateTime? now,
   }) {
     switch (unlockType) {
       case ReactionUnlockType.free:
@@ -151,7 +158,11 @@ enum ReactionType {
       case ReactionUnlockType.virtue:
         return unlockedItems.contains(purchaseKey);
       case ReactionUnlockType.subscription:
-        return isSubscriber;
+        if (isSubscriber) return true;
+        final unlock = rewardedUnlocks?[value];
+        if (unlock == null) return false;
+        final current = now ?? DateTime.now();
+        return unlock.remaining > 0 && current.isBefore(unlock.expiresAt);
     }
   }
 

@@ -6,6 +6,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import 'firebase_options.dart';
 import 'core/theme/app_theme.dart';
@@ -24,6 +25,7 @@ void main() async {
   // Firebase初期化
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await AppCheckService.initialize();
+  await MobileAds.instance.initialize();
 
   final currentUser = FirebaseAuth.instance.currentUser;
   if (currentUser != null) {

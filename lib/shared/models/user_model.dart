@@ -2,6 +2,39 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'ban_record_model.dart';
 import 'avatar_parts_model.dart';
 
+class RewardedReactionUnlock {
+  final int remaining;
+  final DateTime expiresAt;
+
+  const RewardedReactionUnlock({
+    required this.remaining,
+    required this.expiresAt,
+  });
+
+  factory RewardedReactionUnlock.fromMap(Map<String, dynamic> data) {
+    final expiresRaw = data['expiresAt'];
+    DateTime expiresAt;
+    if (expiresRaw is Timestamp) {
+      expiresAt = expiresRaw.toDate();
+    } else if (expiresRaw is DateTime) {
+      expiresAt = expiresRaw;
+    } else {
+      expiresAt = DateTime.fromMillisecondsSinceEpoch(0);
+    }
+    return RewardedReactionUnlock(
+      remaining: (data['remaining'] as num?)?.toInt() ?? 0,
+      expiresAt: expiresAt,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'remaining': remaining,
+      'expiresAt': Timestamp.fromDate(expiresAt),
+    };
+  }
+}
+
 /// ユーザーモデル
 class UserModel {
   final String uid;
@@ -33,6 +66,7 @@ class UserModel {
   final List<String> unlockedNameParts; // アンロック済みパーツID
   final List<String> unlockedReactionStamps; // アンロック済みリアクションスタンプID
   final List<String> unlockedAvatarParts; // アンロック済みアバターパーツID
+  final Map<String, RewardedReactionUnlock> rewardedReactionUnlocks; // 広告で一時解放されたリアクション
   final bool isSubscriber; // サブスク加入状態
   final DateTime? lastNameChangeAt; // 最後に名前を変更した日時
   final String? fcmToken; // プッシュ通知用トークン
@@ -72,6 +106,7 @@ class UserModel {
     this.unlockedNameParts = const [],
     this.unlockedReactionStamps = const [],
     this.unlockedAvatarParts = const [],
+    this.rewardedReactionUnlocks = const {},
     this.isSubscriber = false,
     this.lastNameChangeAt,
 
@@ -127,6 +162,9 @@ class UserModel {
           List<String>.from(data['unlockedReactionStamps'] ?? []),
       unlockedAvatarParts:
           List<String>.from(data['unlockedAvatarParts'] ?? []),
+      rewardedReactionUnlocks: _parseRewardedUnlocks(
+        data['rewardedReactionUnlocks'],
+      ),
       isSubscriber: data['isSubscriber'] ?? false,
       lastNameChangeAt: (data['lastNameChangeAt'] as Timestamp?)?.toDate(),
 
@@ -176,6 +214,9 @@ class UserModel {
       'unlockedNameParts': unlockedNameParts,
       'unlockedReactionStamps': unlockedReactionStamps,
       'unlockedAvatarParts': unlockedAvatarParts,
+      'rewardedReactionUnlocks': rewardedReactionUnlocks.map(
+        (key, value) => MapEntry(key, value.toMap()),
+      ),
       'isSubscriber': isSubscriber,
       if (lastNameChangeAt != null)
         'lastNameChangeAt': Timestamp.fromDate(lastNameChangeAt!),
@@ -218,6 +259,7 @@ class UserModel {
     List<String>? unlockedNameParts,
     List<String>? unlockedReactionStamps,
     List<String>? unlockedAvatarParts,
+    Map<String, RewardedReactionUnlock>? rewardedReactionUnlocks,
     bool? isSubscriber,
     DateTime? lastNameChangeAt,
     String? fcmToken,
@@ -260,6 +302,8 @@ class UserModel {
       unlockedReactionStamps:
           unlockedReactionStamps ?? this.unlockedReactionStamps,
       unlockedAvatarParts: unlockedAvatarParts ?? this.unlockedAvatarParts,
+      rewardedReactionUnlocks:
+          rewardedReactionUnlocks ?? this.rewardedReactionUnlocks,
       isSubscriber: isSubscriber ?? this.isSubscriber,
       lastNameChangeAt: lastNameChangeAt ?? this.lastNameChangeAt,
       fcmToken: fcmToken ?? this.fcmToken,
@@ -271,4 +315,18 @@ class UserModel {
       headerSecondaryColor: headerSecondaryColor ?? this.headerSecondaryColor,
     );
   }
+}
+
+Map<String, RewardedReactionUnlock> _parseRewardedUnlocks(dynamic raw) {
+  if (raw is! Map) return {};
+  final data = Map<String, dynamic>.from(raw);
+  final result = <String, RewardedReactionUnlock>{};
+  data.forEach((key, value) {
+    if (value is Map) {
+      result[key] = RewardedReactionUnlock.fromMap(
+        Map<String, dynamic>.from(value),
+      );
+    }
+  });
+  return result;
 }

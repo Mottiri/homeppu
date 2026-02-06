@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:timeago/timeago.dart' as timeago;
@@ -18,8 +19,11 @@ import '../../../../shared/widgets/video_player_screen.dart';
 import '../../../../shared/services/post_service.dart';
 import '../../../../shared/services/recent_reactions_service.dart';
 import '../../../../shared/services/reaction_limit_service.dart';
+import '../../../../shared/services/rewarded_ad_service.dart';
+import '../../../../shared/services/reaction_sync_service.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/providers/public_user_provider.dart';
+import '../../../../shared/models/user_model.dart';
 import '../../../../shared/providers/moderation_provider.dart';
 import '../../../../shared/providers/virtue_shop_provider.dart';
 import '../../../../shared/services/virtue_shop_service.dart';
@@ -106,25 +110,21 @@ class _PostCardState extends ConsumerState<PostCard> {
 
   /// LINEスタイルのリアクションオーバーレイを表示
   Future<void> _showReactionOverlay() async {
-    // BANユーザーチェック
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser != null) {
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUser.uid)
-          .get();
-      if (userDoc.exists && userDoc.data()?['isBanned'] == true) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppMessages.error.banned),
-              backgroundColor: AppColors.error,
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        }
-        return;
+    // BANユーザーチェック（キャッシュ済みプロバイダーから即時取得）
+    final cachedUser = ref.read(currentUserProvider).valueOrNull;
+    if (cachedUser != null &&
+        (cachedUser.isBanned ||
+            (cachedUser.banStatus != 'none'))) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppMessages.error.banned),
+            backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
+      return;
     }
 
     // 自分の投稿にはリアクションできない
@@ -139,11 +139,33 @@ class _PostCardState extends ConsumerState<PostCard> {
       return;
     }
 
-    final isAdmin = await ref.read(isAdminProvider.future);
+    // 管理者チェック（キャッシュ済みプロバイダーから即時取得）
+    final isAdmin = ref.read(isAdminProvider).valueOrNull ?? false;
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
     int? remaining;
-    // この投稿へのリアクション回数をチェック
+    // この投稿へのリアクション回数をチェック（SharedPreferencesはローカルI/Oのみ）
     if (!isAdmin) {
-      final canReact = await ReactionLimitService.canReact(post.id);
+      if (currentUserId != null) {
+        try {
+          final snapshot = await FirebaseFirestore.instance
+              .collection('reactions')
+              .where('postId', isEqualTo: post.id)
+              .where('userId', isEqualTo: currentUserId)
+              .get(const GetOptions(source: Source.server));
+          await ReactionLimitService.setReactionCount(
+            post.id,
+            snapshot.size,
+            userId: currentUserId,
+          );
+        } catch (e) {
+          debugPrint('Failed to sync reaction count: $e');
+        }
+      }
+
+      final canReact = await ReactionLimitService.canReact(
+        post.id,
+        userId: currentUserId,
+      );
       if (!canReact) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -156,10 +178,23 @@ class _PostCardState extends ConsumerState<PostCard> {
         return;
       }
 
-      remaining = await ReactionLimitService.getRemainingReactions(post.id);
+      remaining = await ReactionLimitService.getRemainingReactions(
+        post.id,
+        userId: currentUserId,
+      );
     }
 
     if (!mounted) return;
+
+    final initialUser = ref.read(currentUserProvider).valueOrNull;
+    Map<String, RewardedReactionUnlock> sessionUnlocks = _adjustUnlocksForPending(
+      Map<String, RewardedReactionUnlock>.from(
+        initialUser?.rewardedReactionUnlocks ?? {},
+      ),
+      userId: currentUserId,
+    );
+    bool hasSyncedUnlocks = false;
+    bool isSyncingUnlocks = false;
 
     showDialog(
       context: context,
@@ -169,8 +204,43 @@ class _PostCardState extends ConsumerState<PostCard> {
         int sessionCount = 0; // このセッションでのタップ数
         return StatefulBuilder(
           builder: (context, setState) {
+            Future<void> syncUnlocks() async {
+              if (isSyncingUnlocks) return;
+              final currentUser = FirebaseAuth.instance.currentUser;
+              if (currentUser == null) return;
+              isSyncingUnlocks = true;
+              setState(() {});
+              try {
+                final doc = await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(currentUser.uid)
+                    .get(const GetOptions(source: Source.server));
+                final data = doc.data();
+                sessionUnlocks = _adjustUnlocksForPending(
+                  _parseRewardedUnlocks(
+                    data?['rewardedReactionUnlocks'],
+                  ),
+                  userId: currentUserId,
+                );
+                hasSyncedUnlocks = true;
+              } catch (e) {
+                debugPrint('Failed to sync rewarded unlocks: $e');
+              } finally {
+                isSyncingUnlocks = false;
+                if (mounted) setState(() {});
+              }
+            }
+
+            if (!hasSyncedUnlocks && !isSyncingUnlocks) {
+              syncUnlocks();
+            }
+
             return _ReactionOverlayDialog(
               postId: post.id,
+              rewardedUnlocks: sessionUnlocks,
+              onRewardedUnlocked: () async {
+                await syncUnlocks();
+              },
               onReactionTap: (reactionType) async {
                 // 残り回数チェック
                 if (!isAdmin) {
@@ -191,11 +261,69 @@ class _PostCardState extends ConsumerState<PostCard> {
                 final scaffoldMessenger = ScaffoldMessenger.of(this.context);
                 final navigator = Navigator.of(dialogContext);
 
+                final user = ref.read(currentUserProvider).valueOrNull;
+                final isSubscriber = user?.isSubscriber ?? false;
+                final reaction =
+                    ReactionType.values.firstWhere(
+                      (type) => type.value == reactionType,
+                      orElse: () => ReactionType.heart,
+                    );
+                final isEpic =
+                    reaction.unlockType == ReactionUnlockType.subscription;
+                final isEpicNonSubscriber = isEpic && !isSubscriber;
+
+                if (isEpicNonSubscriber) {
+                  final unlock = sessionUnlocks[reactionType];
+                  final now = DateTime.now();
+                  if (unlock == null ||
+                      unlock.remaining <= 0 ||
+                      !unlock.expiresAt.isAfter(now)) {
+                    scaffoldMessenger.showSnackBar(
+                      SnackBar(
+                        content: Text(AppMessages.error.epicReactionLocked),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                    return;
+                  }
+                  final nextRemaining = unlock.remaining - 1;
+                  setState(() {
+                    if (nextRemaining <= 0) {
+                      sessionUnlocks.remove(reactionType);
+                    } else {
+                      sessionUnlocks[reactionType] = RewardedReactionUnlock(
+                        remaining: nextRemaining,
+                        expiresAt: unlock.expiresAt,
+                      );
+                    }
+                  });
+                }
+
                 _addReaction(reactionType);
-                _sendReactionToServer(reactionType);
-                RecentReactionsService.addReaction(reactionType);
+                if (isEpicNonSubscriber) {
+                  ReactionSyncService.incrementPending(
+                    reactionType,
+                    userId: currentUserId,
+                  );
+                }
+                ReactionSyncService.enqueue(
+                  currentUserId,
+                  () async {
+                    await _sendReactionToServer(reactionType);
+                    if (isEpicNonSubscriber) {
+                      ReactionSyncService.decrementPending(
+                        reactionType,
+                        userId: currentUserId,
+                      );
+                    }
+                  },
+                );
+                unawaited(RecentReactionsService.addReaction(reactionType));
                 if (!isAdmin) {
-                  await ReactionLimitService.incrementReactionCount(post.id);
+                  await ReactionLimitService.incrementReactionCount(
+                    post.id,
+                    userId: currentUserId,
+                  );
                   sessionCount++;
 
                   // 残り0回でダイアログを閉じる
@@ -218,17 +346,61 @@ class _PostCardState extends ConsumerState<PostCard> {
   }
 
   /// リアクションをサーバーに送信
-  Future<void> _sendReactionToServer(String reactionType) async {
+  Future<void> _sendReactionToServer(
+    String reactionType,
+  ) async {
     try {
       final functions = FirebaseFunctions.instanceFor(
         region: 'asia-northeast1',
       );
       final callable = functions.httpsCallable('addUserReaction');
       await callable.call({'postId': post.id, 'reactionType': reactionType});
-      await RecentReactionsService.addReaction(reactionType);
+    } on FirebaseFunctionsException catch (e) {
+      debugPrint('Reaction error: ${e.code} ${e.message}');
     } catch (e) {
       debugPrint('Reaction error: $e');
     }
+  }
+
+  Map<String, RewardedReactionUnlock> _parseRewardedUnlocks(dynamic raw) {
+    if (raw is! Map) return {};
+    final data = Map<String, dynamic>.from(raw);
+    final result = <String, RewardedReactionUnlock>{};
+    data.forEach((key, value) {
+      if (value is Map) {
+        result[key] = RewardedReactionUnlock.fromMap(
+          Map<String, dynamic>.from(value),
+        );
+      }
+    });
+    return result;
+  }
+
+  /// サーバーから取得した残数からペンディング（キュー未処理）分を差し引く
+  Map<String, RewardedReactionUnlock> _adjustUnlocksForPending(
+    Map<String, RewardedReactionUnlock> unlocks,
+    {String? userId}
+  ) {
+    final adjusted = <String, RewardedReactionUnlock>{};
+    for (final entry in unlocks.entries) {
+      final pending = ReactionSyncService.getPending(
+        entry.key,
+        userId: userId,
+      );
+      final adjustedRemaining = entry.value.remaining - pending;
+      if (adjustedRemaining > 0) {
+        adjusted[entry.key] = RewardedReactionUnlock(
+          remaining: adjustedRemaining,
+          expiresAt: entry.value.expiresAt,
+        );
+      }
+    }
+    return adjusted;
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
   }
 
   @override
@@ -718,10 +890,14 @@ class _MediaGrid extends StatelessWidget {
 class _ReactionOverlayDialog extends ConsumerStatefulWidget {
   final String postId;
   final void Function(String reactionType) onReactionTap;
+  final Map<String, RewardedReactionUnlock> rewardedUnlocks;
+  final Future<void> Function()? onRewardedUnlocked;
 
   const _ReactionOverlayDialog({
     required this.postId,
     required this.onReactionTap,
+    required this.rewardedUnlocks,
+    this.onRewardedUnlocked,
   });
 
   @override
@@ -882,12 +1058,26 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
     final user = ref.watch(currentUserProvider).valueOrNull;
     final unlockedStamps = user?.unlockedReactionStamps.toSet() ?? <String>{};
     final isSubscriber = user?.isSubscriber ?? false;
+    final rewardedUnlocks = widget.rewardedUnlocks;
+    final now = DateTime.now();
     final safeBottom = MediaQuery.of(context).viewPadding.bottom;
+
+    int? remainingCount(ReactionType type) {
+      if (type.rarity != ReactionRarity.epic) return null;
+      if (isSubscriber) return null;
+      final unlock = rewardedUnlocks[type.value];
+      if (unlock == null) return null;
+      if (unlock.remaining <= 0) return null;
+      if (!unlock.expiresAt.isAfter(now)) return null;
+      return unlock.remaining;
+    }
 
     bool isLocked(ReactionType type) {
       return !type.isUnlocked(
         isSubscriber: isSubscriber,
         unlockedItems: unlockedStamps,
+        rewardedUnlocks: rewardedUnlocks,
+        now: now,
       );
     }
 
@@ -923,6 +1113,7 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
                     child: _buildStampButton(
                       stamp,
                       isLocked: isLocked(stamp),
+                      remainingCount: remainingCount(stamp),
                     ),
                   );
                 }),
@@ -958,6 +1149,7 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
                     child: _buildSmallStampButton(
                       stamp,
                       isLocked: isLocked(stamp),
+                      remainingCount: remainingCount(stamp),
                     ),
                   );
                 }),
@@ -1050,34 +1242,74 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
         return;
       case ReactionUnlockType.subscription:
         final rootContext = context;
+        bool isProcessing = false;
         await showDialog<void>(
           context: context,
           builder: (context) {
+            final message = AppMessages.confirm.subscriptionOnlyMessageWithRewarded(
+              AppConstants.rewardedReactionHours,
+              AppConstants.rewardedReactionUses,
+            );
             return AlertDialog(
               title: Text(AppMessages.confirm.subscriptionOnlyTitle),
-              content: Text(AppMessages.confirm.subscriptionOnlyMessage()),
+              content: Text(message),
               actions: [
                 SizedBox(
                   width: double.infinity,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: Text(AppMessages.label.cancel),
-                      ),
-                      const SizedBox(width: 8),
-                      TextButton(
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                          Future.microtask(() {
-                            if (!rootContext.mounted) return;
-                            rootContext.push('/premium');
-                          });
-                        },
-                        child: Text(AppMessages.label.subscribe),
-                      ),
-                    ],
+                  child: StatefulBuilder(
+                    builder: (context, setDialogState) {
+                      return Wrap(
+                        alignment: WrapAlignment.end,
+                        runAlignment: WrapAlignment.center,
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          TextButton(
+                            onPressed: isProcessing
+                                ? null
+                                : () => Navigator.of(context).pop(),
+                            child: Text(AppMessages.label.cancel),
+                          ),
+                          TextButton(
+                            onPressed: isProcessing
+                                ? null
+                                : () async {
+                                    setDialogState(() => isProcessing = true);
+                                    final success =
+                                        await _handleRewardedUnlock(type);
+                                    if (!mounted) return;
+                                    setDialogState(
+                                      () => isProcessing = false,
+                                    );
+                                    if (success) {
+                                      Navigator.of(context).pop();
+                                    }
+                                  },
+                            child: isProcessing
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Text(AppMessages.label.watchAd),
+                          ),
+                          TextButton(
+                            onPressed: isProcessing
+                                ? null
+                                : () {
+                                  Navigator.of(context).pop();
+                                  Future.microtask(() {
+                                    if (!rootContext.mounted) return;
+                                    rootContext.push('/premium');
+                                  });
+                                },
+                            child: Text(AppMessages.label.subscribe),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ],
@@ -1117,7 +1349,69 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
     }
   }
 
-  Widget _buildStampButton(ReactionType type, {required bool isLocked}) {
+  Future<bool> _handleRewardedUnlock(ReactionType type) async {
+    final completer = Completer<bool>();
+    final rewarded = await RewardedAdService.instance.show(
+      onEarned: () {
+        _grantRewardedUnlock(type)
+            .then((value) => completer.complete(value))
+            .catchError((_) => completer.complete(false));
+      },
+    );
+
+    if (!rewarded) {
+      if (mounted) {
+        _showOverlayToast(
+          AppMessages.error.rewardedAdFailed,
+          isError: true,
+        );
+      }
+      return false;
+    }
+
+    final success = await completer.future;
+    if (mounted) {
+      if (success) {
+        final onRewardedUnlocked = widget.onRewardedUnlocked;
+        if (onRewardedUnlocked != null) {
+          await onRewardedUnlocked();
+        }
+        _showOverlayToast(
+          AppMessages.success.rewardedUnlockGranted(
+            AppConstants.rewardedReactionUses,
+            AppConstants.rewardedReactionHours,
+          ),
+        );
+      } else {
+        _showOverlayToast(
+          AppMessages.error.rewardedUnlockFailed,
+          isError: true,
+        );
+      }
+    }
+    return success;
+  }
+
+  Future<bool> _grantRewardedUnlock(ReactionType type) async {
+    try {
+      final functions = FirebaseFunctions.instanceFor(
+        region: 'asia-northeast1',
+      );
+      final callable = functions.httpsCallable('grantRewardedReactionUnlock');
+      await callable.call({'reactionType': type.value});
+      ref.invalidate(currentUserProvider);
+      return true;
+    } catch (e) {
+      debugPrint('Rewarded unlock error: $e');
+      return false;
+    }
+  }
+
+  Widget _buildStampButton(
+    ReactionType type, {
+    required bool isLocked,
+    int? remainingCount,
+  }) {
     return GestureDetector(
       onTap: () => _onStampTap(type, isLocked: isLocked),
       child: _buildStampGlow(
@@ -1126,6 +1420,7 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
         emojiSize: 40,
         padding: const EdgeInsets.all(6),
         isLocked: isLocked,
+        remainingCount: remainingCount,
       ),
     );
   }
@@ -1152,7 +1447,11 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
     );
   }
 
-  Widget _buildSmallStampButton(ReactionType type, {required bool isLocked}) {
+  Widget _buildSmallStampButton(
+    ReactionType type, {
+    required bool isLocked,
+    int? remainingCount,
+  }) {
     return GestureDetector(
       onTap: () => _onStampTap(type, isLocked: isLocked),
       child: _buildStampGlow(
@@ -1161,6 +1460,7 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
         emojiSize: 32,
         padding: const EdgeInsets.all(4),
         isLocked: isLocked,
+        remainingCount: remainingCount,
       ),
     );
   }
@@ -1171,6 +1471,7 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
     required double emojiSize,
     required EdgeInsets padding,
     required bool isLocked,
+    int? remainingCount,
   }) {
     final glowColor = type.rarityColor.withValues(
       alpha: isLocked ? 0.25 : 0.55,
@@ -1221,6 +1522,26 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
                   Icons.lock,
                   size: 12,
                   color: Colors.white,
+                ),
+              ),
+            ),
+          if (!isLocked && remainingCount != null)
+            Positioned(
+              right: 2,
+              bottom: 2,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.7),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '$remainingCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),

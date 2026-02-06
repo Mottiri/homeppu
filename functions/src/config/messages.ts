@@ -25,6 +25,7 @@ export const PERMISSION_ERRORS = {
     CIRCLE_REJECT_OWNER_ONLY: "オーナー、副オーナー、または管理者のみ拒否できます",
     INQUIRY_ACCESS_DENIED: "この問い合わせにはアクセスできません",
     PARTS_NOT_UNLOCKED: "アンロックしていないパーツは使用できません",
+    EPIC_REACTION_REQUIRES_SUBSCRIPTION: "サブスクまたは一時解放が必要です",
 } as const;
 
 // ===============================================

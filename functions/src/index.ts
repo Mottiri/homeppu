@@ -18,6 +18,7 @@ export {
     updateInquiryStatus,
 } from "./callable/inquiries";
 export { createCommentWithModeration, addUserReaction, removeUserReaction } from "./callable/comments";
+export { grantRewardedReactionUnlock } from "./callable/rewarded_reactions";
 export { createPostWithRateLimit, createPostWithModeration } from "./callable/posts";
 export { initializeAIAccounts, generateAIPosts } from "./callable/ai";
 export {

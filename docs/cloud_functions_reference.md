@@ -33,6 +33,7 @@ functions/src/
 | `virtue_shop.ts` | 徳ポイントショップ | `getVirtueShopConfig`, `purchaseVirtueItem` |
 | `posts.ts` | 投稿作成 | `createPostWithRateLimit`, `createPostWithModeration` |
 | `comments.ts` | コメント・リアクション | `createCommentWithModeration`, `addUserReaction`, `removeUserReaction` |
+| `rewarded_reactions.ts` | リワード解放 | `grantRewardedReactionUnlock` |
 | `circles.ts` | サークル管理 | `deleteCircle`, `cleanupDeletedCircle`, `approveJoinRequest`, `rejectJoinRequest`, `sendJoinRequest`, `joinCircle`, `leaveCircle` |
 | `tasks.ts` | タスク管理 | `createTask`, `getTasks` |
 | `reports.ts` | 通報機能 | `reportContent` |
@@ -164,7 +165,7 @@ functions/src/
 | ユーザー認証・権限 | `callable/admin.ts`, `helpers/admin.ts`, `helpers/auth.ts` |
 | フォロー機能 | `callable/users.ts` |
 | 投稿作成・モデレーション | `callable/posts.ts`, `helpers/moderation.ts` |
-| コメント・リアクション | `callable/comments.ts`, `triggers/notifications.ts` |
+| コメント・リアクション | `callable/comments.ts`, `callable/rewarded_reactions.ts`, `triggers/notifications.ts` |
 | サークル管理 | `callable/circles.ts`, `triggers/circles.ts` |
 | サークルAI | `circle-ai/*.ts` |
 | タスク管理 | `callable/tasks.ts`, `triggers/tasks.ts` |

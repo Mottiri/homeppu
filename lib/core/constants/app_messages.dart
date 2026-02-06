@@ -116,6 +116,8 @@ class _SuccessMessages {
   // 汎用
   String get saved => '保存しました';
   String get purchaseCompleted => '購入しました';
+  String rewardedUnlockGranted(int count, int hours) =>
+      '広告視聴で$hours時間、$count回分を解放しました';
   String get copied => 'コピーしました';
 }
 
@@ -136,6 +138,9 @@ class _ErrorMessages {
   String get notFoundDescription => '大丈夫、ホームに戻ろう！';
   String get purchaseFailedTitle => '購入に失敗しました';
   String get purchaseFailedSupport => '購入に失敗しました。お手数ですが運営にお問い合わせください。';
+  String get rewardedAdFailed => '広告の再生に失敗しました。';
+  String get rewardedUnlockFailed => '一時解放に失敗しました。';
+  String get epicReactionLocked => 'サブスクまたは一時解放が必要です。';
 
   // 投稿関連
   String get postFailed => '投稿できなかったみたい。もう一度試してみてね';
@@ -215,6 +220,8 @@ class _ConfirmMessages {
   String purchaseVirtueMessage(int cost) => 'このアイテムを$cost徳ポイントで購入しますか？';
   String get subscriptionOnlyTitle => 'サブスク限定';
   String subscriptionOnlyMessage() => 'このアイテムはサブスク課金限定のアイテムだよ！';
+  String subscriptionOnlyMessageWithRewarded(int hours, int count) =>
+      'このアイテムはプレミアム課金限定です。広告を見ると$hours時間限定で$count回までこのスタンプを使用できます。';
 
   // アカウント削除
   String get deleteAccount => '本当にアカウントを削除する？\nすべてのデータが消えちゃうよ😢';
@@ -239,6 +246,7 @@ class _LabelMessages {
   String get no => 'いいえ';
   String get purchase => '購入する';
   String get subscribe => '詳細';
+  String get watchAd => '広告を見る';
   String get done => '完了';
   String get edit => '編集';
   String get create => '作成';

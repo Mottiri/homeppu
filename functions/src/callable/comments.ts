@@ -6,12 +6,14 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-import { db, FieldValue } from "../helpers/firebase";
+import { db, FieldValue, Timestamp } from "../helpers/firebase";
 import { requireAuth } from "../helpers/auth";
 import { geminiApiKey } from "../config/secrets";
 import { AI_MODELS, LOCATION } from "../config/constants";
 import {
     AUTH_ERRORS,
+    PERMISSION_ERRORS,
+    RESOURCE_ERRORS,
     VALIDATION_ERRORS,
     LABELS,
     MODERATION_MESSAGES,
@@ -19,6 +21,8 @@ import {
 import { VIRTUE_CONFIG } from "../helpers/virtue";
 import { getTextModerationPrompt } from "../ai/prompts/moderation";
 import { ModerationResult } from "../types";
+
+const EPIC_REACTIONS = new Set(["rainbow", "hundred"]);
 
 /**
  * テキストのモデレーション判定 (Gemini)
@@ -187,28 +191,77 @@ export const addUserReaction = onCall(
         }
 
         // ユーザー情報を取得
-        const userDoc = await db.collection("users").doc(userId).get();
-        const displayName = userDoc.data()?.displayName || LABELS.USER;
-
-        const batch = db.batch();
-
-        // 1. リアクション保存
         const reactionRef = db.collection("reactions").doc();
-        batch.set(reactionRef, {
-            postId: postId,
-            userId: userId,
-            userDisplayName: displayName,
-            reactionType: reactionType,
-            createdAt: FieldValue.serverTimestamp(),
-        });
-
-        // 2. 投稿のリアクションカウント更新
         const postRef = db.collection("posts").doc(postId);
-        batch.update(postRef, {
-            [`reactions.${reactionType}`]: FieldValue.increment(1),
-        });
+        const userRef = db.collection("users").doc(userId);
+        let displayName = LABELS.USER;
 
-        await batch.commit();
+        await db.runTransaction(async (transaction) => {
+            const userSnap = await transaction.get(userRef);
+            if (!userSnap.exists) {
+                throw new HttpsError("not-found", RESOURCE_ERRORS.USER_NOT_FOUND);
+            }
+            const userData = userSnap.data() || {};
+
+            // BANユーザーチェック
+            if (userData.isBanned === true || (userData.banStatus && userData.banStatus !== "none")) {
+                throw new HttpsError("permission-denied", AUTH_ERRORS.BANNED);
+            }
+
+            displayName = userData.displayName || LABELS.USER;
+
+            const isEpicReaction = EPIC_REACTIONS.has(reactionType);
+            const isSubscriber = userData.isSubscriber === true;
+
+            if (isEpicReaction && !isSubscriber) {
+                const unlocks = userData.rewardedReactionUnlocks || {};
+                const unlock = unlocks[reactionType];
+                const remaining = Number(unlock?.remaining ?? 0);
+                const rawExpiresAt = unlock?.expiresAt;
+                const parsedExpiresAt =
+                    rawExpiresAt?.toDate?.() ??
+                    (rawExpiresAt ? new Date(rawExpiresAt) : null);
+
+                if (
+                    !parsedExpiresAt ||
+                    Number.isNaN(parsedExpiresAt.getTime()) ||
+                    remaining <= 0 ||
+                    parsedExpiresAt.getTime() <= Date.now()
+                ) {
+                    throw new HttpsError(
+                        "permission-denied",
+                        PERMISSION_ERRORS.EPIC_REACTION_REQUIRES_SUBSCRIPTION
+                    );
+                }
+
+                const nextRemaining = remaining - 1;
+                if (nextRemaining <= 0) {
+                    transaction.update(userRef, {
+                        [`rewardedReactionUnlocks.${reactionType}`]: FieldValue.delete(),
+                    });
+                } else {
+                    transaction.update(userRef, {
+                        [`rewardedReactionUnlocks.${reactionType}.remaining`]: nextRemaining,
+                        [`rewardedReactionUnlocks.${reactionType}.expiresAt`]:
+                            Timestamp.fromDate(parsedExpiresAt),
+                    });
+                }
+            }
+
+            // 1. リアクション保存
+            transaction.set(reactionRef, {
+                postId: postId,
+                userId: userId,
+                userDisplayName: displayName,
+                reactionType: reactionType,
+                createdAt: FieldValue.serverTimestamp(),
+            });
+
+            // 2. 投稿のリアクションカウント更新
+            transaction.update(postRef, {
+                [`reactions.${reactionType}`]: FieldValue.increment(1),
+            });
+        });
 
         console.log(`User reaction added: ${displayName} -> ${reactionType} on ${postId}`);
         return {

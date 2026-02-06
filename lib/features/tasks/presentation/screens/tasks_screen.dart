@@ -17,6 +17,7 @@ import '../../../../shared/providers/auth_provider.dart';
 import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../core/utils/dialog_helper.dart';
 import '../../../../core/constants/app_messages.dart';
+import '../../../../shared/widgets/ad_banner.dart';
 
 import '../widgets/task_detail_sheet.dart';
 import '../widgets/task_calendar_header.dart';
@@ -1026,6 +1027,9 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
             // Main content
             Column(
               children: [
+                const AdBanner(
+                  padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+                ),
                 TaskCalendarHeader(
                   selectedDate: _selectedDate,
                   onDateSelected: (date) {

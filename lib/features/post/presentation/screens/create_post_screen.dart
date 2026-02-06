@@ -15,6 +15,7 @@ import '../../../../shared/services/moderation_service.dart';
 import '../../../../shared/services/nsfw_detector_service.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
 import '../../../../shared/widgets/report_dialog.dart';
+import '../../../../shared/widgets/ad_banner.dart';
 
 /// 投稿作成画面
 class CreatePostScreen extends ConsumerStatefulWidget {
@@ -364,6 +365,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                     ),
                   ],
                 ),
+              ),
+              const AdBanner(
+                padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
               ),
               Expanded(
                 child: SingleChildScrollView(

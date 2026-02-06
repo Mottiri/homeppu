@@ -59,7 +59,8 @@ allow update: if isAuthenticated() && isOwner(userId) &&
           'isSubscriber',
           'unlockedNameParts',
           'unlockedReactionStamps',
-          'unlockedAvatarParts'
+          'unlockedAvatarParts',
+          'rewardedReactionUnlocks'
         ]);
 
       // 繧ｫ繝・ざ繝ｪ繧ｵ繝悶さ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ

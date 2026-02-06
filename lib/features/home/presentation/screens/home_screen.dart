@@ -11,6 +11,7 @@ import '../../../../shared/models/user_model.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/repositories/notification_repository.dart';
 import '../../../../shared/providers/public_user_provider.dart';
+import '../../../../shared/widgets/ad_banner.dart';
 import '../widgets/post_card.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../shared/widgets/infinite_scroll_listener.dart';
@@ -175,6 +176,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   ),
                 ),
 
+                SliverToBoxAdapter(
+                  child: const AdBanner(
+                    padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+                  ),
+                ),
+
                 // タブバー
                 SliverPersistentHeader(
                   pinned: false,
@@ -286,7 +293,9 @@ class _TimelineTab extends StatelessWidget {
           }
 
           final userData = userSnapshot.data?.data() as Map<String, dynamic>?;
-          final followingIds = List<String>.from(userData?['following'] ?? []);
+          final followingIds = List<String>.from(
+            userData?['following'] ?? [],
+          );
 
           if (followingIds.isEmpty) {
             return _EmptyFollowingState();

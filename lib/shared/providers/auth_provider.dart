@@ -7,6 +7,8 @@ import '../models/user_model.dart';
 import '../models/avatar_parts_model.dart';
 import '../../core/constants/app_constants.dart';
 import '../services/subscription_service.dart';
+import '../services/reaction_sync_service.dart';
+import '../services/reaction_limit_service.dart';
 
 /// FirebaseAuthインスタンス
 final firebaseAuthProvider = Provider<FirebaseAuth>((ref) {
@@ -162,6 +164,8 @@ class AuthService {
         // トークン削除失敗は無視してログアウト続行
         debugPrint('FCMトークン削除失敗: $e');
       }
+      ReactionSyncService.clearForUser(user.uid);
+      await ReactionLimitService.clearForUser(user.uid);
     }
     await SubscriptionService.instance.logOut();
     await _auth.signOut();

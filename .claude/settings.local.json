@@ -3,7 +3,8 @@
     "allow": [
       "Bash(flutter analyze:*)",
       "Bash(npm run build:*)",
-      "Bash(node scripts/set_initial_admin.js:*)"
+      "Bash(node scripts/set_initial_admin.js:*)",
+      "Bash(dir /b \"C:\\\\Dev\\\\homeppu\\\\lib\")"
     ]
   }
 }
