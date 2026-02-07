@@ -55,10 +55,12 @@ node functions/scripts/register-avatar-parts.js --rare-cost 100
   - デプロイ不要
 - `functions/src/callable/virtue_shop.ts` が更新された:
   - Functionsデプロイ必須
-  - 例:
+  - 手順:
   ```bash
-  firebase deploy --only functions:getVirtueShopConfig,functions:purchaseVirtueItem
+  npm --prefix functions run build
+  firebase deploy --only "functions:default:getVirtueShopConfig,functions:default:purchaseVirtueItem" --project positive-sns
   ```
+  - PowerShellでは `--only` の値をダブルクォートで囲む
 - `lib/core/constants/avatar_assets.dart` が更新された:
   - アプリ再ビルドが必要（実機確認や次回リリースに反映）
 
