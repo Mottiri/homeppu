@@ -71,7 +71,7 @@ class SubscriptionService {
     if (!_configured) {
       throw StateError('RevenueCat is not configured.');
     }
-    await Purchases.purchasePackage(package);
+    await Purchases.purchase(PurchaseParams.package(package));
   }
 
   Future<void> logOut() async {

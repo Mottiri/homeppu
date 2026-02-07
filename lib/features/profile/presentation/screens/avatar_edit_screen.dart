@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,6 +34,8 @@ class _AvatarEditScreenState extends ConsumerState<AvatarEditScreen> {
   late AvatarParts _parts;
   _AvatarPartCategory _category = _AvatarPartCategory.hair;
   final _virtueShopService = VirtueShopService();
+  bool _isOpeningLockedDialog = false;
+  bool _isRefreshingVirtueConfig = false;
 
   @override
   void initState() {
@@ -108,6 +112,22 @@ class _AvatarEditScreenState extends ConsumerState<AvatarEditScreen> {
     return AvatarAssets.partRarity[id] ?? 'common';
   }
 
+  String _assetPathForPartId(String id) {
+    if (AvatarAssets.hairIds.contains(id)) {
+      return AvatarAssets.hairPath(id);
+    }
+    if (AvatarAssets.eyebrowsIds.contains(id)) {
+      return AvatarAssets.eyebrowsPath(id);
+    }
+    if (AvatarAssets.eyesIds.contains(id)) {
+      return AvatarAssets.eyesPath(id);
+    }
+    if (AvatarAssets.mouthIds.contains(id)) {
+      return AvatarAssets.mouthPath(id);
+    }
+    return AvatarAssets.hairPath(AvatarAssets.hairIds.first);
+  }
+
   bool _isUnlocked({
     required String id,
     required String rarity,
@@ -127,14 +147,89 @@ class _AvatarEditScreenState extends ConsumerState<AvatarEditScreen> {
     return isSelected ? AppColors.primary : AppColors.surfaceVariant;
   }
 
+  void _onLockedPartTap({
+    required String id,
+    required String rarity,
+  }) {
+    if (_isOpeningLockedDialog) return;
+    _isOpeningLockedDialog = true;
+    _showLockedDialog(id: id, rarity: rarity).whenComplete(() {
+      _isOpeningLockedDialog = false;
+    });
+  }
+
+  Future<void> _refreshVirtueConfigInBackground() async {
+    if (_isRefreshingVirtueConfig) return;
+    _isRefreshingVirtueConfig = true;
+    try {
+      ref.invalidate(virtueShopConfigProvider);
+      await ref.read(virtueShopConfigProvider.future);
+    } catch (e) {
+      debugPrint('[AvatarVirtueDialog] Background config refresh failed: $e');
+    } finally {
+      _isRefreshingVirtueConfig = false;
+    }
+  }
+
+  Future<int?> _loadAvatarPartCost(String rarity) async {
+    int? parseCost(VirtueShopConfig? config) {
+      final cost = config?.costForAvatarPart(rarity);
+      if (cost == null || cost <= 0) return null;
+      return cost;
+    }
+
+    final cachedCost = parseCost(ref.read(virtueShopConfigProvider).valueOrNull);
+    if (cachedCost != null) {
+      // Use cached value for fast UX and refresh in background to reduce staleness.
+      unawaited(_refreshVirtueConfigInBackground());
+      return cachedCost;
+    }
+
+    try {
+      final config = await ref.read(virtueShopConfigProvider.future);
+      final cost = parseCost(config);
+      if (cost != null) return cost;
+    } catch (e) {
+      debugPrint('[AvatarVirtueDialog] Config read failed: $e');
+    }
+
+    try {
+      final config = await ref.refresh(virtueShopConfigProvider.future);
+      final cost = parseCost(config);
+      if (cost != null) return cost;
+    } catch (e) {
+      debugPrint('[AvatarVirtueDialog] Config refresh failed: $e');
+    }
+
+    return null;
+  }
+
+  Future<int?> _loadCurrentVirtue() async {
+    final currentUser = ref.read(currentUserProvider).valueOrNull;
+    if (currentUser != null) {
+      debugPrint('[AvatarVirtueDialog] Using currentUserProvider virtue=${currentUser.virtue}');
+      return currentUser.virtue;
+    }
+
+    debugPrint('[AvatarVirtueDialog] currentUser unavailable. Fetching callable virtue status');
+    try {
+      final virtueStatus = await ref.refresh(virtueStatusProvider.future);
+      debugPrint('[AvatarVirtueDialog] Fetched callable virtue=${virtueStatus.virtue}');
+      return virtueStatus.virtue;
+    } catch (e) {
+      debugPrint('[AvatarVirtueDialog] Fetch virtue status failed: $e');
+      return null;
+    }
+  }
+
   Future<void> _showLockedDialog({
     required String id,
     required String rarity,
   }) async {
     if (!mounted) return;
     if (rarity == 'rare') {
-      final config = ref.read(virtueShopConfigProvider).valueOrNull;
-      final cost = config?.costForAvatarPart(rarity);
+      final cost = await _loadAvatarPartCost(rarity);
+      if (!mounted) return;
       if (cost == null || cost <= 0) {
         SnackBarHelper.showError(
           context,
@@ -143,56 +238,189 @@ class _AvatarEditScreenState extends ConsumerState<AvatarEditScreen> {
         return;
       }
 
+      final currentVirtue = await _loadCurrentVirtue();
+      if (!mounted) return;
+      if (currentVirtue == null) {
+        SnackBarHelper.showError(context, AppMessages.error.network);
+        return;
+      }
+
+      final hasEnough = currentVirtue >= cost;
       bool isProcessing = false;
       await showDialog<void>(
         context: context,
-        builder: (context) {
+        barrierColor: Colors.black.withValues(alpha: 0.5),
+        builder: (dialogContext) {
           return StatefulBuilder(
             builder: (context, setDialogState) {
-              return AlertDialog(
-                title: Text(AppMessages.confirm.purchaseVirtueTitle),
-                content: Text(AppMessages.confirm.purchaseVirtueMessage(cost)),
-                actions: [
-                  SizedBox(
-                    width: double.infinity,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: isProcessing
-                              ? null
-                              : () => Navigator.of(context).pop(),
-                          child: Text(AppMessages.label.cancel),
+              return Dialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  constraints: const BoxConstraints(maxWidth: 340),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              AppColors.rarityRare.withValues(alpha: 0.2),
+                              AppColors.rarityRare.withValues(alpha: 0.1),
+                            ],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.rarityRare.withValues(alpha: 0.3),
+                              blurRadius: 16,
+                              spreadRadius: 4,
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
-                        TextButton(
-                          onPressed: isProcessing
+                        child: Image.asset(
+                          _assetPathForPartId(id),
+                          width: 78,
+                          height: 78,
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) {
+                            return const Icon(
+                              Icons.face_retouching_natural,
+                              size: 48,
+                              color: AppColors.textSecondary,
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        AppMessages.confirm.purchaseVirtueTitle,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        AppMessages.confirm.purchaseVirtueMessage(cost),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.virtue.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.auto_awesome,
+                              color: AppColors.virtue,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              AppMessages.confirm.virtueCostLabel(cost),
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.virtue,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        hasEnough
+                            ? AppMessages.confirm.virtueBalanceAfterPurchase(
+                                currentVirtue,
+                                cost,
+                              )
+                            : AppMessages.confirm.virtueBalanceShortage(
+                                currentVirtue,
+                                cost,
+                              ),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: hasEnough
+                              ? AppColors.textSecondary
+                              : AppColors.error,
+                          fontWeight: hasEnough ? null : FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: isProcessing || !hasEnough
                               ? null
                               : () async {
                                   setDialogState(() => isProcessing = true);
                                   final success = await _purchaseAvatarPart(id);
-                                  if (mounted && success) {
-                                    Navigator.of(context).pop();
+                                  if (!mounted || !dialogContext.mounted) {
+                                    return;
+                                  }
+                                  if (success) {
+                                    Navigator.of(dialogContext).pop();
                                     setState(() {
                                       _parts = _withPart(id);
                                     });
+                                    return;
                                   }
-                                  if (mounted) {
-                                    setDialogState(() => isProcessing = false);
-                                  }
+                                  setDialogState(() => isProcessing = false);
                                 },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.virtue,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
                           child: isProcessing
                               ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
                                 )
-                              : Text(AppMessages.label.purchase),
+                              : Text(
+                                  AppMessages.label.purchase,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextButton(
+                        onPressed: isProcessing
+                            ? null
+                            : () => Navigator.of(dialogContext).pop(),
+                        child: Text(
+                          AppMessages.label.cancel,
+                          style: TextStyle(color: AppColors.textSecondary),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               );
             },
           );
@@ -203,37 +431,102 @@ class _AvatarEditScreenState extends ConsumerState<AvatarEditScreen> {
 
     if (rarity == 'epic') {
       final rootContext = context;
+      bool isProcessing = false;
       await showDialog<void>(
         context: context,
-        builder: (context) {
-          return AlertDialog(
-            title: Text(AppMessages.confirm.subscriptionOnlyTitle),
-            content: Text(AppMessages.confirm.subscriptionOnlyMessage()),
-            actions: [
-              SizedBox(
-                width: double.infinity,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: Text(AppMessages.label.cancel),
-                    ),
-                    const SizedBox(width: 8),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                        Future.microtask(() {
-                          if (!rootContext.mounted) return;
-                          rootContext.push('/premium');
-                        });
-                      },
-                      child: Text(AppMessages.label.subscribe),
-                    ),
-                  ],
+        barrierColor: Colors.black.withValues(alpha: 0.5),
+        builder: (dialogContext) {
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              return Dialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
                 ),
-              ),
-            ],
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  constraints: const BoxConstraints(maxWidth: 340),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              AppColors.rarityEpic.withValues(alpha: 0.2),
+                              AppColors.rarityEpic.withValues(alpha: 0.1),
+                            ],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.rarityEpic.withValues(alpha: 0.3),
+                              blurRadius: 16,
+                              spreadRadius: 4,
+                            ),
+                          ],
+                        ),
+                        child: Image.asset(
+                          _assetPathForPartId(id),
+                          width: 78,
+                          height: 78,
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) {
+                            return const Icon(
+                              Icons.workspace_premium,
+                              size: 48,
+                              color: AppColors.textSecondary,
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        AppMessages.confirm.subscriptionOnlyTitle,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        AppMessages.confirm.subscriptionOnlyMessage(),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      _AvatarPremiumOptionCard(
+                        isLoading: isProcessing,
+                        onTap: isProcessing
+                            ? null
+                            : () {
+                                setDialogState(() => isProcessing = true);
+                                Navigator.of(dialogContext).pop();
+                                Future.microtask(() {
+                                  if (!rootContext.mounted) return;
+                                  rootContext.push('/premium');
+                                });
+                              },
+                      ),
+                      const SizedBox(height: 20),
+                      TextButton(
+                        onPressed: isProcessing
+                            ? null
+                            : () => Navigator.of(dialogContext).pop(),
+                        child: Text(
+                          AppMessages.label.cancel,
+                          style: TextStyle(color: AppColors.textSecondary),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
           );
         },
       );
@@ -360,7 +653,7 @@ class _AvatarEditScreenState extends ConsumerState<AvatarEditScreen> {
           return GestureDetector(
             onTap: () {
               if (isLocked) {
-                _showLockedDialog(id: id, rarity: rarity);
+                _onLockedPartTap(id: id, rarity: rarity);
                 return;
               }
               setState(() => _parts = _withPart(id));
@@ -465,6 +758,94 @@ class _AvatarEditScreenState extends ConsumerState<AvatarEditScreen> {
             ),
           );
         }).toList(),
+      ),
+    );
+  }
+}
+
+class _AvatarPremiumOptionCard extends StatelessWidget {
+  final VoidCallback? onTap;
+  final bool isLoading;
+
+  const _AvatarPremiumOptionCard({
+    required this.onTap,
+    required this.isLoading,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppColors.praise.withValues(alpha: 0.35),
+            ),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppColors.praise.withValues(alpha: 0.14),
+                AppColors.rarityEpic.withValues(alpha: 0.08),
+              ],
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.praise.withValues(alpha: 0.15),
+                ),
+                alignment: Alignment.center,
+                child: isLoading
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(
+                        Icons.workspace_premium,
+                        color: AppColors.praise,
+                        size: 22,
+                      ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      AppMessages.confirm.premiumSubscribeTitle,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      AppMessages.confirm.premiumUnlockEpicSubtitle,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.textSecondary,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

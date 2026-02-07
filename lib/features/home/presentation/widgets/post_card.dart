@@ -1167,17 +1167,17 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
     });
   }
 
-  void _refreshVirtueConfigInBackground() {
+  Future<void> _refreshVirtueConfigInBackground() async {
     if (_isRefreshingVirtueConfig) return;
     _isRefreshingVirtueConfig = true;
-    ref
-        .refresh(virtueShopConfigProvider.future)
-        .catchError((e) {
-          debugPrint('[VirtueDialog] Background config refresh failed: $e');
-        })
-        .whenComplete(() {
-          _isRefreshingVirtueConfig = false;
-        });
+    try {
+      ref.invalidate(virtueShopConfigProvider);
+      await ref.read(virtueShopConfigProvider.future);
+    } catch (e) {
+      debugPrint('[VirtueDialog] Background config refresh failed: $e');
+    } finally {
+      _isRefreshingVirtueConfig = false;
+    }
   }
 
   Future<int?> _loadReactionCost(String reactionId) async {
@@ -1190,7 +1190,7 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
     final cachedCost = parseCost(ref.read(virtueShopConfigProvider).valueOrNull);
     if (cachedCost != null) {
       // Keep UI fast while reducing stale config risk in long sessions.
-      _refreshVirtueConfigInBackground();
+      unawaited(_refreshVirtueConfigInBackground());
       return cachedCost;
     }
 
@@ -1396,14 +1396,16 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
                                     setDialogState(() => isProcessing = true);
                                     final success =
                                         await _purchaseReactionStamp(type);
-                                    if (mounted && success) {
+                                    if (!mounted || !dialogContext.mounted) {
+                                      return;
+                                    }
+                                    if (success) {
                                       Navigator.of(dialogContext).pop();
+                                      return;
                                     }
-                                    if (mounted) {
-                                      setDialogState(
-                                        () => isProcessing = false,
-                                      );
-                                    }
+                                    setDialogState(
+                                      () => isProcessing = false,
+                                    );
                                   },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.virtue,
@@ -1544,7 +1546,9 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
                                   final success = await _handleRewardedUnlock(
                                     type,
                                   );
-                                  if (!mounted) return;
+                                  if (!mounted || !dialogContext.mounted) {
+                                    return;
+                                  }
                                   setDialogState(() => isProcessing = false);
                                   if (success) {
                                     Navigator.of(dialogContext).pop();

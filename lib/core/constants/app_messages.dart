@@ -572,7 +572,7 @@ class _AuthMessages {
   String get verifyStep1 => '1. お使いのメールアプリを開く';
   String get verifyStep2 => '2. ほめっぷ運営からのメールを確認';
   String get verifyStep3 => '3. メール内のURLをタップして\n認証を完了してください';
-  String verifyResendCountdown(int seconds) => '再送まであと${seconds}秒';
+  String verifyResendCountdown(int seconds) => '再送まであと$seconds秒';
   String get verifyResendReady => '再送できます';
   String get verifyResendAction => '再送する';
   String get verifyRestart => '登録をやり直す';

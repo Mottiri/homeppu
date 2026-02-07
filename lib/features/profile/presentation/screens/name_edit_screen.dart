@@ -413,7 +413,7 @@ Future<void> _showPurchaseDialog(
     bool isProcessing = false;
     await showDialog<void>(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
@@ -428,7 +428,7 @@ Future<void> _showPurchaseDialog(
                       TextButton(
                         onPressed: isProcessing
                             ? null
-                            : () => Navigator.of(context).pop(),
+                            : () => Navigator.of(dialogContext).pop(),
                         child: Text(AppMessages.label.cancel),
                       ),
                       const SizedBox(width: 8),
@@ -438,12 +438,14 @@ Future<void> _showPurchaseDialog(
                             : () async {
                                 setDialogState(() => isProcessing = true);
                                 final success = await _purchaseNamePart(part);
-                                if (mounted && success) {
-                                  Navigator.of(context).pop();
+                                if (!mounted || !dialogContext.mounted) {
+                                  return;
                                 }
-                                if (mounted) {
-                                  setDialogState(() => isProcessing = false);
+                                if (success) {
+                                  Navigator.of(dialogContext).pop();
+                                  return;
                                 }
+                                setDialogState(() => isProcessing = false);
                               },
                         child: isProcessing
                             ? const SizedBox(

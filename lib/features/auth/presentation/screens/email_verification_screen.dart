@@ -414,7 +414,7 @@ class _EmailVerificationScreenState
 
   Widget _buildSecondaryActions() {
     final countdownText = _remainingSeconds > 0
-        ? '再送（${_remainingSeconds}秒後）'
+        ? '再送（$_remainingSeconds秒後）'
         : AppMessages.auth.verifyResendAction;
 
     return Row(

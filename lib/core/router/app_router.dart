@@ -47,7 +47,7 @@ import '../constants/avatar_assets.dart';
 /// 認証状態の変更を通知するためのNotifier
 class AuthStateNotifier extends ChangeNotifier {
   AuthStateNotifier(this._ref) {
-    _ref.listen(authStateProvider, (_, __) {
+    _ref.listen(authStateProvider, (previous, next) {
       notifyListeners();
     });
   }

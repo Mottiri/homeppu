@@ -45,7 +45,7 @@ class ReactionLimitService {
   /// 指定ユーザーのローカル回数を削除
   static Future<void> clearForUser(String userId) async {
     final prefs = await SharedPreferences.getInstance();
-    final prefix = '${_keyPrefix}${userId}_';
+    final prefix = '$_keyPrefix${userId}_';
     final keys = prefs.getKeys().where((key) => key.startsWith(prefix));
     for (final key in keys) {
       await prefs.remove(key);
