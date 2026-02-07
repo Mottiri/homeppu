@@ -218,10 +218,19 @@ class _ConfirmMessages {
   // 徳ポイント・サブスク購入
   String get purchaseVirtueTitle => '徳ポイント購入';
   String purchaseVirtueMessage(int cost) => 'このアイテムを$cost徳ポイントで購入しますか？';
+  String virtueCostLabel(int cost) => '$cost 徳ポイント';
+  String virtueBalanceAfterPurchase(int currentVirtue, int cost) =>
+      '保有: $currentVirtue → ${currentVirtue - cost}';
+  String virtueBalanceShortage(int currentVirtue, int cost) =>
+      '保有: $currentVirtue（あと${cost - currentVirtue}徳ポイント必要）';
   String get subscriptionOnlyTitle => 'サブスク限定';
   String subscriptionOnlyMessage() => 'このアイテムはサブスク課金限定のアイテムだよ！';
   String subscriptionOnlyMessageWithRewarded(int hours, int count) =>
       'このアイテムはプレミアム課金限定です。広告を見ると$hours時間限定で$count回までこのスタンプを使用できます。';
+  String get rewardedUnlockTitle => '広告を見て解除';
+  String rewardedUnlockSubtitle(int count, int hours) => '$count回 / $hours時間';
+  String get premiumSubscribeTitle => 'プレミアム加入';
+  String get premiumUnlockEpicSubtitle => '全Epicスタンプ無制限';
 
   // アカウント削除
   String get deleteAccount => '本当にアカウントを削除する？\nすべてのデータが消えちゃうよ😢';

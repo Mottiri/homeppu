@@ -102,7 +102,26 @@ function formatEntry(entry) {
   return `  ${entry.name}('${entry.value}', '${entry.emoji}', '${entry.label}', ${entry.colorValue}, ReactionRarity.${entry.rarity}${tail}),`;
 }
 
-async function updateVirtueShopConfig(entries, options) {
+function isSameEntry(a, b) {
+  return (
+    a.name === b.name &&
+    a.value === b.value &&
+    a.emoji === b.emoji &&
+    a.label === b.label &&
+    a.colorValue === b.colorValue &&
+    a.rarity === b.rarity &&
+    (a.assetName || null) === (b.assetName || null) &&
+    (a.virtueCost ?? null) === (b.virtueCost ?? null)
+  );
+}
+
+function isAutoManagedEntry(entry) {
+  if (!entry.assetName) return false;
+  const parsed = parseFileName(entry.assetName);
+  return !!parsed && parsed.id === entry.value;
+}
+
+async function updateVirtueShopConfig(changedEntries, removedIds, options) {
   if (options.skipFirestore) {
     console.log("Firestore update skipped (--no-firestore).");
     return;
@@ -122,12 +141,15 @@ async function updateVirtueShopConfig(entries, options) {
   const data = snap.data() || {};
   const reactionCostsById = { ...(data.reactionCostsById || {}) };
 
-  for (const entry of entries) {
+  for (const entry of changedEntries) {
     if (entry.rarity === "rare") {
       reactionCostsById[entry.value] = entry.virtueCost || 0;
     } else {
       delete reactionCostsById[entry.value];
     }
+  }
+  for (const removedId of removedIds) {
+    delete reactionCostsById[removedId];
   }
 
   if (options.dryRun) {
@@ -224,85 +246,119 @@ async function main() {
   const beginLineEnd = content.indexOf("\n", beginIndex) + 1;
   const block = content.slice(beginLineEnd, endIndex);
   const existingEntries = parseReactionEntries(block);
-  const existingByValue = new Map();
-  for (const entry of existingEntries) {
-    existingByValue.set(entry.value, entry);
-  }
 
-  const updatedEntries = [];
-  const updatedValues = new Set();
+  const nextEntries = [];
   const addedEntries = [];
   const updatedExistingIds = [];
+  const unchangedExistingIds = [];
+  const removedExistingIds = [];
+  const parsedById = new Map(parsedAssets.map((asset) => [asset.id, asset]));
+  const consumedAssetIds = new Set();
 
-  for (const asset of parsedAssets) {
-    const existing = existingByValue.get(asset.id);
-    const colorValue = RARITY_COLORS[asset.rarity];
-    const virtueCost = asset.rarity === "rare" ? asset.cost : null;
-
-    if (existing) {
-      existing.rarity = asset.rarity;
-      existing.colorValue = colorValue;
-      existing.virtueCost = virtueCost;
-      existing.assetName = asset.assetName;
-      updatedValues.add(existing.value);
-      updatedExistingIds.push(existing.value);
-    } else {
-      addedEntries.push({
-        name: asset.id,
-        value: asset.id,
-        emoji: DEFAULT_EMOJI,
-        label: asset.id,
-        colorValue,
-        rarity: asset.rarity,
-        assetName: asset.assetName,
-        virtueCost,
-      });
-      updatedValues.add(asset.id);
+  for (const existing of existingEntries) {
+    const asset = parsedById.get(existing.value);
+    if (!asset) {
+      if (isAutoManagedEntry(existing)) {
+        removedExistingIds.push(existing.value);
+      } else {
+        unchangedExistingIds.push(existing.value);
+        nextEntries.push(existing);
+      }
+      continue;
     }
+
+    consumedAssetIds.add(asset.id);
+    const desired = {
+      ...existing,
+      rarity: asset.rarity,
+      colorValue: RARITY_COLORS[asset.rarity],
+      virtueCost: asset.rarity === "rare" ? asset.cost : null,
+      assetName: asset.assetName,
+    };
+
+    if (isSameEntry(existing, desired)) {
+      unchangedExistingIds.push(existing.value);
+    } else {
+      updatedExistingIds.push(existing.value);
+    }
+    nextEntries.push(desired);
   }
 
-  for (const entry of existingEntries) {
-    updatedEntries.push(entry);
+  for (const asset of parsedAssets) {
+    if (consumedAssetIds.has(asset.id)) continue;
+    addedEntries.push({
+      name: asset.id,
+      value: asset.id,
+      emoji: DEFAULT_EMOJI,
+      label: asset.id,
+      colorValue: RARITY_COLORS[asset.rarity],
+      rarity: asset.rarity,
+      assetName: asset.assetName,
+      virtueCost: asset.rarity === "rare" ? asset.cost : null,
+    });
   }
 
   addedEntries.sort((a, b) => a.value.localeCompare(b.value));
-  updatedEntries.push(...addedEntries);
+  const nextEntriesSorted = [...nextEntries, ...addedEntries];
 
-  const lines = updatedEntries.map(formatEntry);
+  const lines = nextEntriesSorted.map(formatEntry);
   const updatedContent =
     content.slice(0, beginLineEnd) +
     `${lines.join("\n")}\n` +
     content.slice(endIndex);
 
+  const updatedExistingIdSet = new Set(updatedExistingIds);
+  const changedEntries = [
+    ...nextEntriesSorted.filter((entry) => updatedExistingIdSet.has(entry.value)),
+    ...addedEntries,
+  ];
+  const changedIds = Array.from(
+    new Set(changedEntries.map((entry) => entry.value))
+  ).sort();
+  const updatedIds = Array.from(new Set(updatedExistingIds)).sort();
+  const addedIds = addedEntries.map((entry) => entry.value).sort();
+  const removedIds = Array.from(new Set(removedExistingIds)).sort();
+  const unchangedIds = Array.from(new Set(unchangedExistingIds)).sort();
+
   if (dryRun) {
     console.log("=== Dry Run ===");
     console.log(`Detected assets: ${parsedAssets.length}`);
     console.log(`Added entries: ${addedEntries.length}`);
-    console.log(`Updated entries: ${updatedExistingIds.length}`);
+    console.log(`Updated entries: ${updatedIds.length}`);
+    console.log(`Removed entries: ${removedIds.length}`);
+    console.log(`Unchanged entries: ${unchangedIds.length}`);
     console.log(`Skipped assets (no rarity suffix): ${skippedAssets.length}`);
+    if (addedIds.length) console.log(`Added IDs: ${addedIds.join(", ")}`);
+    if (updatedIds.length) console.log(`Updated IDs: ${updatedIds.join(", ")}`);
+    if (removedIds.length) console.log(`Removed IDs: ${removedIds.join(", ")}`);
     if (skippedAssets.length) {
       console.log(`- ${skippedAssets.join(", ")}`);
     }
     return;
   }
 
-  fs.writeFileSync(appConstantsPath, updatedContent, "utf-8");
-  console.log("app_constants.dart updated.");
-
   await updateVirtueShopConfig(
-    updatedEntries.filter((entry) => updatedValues.has(entry.value)),
+    changedEntries,
+    removedIds,
     { dryRun, skipFirestore }
   );
 
-  const addedIds = addedEntries.map((entry) => entry.value).sort();
-  const updatedIds = Array.from(new Set(updatedExistingIds)).sort();
+  fs.writeFileSync(appConstantsPath, updatedContent, "utf-8");
+  console.log("app_constants.dart updated.");
+
   console.log("=== Summary ===");
   console.log(`Added: ${addedIds.length}`);
   if (addedIds.length) console.log(`- ${addedIds.join(", ")}`);
   console.log(`Updated: ${updatedIds.length}`);
   if (updatedIds.length) console.log(`- ${updatedIds.join(", ")}`);
+  console.log(`Removed: ${removedIds.length}`);
+  if (removedIds.length) console.log(`- ${removedIds.join(", ")}`);
+  console.log(`Unchanged: ${unchangedIds.length}`);
+  if (unchangedIds.length) console.log(`- ${unchangedIds.join(", ")}`);
   console.log(`Skipped (no rarity suffix): ${skippedAssets.length}`);
   if (skippedAssets.length) console.log(`- ${skippedAssets.join(", ")}`);
+  console.log(`Changed total (Firestore target): ${changedIds.length}`);
+  if (changedIds.length) console.log(`- ${changedIds.join(", ")}`);
   console.log("Done.");
 }
 

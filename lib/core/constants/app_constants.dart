@@ -115,6 +115,9 @@ enum ReactionType {
   rainbow('rainbow', '??', '??', 0xFFFFB7C5, ReactionRarity.epic),
   hundred('hundred', '??', '100?', 0xFFFF4500, ReactionRarity.epic),
   cracker('cracker', '✨', 'cracker', 0xFF64B5F6, ReactionRarity.rare, assetName: 'cracker_rare_100', virtueCost: 100),
+  balloon('balloon', '✨', 'balloon', 0xFF64B5F6, ReactionRarity.rare, assetName: 'balloon_rare_100', virtueCost: 100),
+  confetti('confetti', '✨', 'confetti', 0xFF9575CD, ReactionRarity.epic, assetName: 'confetti_epic'),
+  present('present', '✨', 'present', 0xFF64B5F6, ReactionRarity.rare, assetName: 'present_rare_100', virtueCost: 100),
 // END AUTO REACTION TYPES
   ;
 

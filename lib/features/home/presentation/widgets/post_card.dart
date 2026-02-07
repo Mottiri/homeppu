@@ -909,6 +909,8 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
   late List<AnimationController> _controllers;
   late List<Animation<double>> _scaleAnimations;
   bool _showExtendedList = false;
+  bool _isOpeningLockedDialog = false;
+  bool _isRefreshingVirtueConfig = false;
 
   // 使用順にソートされたスタンプリスト
   List<ReactionType> _orderedStamps = [];
@@ -1158,7 +1160,61 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
       return;
     }
 
-    _showLockedDialog(type);
+    if (_isOpeningLockedDialog) return;
+    _isOpeningLockedDialog = true;
+    _showLockedDialog(type).whenComplete(() {
+      _isOpeningLockedDialog = false;
+    });
+  }
+
+  void _refreshVirtueConfigInBackground() {
+    if (_isRefreshingVirtueConfig) return;
+    _isRefreshingVirtueConfig = true;
+    ref
+        .refresh(virtueShopConfigProvider.future)
+        .catchError((e) {
+          debugPrint('[VirtueDialog] Background config refresh failed: $e');
+        })
+        .whenComplete(() {
+          _isRefreshingVirtueConfig = false;
+        });
+  }
+
+  Future<int?> _loadReactionCost(String reactionId) async {
+    int? parseCost(VirtueShopConfig? config) {
+      final cost = config?.costForReaction(reactionId);
+      if (cost == null || cost <= 0) return null;
+      return cost;
+    }
+
+    final cachedCost = parseCost(ref.read(virtueShopConfigProvider).valueOrNull);
+    if (cachedCost != null) {
+      // Keep UI fast while reducing stale config risk in long sessions.
+      _refreshVirtueConfigInBackground();
+      return cachedCost;
+    }
+
+    try {
+      final config = await ref.read(virtueShopConfigProvider.future);
+      final cost = parseCost(config);
+      if (cost != null) {
+        return cost;
+      }
+    } catch (e) {
+      debugPrint('[VirtueDialog] Config read failed: $e');
+    }
+
+    try {
+      final config = await ref.refresh(virtueShopConfigProvider.future);
+      final cost = parseCost(config);
+      if (cost != null) {
+        return cost;
+      }
+    } catch (e) {
+      debugPrint('[VirtueDialog] Config refresh failed: $e');
+    }
+
+    return null;
   }
 
   Future<void> _showLockedDialog(ReactionType type) async {
@@ -1167,8 +1223,8 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
       case ReactionUnlockType.free:
         return;
       case ReactionUnlockType.virtue:
-        final config = ref.read(virtueShopConfigProvider).valueOrNull;
-        final cost = config?.costForReaction(type.value);
+        final cost = await _loadReactionCost(type.value);
+        if (!mounted) return;
         if (cost == null || cost <= 0) {
           _showOverlayToast(
             AppMessages.error.loadFailed('価格情報'),
@@ -1264,7 +1320,7 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
                         const SizedBox(height: 16),
                         // タイトル
                         Text(
-                          'スタンプを購入',
+                          AppMessages.confirm.purchaseVirtueTitle,
                           style: Theme.of(context).textTheme.titleLarge
                               ?.copyWith(
                                 fontWeight: FontWeight.bold,
@@ -1273,7 +1329,7 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'このスタンプを永久にアンロックします',
+                          AppMessages.confirm.purchaseVirtueMessage(cost),
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(color: AppColors.textSecondary),
                           textAlign: TextAlign.center,
@@ -1299,7 +1355,7 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                '$cost 徳ポイント',
+                                AppMessages.confirm.virtueCostLabel(cost),
                                 style: Theme.of(context).textTheme.titleMedium
                                     ?.copyWith(
                                       fontWeight: FontWeight.bold,
@@ -1313,8 +1369,14 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
                         // 現在の保有ポイント
                         Text(
                           hasEnough
-                              ? '保有：$currentVirtue → 残：${currentVirtue - cost}'
-                              : '保有：$currentVirtue（${cost - currentVirtue}ポイント不足）',
+                              ? AppMessages.confirm.virtueBalanceAfterPurchase(
+                                  currentVirtue,
+                                  cost,
+                                )
+                              : AppMessages.confirm.virtueBalanceShortage(
+                                  currentVirtue,
+                                  cost,
+                                ),
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(
                                 color: hasEnough
@@ -1447,7 +1509,7 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
                         const SizedBox(height: 16),
                         // タイトル
                         Text(
-                          'Epicスタンプ',
+                          AppMessages.confirm.subscriptionOnlyTitle,
                           style: Theme.of(context).textTheme.titleLarge
                               ?.copyWith(
                                 fontWeight: FontWeight.bold,
@@ -1456,7 +1518,10 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'このスタンプはプレミアム限定です',
+                          AppMessages.confirm.subscriptionOnlyMessageWithRewarded(
+                            AppConstants.rewardedReactionHours,
+                            AppConstants.rewardedReactionUses,
+                          ),
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(color: AppColors.textSecondary),
                           textAlign: TextAlign.center,
@@ -1466,9 +1531,11 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
                         _EpicUnlockOptionCard(
                           icon: Icons.play_circle_outline,
                           iconColor: AppColors.info,
-                          title: '広告を見て解放',
-                          subtitle:
-                              '${AppConstants.rewardedReactionUses}回 / ${AppConstants.rewardedReactionHours}時間',
+                          title: AppMessages.confirm.rewardedUnlockTitle,
+                          subtitle: AppMessages.confirm.rewardedUnlockSubtitle(
+                            AppConstants.rewardedReactionUses,
+                            AppConstants.rewardedReactionHours,
+                          ),
                           isLoading: isProcessing,
                           onTap: isProcessing
                               ? null
@@ -1489,8 +1556,8 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
                         _EpicUnlockOptionCard(
                           icon: Icons.workspace_premium,
                           iconColor: AppColors.praise,
-                          title: 'プレミアム加入',
-                          subtitle: '全Epicスタンプ無制限',
+                          title: AppMessages.confirm.premiumSubscribeTitle,
+                          subtitle: AppMessages.confirm.premiumUnlockEpicSubtitle,
                           isPremium: true,
                           onTap: isProcessing
                               ? null
