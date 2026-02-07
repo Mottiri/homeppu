@@ -10,6 +10,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/constants/app_messages.dart';
+import '../../../../core/utils/snackbar_helper.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../shared/models/post_model.dart';
@@ -1010,7 +1011,6 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
     final safeBottom = MediaQuery.of(context).viewPadding.bottom;
     final bottom = safeBottom + 12;
     final overlay = Overlay.of(context, rootOverlay: true);
-    if (overlay == null) return;
 
     _toastEntry = OverlayEntry(
       builder: (context) {
@@ -1178,38 +1178,164 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
         }
 
         bool isProcessing = false;
+        int currentVirtue = 0;
+        final currentUser = ref.read(currentUserProvider).valueOrNull;
+        if (currentUser != null) {
+          currentVirtue = currentUser.virtue;
+          debugPrint(
+            '[VirtueDialog] Using currentUserProvider virtue=$currentVirtue cost=$cost',
+          );
+        } else {
+          bool fetchFailed = false;
+          debugPrint('[VirtueDialog] currentUser unavailable. Fetching callable virtue status');
+          try {
+            final virtueStatus = await ref.refresh(virtueStatusProvider.future);
+            currentVirtue = virtueStatus.virtue;
+            debugPrint(
+              '[VirtueDialog] Fetched virtue=$currentVirtue cost=$cost',
+            );
+          } catch (e) {
+            fetchFailed = true;
+            debugPrint('[VirtueDialog] Fetch failed: $e');
+          }
+          if (!mounted) return;
+          if (fetchFailed) {
+            SnackBarHelper.showError(context, AppMessages.error.network);
+            return;
+          }
+        }
+        if (!mounted) return;
+        final hasEnough = currentVirtue >= cost;
+        debugPrint(
+          '[VirtueDialog] hasEnough=$hasEnough current=$currentVirtue cost=$cost',
+        );
         await showDialog<void>(
           context: context,
-          builder: (context) {
+          barrierColor: Colors.black.withValues(alpha: 0.5),
+          builder: (dialogContext) {
             return StatefulBuilder(
               builder: (context, setDialogState) {
-                return AlertDialog(
-                  title: Text(AppMessages.confirm.purchaseVirtueTitle),
-                  content: Text(
-                    AppMessages.confirm.purchaseVirtueMessage(cost),
+                return Dialog(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
                   ),
-                  actions: [
-                    SizedBox(
-                      width: double.infinity,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          TextButton(
-                            onPressed: isProcessing
-                                ? null
-                                : () => Navigator.of(context).pop(),
-                            child: Text(AppMessages.label.cancel),
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    constraints: const BoxConstraints(maxWidth: 340),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // スタンププレビュー（グロー付き）
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                AppColors.rarityRare.withValues(alpha: 0.2),
+                                AppColors.rarityRare.withValues(alpha: 0.1),
+                              ],
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.rarityRare.withValues(
+                                  alpha: 0.3,
+                                ),
+                                blurRadius: 16,
+                                spreadRadius: 4,
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 8),
-                          TextButton(
-                            onPressed: isProcessing
+                          child: Image.asset(
+                            type.assetPath,
+                            width: 64,
+                            height: 64,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Text(
+                                type.emoji,
+                                style: const TextStyle(fontSize: 48),
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        // タイトル
+                        Text(
+                          'スタンプを購入',
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary,
+                              ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'このスタンプを永久にアンロックします',
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: AppColors.textSecondary),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 24),
+                        // 価格表示
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.virtue.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.auto_awesome,
+                                color: AppColors.virtue,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '$cost 徳ポイント',
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.virtue,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        // 現在の保有ポイント
+                        Text(
+                          hasEnough
+                              ? '保有：$currentVirtue → 残：${currentVirtue - cost}'
+                              : '保有：$currentVirtue（${cost - currentVirtue}ポイント不足）',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: hasEnough
+                                    ? AppColors.textSecondary
+                                    : AppColors.error,
+                                fontWeight: hasEnough ? null : FontWeight.bold,
+                              ),
+                        ),
+                        const SizedBox(height: 20),
+                        // 購入ボタン
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: isProcessing || !hasEnough
                                 ? null
                                 : () async {
                                     setDialogState(() => isProcessing = true);
                                     final success =
                                         await _purchaseReactionStamp(type);
                                     if (mounted && success) {
-                                      Navigator.of(context).pop();
+                                      Navigator.of(dialogContext).pop();
                                     }
                                     if (mounted) {
                                       setDialogState(
@@ -1217,20 +1343,46 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
                                       );
                                     }
                                   },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.virtue,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
                             child: isProcessing
                                 ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
+                                    width: 20,
+                                    height: 20,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
+                                      color: Colors.white,
                                     ),
                                   )
-                                : Text(AppMessages.label.purchase),
+                                : Text(
+                                    AppMessages.label.purchase,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
                           ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(height: 12),
+                        // キャンセルボタン
+                        TextButton(
+                          onPressed: isProcessing
+                              ? null
+                              : () => Navigator.of(dialogContext).pop(),
+                          child: Text(
+                            AppMessages.label.cancel,
+                            style: TextStyle(color: AppColors.textSecondary),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 );
               },
             );

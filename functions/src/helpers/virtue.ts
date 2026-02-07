@@ -63,3 +63,42 @@ export async function decreaseVirtue(
 
     return { newVirtue, isBanned };
 }
+
+/**
+ * 徳ポイントを増加させる
+ */
+export async function increaseVirtue(
+    userId: string,
+    reason: string,
+    amount: number
+): Promise<{ newVirtue: number }> {
+    console.log(`[Virtue] increase start userId=${userId} amount=${amount} reason=${reason}`);
+    const userRef = db.collection("users").doc(userId);
+    const userDoc = await userRef.get();
+
+    if (!userDoc.exists) {
+        console.error(`[Virtue] increase failed: user not found userId=${userId}`);
+        throw new Error("User not found");
+    }
+
+    const userData = userDoc.data()!;
+    const currentVirtue = userData.virtue ?? VIRTUE_CONFIG.initial;
+    const newVirtue = currentVirtue + amount;
+
+    await userRef.update({
+        virtue: newVirtue,
+        updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    await db.collection("virtueHistory").add({
+        userId: userId,
+        change: amount,
+        reason: reason,
+        newVirtue: newVirtue,
+        createdAt: FieldValue.serverTimestamp(),
+    });
+
+    console.log(`[Virtue] increase done userId=${userId} ${currentVirtue} -> ${newVirtue}`);
+
+    return { newVirtue };
+}

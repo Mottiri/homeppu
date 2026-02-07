@@ -106,13 +106,17 @@ enum ReactionUnlockType {
 
 /// リアクションの種類（7種類のスタンプ）
 enum ReactionType {
+  // BEGIN AUTO REACTION TYPES
   heart('heart', '??', '???', 0xFFFF6B6B, ReactionRarity.common),
   praise('praise', '??', '???', 0xFFFFD93D, ReactionRarity.common),
   clap('clap', '??', '??', 0xFFFFDAB9, ReactionRarity.common),
   shine('shine', '?', '????', 0xFF6BCB77, ReactionRarity.rare, virtueCost: 100),
   star('star', '?', '???', 0xFFFFD700, ReactionRarity.rare, virtueCost: 100),
   rainbow('rainbow', '??', '??', 0xFFFFB7C5, ReactionRarity.epic),
-  hundred('hundred', '??', '100?', 0xFFFF4500, ReactionRarity.epic);
+  hundred('hundred', '??', '100?', 0xFFFF4500, ReactionRarity.epic),
+  cracker('cracker', '✨', 'cracker', 0xFF64B5F6, ReactionRarity.rare, assetName: 'cracker_rare_100', virtueCost: 100),
+// END AUTO REACTION TYPES
+  ;
 
   const ReactionType(
     this.value,
@@ -120,18 +124,20 @@ enum ReactionType {
     this.label,
     this.colorValue,
     this.rarity, {
+    String? assetName,
     this.virtueCost,
-  });
+  }) : assetName = assetName ?? value;
 
   final String value;
   final String emoji;
   final String label;
   final int colorValue;
   final ReactionRarity rarity;
+  final String assetName;
   final int? virtueCost; // ?????????rare???
 
-  /// ???????assets/reactions/{value}.png?
-  String get assetPath => 'assets/reactions/$value.png';
+  /// ???????assets/reactions/{assetName}.png?
+  String get assetPath => 'assets/reactions/$assetName.png';
 
   String get purchaseKey => 'reaction_$value';
 

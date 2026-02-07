@@ -196,19 +196,9 @@ class ModerationService {
 
   /// 徳ポイント状態を取得
   Future<VirtueStatus> getVirtueStatus() async {
-    try {
-      final callable = _functions.httpsCallable('getVirtueStatus');
-      final result = await callable.call();
-      return VirtueStatus.fromJson(Map<String, dynamic>.from(result.data as Map));
-    } catch (e) {
-      // エラー時はデフォルト値を返す
-      return VirtueStatus(
-        virtue: 100,
-        isBanned: false,
-        warningThreshold: 30,
-        maxVirtue: 100,
-      );
-    }
+    final callable = _functions.httpsCallable('getVirtueStatus');
+    final result = await callable.call();
+    return VirtueStatus.fromJson(Map<String, dynamic>.from(result.data as Map));
   }
 
   /// 徳ポイント履歴を取得

@@ -163,7 +163,7 @@ export const getVirtueStatus = onCall(
         const userData = userDoc.data()!;
 
         return {
-            virtue: userData.virtue || VIRTUE_CONFIG.initial,
+            virtue: userData.virtue ?? VIRTUE_CONFIG.initial,
             isBanned: userData.isBanned || false,
             warningThreshold: VIRTUE_CONFIG.warningThreshold,
             maxVirtue: VIRTUE_CONFIG.initial,

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -250,7 +251,19 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       );
 
       // 徳ポイント状態を更新
-      ref.invalidate(virtueStatusProvider);
+      if (kDebugMode) {
+        try {
+          final status = await ref.refresh(virtueStatusProvider.future);
+          debugPrint(
+            '[VirtueDebug] Post created. virtue=${status.virtue}',
+          );
+        } catch (e) {
+          debugPrint('[VirtueDebug] Post created but virtue fetch failed: $e');
+          ref.invalidate(virtueStatusProvider);
+        }
+      } else {
+        ref.invalidate(virtueStatusProvider);
+      }
 
       if (mounted) {
         // 成功メッセージ

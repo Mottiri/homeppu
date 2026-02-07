@@ -13,7 +13,7 @@ import { geminiApiKey } from "../config/secrets";
 import { isAdmin, getAdminUids } from "../helpers/admin";
 import { ModerationResult, MediaItem } from "../types";
 import { moderateMedia } from "../helpers/moderation";
-import { VIRTUE_CONFIG, NG_WORDS, decreaseVirtue } from "../helpers/virtue";
+import { VIRTUE_CONFIG, NG_WORDS, decreaseVirtue, increaseVirtue } from "../helpers/virtue";
 import { LOCATION, AI_MODELS } from "../config/constants";
 import {
     AUTH_ERRORS,
@@ -78,6 +78,11 @@ export const createPostWithRateLimit = onCall(
         await db.collection("users").doc(userId).update({
             totalPosts: FieldValue.increment(1),
         });
+
+        // テスト用: 投稿ごとに徳ポイントを加算（仕様確定後に削除/調整）
+        console.log(`[Virtue] bonus start userId=${userId}`);
+        const virtueResult = await increaseVirtue(userId, "投稿ボーナス（テスト）", 100);
+        console.log(`[Virtue] bonus applied userId=${userId} newVirtue=${virtueResult.newVirtue}`);
 
         return { success: true, postId: postRef.id };
     }
@@ -453,6 +458,11 @@ ${content}
         await db.collection("users").doc(userId).update({
             totalPosts: FieldValue.increment(1),
         });
+
+        // テスト用: 投稿ごとに徳ポイントを加算（仕様確定後に削除/調整）
+        console.log(`[Virtue] bonus start userId=${userId}`);
+        const virtueResult = await increaseVirtue(userId, "投稿ボーナス（テスト）", 100);
+        console.log(`[Virtue] bonus applied userId=${userId} newVirtue=${virtueResult.newVirtue}`);
 
         console.log(`=== createPostWithModeration SUCCESS: postId=${postRef.id} ===`);
         return { success: true, postId: postRef.id };

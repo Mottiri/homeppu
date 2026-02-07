@@ -133,7 +133,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     } catch (e) {
       debugPrint('ProfileScreen: virtue status load failed: $e');
       if (mounted) {
-        SnackBarHelper.showError(context, AppMessages.error.general);
+        SnackBarHelper.showError(context, AppMessages.error.network);
       }
     }
   }
