@@ -5,6 +5,7 @@
  */
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { logger } from "firebase-functions/logger";
 import { db, FieldValue } from "../helpers/firebase";
 import { requireAuth } from "../helpers/auth";
 import { COLLECTIONS } from "../config/collections";
@@ -26,6 +27,7 @@ const AVATAR_PART_RARITY: Record<string, string> = {
     hair_02: "common",
     hair_03: "epic",
     hair_04: "rare",
+    hair_05: "rare",
     // eyebrows
     eyebrows_01: "common",
     eyebrows_02: "common",
@@ -92,6 +94,11 @@ export const purchaseVirtueItem = onCall(
   async (request) => {
         const userId = requireAuth(request);
         const { itemType, itemId } = request.data || {};
+        logger.info("purchaseVirtueItem request", {
+            userId,
+            itemType,
+            itemId,
+        });
 
         if (!itemType || !itemId) {
             throw new HttpsError("invalid-argument", "itemType and itemId are required");
@@ -150,11 +157,29 @@ export const purchaseVirtueItem = onCall(
                 purchaseKey = `virtue_reaction_stamp_${itemId}`;
             } else {
                 const rarity = AVATAR_PART_RARITY[itemId] ?? "";
+                logger.info("purchaseVirtueItem avatar lookup", {
+                    userId,
+                    itemId,
+                    rarity,
+                    knownAvatarPartCount: Object.keys(AVATAR_PART_RARITY).length,
+                    avatarCostConfig: config.avatarPartCostsByRarity,
+                });
                 if (!rarity) {
+                    logger.warn("purchaseVirtueItem avatar part not found", {
+                        userId,
+                        itemId,
+                    });
                     throw new HttpsError("not-found", "avatar part not found");
                 }
                 cost = config.avatarPartCostsByRarity[rarity] ?? 0;
                 if (!cost || cost <= 0) {
+                    logger.warn("purchaseVirtueItem avatar cost not configured", {
+                        userId,
+                        itemId,
+                        rarity,
+                        cost,
+                        avatarCostConfig: config.avatarPartCostsByRarity,
+                    });
                     throw new HttpsError("failed-precondition", "Cost not configured");
                 }
 
@@ -174,6 +199,13 @@ export const purchaseVirtueItem = onCall(
 
             const currentVirtue = userData.virtue ?? 0;
             if (currentVirtue < cost) {
+                logger.info("purchaseVirtueItem insufficient virtue", {
+                    userId,
+                    itemType,
+                    itemId,
+                    currentVirtue,
+                    cost,
+                });
                 throw new HttpsError("failed-precondition", "徳ポイントが足りません。");
             }
 
@@ -205,6 +237,16 @@ export const purchaseVirtueItem = onCall(
                 virtue: newVirtue,
                 [unlockField]: FieldValue.arrayUnion(unlockValue),
                 updatedAt: FieldValue.serverTimestamp(),
+            });
+
+            logger.info("purchaseVirtueItem success", {
+                userId,
+                itemType,
+                itemId,
+                cost,
+                newVirtue,
+                unlockField,
+                unlockValue,
             });
 
             return {

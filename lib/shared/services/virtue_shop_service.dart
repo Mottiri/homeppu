@@ -56,9 +56,27 @@ class VirtueShopService {
     required String itemId,
   }) async {
     final callable = _functions.httpsCallable('purchaseVirtueItem');
-    await callable.call({
-      'itemType': itemType,
-      'itemId': itemId,
-    });
+    try {
+      await callable.call({
+        'itemType': itemType,
+        'itemId': itemId,
+      });
+    } on FirebaseFunctionsException catch (e) {
+      // Keep UI message generic, but expose structured details for diagnosis.
+      // ignore: avoid_print
+      print(
+        '[VirtueShopService] purchaseVirtueItem failed: '
+        'itemType=$itemType itemId=$itemId '
+        'code=${e.code} message=${e.message} details=${e.details}',
+      );
+      rethrow;
+    } catch (e) {
+      // ignore: avoid_print
+      print(
+        '[VirtueShopService] purchaseVirtueItem unexpected error: '
+        'itemType=$itemType itemId=$itemId error=$e',
+      );
+      rethrow;
+    }
   }
 }

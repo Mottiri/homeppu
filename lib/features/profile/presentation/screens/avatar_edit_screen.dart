@@ -547,6 +547,10 @@ class _AvatarEditScreenState extends ConsumerState<AvatarEditScreen> {
       }
       return true;
     } on FirebaseFunctionsException catch (e) {
+      debugPrint(
+        '[AvatarVirtueDialog] purchaseAvatarPart failed: '
+        'itemId=$id code=${e.code} message=${e.message} details=${e.details}',
+      );
       if (mounted) {
         final message = e.message == AppMessages.error.notEnoughVirtue
             ? AppMessages.error.notEnoughVirtue
