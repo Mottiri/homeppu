@@ -232,6 +232,11 @@ class _ConfirmMessages {
   String get premiumSubscribeTitle => 'プレミアム加入';
   String get premiumUnlockEpicSubtitle => '全Epicスタンプ無制限';
 
+  // 投稿前インフォメーションダイアログ
+  String get postAdNoticeTitle => '投稿前のお知らせ';
+  String get postAdNoticeReview => '投稿内容を審査します';
+  String get postAdNoticeMayShowAd => '広告が表示される場合があります';
+
   // アカウント削除
   String get deleteAccount => '本当にアカウントを削除する？\nすべてのデータが消えちゃうよ😢';
 }

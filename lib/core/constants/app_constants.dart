@@ -26,6 +26,10 @@ class AppConstants {
   static const int rewardedReactionUses = 25;
   static const int rewardedReactionHours = 24;
 
+  // 投稿時インタースティシャル広告
+  static const int postInterstitialAdFrequency = 3;
+  static const int postInterstitialAdDailyLimit = 8;
+
   // システムメッセージ（フレンドリーなトーン）
   static const Map<String, String> friendlyMessages = {
     'welcome': 'ようこそ、ほめっぷへ！\nあなたの毎日を応援するよ☺️',

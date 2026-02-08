@@ -14,6 +14,8 @@ import '../../../../shared/providers/moderation_provider.dart';
 import '../../../../shared/services/media_service.dart';
 import '../../../../shared/services/moderation_service.dart';
 import '../../../../shared/services/nsfw_detector_service.dart';
+import '../../../../shared/services/interstitial_ad_service.dart';
+import '../../../../shared/services/post_ad_policy_service.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
 import '../../../../shared/widgets/report_dialog.dart';
 import '../../../../shared/widgets/ad_banner.dart';
@@ -31,6 +33,7 @@ class CreatePostScreen extends ConsumerStatefulWidget {
 class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   final _contentController = TextEditingController();
   final _mediaService = MediaService();
+  final _postAdPolicyService = PostAdPolicyService();
   bool _isLoading = false;
   bool _isUploading = false;
   double _uploadProgress = 0;
@@ -39,9 +42,195 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   final List<_SelectedMedia> _selectedMedia = [];
 
   @override
+  void initState() {
+    super.initState();
+    InterstitialAdService.instance.preload();
+  }
+
+  @override
   void dispose() {
     _contentController.dispose();
     super.dispose();
+  }
+
+  Widget _buildNoticeItem(BuildContext context, String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '•',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: AppColors.info,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: AppColors.textSecondary,
+              height: 1.4,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showPostAdNoticeDialog() async {
+    var dontShowAgain = false;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                constraints: const BoxConstraints(maxWidth: 340),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // アイコン
+                      Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          color: AppColors.info.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.info_outline,
+                          color: AppColors.info,
+                          size: 32,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // タイトル
+                      Text(
+                        AppMessages.confirm.postAdNoticeTitle,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      // 本文（箇条書き風）
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.info.withValues(alpha: 0.05),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildNoticeItem(
+                              context,
+                              AppMessages.confirm.postAdNoticeReview,
+                            ),
+                            const SizedBox(height: 6),
+                            _buildNoticeItem(
+                              context,
+                              AppMessages.confirm.postAdNoticeMayShowAd,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      // チェックボックス
+                      GestureDetector(
+                        onTap: () {
+                          setDialogState(() {
+                            dontShowAgain = !dontShowAgain;
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.backgroundSecondary,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: Checkbox(
+                                  value: dontShowAgain,
+                                  onChanged: (value) {
+                                    setDialogState(() {
+                                      dontShowAgain = value ?? false;
+                                    });
+                                  },
+                                  materialTapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                AppMessages.label.dontShowAgain,
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(color: AppColors.textSecondary),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      // OKボタン
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.of(dialogContext).pop(),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text(
+                            AppMessages.label.ok,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (dontShowAgain) {
+      final userId = ref.read(currentUserProvider).valueOrNull?.uid;
+      if (userId != null) {
+        await _postAdPolicyService.setNoticeSkip(userId, true);
+      }
+    }
   }
 
   /// メディア選択メニューを表示
@@ -210,7 +399,32 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     final user = ref.read(currentUserProvider).valueOrNull;
     if (user == null) return;
 
+    if (kDebugMode) {
+      final debugState = await _postAdPolicyService.debugState(user.uid);
+      debugPrint(
+        '[PostAd] before submit: isSubscriber=${user.isSubscriber} $debugState',
+      );
+    }
+
+    if (!user.isSubscriber &&
+        await _postAdPolicyService.shouldShowNoticeDialog(user.uid) &&
+        mounted) {
+      await _showPostAdNoticeDialog();
+    }
+
+    final shouldTryPostAd =
+        !user.isSubscriber &&
+        await _postAdPolicyService.shouldShowAdOnThisPost(user.uid);
+    if (kDebugMode) {
+      debugPrint('[PostAd] shouldTryPostAd=$shouldTryPostAd');
+    }
+
     setState(() => _isLoading = true);
+
+    ModerationException? moderationError;
+    String? generalErrorMessage;
+    var postCreated = false;
+    Future<bool>? adFuture;
 
     try {
       // メディアをアップロード
@@ -239,6 +453,10 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         setState(() => _isUploading = false);
       }
 
+      if (shouldTryPostAd) {
+        adFuture = InterstitialAdService.instance.showIfAvailable();
+      }
+
       // モデレーション付き投稿作成（Cloud Functions経由）
       final moderationService = ref.read(moderationServiceProvider);
       await moderationService.createPostWithModeration(
@@ -254,9 +472,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       if (kDebugMode) {
         try {
           final status = await ref.refresh(virtueStatusProvider.future);
-          debugPrint(
-            '[VirtueDebug] Post created. virtue=${status.virtue}',
-          );
+          debugPrint('[VirtueDebug] Post created. virtue=${status.virtue}');
         } catch (e) {
           debugPrint('[VirtueDebug] Post created but virtue fetch failed: $e');
           ref.invalidate(virtueStatusProvider);
@@ -264,44 +480,58 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       } else {
         ref.invalidate(virtueStatusProvider);
       }
-
-      if (mounted) {
-        // 成功メッセージ
-        SnackBarHelper.showSuccess(
-          context,
-          AppMessages.success.postCreated,
-        );
-        context.pop(true); // 成功を返す（ホーム画面でリロードするため）
-      }
+      postCreated = true;
     } on ModerationException catch (e) {
-      if (mounted) {
-        // ネガティブコンテンツが検出された場合
-        await NegativeContentDialog.show(
-          context: context,
-          message: e.message,
-          onRetry: () {
-            // テキストフィールドにフォーカスを戻す
-          },
-        );
-        // 徳ポイント状態を更新
-        ref.invalidate(virtueStatusProvider);
-      }
+      moderationError = e;
+      ref.invalidate(virtueStatusProvider);
     } catch (e) {
       debugPrint('Error creating post: $e');
-      if (mounted) {
-        // ファイルサイズエラーなど具体的なメッセージがある場合はそれを表示
-        final errorMessage = e.toString().contains('ファイルサイズ')
-            ? e.toString().replaceFirst('Exception: ', '')
-            : AppMessages.error.general;
-        SnackBarHelper.showError(context, errorMessage);
+      generalErrorMessage = e.toString().contains('ファイルサイズ')
+          ? e.toString().replaceFirst('Exception: ', '')
+          : AppMessages.error.general;
+    }
+
+    if (adFuture != null) {
+      try {
+        final adShown = await adFuture;
+        if (adShown) {
+          await _postAdPolicyService.markAdShown(user.uid);
+        }
+        if (kDebugMode) {
+          final debugState = await _postAdPolicyService.debugState(user.uid);
+          debugPrint('[PostAd] adShown=$adShown $debugState');
+        }
+      } catch (e) {
+        debugPrint('Error awaiting post interstitial ad: $e');
       }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _isUploading = false;
-        });
-      }
+      InterstitialAdService.instance.preload();
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _isLoading = false;
+      _isUploading = false;
+    });
+
+    if (postCreated) {
+      SnackBarHelper.showSuccess(context, AppMessages.success.postCreated);
+      context.pop(true); // 成功を返す（ホーム画面でリロードするため）
+      return;
+    }
+
+    if (moderationError != null) {
+      await NegativeContentDialog.show(
+        context: context,
+        message: moderationError.message,
+        onRetry: () {
+          // テキストフィールドにフォーカスを戻す
+        },
+      );
+      return;
+    }
+
+    if (generalErrorMessage != null) {
+      SnackBarHelper.showError(context, generalErrorMessage);
     }
   }
 
@@ -379,9 +609,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                   ],
                 ),
               ),
-              const AdBanner(
-                padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
-              ),
+              const AdBanner(padding: EdgeInsets.fromLTRB(16, 8, 16, 0)),
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(20),
