@@ -11,6 +11,7 @@ import { db } from "../helpers/firebase";
 import { requireAdmin, requireAuth } from "../helpers/auth";
 import { isAdmin } from "../helpers/admin";
 import { getVirtuePolicy } from "../helpers/virtue-policy";
+import { deleteStorageFileFromUrl } from "../helpers/storage";
 import { LOCATION } from "../config/constants";
 import { buildPublicUserData } from "../helpers/public-users";
 import {
@@ -540,6 +541,7 @@ export const adminDeletePostWithPenalty = onCall(
         const reportIdList = Array.isArray(reportIds)
             ? reportIds.filter((id): id is string => typeof id === "string" && id.length > 0)
             : [];
+        const mediaUrlsToDelete: string[] = [];
         let postOwnerId = "";
         let newVirtue = 0;
 
@@ -550,6 +552,13 @@ export const adminDeletePostWithPenalty = onCall(
             }
 
             const postData = postDoc.data() || {};
+            const mediaItems = Array.isArray(postData.mediaItems) ? postData.mediaItems : [];
+            for (const item of mediaItems) {
+                const mediaUrl = typeof item?.url === "string" ? item.url : null;
+                const thumbnailUrl = typeof item?.thumbnailUrl === "string" ? item.thumbnailUrl : null;
+                if (mediaUrl && mediaUrl.length > 0) mediaUrlsToDelete.push(mediaUrl);
+                if (thumbnailUrl && thumbnailUrl.length > 0) mediaUrlsToDelete.push(thumbnailUrl);
+            }
             postOwnerId = (typeof targetUserId === "string" && targetUserId.length > 0)
                 ? targetUserId
                 : (postData.userId as string | undefined) || "";
@@ -618,6 +627,11 @@ export const adminDeletePostWithPenalty = onCall(
             });
         });
 
+        if (mediaUrlsToDelete.length > 0) {
+            await Promise.allSettled(
+                mediaUrlsToDelete.map((url) => deleteStorageFileFromUrl(url))
+            );
+        }
 
         return {
             success: true,

@@ -8,7 +8,6 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_messages.dart';
 import '../../../../core/utils/dialog_helper.dart';
 import '../../../../core/utils/snackbar_helper.dart';
-import '../../../../shared/services/media_service.dart';
 import '../../../../shared/models/post_model.dart';
 
 /// 管理者用：要審査投稿一覧画面
@@ -21,7 +20,7 @@ class AdminReviewScreen extends ConsumerStatefulWidget {
 
 class _AdminReviewScreenState extends ConsumerState<AdminReviewScreen> {
   final _firestore = FirebaseFirestore.instance;
-  final _functions = FirebaseFunctions.instance;
+  final _functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
 
   @override
   Widget build(BuildContext context) {
@@ -259,27 +258,6 @@ class _AdminReviewScreenState extends ConsumerState<AdminReviewScreen> {
     if (!confirmed) return;
 
     try {
-      // Storageからメディアを削除
-      if (post.allMedia.isNotEmpty) {
-        final mediaService = MediaService();
-        for (final media in post.allMedia) {
-          try {
-            await mediaService.deleteMedia(media.url);
-          } catch (e) {
-            debugPrint('AdminReviewScreen: media delete failed: $e');
-          }
-
-          // サムネイルも削除
-          if (media.thumbnailUrl != null && media.thumbnailUrl!.isNotEmpty) {
-            try {
-              await mediaService.deleteMedia(media.thumbnailUrl!);
-            } catch (e) {
-              debugPrint('AdminReviewScreen: thumbnail delete failed: $e');
-            }
-          }
-        }
-      }
-
       final callable = _functions.httpsCallable('adminDeletePostWithPenalty');
       await callable.call(<String, dynamic>{
         'postId': post.id,

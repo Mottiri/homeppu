@@ -26,7 +26,7 @@ class AdminReportContentScreen extends ConsumerStatefulWidget {
 class _AdminReportContentScreenState
     extends ConsumerState<AdminReportContentScreen> {
   final _firestore = FirebaseFirestore.instance;
-  final _functions = FirebaseFunctions.instance;
+  final _functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
   bool _isProcessing = false;
 
   @override
