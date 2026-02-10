@@ -103,5 +103,7 @@ flutter:
     - assets/avatars/mouth/
     - assets/avatars/eyebrows/
     - assets/reactions/
+    - assets/stamp_sheets/
+    - assets/stamp_sheets/layouts/
   
   # フォントはGoogle Fontsパッケージで動的に読み込み

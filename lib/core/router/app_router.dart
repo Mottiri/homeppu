@@ -22,6 +22,7 @@ import '../../shared/models/circle_model.dart';
 import '../../features/circle/presentation/screens/join_requests_screen.dart';
 import '../../features/circle/presentation/screens/members_list_screen.dart';
 import '../../features/tasks/presentation/screens/tasks_screen.dart';
+import '../../features/stamps/presentation/screens/stamp_sheet_screen.dart';
 import '../../features/goals/presentation/screens/goal_list_screen.dart';
 import '../../features/goals/presentation/screens/create_goal_screen.dart';
 import '../../features/goals/presentation/screens/goal_detail_screen.dart';
@@ -153,6 +154,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     : null,
               );
             },
+          ),
+          GoRoute(
+            path: '/stamps',
+            name: 'stamps',
+            builder: (context, state) => const StampSheetScreen(),
           ),
           GoRoute(
             path: '/tasks',

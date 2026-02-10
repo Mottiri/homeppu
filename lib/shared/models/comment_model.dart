@@ -11,6 +11,9 @@ class CommentModel {
   final String content;
   final DateTime createdAt;
   final DateTime? scheduledAt;  // AI応答の場合、表示予定時刻
+  final bool thanksLikedByPostOwner;
+  final DateTime? thanksLikedAt;
+  final String? thanksLikedBy;
 
   CommentModel({
     required this.id,
@@ -22,6 +25,9 @@ class CommentModel {
     required this.content,
     required this.createdAt,
     this.scheduledAt,
+    this.thanksLikedByPostOwner = false,
+    this.thanksLikedAt,
+    this.thanksLikedBy,
   });
 
   factory CommentModel.fromFirestore(DocumentSnapshot doc) {
@@ -36,6 +42,9 @@ class CommentModel {
       content: data['content'] ?? '',
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       scheduledAt: (data['scheduledAt'] as Timestamp?)?.toDate(),
+      thanksLikedByPostOwner: data['thanksLikedByPostOwner'] == true,
+      thanksLikedAt: (data['thanksLikedAt'] as Timestamp?)?.toDate(),
+      thanksLikedBy: data['thanksLikedBy'] as String?,
     );
   }
 
@@ -49,6 +58,10 @@ class CommentModel {
       'content': content,
       'createdAt': Timestamp.fromDate(createdAt),
       'scheduledAt': scheduledAt != null ? Timestamp.fromDate(scheduledAt!) : null,
+      'thanksLikedByPostOwner': thanksLikedByPostOwner,
+      'thanksLikedAt':
+          thanksLikedAt != null ? Timestamp.fromDate(thanksLikedAt!) : null,
+      'thanksLikedBy': thanksLikedBy,
     };
   }
 
@@ -68,6 +81,9 @@ class CommentModel {
     String? content,
     DateTime? createdAt,
     DateTime? scheduledAt,
+    bool? thanksLikedByPostOwner,
+    DateTime? thanksLikedAt,
+    String? thanksLikedBy,
   }) {
     return CommentModel(
       id: id ?? this.id,
@@ -79,6 +95,10 @@ class CommentModel {
       content: content ?? this.content,
       createdAt: createdAt ?? this.createdAt,
       scheduledAt: scheduledAt ?? this.scheduledAt,
+      thanksLikedByPostOwner:
+          thanksLikedByPostOwner ?? this.thanksLikedByPostOwner,
+      thanksLikedAt: thanksLikedAt ?? this.thanksLikedAt,
+      thanksLikedBy: thanksLikedBy ?? this.thanksLikedBy,
     );
   }
 }

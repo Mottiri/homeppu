@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'dart:async';
@@ -15,6 +16,7 @@ import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/providers/moderation_provider.dart';
 import '../../../../shared/services/moderation_service.dart';
 import '../../../../shared/services/circle_service.dart';
+import '../../../../shared/services/comment_thanks_service.dart';
 import '../../../../shared/widgets/public_user_avatar.dart';
 import '../../../../shared/widgets/report_dialog.dart';
 
@@ -297,7 +299,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                 index,
                               ) {
                                 final comment = comments[index];
-                                return _CommentTile(comment: comment);
+                                return _CommentTile(comment: comment, postOwnerId: post.userId);
                               }, childCount: comments.length),
                             );
                           },
@@ -452,68 +454,196 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
 }
 
 /// コメントタイル
-class _CommentTile extends StatelessWidget {
+class _CommentTile extends StatefulWidget {
   final CommentModel comment;
+  final String postOwnerId;
 
-  const _CommentTile({required this.comment});
+  const _CommentTile({
+    required this.comment,
+    required this.postOwnerId,
+  });
+
+  @override
+  State<_CommentTile> createState() => _CommentTileState();
+}
+
+class _CommentTileState extends State<_CommentTile> {
+  bool _optimisticThanked = false;
+  bool _isSubmitting = false;
+
+  bool get _isThanked =>
+      widget.comment.thanksLikedByPostOwner || _optimisticThanked;
 
   void _navigateToProfile(BuildContext context) {
-    context.push('/profile/${comment.userId}');
+    context.push('/profile/${widget.comment.userId}');
   }
 
   @override
   Widget build(BuildContext context) {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    final canThanks = currentUserId != null &&
+        currentUserId == widget.postOwnerId &&
+        widget.comment.userId != currentUserId;
+
+    Future<void> handleThanksTap() async {
+      if (!canThanks) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppMessages.stamp.postOwnerOnly),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        return;
+      }
+
+      if (_isThanked) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppMessages.stamp.thanksAlreadyGiven)),
+        );
+        return;
+      }
+
+      final confirmed = await showModalBottomSheet<bool>(
+        context: context,
+        showDragHandle: true,
+        builder: (sheetContext) {
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () => Navigator.of(sheetContext).pop(true),
+                      icon: const Icon(Icons.favorite_rounded),
+                      label: Text(AppMessages.stamp.thanksAction),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(sheetContext).pop(false),
+                      child: Text(AppMessages.label.cancel),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+
+      if (confirmed != true) return;
+
+      setState(() {
+        _isSubmitting = true;
+        _optimisticThanked = true;
+      });
+
+      try {
+        final service = CommentThanksService();
+        final result = await service.likeCommentAsPostOwner(widget.comment.id);
+        if (!context.mounted) return;
+        if (result.alreadyThanked) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(AppMessages.stamp.thanksAlreadyGiven)),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(AppMessages.stamp.thanksSent),
+              backgroundColor: AppColors.success,
+            ),
+          );
+        }
+      } catch (_) {
+        if (!context.mounted) return;
+        setState(() => _optimisticThanked = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppMessages.error.general),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      } finally {
+        if (mounted) {
+          setState(() => _isSubmitting = false);
+        }
+      }
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // アバター（タップでプロフィールへ）
           GestureDetector(
             onTap: () => _navigateToProfile(context),
             child: PublicUserAvatar(
-              userId: comment.userId,
-              avatarIndex: comment.userAvatarIndex,
+              userId: widget.comment.userId,
+              avatarIndex: widget.comment.userAvatarIndex,
               size: 36,
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceVariant,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      // ユーザー名（タップでプロフィールへ）
-                      GestureDetector(
-                        onTap: () => _navigateToProfile(context),
-                        child: Text(
-                          comment.userDisplayName,
-                          style: Theme.of(context).textTheme.titleSmall
-                              ?.copyWith(color: AppColors.primary),
+            child: GestureDetector(
+              onLongPress: canThanks && !_isSubmitting ? handleThanksTap : null,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceVariant,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        GestureDetector(
+                          onTap: () => _navigateToProfile(context),
+                          child: Text(
+                            widget.comment.userDisplayName,
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(color: AppColors.primary),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        timeago.format(comment.createdAt, locale: 'ja'),
-                        style: Theme.of(context).textTheme.labelSmall,
+                        const SizedBox(width: 8),
+                        Text(
+                          timeago.format(widget.comment.createdAt, locale: 'ja'),
+                          style: Theme.of(context).textTheme.labelSmall,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      widget.comment.content,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium?.copyWith(height: 1.5),
+                    ),
+                    if (_isThanked) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.favorite_rounded,
+                            size: 16,
+                            color: AppColors.error,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            AppMessages.stamp.thanksReceived,
+                            style: Theme.of(context).textTheme.labelSmall,
+                          ),
+                        ],
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    comment.content,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodyMedium?.copyWith(height: 1.5),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
