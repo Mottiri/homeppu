@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
@@ -20,6 +21,7 @@ class AdminReviewScreen extends ConsumerStatefulWidget {
 
 class _AdminReviewScreenState extends ConsumerState<AdminReviewScreen> {
   final _firestore = FirebaseFirestore.instance;
+  final _functions = FirebaseFunctions.instance;
 
   @override
   Widget build(BuildContext context) {
@@ -261,23 +263,28 @@ class _AdminReviewScreenState extends ConsumerState<AdminReviewScreen> {
       if (post.allMedia.isNotEmpty) {
         final mediaService = MediaService();
         for (final media in post.allMedia) {
-          await mediaService.deleteMedia(media.url);
+          try {
+            await mediaService.deleteMedia(media.url);
+          } catch (e) {
+            debugPrint('AdminReviewScreen: media delete failed: $e');
+          }
 
           // サムネイルも削除
           if (media.thumbnailUrl != null && media.thumbnailUrl!.isNotEmpty) {
-            await mediaService.deleteMedia(media.thumbnailUrl!);
+            try {
+              await mediaService.deleteMedia(media.thumbnailUrl!);
+            } catch (e) {
+              debugPrint('AdminReviewScreen: thumbnail delete failed: $e');
+            }
           }
         }
       }
 
-      // 投稿を削除
-      await _firestore.collection('posts').doc(post.id).delete();
-
-      // pendingReviewsを更新
-      await _firestore.collection('pendingReviews').doc(reviewId).update({
-        'reviewed': true,
-        'reviewedAt': FieldValue.serverTimestamp(),
-        'action': 'deleted',
+      final callable = _functions.httpsCallable('adminDeletePostWithPenalty');
+      await callable.call(<String, dynamic>{
+        'postId': post.id,
+        'targetUserId': post.userId,
+        'reviewId': reviewId,
       });
 
       if (mounted) {

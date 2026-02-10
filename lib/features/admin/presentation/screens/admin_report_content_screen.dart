@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -25,6 +26,7 @@ class AdminReportContentScreen extends ConsumerStatefulWidget {
 class _AdminReportContentScreenState
     extends ConsumerState<AdminReportContentScreen> {
   final _firestore = FirebaseFirestore.instance;
+  final _functions = FirebaseFunctions.instance;
   bool _isProcessing = false;
 
   @override
@@ -550,38 +552,27 @@ class _AdminReportContentScreenState
 
     setState(() => _isProcessing = true);
     try {
-      final now = FieldValue.serverTimestamp();
-      final batch = _firestore.batch();
-
-      // 投稿を削除
       if (contentType == 'post') {
-        final postRef = _firestore.collection('posts').doc(widget.contentId);
-        batch.delete(postRef);
-
-        // 投稿者に通知
-        final notifRef = _firestore
-            .collection('users')
-            .doc(targetUserId)
-            .collection('notifications')
-            .doc();
-        batch.set(notifRef, {
-          'type': 'post_deleted',
-          'title': '投稿が削除されました',
-          'body': '規約違反のため、投稿が削除されました。',
-          'isRead': false,
-          'createdAt': now,
+        final callable = _functions.httpsCallable('adminDeletePostWithPenalty');
+        await callable.call(<String, dynamic>{
+          'postId': widget.contentId,
+          'targetUserId': targetUserId,
+          'reportIds': reports.map((report) => report.id).toList(),
         });
-      }
+      } else {
+        final now = FieldValue.serverTimestamp();
+        final batch = _firestore.batch();
 
-      // すべての通報を resolved に
-      for (final report in reports) {
-        batch.update(report.reference, {
-          'status': 'resolved',
-          'reviewedAt': now,
-        });
-      }
+        // すべての通報を resolved に
+        for (final report in reports) {
+          batch.update(report.reference, {
+            'status': 'resolved',
+            'reviewedAt': now,
+          });
+        }
 
-      await batch.commit();
+        await batch.commit();
+      }
 
       if (mounted) {
         SnackBarHelper.showSuccess(context, AppMessages.admin.postDeleted);

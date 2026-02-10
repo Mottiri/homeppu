@@ -119,6 +119,7 @@ export const NOTIFICATION_TITLES = {
     INQUIRY_DELETE_WARNING: "問い合わせ削除予定",
 
     POST_HIDDEN: "投稿が非表示になりました",
+    POST_DELETED_BY_ADMIN: "投稿が削除されました",
     NEW_REPORT: "新しい通報を受信",
     REVIEW_NEEDED: "要審査投稿",
 
@@ -131,6 +132,7 @@ export const NOTIFICATION_TITLES = {
 // ===============================================
 export const NOTIFICATION_BODIES = {
     POST_HIDDEN_BY_REPORTS: "複数の通報があったため、投稿を一時的に非表示にしました。内容をご確認ください。",
+    POST_DELETED_BY_ADMIN: "運営による確認の結果、投稿が削除されました。",
     REPORT_SUBMITTED: "通報内容を運営チームで確認します。ご協力ありがとうございます。",
     flaggedPost: (reason: string) => `フラグ付き投稿があります: ${reason}`,
 } as const;
@@ -232,6 +234,7 @@ export const MODERATION_MESSAGES = {
 // ===============================================
 export const VIRTUE_MESSAGES = {
     POST_CREATE_GRANT_REASON: "投稿作成による徳ポイント加算",
+    ADMIN_DELETE_POST_PENALTY_REASON: "運営削除（通報対応）",
 } as const;
 
 // ===============================================

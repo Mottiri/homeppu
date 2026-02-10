@@ -10,6 +10,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { db } from "../helpers/firebase";
 import { requireAdmin, requireAuth } from "../helpers/auth";
 import { isAdmin } from "../helpers/admin";
+import { getVirtuePolicy } from "../helpers/virtue-policy";
 import { LOCATION } from "../config/constants";
 import { buildPublicUserData } from "../helpers/public-users";
 import {
@@ -18,6 +19,8 @@ import {
     VALIDATION_ERRORS,
     SYSTEM_ERRORS,
     NOTIFICATION_TITLES,
+    NOTIFICATION_BODIES,
+    VIRTUE_MESSAGES,
     SUCCESS_MESSAGES,
 } from "../config/messages";
 
@@ -512,5 +515,116 @@ export const unbanUser = onCall(
 
         console.log(`User ${userId} unbanned by ${adminId}`);
         return { success: true };
+    }
+);
+
+/**
+ * 管理者用: 投稿削除 + 徳ポイント減算
+ * - 減算値は settings/virtuePolicy.adminDeletePenaltyPoints を優先
+ * - 未設定時は 10 ポイント
+ */
+export const adminDeletePostWithPenalty = onCall(
+    { region: LOCATION, enforceAppCheck: true },
+    async (request) => {
+        const adminId = await requireAdmin(request);
+        const { postId, targetUserId, reviewId, reportIds } = request.data || {};
+
+        if (!postId || typeof postId !== "string") {
+            throw new HttpsError("invalid-argument", VALIDATION_ERRORS.MISSING_REQUIRED);
+        }
+
+        const virtuePolicy = await getVirtuePolicy();
+        const penaltyPoints = virtuePolicy.adminDeletePenaltyPoints;
+        const postRef = db.collection("posts").doc(postId);
+
+        const reportIdList = Array.isArray(reportIds)
+            ? reportIds.filter((id): id is string => typeof id === "string" && id.length > 0)
+            : [];
+        let postOwnerId = "";
+        let newVirtue = 0;
+
+        await db.runTransaction(async (transaction) => {
+            const postDoc = await transaction.get(postRef);
+            if (!postDoc.exists) {
+                throw new HttpsError("not-found", RESOURCE_ERRORS.POST_NOT_FOUND);
+            }
+
+            const postData = postDoc.data() || {};
+            postOwnerId = (typeof targetUserId === "string" && targetUserId.length > 0)
+                ? targetUserId
+                : (postData.userId as string | undefined) || "";
+
+            if (!postOwnerId) {
+                throw new HttpsError("failed-precondition", SYSTEM_ERRORS.PROCESSING_ERROR);
+            }
+
+            const userRef = db.collection("users").doc(postOwnerId);
+            const userDoc = await transaction.get(userRef);
+            if (!userDoc.exists) {
+                throw new HttpsError("not-found", RESOURCE_ERRORS.USER_NOT_FOUND);
+            }
+
+            const currentVirtueRaw = Number(userDoc.data()?.virtue ?? 100);
+            const currentVirtue = Number.isFinite(currentVirtueRaw) ? currentVirtueRaw : 100;
+            newVirtue = Math.max(0, currentVirtue - penaltyPoints);
+            const now = admin.firestore.FieldValue.serverTimestamp();
+
+            transaction.delete(postRef);
+
+            if (typeof reviewId === "string" && reviewId.length > 0) {
+                const reviewRef = db.collection("pendingReviews").doc(reviewId);
+                transaction.set(reviewRef, {
+                    reviewed: true,
+                    reviewedAt: now,
+                    action: "deleted",
+                    reviewedBy: adminId,
+                }, { merge: true });
+            }
+
+            for (const reportId of reportIdList) {
+                const reportRef = db.collection("reports").doc(reportId);
+                transaction.set(reportRef, {
+                    status: "resolved",
+                    reviewedAt: now,
+                    action: "deleted",
+                    reviewedBy: adminId,
+                }, { merge: true });
+            }
+
+            transaction.update(userRef, {
+                virtue: newVirtue,
+                updatedAt: now,
+            });
+
+            const historyRef = db.collection("virtueHistory").doc();
+            transaction.set(historyRef, {
+                userId: postOwnerId,
+                change: -penaltyPoints,
+                reason: VIRTUE_MESSAGES.ADMIN_DELETE_POST_PENALTY_REASON,
+                source: "admin_delete_post",
+                targetId: postId,
+                newVirtue,
+                createdAt: now,
+            });
+
+            const notificationRef = userRef.collection("notifications").doc();
+            transaction.set(notificationRef, {
+                userId: postOwnerId,
+                type: "post_deleted",
+                title: NOTIFICATION_TITLES.POST_DELETED_BY_ADMIN,
+                body: NOTIFICATION_BODIES.POST_DELETED_BY_ADMIN,
+                isRead: false,
+                createdAt: now,
+            });
+        });
+
+
+        return {
+            success: true,
+            postId,
+            userId: postOwnerId,
+            penaltyPoints,
+            newVirtue,
+        };
     }
 );
