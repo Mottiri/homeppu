@@ -543,10 +543,11 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
             }
           }
 
-          // Celebration!
-          if (mounted) {
-            _confettiController.play();
-          }
+        }
+
+        // Celebration should not depend on profile cache readiness.
+        if (mounted) {
+          _confettiController.play();
         }
       }
 
@@ -563,7 +564,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen>
               ? AppMessages.success.taskMilestoneWithPost(newStreak, milestoneMsg)
               : AppMessages.success.taskMilestone(newStreak, milestoneMsg);
         } else {
-          message = AppMessages.success.taskCompletedWithVirtue(newStreak);
+          message = AppMessages.success.taskCompleted;
         }
 
         SnackBarHelper.showSuccess(
