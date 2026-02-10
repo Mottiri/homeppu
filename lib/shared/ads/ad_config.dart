@@ -24,6 +24,10 @@ class AdConfig {
       'ca-app-pub-3940256099942544/1033173712';
   static const String _testInterstitialIos =
       'ca-app-pub-3940256099942544/4411468910';
+  static const String _testNativeAndroid =
+      'ca-app-pub-3940256099942544/2247696110';
+  static const String _testNativeIos =
+      'ca-app-pub-3940256099942544/3986624511';
 
   static String get appId {
     if (kIsWeb) return '';
@@ -50,6 +54,19 @@ class AdConfig {
     if (kIsWeb) return '';
     if (Platform.isAndroid) return _testInterstitialAndroid;
     if (Platform.isIOS) return _testInterstitialIos;
+    return '';
+  }
+
+  static String get nativeAdUnitId {
+    if (kIsWeb) return '';
+    if (Platform.isAndroid) return _testNativeAndroid;
+    if (Platform.isIOS) return _testNativeIos;
+    return '';
+  }
+
+  static String get nativeAdFactoryId {
+    if (Platform.isAndroid) return 'homeNative';
+    if (Platform.isIOS) return '';
     return '';
   }
 }

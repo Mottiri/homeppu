@@ -58,6 +58,9 @@ class AppMessages {
   // ===== プロフィール関連 =====
   static const profile = _ProfileMessages();
 
+  // ===== スタンプシート関連 =====
+  static const stamp = _StampMessages();
+
   // ===== 徳ポイント関連 =====
   static const virtue = _VirtueMessages();
 }
@@ -411,6 +414,8 @@ class _HomeMessages {
 
   String get tabRecommended => 'おすすめ';
   String get tabFollowing => 'フォロー中';
+  String get nativeAdLabel => '広告';
+  String get nativeAdLoading => '広告を読み込み中...';
   String get timelineLoading => 'みんなの投稿を読み込み中...';
   String get emptyPostsTitle => 'まだ投稿がないよ';
   String get emptyPostsDescription => '最初の投稿をしてみよう！';
@@ -655,6 +660,7 @@ class _ProfileMessages {
   String get premiumPriceLabel => '/月';
   String get premiumProcessing => '購入処理中...';
   String get premiumProcessingWait => '少々お待ちください';
+  String get premiumActivationInProgress => '購入内容を反映中...';
   String get premiumNotice => '反映まで数十秒かかる場合があります';
   String get premiumSubscribed => '加入済み';
   String get premiumManage => '定期購入を管理';
@@ -718,6 +724,35 @@ class _ProfileMessages {
   String get namePartPlaceholder => '???';
   String lockedPartMessage(String partText, String rarity) =>
       '「$partText」は$rarityパーツです。徳ポイントショップでアンロックできます。';
+}
+
+/// スタンプシート関連メッセージ
+class _StampMessages {
+  const _StampMessages();
+
+  String get navLabel => 'スタンプ';
+  String get title => 'スタンプシート';
+  String creditsLabel(int count) => 'お礼スタンプ: $count';
+  String get noSheets => 'スタンプシートがありません';
+  String get selectStamp => 'スタンプを選択';
+  String get slotTapHint => 'シートを長押ししてスタンプを押してください';
+  String get sheetLocked => 'このシートは未解放です';
+  String get stampLocked => 'このスタンプは未解放です';
+  String get creditNotEnough => 'お礼スタンプが足りません';
+  
+  String get sheetFull => 'このシートはすべて埋まっています';
+  
+  String get applied => 'スタンプを押しました';
+  
+  String get replaced => 'スタンプを上書きしました';
+  
+  String get thanksAction => 'いいね！する';
+  
+  String get thanksSent => 'いいね！しました';
+  String get thanksReceived => 'いいね！されたよ';
+  String get thanksGiven => 'お礼スタンプを1つ獲得しました';
+  String get thanksAlreadyGiven => 'このコメントには既に付与済みです';
+  String get postOwnerOnly => '投稿主のみ実行できます';
 }
 
 /// 徳ポイント関連メッセージ

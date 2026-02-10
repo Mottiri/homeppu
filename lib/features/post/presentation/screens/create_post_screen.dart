@@ -78,7 +78,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     );
   }
 
-  Future<void> _showPostAdNoticeDialog() async {
+  Future<void> _showPostAdNoticeDialog(String userId) async {
     var dontShowAgain = false;
     await showDialog<void>(
       context: context,
@@ -226,10 +226,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     );
 
     if (dontShowAgain) {
-      final userId = ref.read(currentUserProvider).valueOrNull?.uid;
-      if (userId != null) {
-        await _postAdPolicyService.setNoticeSkip(userId, true);
-      }
+      await _postAdPolicyService.setNoticeSkip(userId, true);
     }
   }
 
@@ -409,7 +406,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     if (!user.isSubscriber &&
         await _postAdPolicyService.shouldShowNoticeDialog(user.uid) &&
         mounted) {
-      await _showPostAdNoticeDialog();
+      await _showPostAdNoticeDialog(user.uid);
     }
 
     final shouldTryPostAd =

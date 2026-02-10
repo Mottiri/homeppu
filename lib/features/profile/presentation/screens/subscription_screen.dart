@@ -25,6 +25,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
   Package? _package;
   bool _loading = true;
   bool _isProcessing = false;
+  bool _isAwaitingSubscriptionSync = false;
   static const String _androidManageUrl =
       'https://play.google.com/store/account/subscriptions?package=com.homeppu.homeppu';
 
@@ -76,9 +77,11 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
       _showPurchaseFailedDialog();
       return;
     }
+    var purchaseSucceeded = false;
     setState(() => _isProcessing = true);
     try {
       await SubscriptionService.instance.purchasePackage(_package!);
+      purchaseSucceeded = true;
       ref.invalidate(currentUserProvider);
       if (mounted) {
         SnackBarHelper.showSuccess(
@@ -97,7 +100,12 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
       }
     } finally {
       if (mounted) {
-        setState(() => _isProcessing = false);
+        setState(() {
+          _isProcessing = false;
+          if (purchaseSucceeded) {
+            _isAwaitingSubscriptionSync = true;
+          }
+        });
       }
     }
   }
@@ -146,6 +154,14 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
     final user = ref.watch(currentUserProvider).valueOrNull;
     final isSubscriber = user?.isSubscriber ?? false;
     final priceLabel = _package?.storeProduct.priceString ?? '¥500';
+    final isAwaitingSync = _isAwaitingSubscriptionSync && !isSubscriber;
+
+    if (_isAwaitingSubscriptionSync && isSubscriber) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() => _isAwaitingSubscriptionSync = false);
+      });
+    }
 
     return Stack(
       children: [
@@ -177,7 +193,10 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
                   const SizedBox(height: 24),
 
                   // 購入ボタン
-                  _buildPurchaseButton(isSubscriber),
+                  _buildPurchaseButton(
+                    isSubscriber: isSubscriber,
+                    isAwaitingSync: isAwaitingSync,
+                  ),
                   const SizedBox(height: 16),
 
                   // 注意書き
@@ -372,21 +391,50 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
     );
   }
 
-  Widget _buildPurchaseButton(bool isSubscriber) {
+  Widget _buildPurchaseButton({
+    required bool isSubscriber,
+    required bool isAwaitingSync,
+  }) {
+    final disableButton = _isProcessing || isAwaitingSync;
     return SizedBox(
       height: 56,
       child: ElevatedButton(
-        onPressed: _isProcessing
+        onPressed: disableButton
             ? null
             : isSubscriber
             ? _openManageSubscription
             : _purchase,
-        child: Text(
-          isSubscriber
-              ? AppMessages.profile.premiumManage
-              : AppMessages.label.purchase,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-        ),
+        child: isAwaitingSync
+            ? Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    AppMessages.profile.premiumActivationInProgress,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              )
+            : Text(
+                isSubscriber
+                    ? AppMessages.profile.premiumManage
+                    : AppMessages.label.purchase,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
       ),
     );
   }

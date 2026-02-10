@@ -12,6 +12,7 @@ import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/repositories/notification_repository.dart';
 import '../../../../shared/providers/public_user_provider.dart';
 import '../../../../shared/widgets/ad_banner.dart';
+import '../../../../shared/widgets/native_feed_ad_card.dart';
 import '../widgets/post_card.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../shared/widgets/infinite_scroll_listener.dart';
@@ -350,12 +351,26 @@ class _PostsList extends ConsumerStatefulWidget {
 }
 
 class _PostsListState extends ConsumerState<_PostsList> {
+  static const int _nativeAdInterval = 10;
+
   List<PostModel> _posts = [];
   DocumentSnapshot? _lastDocument;
   bool _hasMore = true;
   bool _isLoading = true;
   bool _isLoadingMore = false;
   bool _hasError = false;
+
+  int _nativeAdCountForPosts(int postsCount) => postsCount ~/ _nativeAdInterval;
+
+  bool _isNativeAdIndex(int displayIndex) {
+    final slot = _nativeAdInterval + 1;
+    return (displayIndex + 1) % slot == 0;
+  }
+
+  int _postIndexFromDisplayIndex(int displayIndex) {
+    final adsBefore = (displayIndex + 1) ~/ (_nativeAdInterval + 1);
+    return displayIndex - adsBefore;
+  }
 
   @override
   void initState() {
@@ -537,12 +552,17 @@ class _PostsListState extends ConsumerState<_PostsList> {
       child: RefreshIndicator(
         onRefresh: _refreshPosts,
         color: AppColors.primary,
-        child: ListView.builder(
+        child: Builder(
+          builder: (context) {
+            final contentCount =
+                _posts.length + _nativeAdCountForPosts(_posts.length);
+            final totalCount = contentCount + (_isLoadingMore ? 1 : 0);
+            return ListView.builder(
           primary: false,
           padding: const EdgeInsets.only(bottom: 120),
-          itemCount: _posts.length + (_isLoadingMore ? 1 : 0),
+          itemCount: totalCount,
           itemBuilder: (context, index) {
-            if (index == _posts.length) {
+            if (_isLoadingMore && index == contentCount) {
               // ローディングインジケーター
               return const Padding(
                 padding: EdgeInsets.all(16),
@@ -551,15 +571,26 @@ class _PostsListState extends ConsumerState<_PostsList> {
                 ),
               );
             }
+
+            if (_isNativeAdIndex(index)) {
+              return NativeFeedAdCard(
+                key: ValueKey('native_ad_slot_$index'),
+              );
+            }
+
+            final postIndex = _postIndexFromDisplayIndex(index);
+            final post = _posts[postIndex];
             return PostCard(
-              key: ValueKey(_posts[index].id),
-              post: _posts[index],
+              key: ValueKey(post.id),
+              post: post,
               onDeleted: () {
                 // 自分の投稿を削除した場合、ローカルリストから即座に削除
                 setState(() {
-                  _posts.removeAt(index);
+                  _posts.removeAt(postIndex);
                 });
               },
+            );
+          },
             );
           },
         ),
