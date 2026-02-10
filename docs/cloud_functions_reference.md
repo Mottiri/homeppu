@@ -28,7 +28,7 @@ functions/src/
 
 | ファイル | 機能 | 主な関数 |
 |---------|------|---------|
-| `admin.ts` | 管理者機能 | `cleanUpUserFollows`, `deleteAllAIUsers`, `cleanupOrphanedCircleAIs`, `backfillPublicUsers`, `setAdminRole`, `removeAdminRole`, `banUser`, `permanentBanUser`, `unbanUser` |
+| `admin.ts` | 管理者機能 | `cleanUpUserFollows`, `deleteAllAIUsers`, `cleanupOrphanedCircleAIs`, `backfillPublicUsers`, `adminDeletePostWithPenalty`, `setAdminRole`, `removeAdminRole`, `banUser`, `permanentBanUser`, `unbanUser` |
 | `users.ts` | ユーザー機能 | `followUser`, `unfollowUser`, `getFollowStatus`, `getVirtueHistory`, `getVirtueStatus` |
 | `virtue_shop.ts` | 徳ポイントショップ | `getVirtueShopConfig`, `purchaseVirtueItem` |
 | `posts.ts` | 投稿作成 | `createPostWithRateLimit`, `createPostWithModeration` |
@@ -59,7 +59,7 @@ functions/src/
 | `users.ts` | ユーザー | `onUserCreated`, `onUserUpdated`, `onUserDeleted`（publicUsers同期） |
 | `notifications.ts` | 通知 | `onNotificationCreated`（自動プッシュ送信）、`onCommentCreatedNotify`、`onReactionAddedNotify` |
 | `tasks.ts` | タスク | `onTaskUpdated`, `scheduleTaskReminders`, `scheduleTaskRemindersOnCreate` |
-| `goals.ts` | 目標 | `scheduleGoalReminders`, `scheduleGoalRemindersOnCreate` |
+| `goals.ts` | 目標 | `scheduleGoalReminders`, `scheduleGoalRemindersOnCreate`, `onGoalUpdatedForVirtue` |
 | `reactions.ts` | リアクション | `onReactionCreated` |
 
 補足（2026-01-25）:
@@ -110,6 +110,7 @@ functions/src/
 | `admin.ts` | 管理者権限確認 `isAdmin()`, `getAdminUids()` |
 | `auth.ts` | 認証関連 `requireAuth()`, `requireAdmin()` |
 | `virtue.ts` | 徳ポイント計算 `VIRTUE_CONFIG` |
+| `virtue-policy.ts` | 徳ポイント方針取得/加点処理（`settings/virtuePolicy`） |
 | `notification.ts` | プッシュ通知送信 `sendPushNotification`, `sendPushOnly` |
 | `storage.ts` | Storageファイル削除 `deleteStorageFileFromUrl` |
 | `moderation.ts` | メディアモデレーション `moderateMedia` |
@@ -224,3 +225,28 @@ functions/src/
 | `migrate_last_human_post.js` | lastHumanPostAtフィールドの移行 |
 | `set_initial_admin.js` | 初期管理者の設定 |
 | `set_initial_admin_cli.js` | 初期管理者の設定（CLI版） |
+| `register-stamp-sheets.js` | スタンプシート台紙カタログを差分同期（削除は完全削除） |
+
+## 追記: Stamp Sheet / Comment Thanks (2026-02-09)
+
+### Callable
+- `likeCommentAsPostOwner`
+  - 入力: `{ commentId }`
+  - 投稿主のみ実行可。対象コメントに `thanksLikedByPostOwner=true` を設定し、投稿主の `thanksStampCredits` を `+1`。
+- `setActiveStampSheet`
+  - 入力: `{ sheetId }`
+  - ユーザーの `activeStampSheetId` を更新。
+- `applyStampToSheetSlot`
+  - 入力: `{ sheetId, slotId, stampId }`
+  - 空枠の初回押印のみ `thanksStampCredits` を `-1`。既存枠差し替えは消費なし。
+
+### 関連データ
+- `users/{uid}.thanksStampCredits`
+- `users/{uid}.activeStampSheetId`
+- `users/{uid}.unlockedStampSheets`
+- `users/{uid}/stampSheet/{sheetId}_{slotId}`
+- `comments/{commentId}.thanksLikedByPostOwner`
+- `comments/{commentId}.thanksLikedAt`
+- `comments/{commentId}.thanksLikedBy`
+
+

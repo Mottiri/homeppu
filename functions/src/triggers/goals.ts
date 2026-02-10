@@ -7,10 +7,46 @@ import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/fire
 import { CloudTasksClient } from "@google-cloud/tasks";
 
 import { db, FieldValue, Timestamp as FirestoreTimestamp } from "../helpers/firebase";
+import { getVirtuePolicy, grantVirtue, VIRTUE_ROUTE_KEYS } from "../helpers/virtue-policy";
 import { LOCATION, PROJECT_ID } from "../config/constants";
 import { scheduleHttpTask } from "../helpers/cloud-tasks";
 
 const GOAL_REMINDER_QUEUE = "task-reminders";
+
+/**
+ * 目標完了時の徳ポイント付与
+ * - before.completedAt が未設定 && after.completedAt が設定された時のみ付与
+ */
+export const onGoalUpdatedForVirtue = onDocumentUpdated(
+    { document: "goals/{goalId}", region: LOCATION },
+    async (event) => {
+        const before = event.data?.before.data();
+        const after = event.data?.after.data();
+        if (!before || !after) return;
+
+        const beforeCompleted = Boolean(before.completedAt);
+        const afterCompleted = Boolean(after.completedAt);
+        if (beforeCompleted || !afterCompleted) return;
+
+        const userId = after.userId as string | undefined;
+        if (!userId) return;
+
+        try {
+            const virtuePolicy = await getVirtuePolicy();
+            await grantVirtue({
+                userId,
+                routeKey: VIRTUE_ROUTE_KEYS.goalComplete,
+                points: virtuePolicy.goalCompletePoints,
+                dailyCap: virtuePolicy.goalCompleteDailyCap,
+                reason: "目標達成",
+                source: "goal_complete",
+                targetId: event.params.goalId,
+            });
+        } catch (error) {
+            console.error("[GoalVirtue] Failed to grant virtue on goal completion:", error);
+        }
+    }
+);
 
 /**
  * 目標リマインダー用時刻計算（期限から逆算）

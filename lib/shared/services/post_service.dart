@@ -95,6 +95,7 @@ class PostService {
         userDisplayName: userDisplayName,
         userAvatarIndex: userAvatarIndex,
         postMode: 'ai', // システムによる自動投稿
+        grantVirtue: false,
       );
 
       debugPrint(

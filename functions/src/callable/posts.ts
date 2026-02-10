@@ -13,15 +13,18 @@ import { geminiApiKey } from "../config/secrets";
 import { isAdmin, getAdminUids } from "../helpers/admin";
 import { ModerationResult, MediaItem } from "../types";
 import { moderateMedia } from "../helpers/moderation";
-import { VIRTUE_CONFIG, NG_WORDS, decreaseVirtue, increaseVirtue } from "../helpers/virtue";
+import { NG_WORDS } from "../helpers/virtue";
+import { getVirtuePolicy, grantVirtue, VIRTUE_ROUTE_KEYS } from "../helpers/virtue-policy";
 import { LOCATION, AI_MODELS } from "../config/constants";
 import {
     AUTH_ERRORS,
     VALIDATION_ERRORS,
     SYSTEM_ERRORS,
     NOTIFICATION_TITLES,
+    NOTIFICATION_BODIES,
     LABELS,
     MODERATION_MESSAGES,
+    VIRTUE_MESSAGES,
 } from "../config/messages";
 
 /**
@@ -32,6 +35,7 @@ export const createPostWithRateLimit = onCall(
     async (request) => {
         const userId = requireAuth(request);
         const data = request.data;
+        const shouldGrantVirtue = data?.grantVirtue !== false;
 
         // レート制限チェック（1分間に5投稿まで）
         const oneMinuteAgo = admin.firestore.Timestamp.fromDate(
@@ -79,10 +83,18 @@ export const createPostWithRateLimit = onCall(
             totalPosts: FieldValue.increment(1),
         });
 
-        // テスト用: 投稿ごとに徳ポイントを加算（仕様確定後に削除/調整）
-        console.log(`[Virtue] bonus start userId=${userId}`);
-        const virtueResult = await increaseVirtue(userId, "投稿ボーナス（テスト）", 100);
-        console.log(`[Virtue] bonus applied userId=${userId} newVirtue=${virtueResult.newVirtue}`);
+        if (shouldGrantVirtue) {
+            const virtuePolicy = await getVirtuePolicy();
+            await grantVirtue({
+                userId,
+                routeKey: VIRTUE_ROUTE_KEYS.postCreate,
+                points: virtuePolicy.postCreatePoints,
+                dailyCap: virtuePolicy.postCreateDailyCap,
+                reason: VIRTUE_MESSAGES.POST_CREATE_GRANT_REASON,
+                source: "post_create",
+                targetId: postRef.id,
+            });
+        }
 
         return { success: true, postId: postRef.id };
     }
@@ -104,7 +116,16 @@ export const createPostWithModeration = onCall(
         console.log("=== createPostWithModeration START ===");
 
         const userId = requireAuth(request);
-        const { content, userDisplayName, userAvatarIndex, postMode, circleId, mediaItems } = request.data;
+        const {
+            content,
+            userDisplayName,
+            userAvatarIndex,
+            postMode,
+            circleId,
+            mediaItems,
+            grantVirtue: grantVirtueFlag,
+        } = request.data;
+        const shouldGrantVirtue = grantVirtueFlag !== false;
         console.log(`User: ${userId}, Content: ${content?.substring(0, 30)}...`);
 
         // ユーザーがBANされているかチェック
@@ -147,17 +168,11 @@ export const createPostWithModeration = onCall(
         // 0. 静的NGワードチェック
         // ===============================================
         if (content) {
-            const hasNgWord = NG_WORDS.some(word => content.includes(word));
+            const hasNgWord = NG_WORDS.some((word) => content.includes(word));
             if (hasNgWord) {
-                const virtueResult = await decreaseVirtue(
-                    userId,
-                    MODERATION_MESSAGES.NG_WORD_USED,
-                    VIRTUE_CONFIG.lossPerNegative * 2
-                );
-
                 throw new HttpsError(
                     "invalid-argument",
-                    `不適切な表現が含まれています。\n「ほめっぷ」はポジティブなSNSです。\n\n(徳ポイント: ${virtueResult.newVirtue})`
+                    MODERATION_MESSAGES.NG_WORD_USED
                 );
             }
         }
@@ -226,12 +241,6 @@ ${content}
                 }
 
                 if (modResult.isNegative && modResult.confidence >= 0.7) {
-                    const virtueResult = await decreaseVirtue(
-                        userId,
-                        `ネガティブ投稿検出: ${modResult.category} `,
-                        VIRTUE_CONFIG.lossPerNegative
-                    );
-
                     await db.collection("moderatedContent").add({
                         userId: userId,
                         content: content,
@@ -244,7 +253,10 @@ ${content}
 
                     throw new HttpsError(
                         "invalid-argument",
-                        `${modResult.reason} \n\n💡 提案: ${modResult.suggestion} \n\n(徳ポイント: ${virtueResult.newVirtue})`
+                        MODERATION_MESSAGES.suggestionWithReason(
+                            modResult.reason,
+                            modResult.suggestion
+                        )
                     );
                 }
             } catch (error) {
@@ -285,12 +297,6 @@ ${content}
                         needsReviewReason = `メディア: ${mediaResult.result.category} (confidence: ${mediaResult.result.confidence})`;
                         console.log(`FLAGGED for review: ${needsReviewReason}`);
                     } else if (mediaResult.result.confidence >= 0.7) {
-                        const virtueResult = await decreaseVirtue(
-                            userId,
-                            `不適切なメディア検出: ${mediaResult.result.category} `,
-                            VIRTUE_CONFIG.lossPerNegative
-                        );
-
                         await db.collection("moderatedContent").add({
                             userId: userId,
                             content: `[メディア] ${mediaResult.failedItem?.fileName || "media"} `,
@@ -328,7 +334,10 @@ ${content}
 
                         throw new HttpsError(
                             "invalid-argument",
-                            `添付された${mediaResult.failedItem?.type === "video" ? "動画" : "画像"}に${categoryLabel} が含まれている可能性があります。\n\n別のメディアを選択してください。\n\n(徳ポイント: ${virtueResult.newVirtue})`
+                            MODERATION_MESSAGES.mediaBlockedSimple(
+                                mediaResult.failedItem?.type === "video" ? "video" : "image",
+                                categoryLabel
+                            )
                         );
                     }
                 }
@@ -394,7 +403,7 @@ ${content}
                 });
 
                 const adminUids = await getAdminUids();
-                const notifyBody = `フラグ付き投稿があります: ${needsReviewReason}`;
+                const notifyBody = NOTIFICATION_BODIES.flaggedPost(needsReviewReason);
 
                 for (const adminUid of adminUids) {
                     await db.collection("users").doc(adminUid).collection("notifications").add({
@@ -459,10 +468,18 @@ ${content}
             totalPosts: FieldValue.increment(1),
         });
 
-        // テスト用: 投稿ごとに徳ポイントを加算（仕様確定後に削除/調整）
-        console.log(`[Virtue] bonus start userId=${userId}`);
-        const virtueResult = await increaseVirtue(userId, "投稿ボーナス（テスト）", 100);
-        console.log(`[Virtue] bonus applied userId=${userId} newVirtue=${virtueResult.newVirtue}`);
+        if (shouldGrantVirtue) {
+            const virtuePolicy = await getVirtuePolicy();
+            await grantVirtue({
+                userId,
+                routeKey: VIRTUE_ROUTE_KEYS.postCreate,
+                points: virtuePolicy.postCreatePoints,
+                dailyCap: virtuePolicy.postCreateDailyCap,
+                reason: VIRTUE_MESSAGES.POST_CREATE_GRANT_REASON,
+                source: "post_create",
+                targetId: postRef.id,
+            });
+        }
 
         console.log(`=== createPostWithModeration SUCCESS: postId=${postRef.id} ===`);
         return { success: true, postId: postRef.id };

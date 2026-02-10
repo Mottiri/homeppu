@@ -17,7 +17,14 @@ export {
     sendInquiryReply,
     updateInquiryStatus,
 } from "./callable/inquiries";
-export { createCommentWithModeration, addUserReaction, removeUserReaction } from "./callable/comments";
+export {
+    createCommentWithModeration,
+    addUserReaction,
+    removeUserReaction,
+    likeCommentAsPostOwner,
+    setActiveStampSheet,
+    applyStampToSheetSlot,
+} from "./callable/comments";
 export { grantRewardedReactionUnlock } from "./callable/rewarded_reactions";
 export { createPostWithRateLimit, createPostWithModeration } from "./callable/posts";
 export { initializeAIAccounts, generateAIPosts } from "./callable/ai";
@@ -43,6 +50,7 @@ export {
     deleteAllAIUsers,
     cleanupOrphanedCircleAIs,
     backfillPublicUsers,
+    adminDeletePostWithPenalty,
     setAdminRole,
     removeAdminRole,
     banUser,
@@ -58,7 +66,7 @@ export { onPostCreated } from "./triggers/posts";
 export { onNotificationCreated, onCommentCreatedNotify, onReactionAddedNotify } from "./triggers/notifications";
 export { onTaskUpdated, scheduleTaskReminders, scheduleTaskRemindersOnCreate } from "./triggers/tasks";
 export { onReactionCreated } from "./triggers/reactions";
-export { scheduleGoalReminders, scheduleGoalRemindersOnCreate } from "./triggers/goals";
+export { scheduleGoalReminders, scheduleGoalRemindersOnCreate, onGoalUpdatedForVirtue } from "./triggers/goals";
 export { onUserCreated, onUserUpdated, onUserDeleted } from "./triggers/users";
 
 // ===============================================

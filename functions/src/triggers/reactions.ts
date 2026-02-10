@@ -6,6 +6,7 @@
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 
 import { db, FieldValue } from "../helpers/firebase";
+import { getVirtuePolicy, grantVirtue, VIRTUE_ROUTE_KEYS } from "../helpers/virtue-policy";
 import { LOCATION } from "../config/constants";
 
 /**
@@ -52,6 +53,38 @@ export const onReactionCreated = onDocumentCreated(
             });
 
             console.log(`Incremented totalPraises for user: ${postOwnerId}`);
+
+            // 徳ポイント付与（人間ユーザー同士のみ）
+            const [reactorDoc, postOwnerDoc] = await Promise.all([
+                db.collection("users").doc(reactorId).get(),
+                db.collection("users").doc(postOwnerId).get(),
+            ]);
+            const reactorIsAI = reactorDoc.data()?.isAI === true;
+            const postOwnerIsAI = postOwnerDoc.data()?.isAI === true;
+
+            if (!reactorIsAI && !postOwnerIsAI) {
+                const virtuePolicy = await getVirtuePolicy();
+                await Promise.all([
+                    grantVirtue({
+                        userId: reactorId,
+                        routeKey: VIRTUE_ROUTE_KEYS.reactionGiven,
+                        points: virtuePolicy.reactionGivenPoints,
+                        dailyCap: virtuePolicy.reactionGivenDailyCap,
+                        reason: "リアクション送信",
+                        source: "reaction_given",
+                        targetId: postId,
+                    }),
+                    grantVirtue({
+                        userId: postOwnerId,
+                        routeKey: VIRTUE_ROUTE_KEYS.reactionReceived,
+                        points: virtuePolicy.reactionReceivedPoints,
+                        dailyCap: virtuePolicy.reactionReceivedDailyCap,
+                        reason: "リアクション受信",
+                        source: "reaction_received",
+                        targetId: postId,
+                    }),
+                ]);
+            }
 
         } catch (error) {
             console.error("onReactionCreated ERROR:", error);

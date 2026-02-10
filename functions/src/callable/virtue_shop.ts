@@ -11,12 +11,13 @@ import { requireAuth } from "../helpers/auth";
 import { COLLECTIONS } from "../config/collections";
 import { LOCATION } from "../config/constants";
 
-type VirtueItemType = "name_part" | "reaction_stamp" | "avatar_part";
+type VirtueItemType = "name_part" | "reaction_stamp" | "avatar_part" | "stamp_sheet";
 
 type VirtueShopConfig = {
     namePartCostsByRarity: Record<string, number>;
     avatarPartCostsByRarity: Record<string, number>;
     reactionCostsById: Record<string, number>;
+    stampSheetCostsByRarity: Record<string, number>;
 };
 
 const SETTINGS_DOC_ID = "virtueShop";
@@ -67,7 +68,17 @@ function readVirtueShopConfig(data: Record<string, unknown> | undefined): Virtue
         ? toNumberMap(data?.avatarPartCostsByRarity)
         : namePartCostsByRarity;
     const reactionCostsById = toNumberMap(data?.reactionCostsById);
-    return { namePartCostsByRarity, avatarPartCostsByRarity, reactionCostsById };
+    const stampSheetCostsByRarity = Object.keys(
+        toNumberMap(data?.stampSheetCostsByRarity)
+    ).length
+        ? toNumberMap(data?.stampSheetCostsByRarity)
+        : namePartCostsByRarity;
+    return {
+        namePartCostsByRarity,
+        avatarPartCostsByRarity,
+        reactionCostsById,
+        stampSheetCostsByRarity,
+    };
 }
 
 export const getVirtueShopConfig = onCall(
@@ -84,6 +95,7 @@ export const getVirtueShopConfig = onCall(
             namePartCostsByRarity: config.namePartCostsByRarity,
             avatarPartCostsByRarity: config.avatarPartCostsByRarity,
             reactionCostsById: config.reactionCostsById,
+            stampSheetCostsByRarity: config.stampSheetCostsByRarity,
         };
     }
 );
@@ -103,7 +115,12 @@ export const purchaseVirtueItem = onCall(
             throw new HttpsError("invalid-argument", "itemType and itemId are required");
         }
 
-        if (itemType !== "name_part" && itemType !== "reaction_stamp" && itemType !== "avatar_part") {
+        if (
+            itemType !== "name_part" &&
+            itemType !== "reaction_stamp" &&
+            itemType !== "avatar_part" &&
+            itemType !== "stamp_sheet"
+        ) {
             throw new HttpsError("invalid-argument", "invalid itemType");
         }
 
@@ -125,7 +142,11 @@ export const purchaseVirtueItem = onCall(
             const userData = userSnap.data() || {};
 
             let cost = 0;
-            let unlockField: "unlockedNameParts" | "unlockedReactionStamps" | "unlockedAvatarParts";
+            let unlockField:
+                "unlockedNameParts" |
+                "unlockedReactionStamps" |
+                "unlockedAvatarParts" |
+                "unlockedStampSheets";
             let unlockValue = "";
             let purchaseKey = "";
 
@@ -154,7 +175,7 @@ export const purchaseVirtueItem = onCall(
                 unlockField = "unlockedReactionStamps";
                 unlockValue = `reaction_${itemId}`;
                 purchaseKey = `virtue_reaction_stamp_${itemId}`;
-            } else {
+            } else if (itemType === "avatar_part") {
                 const rarity = AVATAR_PART_RARITY[itemId] ?? "";
                 logger.info("purchaseVirtueItem avatar lookup", {
                     userId,
@@ -185,6 +206,35 @@ export const purchaseVirtueItem = onCall(
                 unlockField = "unlockedAvatarParts";
                 unlockValue = itemId;
                 purchaseKey = `virtue_avatar_part_${itemId}`;
+            } else {
+                const catalogRef = db.collection(COLLECTIONS.SETTINGS).doc("stampSheetCatalog");
+                const catalogSnap = await transaction.get(catalogRef);
+                if (!catalogSnap.exists) {
+                    throw new HttpsError("failed-precondition", "stamp sheet catalog not found");
+                }
+
+                const sheetsRaw = catalogSnap.data()?.sheets;
+                const sheets = Array.isArray(sheetsRaw) ? sheetsRaw : [];
+                const targetSheet = sheets.find(
+                    (sheet) => sheet?.id === itemId && sheet?.isActive !== false
+                );
+                if (!targetSheet) {
+                    throw new HttpsError("not-found", "stamp sheet not found");
+                }
+
+                const rarity = typeof targetSheet.rarity === "string" ? targetSheet.rarity : "common";
+                if (rarity === "epic" && userData.isSubscriber !== true) {
+                    throw new HttpsError("permission-denied", "epic stamp sheet requires subscription");
+                }
+
+                cost = config.stampSheetCostsByRarity[rarity] ?? 0;
+                if (!cost || cost <= 0) {
+                    throw new HttpsError("failed-precondition", "Cost not configured");
+                }
+
+                unlockField = "unlockedStampSheets";
+                unlockValue = `sheet_${itemId}`;
+                purchaseKey = `virtue_stamp_sheet_${itemId}`;
             }
 
             const unlockedList: string[] = userData[unlockField] || [];

@@ -4,11 +4,13 @@ class VirtueShopConfig {
   final Map<String, int> namePartCostsByRarity;
   final Map<String, int> avatarPartCostsByRarity;
   final Map<String, int> reactionCostsById;
+  final Map<String, int> stampSheetCostsByRarity;
 
   const VirtueShopConfig({
     required this.namePartCostsByRarity,
     required this.avatarPartCostsByRarity,
     required this.reactionCostsById,
+    required this.stampSheetCostsByRarity,
   });
 
   factory VirtueShopConfig.fromMap(Map<String, dynamic> map) {
@@ -30,12 +32,14 @@ class VirtueShopConfig {
       namePartCostsByRarity: namePartCostsByRarity,
       avatarPartCostsByRarity: avatarPartCostsByRarity,
       reactionCostsById: toIntMap(map['reactionCostsById']),
+      stampSheetCostsByRarity: toIntMap(map['stampSheetCostsByRarity']),
     );
   }
 
   int? costForNamePart(String rarity) => namePartCostsByRarity[rarity];
   int? costForAvatarPart(String rarity) => avatarPartCostsByRarity[rarity];
   int? costForReaction(String reactionId) => reactionCostsById[reactionId];
+  int? costForStampSheet(String rarity) => stampSheetCostsByRarity[rarity];
 }
 
 class VirtueShopService {
