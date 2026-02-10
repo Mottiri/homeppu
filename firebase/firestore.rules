@@ -1,7 +1,6 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
     // Auth helpers
     function isAuthenticated() {
       return request.auth != null;
@@ -23,11 +22,6 @@ service cloud.firestore {
     }
 
     // Circle ownership helpers
-    function isCircleSubOwner(circleId) {
-      return exists(/databases/$(database)/documents/circles/$(circleId)) &&
-             get(/databases/$(database)/documents/circles/$(circleId)).data.subOwnerId == request.auth.uid;
-    }
-
     function isCircleOwnerOrSubOwner(circleId) {
       let circleData = get(/databases/$(database)/documents/circles/$(circleId)).data;
       return circleData.ownerId == request.auth.uid || circleData.subOwnerId == request.auth.uid;
@@ -36,17 +30,17 @@ service cloud.firestore {
     function isCircleOwnerOrSubOwnerOrAdmin(circleId) {
       return isAdmin() || isCircleOwnerOrSubOwner(circleId);
     }
-    
-    // 繝ｦ繝ｼ繧ｶ繝ｼ繧ｳ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
+
+    // Users
     match /users/{userId} {
-      // 隱ｭ縺ｿ蜿悶ｊ: 隱崎ｨｼ貂医∩繝ｦ繝ｼ繧ｶ繝ｼ
+      // Read: self or admin
       allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
-      
-      // 菴懈・: 譛ｬ莠ｺ縺ｮ縺ｿ
+
+      // Create: self only
       allow create: if isAuthenticated() && isOwner(userId);
-      
-      // 譖ｴ譁ｰ: 譛ｬ莠ｺ縺ｮ縺ｿ・育音螳壹ヵ繧｣繝ｼ繝ｫ繝峨・螟画峩荳榊庄・・
-allow update: if isAuthenticated() && isOwner(userId) && 
+
+      // Update: self only (server-managed fields are blocked)
+      allow update: if isAuthenticated() && isOwner(userId) &&
         !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'virtue',
           'isBanned',
@@ -60,117 +54,87 @@ allow update: if isAuthenticated() && isOwner(userId) &&
           'unlockedNameParts',
           'unlockedReactionStamps',
           'unlockedAvatarParts',
+          'unlockedStampSheets',
+          'activeStampSheetId',
+          'thanksStampCredits',
           'rewardedReactionUnlocks'
         ]);
 
-      // 繧ｫ繝・ざ繝ｪ繧ｵ繝悶さ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
-      match /categories/{categoryId} {
+      // Stamp sheet placements are server-managed
+      match /stampSheet/{slotId} {
         allow read: if isAuthenticated() && isOwner(userId);
-        allow create: if isAuthenticated() && isOwner(userId);
-        allow update: if isAuthenticated() && isOwner(userId);
-        allow delete: if isAuthenticated() && isOwner(userId);
+        allow write: if false;
       }
 
-      // 騾夂衍繧ｵ繝悶さ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
+      // Categories
+      match /categories/{categoryId} {
+        allow read, create, update, delete: if isAuthenticated() && isOwner(userId);
+      }
+
+      // Notifications
       match /notifications/{notificationId} {
-         allow read: if isAuthenticated() && isOwner(userId);
-         allow update: if isAuthenticated() && isOwner(userId); // 譌｢隱ｭ譖ｴ譁ｰ逕ｨ
-         allow delete: if isAuthenticated() && isOwner(userId); // 蜑企勁逕ｨ
-         // 邂｡逅・・・騾夂衍繧剃ｽ懈・蜿ｯ閭ｽ
-         allow create: if isAdmin();
+        allow read, update, delete: if isAuthenticated() && isOwner(userId);
+        allow create: if isAdmin();
       }
     }
-    
-    // BAN逡ｰ隴ｰ逕ｳ縺礼ｫ九※繧ｳ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
+
+    // Public profile snapshots (read-only)
     match /publicUsers/{userId} {
       allow read: if isAuthenticated();
       allow write: if false;
     }
-    
+
+    // Ban appeals
     match /banAppeals/{appealId} {
-      // 隱ｭ縺ｿ蜿悶ｊ: 邂｡逅・・縺ｾ縺溘・ 譛ｬ莠ｺ
       allow read: if isAuthenticated() && (
-        isAdmin() || 
+        isAdmin() ||
         resource.data.bannedUserId == request.auth.uid
       );
-      
-      // 菴懈・: 邂｡逅・・縺ｾ縺溘・ 譛ｬ莠ｺ
       allow create: if isAuthenticated() && (
-        isAdmin() || 
+        isAdmin() ||
         request.resource.data.bannedUserId == request.auth.uid
       );
-      
-      // 譖ｴ譁ｰ: 邂｡逅・・縺ｾ縺溘・ 譛ｬ莠ｺ
       allow update: if isAuthenticated() && (
-        isAdmin() || 
+        isAdmin() ||
         resource.data.bannedUserId == request.auth.uid
       );
     }
-    
-    // 蜷榊燕繝代・繝・・繧ｹ繧ｿ繧ｳ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
-    // 隱ｭ縺ｿ蜿悶ｊ: 隱崎ｨｼ貂医∩繝ｦ繝ｼ繧ｶ繝ｼ・亥錐蜑咲函謌舌↓蠢・ｦ・ｼ・    // 譖ｸ縺崎ｾｼ縺ｿ: Cloud Functions縺ｮ縺ｿ・医け繝ｩ繧､繧｢繝ｳ繝医°繧峨・荳榊庄・・
-match /nameParts/{partId} {
+
+    // Name parts catalog (read-only from client)
+    match /nameParts/{partId} {
       allow read: if isAuthenticated();
       allow write: if false;
     }
 
-
-
-    // 繧ｿ繧ｹ繧ｯ繧ｳ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
+    // Tasks
     match /tasks/{taskId} {
-      // 隱ｭ縺ｿ蜿悶ｊ: 譛ｬ莠ｺ縺ｮ縺ｿ
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      
-      // 菴懈・: 譛ｬ莠ｺ縺ｮ縺ｿ
+      allow read, update: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      
-      // 譖ｴ譁ｰ: 譛ｬ莠ｺ縺ｮ縺ｿ
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      
-      // 蜑企勁: 譛ｬ莠ｺ縺ｮ縺ｿ (蟄伜惠縺励↑縺・ラ繧ｭ繝･繝｡繝ｳ繝医・蜑企勁繧りｨｱ蜿ｯ縺励※繧ｨ繝ｩ繝ｼ繧帝亟縺・
       allow delete: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid);
     }
 
-    // 逶ｮ讓吶さ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
+    // Goals
     match /goals/{goalId} {
-      // 隱ｭ縺ｿ蜿悶ｊ: 譛ｬ莠ｺ 縺ｾ縺溘・ 蜈ｬ髢玖ｨｭ螳壹′true縺ｮ蝣ｴ蜷・
-allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || resource.data.isPublic == true);
-      
-      // 菴懈・: 譛ｬ莠ｺ縺ｮ縺ｿ
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || resource.data.isPublic == true);
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      
-      // 譖ｴ譁ｰ: 譛ｬ莠ｺ縺ｮ縺ｿ
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      
-      // 蜑企勁: 譛ｬ莠ｺ縺ｮ縺ｿ
       allow delete: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid);
     }
-    
-    // 謚慕ｨｿ繧ｳ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
+
+    // Posts (created via Cloud Functions)
     match /posts/{postId} {
-      // 隱ｭ縺ｿ蜿悶ｊ: 隱崎ｨｼ貂医∩繝ｦ繝ｼ繧ｶ繝ｼ
       allow read: if isAuthenticated();
-      
-      // 菴懈・: 隱崎ｨｼ貂医∩縺ｧBAN縺輔ｌ縺ｦ縺・↑縺・Θ繝ｼ繧ｶ繝ｼ
-      // 菴懈・: 繧ｯ繝ｩ繧､繧｢繝ｳ繝医°繧峨・逶ｴ謗･菴懈・繧堤ｦ∵ｭ｢・・loud Functions邨檎罰縺ｮ縺ｿ・・
-allow create: if false;
-      
-      // 譖ｴ譁ｰ: 謚慕ｨｿ閠・・縺ｿ・医Μ繧｢繧ｯ繧ｷ繝ｧ繝ｳ縺ｯ隱ｰ縺ｧ繧よ峩譁ｰ蜿ｯ閭ｽ縲√し繝ｼ繧ｯ繝ｫ繧ｪ繝ｼ繝翫・/蜑ｯ繧ｪ繝ｼ繝翫・縺ｯ繝斐Φ逡吶ａ繧ょ庄閭ｽ縲∫ｮ｡逅・・・needsReview・・
-allow update: if isAuthenticated() && (
+      allow create: if false;
+      allow update: if isAuthenticated() && (
         (isOwner(resource.data.userId) &&
          isNotBanned() &&
          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['reactions', 'commentCount'])) ||
-        // 繝ｪ繧｢繧ｯ繧ｷ繝ｧ繝ｳ繝ｻ繧ｳ繝｡繝ｳ繝域焚縺ｮ譖ｴ譁ｰ縺ｯBAN縺輔ｌ縺ｦ縺・↑縺・Θ繝ｼ繧ｶ繝ｼ縺ｮ縺ｿ
-        // 繧ｵ繝ｼ繧ｯ繝ｫ繧ｪ繝ｼ繝翫・縺ｾ縺溘・蜑ｯ繧ｪ繝ｼ繝翫・縺ｯ繝斐Φ逡吶ａ繝輔ぅ繝ｼ繝ｫ繝峨ｒ譖ｴ譁ｰ蜿ｯ閭ｽ
         (resource.data.circleId != null &&
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isPinned', 'isPinnedTop']) &&
          exists(/databases/$(database)/documents/circles/$(resource.data.circleId)) &&
          isCircleOwnerOrSubOwner(resource.data.circleId)) ||
-        // 邂｡逅・・・蜈ｨ縺ｦ縺ｮ譖ｴ譁ｰ縺悟庄閭ｽ
         isAdmin()
       );
-
-      // 蜑企勁: 謚慕ｨｿ閠・縺ｾ縺溘・ 繧ｵ繝ｼ繧ｯ繝ｫ謚慕ｨｿ縺ｮ蝣ｴ蜷医・繧ｵ繝ｼ繧ｯ繝ｫ繧ｪ繝ｼ繝翫・繧ょ庄縲∫ｮ｡逅・・・蜑企勁蜿ｯ閭ｽ
       allow delete: if isAuthenticated() && (
         (isOwner(resource.data.userId) && isNotBanned()) ||
         (resource.data.circleId != null &&
@@ -179,37 +143,14 @@ allow update: if isAuthenticated() && (
         isAdmin()
       );
     }
-    
-    // 繧ｳ繝｡繝ｳ繝医さ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
+
+    // Comments
     match /comments/{commentId} {
-      // 隱ｭ縺ｿ蜿悶ｊ: 隱崎ｨｼ貂医∩繝ｦ繝ｼ繧ｶ繝ｼ
       allow read: if isAuthenticated();
-      
-      // 菴懈・: 隱崎ｨｼ貂医∩縺ｧBAN縺輔ｌ縺ｦ縺・↑縺・Θ繝ｼ繧ｶ繝ｼ
-      allow create: if isAuthenticated() && isNotBanned() && 
-        request.resource.data.userId == request.auth.uid;
-      
-      // 蜑企勁: 繧ｳ繝｡繝ｳ繝域兜遞ｿ閠・縺ｾ縺溘・ 蜈・兜遞ｿ縺ｮ謇譛芽・縺ｾ縺溘・ 繧ｵ繝ｼ繧ｯ繝ｫ繧ｪ繝ｼ繝翫・ 縺ｾ縺溘・ 邂｡逅・・
-allow delete: if isAuthenticated() && (
-        isOwner(resource.data.userId) ||
-        isOwner(get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.userId) ||
-        (get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.circleId != null &&
-         get(/databases/$(database)/documents/circles/$(get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.circleId)).data.ownerId == request.auth.uid) ||
-        isAdmin()
-      );
-    }
-    
-    // 繝ｪ繧｢繧ｯ繧ｷ繝ｧ繝ｳ繧ｳ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
-    match /reactions/{reactionId} {
-      // 隱ｭ縺ｿ蜿悶ｊ: 隱崎ｨｼ貂医∩繝ｦ繝ｼ繧ｶ繝ｼ
-      allow read: if isAuthenticated();
-      
-      // 菴懈・: 隱崎ｨｼ貂医∩縺ｧBAN縺輔ｌ縺ｦ縺・↑縺・Θ繝ｼ繧ｶ繝ｼ
-      allow create: if isAuthenticated() && isNotBanned() && 
-        request.resource.data.userId == request.auth.uid;
-      
-      // 蜑企勁: 繝ｪ繧｢繧ｯ繧ｷ繝ｧ繝ｳ縺励◆譛ｬ莠ｺ 縺ｾ縺溘・ 蜈・兜遞ｿ縺ｮ謇譛芽・縺ｾ縺溘・ 繧ｵ繝ｼ繧ｯ繝ｫ繧ｪ繝ｼ繝翫・ 縺ｾ縺溘・ 邂｡逅・・
-allow delete: if isAuthenticated() && (
+      allow create: if isAuthenticated() &&
+                    isNotBanned() &&
+                    request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && (
         isOwner(resource.data.userId) ||
         isOwner(get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.userId) ||
         (get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.circleId != null &&
@@ -218,118 +159,106 @@ allow delete: if isAuthenticated() && (
       );
     }
 
-    // 繧ｵ繝ｼ繧ｯ繝ｫ繧ｳ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
+    // Reactions
+    match /reactions/{reactionId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+                    isNotBanned() &&
+                    request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && (
+        isOwner(resource.data.userId) ||
+        isOwner(get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.userId) ||
+        (get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.circleId != null &&
+         get(/databases/$(database)/documents/circles/$(get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.circleId)).data.ownerId == request.auth.uid) ||
+        isAdmin()
+      );
+    }
+
+    // Circles
     match /circles/{circleId} {
-      // 隱ｭ縺ｿ蜿悶ｊ: AI繝｢繝ｼ繝峨し繝ｼ繧ｯ繝ｫ縺ｯ菴懈・閠・・縺ｿ縲√◎繧御ｻ･螟悶・隱崎ｨｼ貂医∩繝ｦ繝ｼ繧ｶ繝ｼ隱ｰ縺ｧ繧・
-allow read: if isAuthenticated() && (
+      allow read: if isAuthenticated() && (
         resource.data.aiMode != "aiOnly" ||
         resource.data.ownerId == request.auth.uid ||
         isAdmin()
       );
-      
-      // 菴懈・: 隱崎ｨｼ貂医∩縺ｧBAN縺輔ｌ縺ｦ縺・↑縺・Θ繝ｼ繧ｶ繝ｼ・育ｮ｡逅・・・BAN繝√ぉ繝・け繧ｹ繧ｭ繝・・・・
-allow create: if isAuthenticated() && (isNotBanned() || isAdmin());
-      
-      // 譖ｴ譁ｰ: 繧ｪ繝ｼ繝翫・縲√∪縺溘・邂｡逅・・√∪縺溘・繝｡繝ｳ繝舌・霑ｽ蜉繝ｻ蜑企勁謫堺ｽ懊√∪縺溘・繝｡繝ｳ繝舌・縺ｫ繧医ｋpostCount譖ｴ譁ｰ
+      allow create: if isAuthenticated() && (isNotBanned() || isAdmin());
       allow update: if isAuthenticated() && (
         (isCircleOwnerOrSubOwner(circleId) && isNotBanned()) ||
         isAdmin()
       );
-      
-      // 蜑企勁: 繧ｪ繝ｼ繝翫・・・AN縺輔ｌ縺ｦ縺・↑縺・ｼ峨∪縺溘・邂｡逅・・・縺ｿ
-      allow delete: if isAuthenticated() && ((isOwner(resource.data.ownerId) && isNotBanned()) || isAdmin());
+      allow delete: if isAuthenticated() &&
+                    ((isOwner(resource.data.ownerId) && isNotBanned()) || isAdmin());
     }
-    
-    // 繧ｵ繝ｼ繧ｯ繝ｫ蜿ょ刈逕ｳ隲九さ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
+
+    // Circle join requests
     match /circleJoinRequests/{requestId} {
-      // 隱ｭ縺ｿ蜿悶ｊ: 繧ｵ繝ｼ繧ｯ繝ｫ繧ｪ繝ｼ繝翫・縲∝憶繧ｪ繝ｼ繝翫・縲∫ｮ｡逅・・√∪縺溘・逕ｳ隲玖・
-allow read: if isAuthenticated() && (
+      allow read: if isAuthenticated() && (
         resource.data.userId == request.auth.uid ||
         isCircleOwnerOrSubOwnerOrAdmin(resource.data.circleId)
       );
-      
-      // 菴懈・: 隱崎ｨｼ貂医∩繝ｦ繝ｼ繧ｶ繝ｼ・・AN縺輔ｌ縺ｦ縺・↑縺・ｼ・
-allow create: if isAuthenticated() && isNotBanned() && request.resource.data.userId == request.auth.uid;
-      
-      // 譖ｴ譁ｰ: 豕ｨ諢・ isCircleOwnerOrSubOwnerOrAdmin 縺ｯ circleId 繧貞ｼ墓焚縺ｫ蜿悶ｋ縺後・      // 縺薙％縺ｧ縺ｯ resource.data.circleId 繧剃ｽｿ縺・ｿ・ｦ√′縺ゅｋ縲・      // 繧ｵ繝ｼ繧ｯ繝ｫ繧ｪ繝ｼ繝翫・縺ｾ縺溘・蜑ｯ繧ｪ繝ｼ繝翫・縺ｾ縺溘・邂｡逅・・ｼ域価隱・諡貞凄・・      // BAN荳ｭ縺ｮ繧ｪ繝ｼ繝翫・/蜑ｯ繧ｪ繝ｼ繝翫・縺ｯ謫堺ｽ應ｸ榊庄
-      allow update: if isAuthenticated() && isNotBanned() && 
-        isCircleOwnerOrSubOwnerOrAdmin(resource.data.circleId);
-      
-      // 蜑企勁: 逕ｳ隲玖・∪縺溘・繧ｵ繝ｼ繧ｯ繝ｫ繧ｪ繝ｼ繝翫・/蜑ｯ繧ｪ繝ｼ繝翫・/邂｡逅・・ｼ・AN縺輔ｌ縺ｦ縺・↑縺・ｼ・
-allow delete: if isAuthenticated() && isNotBanned() && (
-        resource.data.userId == request.auth.uid ||
-        isCircleOwnerOrSubOwnerOrAdmin(resource.data.circleId)
-      );
+      allow create: if isAuthenticated() &&
+                    isNotBanned() &&
+                    request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() &&
+                    isNotBanned() &&
+                    isCircleOwnerOrSubOwnerOrAdmin(resource.data.circleId);
+      allow delete: if isAuthenticated() &&
+                    isNotBanned() && (
+                      resource.data.userId == request.auth.uid ||
+                      isCircleOwnerOrSubOwnerOrAdmin(resource.data.circleId)
+                    );
     }
-    
-    
-    // 蠕ｳ繝昴う繝ｳ繝亥ｱ･豁ｴ繧ｳ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
+
+    // Virtue history (read-only)
     match /virtueHistory/{historyId} {
-      // 隱ｭ縺ｿ蜿悶ｊ: 譛ｬ莠ｺ縺ｮ縺ｿ
       allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      // 譖ｸ縺崎ｾｼ縺ｿ: Cloud Functions縺ｮ縺ｿ
       allow write: if false;
     }
-    
-    // 繝｢繝・Ξ繝ｼ繧ｷ繝ｧ繝ｳ貂医∩繧ｳ繝ｳ繝・Φ繝・ｼ育ｮ｡逅・畑・・
-match /moderatedContent/{contentId} {
-      // 縺吶∋縺ｦCloud Functions縺ｧ邂｡逅・
-allow read, write: if false;
+
+    // Moderation log (server-only)
+    match /moderatedContent/{contentId} {
+      allow read, write: if false;
     }
 
-    // 蝠上＞蜷医ｏ縺帙さ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
-    match /inquiries/{inquiryId} {
-      // 隱ｭ縺ｿ蜿悶ｊ: 邂｡逅・・・蜈ｨ莉ｶ縲√Θ繝ｼ繧ｶ繝ｼ縺ｯ閾ｪ蛻・・縺ｿ
+    // Public settings consumed by stamp sheet UI
+    match /settings/{docId} {
       allow read: if isAuthenticated() && (
-        isAdmin() ||
-        resource.data.userId == request.auth.uid
+        docId == "stampSheetCatalog" ||
+        docId == "stampSheetLayoutCatalog"
       );
+      allow write: if false;
+    }
 
-      // 譖ｴ譁ｰ: 譛ｬ莠ｺ・・asUnreadReply, userViewing・峨∪縺溘・邂｡逅・・
-allow update: if isAuthenticated() && (
+    // Inquiries
+    match /inquiries/{inquiryId} {
+      allow read: if isAuthenticated() &&
+                  (isAdmin() || resource.data.userId == request.auth.uid);
+      allow update: if isAuthenticated() && (
         isAdmin() ||
         (resource.data.userId == request.auth.uid &&
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hasUnreadReply', 'userViewing']))
       );
-
-      // 菴懈・繝ｻ蜑企勁: Cloud Functions縺ｮ縺ｿ
       allow create, delete: if false;
 
-      // 繝｡繝・そ繝ｼ繧ｸ繧ｵ繝悶さ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
       match /messages/{messageId} {
-        // 隱ｭ縺ｿ蜿悶ｊ: 邂｡逅・・∪縺溘・蝠上＞蜷医ｏ縺帙が繝ｼ繝翫・
         allow read: if isAuthenticated() && (
           isAdmin() ||
           get(/databases/$(database)/documents/inquiries/$(inquiryId)).data.userId == request.auth.uid
         );
-        // 譖ｸ縺崎ｾｼ縺ｿ: Cloud Functions縺ｮ縺ｿ
         allow create, delete: if false;
       }
     }
 
-
-    // 騾壼ｱ繧ｳ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ
+    // Reports (admin-only)
     match /reports/{reportId} {
-      // 邂｡逅・・・縺ｿ隱ｭ縺ｿ蜿悶ｊ蜿ｯ閭ｽ
-      allow read: if isAdmin();
-      // 邂｡逅・・・縺ｿ譖ｴ譁ｰ蜿ｯ閭ｽ・医せ繝・・繧ｿ繧ｹ螟画峩・・
-allow update: if isAdmin();
-      // 菴懈・繝ｻ蜑企勁縺ｯCloud Functions縺ｮ縺ｿ
+      allow read, update: if isAdmin();
       allow create, delete: if false;
     }
 
-    // 隕∝ｯｩ譟ｻ謚慕ｨｿ繧ｳ繝ｬ繧ｯ繧ｷ繝ｧ繝ｳ・育ｮ｡逅・・ｰら畑・・
-match /pendingReviews/{reviewId} {
-      // 邂｡逅・・・縺ｿ隱ｭ縺ｿ蜿悶ｊ蜿ｯ閭ｽ
-      allow read: if isAdmin();
-      // 邂｡逅・・・縺ｿ譖ｴ譁ｰ蜿ｯ閭ｽ・域価隱・蜑企勁蠕後・迥ｶ諷区峩譁ｰ・・
-allow update: if isAdmin();
-      // 菴懈・繝ｻ蜑企勁縺ｯCloud Functions縺ｮ縺ｿ
+    // Pending reviews (admin-only)
+    match /pendingReviews/{reviewId} {
+      allow read, update: if isAdmin();
       allow create, delete: if false;
     }
   }
 }
-
-
-
-

@@ -1,15 +1,15 @@
-﻿rules_version = '2';
+rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // 隱崎ｨｼ繝√ぉ繝・け
+    // Auth helpers
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    // 邂｡逅・・メ繧ｧ繝・け・・ustom Claims菴ｿ逕ｨ・・    function isAdmin() {
+    function isAdmin() {
       return request.auth != null && request.auth.token.admin == true;
     }
-    
+
     function circleData(circleId) {
       return firestore.get(/databases/$(database)/documents/circles/$(circleId)).data;
     }
@@ -22,88 +22,82 @@ service firebase.storage {
     function isCircleOwnerOrSubOwnerOrAdmin(circleId) {
       return isAdmin() || isCircleOwnerOrSubOwner(circleId);
     }
-    
-    // 逕ｻ蜒上し繧､繧ｺ蛻ｶ髯撰ｼ・0MB・・    function isValidImageSize() {
+
+    function isValidImageSize() {
       return request.resource.size < 10 * 1024 * 1024;
     }
-    
-    // 蜍慕判繧ｵ繧､繧ｺ蛻ｶ髯撰ｼ・00MB・・    function isValidVideoSize() {
+
+    function isValidVideoSize() {
       return request.resource.size < 100 * 1024 * 1024;
     }
-    
-    // 繝輔ぃ繧､繝ｫ繧ｵ繧､繧ｺ蛻ｶ髯撰ｼ・0MB・・    function isValidFileSize() {
+
+    function isValidFileSize() {
       return request.resource.size < 50 * 1024 * 1024;
     }
-    
-    // 繝励Ο繝輔ぅ繝ｼ繝ｫ逕ｻ蜒上し繧､繧ｺ・・MB・・    function isValidProfileSize() {
+
+    function isValidProfileSize() {
       return request.resource.size < 5 * 1024 * 1024;
     }
-    
-    // 逕ｻ蜒上ヵ繧｡繧､繝ｫ縺ｮ縺ｿ險ｱ蜿ｯ
+
     function isImage() {
       return request.resource.contentType.matches('image/.*');
     }
-    
-    // 蜍慕判繝輔ぃ繧､繝ｫ縺ｮ縺ｿ險ｱ蜿ｯ
+
     function isVideo() {
       return request.resource.contentType.matches('video/.*');
     }
-    
-    // 險ｱ蜿ｯ縺輔ｌ繧九ヵ繧｡繧､繝ｫ繧ｿ繧､繝・
-// 繝ｦ繝ｼ繧ｶ繝ｼ繝倥ャ繝繝ｼ逕ｻ蜒・    match /headers/{fileName} {
+
+    // User header images
+    match /headers/{fileName} {
       allow read: if isAuthenticated();
-      // 繝輔ぃ繧､繝ｫ蜷阪′繝ｦ繝ｼ繧ｶ繝ｼID縺ｧ蟋九∪繧句ｴ蜷医・縺ｿ譖ｸ縺崎ｾｼ縺ｿ蜿ｯ閭ｽ
-      allow write: if isAuthenticated() 
+      allow write: if isAuthenticated()
                    && fileName.matches(request.auth.uid + '.*')
-                   && isValidImageSize() 
+                   && isValidImageSize()
                    && isImage();
-      // 譛ｬ莠ｺ縺ｮ縺ｿ蜑企勁蜿ｯ閭ｽ
-      allow delete: if isAuthenticated() 
+      allow delete: if isAuthenticated()
                     && fileName.matches(request.auth.uid + '.*');
     }
 
-    // 繝ｦ繝ｼ繧ｶ繝ｼ繝励Ο繝輔ぅ繝ｼ繝ｫ逕ｻ蜒・    match /users/{userId}/profile/{fileName} {
+    // User profile images
+    match /users/{userId}/profile/{fileName} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() 
-                   && request.auth.uid == userId 
-                   && isValidProfileSize() 
+      allow write: if isAuthenticated()
+                   && request.auth.uid == userId
+                   && isValidProfileSize()
                    && isImage();
     }
-    
-    // 謚慕ｨｿ繝｡繝・ぅ繧｢ - 逕ｻ蜒・    match /posts/{userId}/images/{fileName} {
+
+    // Post images
+    match /posts/{userId}/images/{fileName} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() 
-                   && request.auth.uid == userId 
-                   && isValidImageSize() 
+      allow write: if isAuthenticated()
+                   && request.auth.uid == userId
+                   && isValidImageSize()
                    && isImage();
-      // 譛ｬ莠ｺ縺ｮ縺ｿ蜑企勁蜿ｯ閭ｽ
       allow delete: if isAuthenticated() && request.auth.uid == userId;
     }
-    
-    // 謚慕ｨｿ繝｡繝・ぅ繧｢ - 蜍慕判
+
+    // Post videos
     match /posts/{userId}/videos/{fileName} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() 
-                   && request.auth.uid == userId 
-                   && isValidVideoSize() 
+      allow write: if isAuthenticated()
+                   && request.auth.uid == userId
+                   && isValidVideoSize()
                    && isVideo();
-      // 譛ｬ莠ｺ縺ｮ縺ｿ蜑企勁蜿ｯ閭ｽ
       allow delete: if isAuthenticated() && request.auth.uid == userId;
     }
-    
-    // 謚慕ｨｿ繝｡繝・ぅ繧｢ - 繝輔ぃ繧､繝ｫ
-// 謚慕ｨｿ繝｡繝・ぅ繧｢ - 蜍慕判繧ｵ繝繝阪う繝ｫ
+
+    // Post thumbnails
     match /posts/{userId}/thumbnails/{fileName} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() 
-                   && request.auth.uid == userId 
-                   && isValidProfileSize()  // 5MB limit for thumbnails
+      allow write: if isAuthenticated()
+                   && request.auth.uid == userId
+                   && isValidProfileSize()
                    && isImage();
-      // 譛ｬ莠ｺ縺ｮ縺ｿ蜑企勁蜿ｯ閭ｽ
       allow delete: if isAuthenticated() && request.auth.uid == userId;
     }
-    
-    // 蠕梧婿莠呈鋤諤ｧ・壼商縺・ｽ｢蠑上・謚慕ｨｿ逕ｻ蜒・
+
+    // Circle images
     match /circles/{circleId}/{imageType}/{fileName} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated()
@@ -111,31 +105,24 @@ service firebase.storage {
                    && isValidProfileSize()
                    && isImage();
     }
-    // 繧ｿ繧ｹ繧ｯ豺ｻ莉倥ヵ繧｡繧､繝ｫ (逕ｻ蜒上・繝輔ぃ繧､繝ｫ)
+
+    // Task attachments (image/file)
     match /task_attachments/{userId}/{taskId}/{fileName} {
       allow read: if isAuthenticated() && request.auth.uid == userId;
-      allow write: if isAuthenticated() 
-                   && request.auth.uid == userId 
-                   && isValidFileSize(); // 50MB limit
-      // 譛ｬ莠ｺ縺ｮ縺ｿ蜑企勁蜿ｯ閭ｽ
+      allow write: if isAuthenticated()
+                   && request.auth.uid == userId
+                   && isValidFileSize();
       allow delete: if isAuthenticated() && request.auth.uid == userId;
     }
 
-    // 蝠上＞蜷医ｏ縺帶ｷｻ莉倡判蜒擾ｼ医Θ繝ｼ繧ｶ繝ｼID縺斐→縺ｫ蛻・屬・・    match /inquiries/{userId}/{fileName} {
-      // 譛ｬ莠ｺ縺ｾ縺溘・邂｡逅・・・縺ｿ隱ｭ縺ｿ蜿悶ｊ蜿ｯ閭ｽ
+    // Inquiry attachments
+    match /inquiries/{userId}/{fileName} {
       allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-      // 譛ｬ莠ｺ縺ｮ縺ｿ譖ｸ縺崎ｾｼ縺ｿ蜿ｯ閭ｽ
       allow write: if isAuthenticated()
                    && request.auth.uid == userId
-                   && isValidProfileSize()  // 5MB limit
+                   && isValidProfileSize()
                    && isImage();
-      // 邂｡逅・・・縺ｿ蜑企勁蜿ｯ閭ｽ
       allow delete: if isAdmin();
     }
   }
 }
-
-
-
-
-
