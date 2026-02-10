@@ -44,6 +44,7 @@ class AIService {
     required int userAvatarIndex,
     required String postMode,
     String? circleId,
+    bool grantVirtue = true,
   }) async {
     try {
       final callable = _functions.httpsCallable('createPostWithRateLimit');
@@ -53,6 +54,7 @@ class AIService {
         'userAvatarIndex': userAvatarIndex,
         'postMode': postMode,
         'circleId': circleId,
+        'grantVirtue': grantVirtue,
       });
       return result.data['postId'] as String?;
     } catch (e) {

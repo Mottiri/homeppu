@@ -10,6 +10,8 @@ Keep this file short and up to date.
 - Maintain a shared, up-to-date knowledge base.
 - Prefer safety and correctness over speed.
 - User-facing text must be defined in `lib/core/constants/app_messages.dart` and referenced from there (no hardcoded UI strings).
+- Cloud Functions-side messages must be defined in `functions/src/config/messages.ts` (no hardcoded response/error strings).
+- Text files must be UTF-8 (no mojibake). Run `npm run check:mojibake` before commit.
 
 ## Knowledge Base (Sources of Truth)
 - `CONCEPT.md` for product intent and constraints.

@@ -1,4 +1,8 @@
 {
+  "scripts": {
+    "check:mojibake": "node scripts/check-mojibake.js",
+    "setup:hooks": "git config core.hooksPath .githooks"
+  },
   "dependencies": {
     "openai": "^6.15.0"
   }
