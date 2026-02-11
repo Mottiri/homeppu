@@ -3,6 +3,11 @@ const fs = require("fs");
 const path = require("path");
 const admin = require("firebase-admin");
 
+function stripBom(text) {
+  if (!text) return text;
+  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+}
+
 const RARITIES = new Set(["common", "rare", "epic"]);
 const FILE_PATTERN = /^(.*)_(common|rare|epic)$/;
 
@@ -182,6 +187,7 @@ async function updateFirestore(records, args) {
       layoutAssetPath: record.layoutAssetPath,
       version: Number.isFinite(Number(existing?.version)) ? Number(existing.version) : 1,
       isActive: true,
+      validSlotIds: record.validSlotIds,
     };
   });
 
@@ -279,11 +285,27 @@ async function main() {
       throw new Error(`Missing layout JSON: ${layoutFile}`);
     }
 
+    // Extract validSlotIds from layout JSON
+    let validSlotIds = [];
+    try {
+      const rawLayout = fs.readFileSync(layoutFile, "utf-8");
+      const layoutJson = JSON.parse(stripBom(rawLayout));
+      validSlotIds = (layoutJson.slots || [])
+        .map((s) => s.slotId)
+        .filter(Boolean);
+    } catch (e) {
+      throw new Error(`Failed to parse layout JSON ${layoutFile}: ${e.message}`);
+    }
+    if (validSlotIds.length === 0) {
+      throw new Error(`No valid slotIds found in ${layoutFile}. Each slot must have a slotId.`);
+    }
+
     records.push({
       id: parsed.id,
       rarity: parsed.rarity,
       assetPath: `assets/stamp_sheets/${file.replace(/\\/g, "/")}`,
       layoutAssetPath: `assets/stamp_sheets/layouts/${parsed.id}.json`,
+      validSlotIds,
     });
   }
 
@@ -316,3 +338,6 @@ main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
+
+
+

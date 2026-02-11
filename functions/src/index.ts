@@ -23,7 +23,8 @@ export {
     removeUserReaction,
     likeCommentAsPostOwner,
     setActiveStampSheet,
-    applyStampToSheetSlot,
+    archiveAndStartNextStampSheet,
+    syncStampSheetSnapshot,
 } from "./callable/comments";
 export { grantRewardedReactionUnlock } from "./callable/rewarded_reactions";
 export { createPostWithRateLimit, createPostWithModeration } from "./callable/posts";

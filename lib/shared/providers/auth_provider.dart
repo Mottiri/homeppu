@@ -33,15 +33,53 @@ final currentUserProvider = StreamProvider<UserModel?>((ref) {
   return authState.when(
     data: (user) {
       if (user == null) return Stream.value(null);
-      return firestore.collection('users').doc(user.uid).snapshots().map((doc) {
-        if (!doc.exists) return null;
-        return UserModel.fromFirestore(doc);
-      });
+      return firestore
+          .collection('users')
+          .doc(user.uid)
+          .snapshots()
+          .asyncMap((doc) async {
+            if (doc.exists) {
+              return UserModel.fromFirestore(doc);
+            }
+            // Self-heal: auth user exists but users/{uid} is missing.
+            await _bootstrapMissingUserDoc(firestore, user);
+            final reloaded = await firestore
+                .collection('users')
+                .doc(user.uid)
+                .get();
+            if (!reloaded.exists) return null;
+            return UserModel.fromFirestore(reloaded);
+          });
     },
     loading: () => Stream.value(null),
     error: (e, _) => Stream.value(null),
   );
 });
+
+Future<void> _bootstrapMissingUserDoc(
+  FirebaseFirestore firestore,
+  User user,
+) async {
+  final displayName = (user.displayName != null && user.displayName!.trim().isNotEmpty)
+      ? user.displayName!.trim()
+      : 'ゲスト';
+  final now = DateTime.now();
+  final model = UserModel(
+    uid: user.uid,
+    email: user.email ?? '',
+    displayName: displayName,
+    virtue: AppConstants.virtueInitial,
+    createdAt: now,
+    updatedAt: now,
+  );
+  try {
+    await firestore.collection('users').doc(user.uid).set(model.toFirestore());
+    debugPrint('AuthProvider: bootstrapped missing users/${user.uid}');
+  } catch (e, st) {
+    debugPrint('AuthProvider: failed to bootstrap users/${user.uid}: $e');
+    debugPrint('$st');
+  }
+}
 
 /// 現在のユーザーが管理者かどうか
 final isAdminProvider = StreamProvider<bool>((ref) {
@@ -83,10 +121,11 @@ class AuthService {
     String? namePrefix,
     String? nameSuffix,
   }) async {
+    UserCredential? credential;
     try {
       debugPrint('AuthService: Starting signUp for email: $email');
 
-      final credential = await _auth.createUserWithEmailAndPassword(
+      credential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
@@ -112,10 +151,26 @@ class AuthService {
         debugPrint('AuthService: UserModel created, saving to Firestore...');
         debugPrint('AuthService: UserModel data: ${user.toFirestore()}');
 
-        await _firestore
-            .collection('users')
-            .doc(credential.user!.uid)
-            .set(user.toFirestore());
+        try {
+          await _firestore
+              .collection('users')
+              .doc(credential.user!.uid)
+              .set(user.toFirestore());
+        } catch (e, st) {
+          debugPrint('AuthService: Firestore user doc creation failed: $e');
+          debugPrint('AuthService: Firestore user doc stack trace: $st');
+          // Rollback auth user to prevent orphan account without users/{uid}.
+          try {
+            await credential.user!.delete();
+            debugPrint(
+              'AuthService: Rolled back auth user ${credential.user!.uid}',
+            );
+          } catch (rollbackError, rollbackSt) {
+            debugPrint('AuthService: Failed to rollback auth user: $rollbackError');
+            debugPrint('$rollbackSt');
+          }
+          rethrow;
+        }
 
         debugPrint('AuthService: User saved to Firestore successfully');
 

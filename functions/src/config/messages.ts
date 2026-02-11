@@ -263,6 +263,10 @@ export const COMMENT_THANKS_MESSAGES = {
 // Stamp Sheet
 // ===============================================
 export const STAMP_SHEET_MESSAGES = {
+    OP_ID_REQUIRED: "opId is required",
+    BASE_VERSION_REQUIRED: "baseVersion is required",
+    ENTRIES_REQUIRED: "entries is required",
+    CREDITS_INVALID: "credits is invalid",
     SHEET_ID_REQUIRED: "sheetId is required",
     SLOT_ID_REQUIRED: "slotId is required",
     STAMP_ID_REQUIRED: "stampId is required",
@@ -271,4 +275,13 @@ export const STAMP_SHEET_MESSAGES = {
     CREDIT_NOT_ENOUGH: "not enough thanks stamp credits",
     SHEET_NOT_FOUND: "stamp sheet not found",
     SHEET_LOCKED: "stamp sheet is locked",
+    PAGE_INDEX_OUT_OF_RANGE: "pageIndex out of range",
+    INVALID_SLOT_ID: "invalid slotId for this sheet",
+    SNAPSHOT_CONFLICT: "snapshot version conflict",
+    SLOT_IDS_NOT_CONFIGURED: "validSlotIds not configured for this sheet",
+    SHEET_FULL: "sheet is full",
+    NO_STAMP_TO_UNDO: "no stamp to undo",
+    CURRENT_SHEET_ID_REQUIRED: "currentSheetId is required",
+    NEXT_SHEET_ID_REQUIRED: "nextSheetId is required",
+    CURRENT_SHEET_NOT_FULL: "current sheet is not full",
 } as const;

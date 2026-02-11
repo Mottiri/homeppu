@@ -739,20 +739,40 @@ class _StampMessages {
   String get sheetLocked => 'このシートは未解放です';
   String get stampLocked => 'このスタンプは未解放です';
   String get creditNotEnough => 'お礼スタンプが足りません';
-  
+
   String get sheetFull => 'このシートはすべて埋まっています';
-  
+
   String get applied => 'スタンプを押しました';
-  
+
   String get replaced => 'スタンプを上書きしました';
-  
+
   String get thanksAction => 'いいね！する';
-  
+
   String get thanksSent => 'いいね！しました';
   String get thanksReceived => 'いいね！されたよ';
-  String get thanksGiven => 'お礼スタンプを1つ獲得しました';
+  String get thanksGiven => 'お礼スタンプを20個獲得しました';
   String get thanksAlreadyGiven => 'このコメントには既に付与済みです';
   String get postOwnerOnly => '投稿主のみ実行できます';
+  String get designSelect => 'デザイン閲覧';
+  String get designCatalogTitle => 'シート一覧';
+  String get chooseNextSheetTitle => '次のシートを選択';
+  String get chooseFirstSheetTitle => '最初のシートを選択';
+  String get sheetCompleted => 'シート完成！';
+  String get chooseNextSheetBody => '次のページに使うシートを選んでください';
+  String sheetRarityLabel(String rarity) => 'レア度: $rarity';
+  String get owned => '所持済み';
+  String get helpTitle => 'スタンプシートの使い方';
+  String get helpBody =>
+      'シートを長押しすると空いている枠にスタンプを押せます。\n'
+      'シートは1枚表示で、空き枠に自動でスタンプが入ります。\n'
+      '右上の🎨アイコンからデザインを確認・購入できます。';
+  String pageLabel(int current, int total) => '$current / $total';
+  String get firstSheetPrompt => 'スタンプを押すシートを選んでください';
+  String get undoAction => '取り消し';
+  String get undoDone => '最新のスタンプを取り消しました';
+  String get undoUnavailable => '取り消せるスタンプがありません';
+  String get sheetConfigNotReady =>
+      'スタンプシート設定を同期中です。少し待ってからもう一度お試しください。';
 }
 
 /// 徳ポイント関連メッセージ
@@ -772,3 +792,4 @@ class _VirtueMessages {
   String get historyEmpty => 'まだ履歴がないよ';
   String get historyLoadFailed => '履歴を読み込めませんでした';
 }
+

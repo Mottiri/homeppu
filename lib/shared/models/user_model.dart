@@ -69,6 +69,7 @@ class UserModel {
   final List<String> unlockedStampSheets; // アンロック済みスタンプシートID
   final String? activeStampSheetId; // 現在使用中のスタンプシートID
   final int thanksStampCredits; // お礼スタンプの保有数
+  final int stampSheetVersion; // スタンプシート同期バージョン
   final Map<String, RewardedReactionUnlock> rewardedReactionUnlocks; // 広告で一時解放されたリアクション
   final bool isSubscriber; // サブスク加入状態
   final DateTime? lastNameChangeAt; // 最後に名前を変更した日時
@@ -112,6 +113,7 @@ class UserModel {
     this.unlockedStampSheets = const [],
     this.activeStampSheetId,
     this.thanksStampCredits = 0,
+    this.stampSheetVersion = 0,
     this.rewardedReactionUnlocks = const {},
     this.isSubscriber = false,
     this.lastNameChangeAt,
@@ -172,6 +174,7 @@ class UserModel {
           List<String>.from(data['unlockedStampSheets'] ?? []),
       activeStampSheetId: data['activeStampSheetId'],
       thanksStampCredits: data['thanksStampCredits'] ?? 0,
+      stampSheetVersion: data['stampSheetVersion'] ?? 0,
       rewardedReactionUnlocks: _parseRewardedUnlocks(
         data['rewardedReactionUnlocks'],
       ),
@@ -227,6 +230,7 @@ class UserModel {
       'unlockedStampSheets': unlockedStampSheets,
       'activeStampSheetId': activeStampSheetId,
       'thanksStampCredits': thanksStampCredits,
+      'stampSheetVersion': stampSheetVersion,
       'rewardedReactionUnlocks': rewardedReactionUnlocks.map(
         (key, value) => MapEntry(key, value.toMap()),
       ),
@@ -275,6 +279,7 @@ class UserModel {
     List<String>? unlockedStampSheets,
     String? activeStampSheetId,
     int? thanksStampCredits,
+    int? stampSheetVersion,
     Map<String, RewardedReactionUnlock>? rewardedReactionUnlocks,
     bool? isSubscriber,
     DateTime? lastNameChangeAt,
@@ -321,6 +326,7 @@ class UserModel {
       unlockedStampSheets: unlockedStampSheets ?? this.unlockedStampSheets,
       activeStampSheetId: activeStampSheetId ?? this.activeStampSheetId,
       thanksStampCredits: thanksStampCredits ?? this.thanksStampCredits,
+      stampSheetVersion: stampSheetVersion ?? this.stampSheetVersion,
       rewardedReactionUnlocks:
           rewardedReactionUnlocks ?? this.rewardedReactionUnlocks,
       isSubscriber: isSubscriber ?? this.isSubscriber,

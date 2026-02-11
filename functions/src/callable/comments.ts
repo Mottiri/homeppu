@@ -28,6 +28,7 @@ const EPIC_STAMP_SHEET_REACTIONS = new Set(["rainbow", "hundred", "confetti"]);
 const SETTINGS_COLLECTION = "settings";
 const VIRTUE_SHOP_SETTINGS_DOC = "virtueShop";
 const STAMP_SHEET_CATALOG_DOC = "stampSheetCatalog";
+const THANKS_STAMP_CREDITS_PER_LIKE = 20;
 
 function normalizeRarity(raw: unknown): "common" | "rare" | "epic" {
     if (raw === "rare") return "rare";
@@ -39,6 +40,231 @@ function parseStringArray(value: unknown): string[] {
     if (!Array.isArray(value)) return [];
     return value.filter((item): item is string => typeof item === "string");
 }
+
+type StampSnapshotEntry = {
+    pageIndex: number;
+    sheetId: string;
+    slotId: string;
+    stampId: string;
+};
+
+function toSafeInt(value: unknown, fallback = 0): number {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(0, Math.trunc(n));
+}
+
+function isSheetUnlockedForUser(
+    rarity: "common" | "rare" | "epic",
+    sheetId: string,
+    unlockedStampSheets: string[],
+    isSubscriber: boolean,
+): boolean {
+    if (rarity === "common") return true;
+    if (unlockedStampSheets.includes(`sheet_${sheetId}`)) return true;
+    if (rarity === "epic" && isSubscriber) return true;
+    return false;
+}
+
+function isStampUnlockedForUser(
+    stampId: string,
+    reactionCostsById: Record<string, unknown>,
+    unlockedReactionStamps: string[],
+    isSubscriber: boolean,
+): boolean {
+    const isRareStamp = Object.prototype.hasOwnProperty.call(reactionCostsById, stampId);
+    const isEpicStamp = EPIC_STAMP_SHEET_REACTIONS.has(stampId);
+    if (isEpicStamp) return isSubscriber;
+    if (isRareStamp) return unlockedReactionStamps.includes(`reaction_${stampId}`);
+    return true;
+}
+
+/**
+ * スタンプシート最終状態を一括同期
+ * - クライアントは楽観UIで編集し、最終状態のみ送信
+ * - サーバーで最低限の整合性(スロット妥当性/クレジット範囲)を検証して保存
+ */
+export const syncStampSheetSnapshot = onCall(
+    { region: LOCATION, enforceAppCheck: true },
+    async (request) => {
+        const userId = requireAuth(request, AUTH_ERRORS.USER_MUST_BE_LOGGED_IN);
+        const baseVersionRaw = Number(request.data?.baseVersion);
+        const entriesRaw = request.data?.entries;
+
+        if (!Number.isFinite(baseVersionRaw) || baseVersionRaw < 0) {
+            throw new HttpsError("invalid-argument", STAMP_SHEET_MESSAGES.BASE_VERSION_REQUIRED);
+        }
+        if (!Array.isArray(entriesRaw)) {
+            throw new HttpsError("invalid-argument", STAMP_SHEET_MESSAGES.ENTRIES_REQUIRED);
+        }
+        const baseVersion = Math.trunc(baseVersionRaw);
+
+        const entries: StampSnapshotEntry[] = [];
+        for (const raw of entriesRaw) {
+            if (!raw || typeof raw !== "object") continue;
+            const e = raw as Record<string, unknown>;
+            const pageIndex = Number(e.pageIndex);
+            const sheetId = typeof e.sheetId === "string" ? e.sheetId : "";
+            const slotId = typeof e.slotId === "string" ? e.slotId : "";
+            const stampId = typeof e.stampId === "string" ? e.stampId : "";
+            if (!Number.isFinite(pageIndex) || pageIndex < 0) continue;
+            if (!sheetId || !slotId || !stampId) continue;
+            entries.push({
+                pageIndex: Math.trunc(pageIndex),
+                sheetId,
+                slotId,
+                stampId,
+            });
+        }
+
+        const userRef = db.collection("users").doc(userId);
+        const settingsVirtueShopRef = db.collection(SETTINGS_COLLECTION).doc(VIRTUE_SHOP_SETTINGS_DOC);
+        const settingsCatalogRef = db.collection(SETTINGS_COLLECTION).doc(STAMP_SHEET_CATALOG_DOC);
+        const settingsLayoutRef = db.collection(SETTINGS_COLLECTION).doc("stampSheetLayoutCatalog");
+
+        const syncResult = await db.runTransaction(async (transaction) => {
+            const [userSnap, virtueShopSnap, catalogSnap, layoutSnap, existingSnap] = await Promise.all([
+                transaction.get(userRef),
+                transaction.get(settingsVirtueShopRef),
+                transaction.get(settingsCatalogRef),
+                transaction.get(settingsLayoutRef),
+                transaction.get(userRef.collection("stampSheet")),
+            ]);
+            if (!userSnap.exists) {
+                throw new HttpsError("not-found", STAMP_SHEET_MESSAGES.USER_NOT_FOUND);
+            }
+            if (!layoutSnap.exists) {
+                throw new HttpsError("invalid-argument", STAMP_SHEET_MESSAGES.SLOT_IDS_NOT_CONFIGURED);
+            }
+
+            const userData = userSnap.data() || {};
+            const currentVersion = toSafeInt(userData.stampSheetVersion, 0);
+            if (baseVersion !== currentVersion) {
+                throw new HttpsError(
+                    "failed-precondition",
+                    STAMP_SHEET_MESSAGES.SNAPSHOT_CONFLICT,
+                    { currentVersion },
+                );
+            }
+
+            const unlockedReactionStamps = parseStringArray(userData.unlockedReactionStamps);
+            const unlockedStampSheets = parseStringArray(userData.unlockedStampSheets);
+            const isSubscriber = userData.isSubscriber === true;
+            const reactionCostsByIdRaw = virtueShopSnap.data()?.reactionCostsById;
+            const reactionCostsById = (
+                reactionCostsByIdRaw && typeof reactionCostsByIdRaw === "object"
+                    ? reactionCostsByIdRaw
+                    : {}
+            ) as Record<string, unknown>;
+
+            const sheetRarityById = new Map<string, "common" | "rare" | "epic">();
+            const sheetsRaw = catalogSnap.data()?.sheets;
+            const sheets = Array.isArray(sheetsRaw) ? sheetsRaw : [];
+            for (const raw of sheets) {
+                if (!raw || typeof raw !== "object") continue;
+                const map = raw as Record<string, unknown>;
+                const sheetId = typeof map.id === "string" ? map.id : "";
+                if (!sheetId) continue;
+                if (map.isActive === false) continue;
+                sheetRarityById.set(sheetId, normalizeRarity(map.rarity));
+            }
+            // Default sheet fallback for older settings docs.
+            if (!sheetRarityById.has("default")) {
+                sheetRarityById.set("default", "common");
+            }
+
+            const validSlotIdsBySheet = new Map<string, Set<string>>();
+            const layoutsRaw = layoutSnap.data()?.layouts;
+            const layouts = Array.isArray(layoutsRaw) ? layoutsRaw : [];
+            for (const raw of layouts) {
+                if (!raw || typeof raw !== "object") continue;
+                const map = raw as Record<string, unknown>;
+                const sheetId = typeof map.sheetId === "string" ? map.sheetId : "";
+                if (!sheetId) continue;
+                validSlotIdsBySheet.set(sheetId, new Set(parseStringArray(map.validSlotIds)));
+            }
+
+            const dedupe = new Set<string>();
+            for (const e of entries) {
+                const sheetRarity = sheetRarityById.get(e.sheetId);
+                if (!sheetRarity) {
+                    throw new HttpsError("not-found", STAMP_SHEET_MESSAGES.SHEET_NOT_FOUND);
+                }
+                if (!isSheetUnlockedForUser(
+                    sheetRarity,
+                    e.sheetId,
+                    unlockedStampSheets,
+                    isSubscriber,
+                )) {
+                    throw new HttpsError("permission-denied", STAMP_SHEET_MESSAGES.SHEET_LOCKED);
+                }
+                const validSlots = validSlotIdsBySheet.get(e.sheetId);
+                if (!validSlots || validSlots.size === 0 || !validSlots.has(e.slotId)) {
+                    throw new HttpsError("invalid-argument", STAMP_SHEET_MESSAGES.INVALID_SLOT_ID);
+                }
+                if (!isStampUnlockedForUser(
+                    e.stampId,
+                    reactionCostsById,
+                    unlockedReactionStamps,
+                    isSubscriber,
+                )) {
+                    throw new HttpsError("permission-denied", STAMP_SHEET_MESSAGES.STAMP_LOCKED);
+                }
+                const key = `${e.pageIndex}_${e.slotId}`;
+                if (dedupe.has(key)) {
+                    throw new HttpsError("invalid-argument", STAMP_SHEET_MESSAGES.INVALID_SLOT_ID);
+                }
+                dedupe.add(key);
+            }
+
+            const currentCredits = toSafeInt(userData.thanksStampCredits, 0);
+            const currentCount = existingSnap.size;
+            const nextCount = entries.length;
+            const delta = nextCount - currentCount;
+            const nextCredits = currentCredits - delta;
+            if (nextCredits < 0) {
+                throw new HttpsError("failed-precondition", STAMP_SHEET_MESSAGES.CREDIT_NOT_ENOUGH);
+            }
+
+            for (const doc of existingSnap.docs) {
+                transaction.delete(doc.ref);
+            }
+
+            const now = FieldValue.serverTimestamp();
+            for (const e of entries) {
+                const ref = userRef.collection("stampSheet").doc(`p${e.pageIndex}_${e.slotId}`);
+                transaction.set(ref, {
+                    sheetId: e.sheetId,
+                    slotId: e.slotId,
+                    stampId: e.stampId,
+                    pageIndex: e.pageIndex,
+                    appliedAt: now,
+                    updatedAt: now,
+                    createdAt: now,
+                }, { merge: false });
+            }
+
+            transaction.update(userRef, {
+                thanksStampCredits: Math.trunc(nextCredits),
+                stampSheetVersion: currentVersion + 1,
+                updatedAt: now,
+            });
+
+            return {
+                credits: Math.trunc(nextCredits),
+                version: currentVersion + 1,
+                entries: nextCount,
+            };
+        });
+
+        return {
+            success: true,
+            entries: syncResult.entries,
+            credits: syncResult.credits,
+            version: syncResult.version,
+        };
+    },
+);
 
 /**
  * テキストのモデレーション判定 (Gemini)
@@ -361,7 +587,7 @@ export const likeCommentAsPostOwner = onCall(
                 };
             }
 
-            const nextCredits = currentCredits + 1;
+            const nextCredits = currentCredits + THANKS_STAMP_CREDITS_PER_LIKE;
             const now = FieldValue.serverTimestamp();
 
             transaction.update(commentRef, {
@@ -450,129 +676,151 @@ export const setActiveStampSheet = onCall(
 );
 
 /**
- * スタンプシート枠にスタンプを適用
- * - 空枠に初回押印する場合のみ credits を1消費
- * - 既存押印の上書きは消費なし
+ * 現在シートをアーカイブし、次シートを開始
+ * - 現在シートが満杯のときのみ実行可能
+ * - スタンプシート本体(users/{uid}/stampSheet)はリセット
  */
-export const applyStampToSheetSlot = onCall(
+export const archiveAndStartNextStampSheet = onCall(
     { region: LOCATION, enforceAppCheck: true },
     async (request) => {
         const userId = requireAuth(request, AUTH_ERRORS.USER_MUST_BE_LOGGED_IN);
-        const sheetId = request.data?.sheetId as string | undefined;
-        const slotId = request.data?.slotId as string | undefined;
-        const stampId = request.data?.stampId as string | undefined;
+        const currentSheetId = request.data?.currentSheetId as string | undefined;
+        const nextSheetId = request.data?.nextSheetId as string | undefined;
 
-        if (!sheetId || typeof sheetId !== "string") {
-            throw new HttpsError("invalid-argument", STAMP_SHEET_MESSAGES.SHEET_ID_REQUIRED);
+        if (!currentSheetId || typeof currentSheetId !== "string") {
+            throw new HttpsError("invalid-argument", STAMP_SHEET_MESSAGES.CURRENT_SHEET_ID_REQUIRED);
         }
-        if (!slotId || typeof slotId !== "string") {
-            throw new HttpsError("invalid-argument", STAMP_SHEET_MESSAGES.SLOT_ID_REQUIRED);
-        }
-        if (!stampId || typeof stampId !== "string") {
-            throw new HttpsError("invalid-argument", STAMP_SHEET_MESSAGES.STAMP_ID_REQUIRED);
+        if (!nextSheetId || typeof nextSheetId !== "string") {
+            throw new HttpsError("invalid-argument", STAMP_SHEET_MESSAGES.NEXT_SHEET_ID_REQUIRED);
         }
 
         const userRef = db.collection("users").doc(userId);
-        const placementRef = userRef.collection("stampSheet").doc(`${sheetId}_${slotId}`);
-        const settingsVirtueShopRef = db.collection(SETTINGS_COLLECTION).doc(VIRTUE_SHOP_SETTINGS_DOC);
         const settingsCatalogRef = db.collection(SETTINGS_COLLECTION).doc(STAMP_SHEET_CATALOG_DOC);
+        const settingsLayoutRef = db.collection(SETTINGS_COLLECTION).doc("stampSheetLayoutCatalog");
 
         const result = await db.runTransaction(async (transaction) => {
-            const [userSnap, placementSnap, virtueShopSnap, catalogSnap] = await Promise.all([
+            const [userSnap, catalogSnap, layoutSnap, placementsSnap] = await Promise.all([
                 transaction.get(userRef),
-                transaction.get(placementRef),
-                transaction.get(settingsVirtueShopRef),
                 transaction.get(settingsCatalogRef),
+                transaction.get(settingsLayoutRef),
+                transaction.get(userRef.collection("stampSheet")),
             ]);
 
             if (!userSnap.exists) {
                 throw new HttpsError("not-found", STAMP_SHEET_MESSAGES.USER_NOT_FOUND);
             }
+            if (!layoutSnap.exists) {
+                throw new HttpsError("invalid-argument", STAMP_SHEET_MESSAGES.SLOT_IDS_NOT_CONFIGURED);
+            }
 
             const userData = userSnap.data() || {};
-            const unlockedReactionStamps = parseStringArray(userData.unlockedReactionStamps);
-            const unlockedStampSheets = parseStringArray(userData.unlockedStampSheets);
+            const unlockedSheets = parseStringArray(userData.unlockedStampSheets);
             const isSubscriber = userData.isSubscriber === true;
 
-            let sheetRarity: "common" | "rare" | "epic" = "common";
+            let currentRarity: "common" | "rare" | "epic" = "common";
+            let nextRarity: "common" | "rare" | "epic" = "common";
             if (catalogSnap.exists) {
                 const sheetsRaw = catalogSnap.data()?.sheets;
                 const sheets = Array.isArray(sheetsRaw) ? sheetsRaw : [];
-                const sheet = sheets.find((item) => item?.id === sheetId && item?.isActive !== false);
-                if (!sheet) {
+                const current = sheets.find((item) => item?.id === currentSheetId && item?.isActive !== false);
+                const next = sheets.find((item) => item?.id === nextSheetId && item?.isActive !== false);
+                if (!current) throw new HttpsError("not-found", STAMP_SHEET_MESSAGES.SHEET_NOT_FOUND);
+                if (!next) throw new HttpsError("not-found", STAMP_SHEET_MESSAGES.SHEET_NOT_FOUND);
+                currentRarity = normalizeRarity(current?.rarity);
+                nextRarity = normalizeRarity(next?.rarity);
+            } else {
+                if (currentSheetId !== "default" || nextSheetId !== "default") {
                     throw new HttpsError("not-found", STAMP_SHEET_MESSAGES.SHEET_NOT_FOUND);
                 }
-                sheetRarity = normalizeRarity(sheet?.rarity);
-            } else if (sheetId !== "default") {
-                throw new HttpsError("not-found", STAMP_SHEET_MESSAGES.SHEET_NOT_FOUND);
             }
 
-            const sheetUnlocked = sheetRarity === "common" ||
-                unlockedStampSheets.includes(`sheet_${sheetId}`) ||
-                (sheetRarity === "epic" && isSubscriber);
-            if (!sheetUnlocked) {
+            const currentUnlocked = isSheetUnlockedForUser(
+                currentRarity,
+                currentSheetId,
+                unlockedSheets,
+                isSubscriber,
+            );
+            const nextUnlocked = isSheetUnlockedForUser(
+                nextRarity,
+                nextSheetId,
+                unlockedSheets,
+                isSubscriber,
+            );
+            if (!currentUnlocked || !nextUnlocked) {
                 throw new HttpsError("permission-denied", STAMP_SHEET_MESSAGES.SHEET_LOCKED);
             }
 
-            const reactionCostsByIdRaw = virtueShopSnap.data()?.reactionCostsById;
-            const reactionCostsById = (
-                reactionCostsByIdRaw && typeof reactionCostsByIdRaw === "object"
-                    ? reactionCostsByIdRaw
-                    : {}
-            ) as Record<string, unknown>;
-            const isRareStamp = Object.prototype.hasOwnProperty.call(reactionCostsById, stampId);
-            const isEpicStamp = EPIC_STAMP_SHEET_REACTIONS.has(stampId);
-            const isStampUnlocked = isEpicStamp
-                ? isSubscriber
-                : (isRareStamp ? unlockedReactionStamps.includes(`reaction_${stampId}`) : true);
-            if (!isStampUnlocked) {
-                throw new HttpsError("permission-denied", STAMP_SHEET_MESSAGES.STAMP_LOCKED);
+            const layoutsRaw = layoutSnap.data()?.layouts;
+            const layouts = Array.isArray(layoutsRaw) ? layoutsRaw : [];
+            const validSlotIdsBySheet = new Map<string, Set<string>>();
+            for (const raw of layouts) {
+                if (!raw || typeof raw !== "object") continue;
+                const map = raw as Record<string, unknown>;
+                const sheetId = typeof map.sheetId === "string" ? map.sheetId : "";
+                if (!sheetId) continue;
+                validSlotIdsBySheet.set(sheetId, new Set(parseStringArray(map.validSlotIds)));
             }
 
-            const existingStampId = placementSnap.data()?.stampId as string | undefined;
-            const shouldConsumeCredit = !(existingStampId && existingStampId.length > 0);
+            const currentValidSlots = validSlotIdsBySheet.get(currentSheetId);
+            if (!currentValidSlots || currentValidSlots.size === 0) {
+                throw new HttpsError("invalid-argument", STAMP_SHEET_MESSAGES.SLOT_IDS_NOT_CONFIGURED);
+            }
 
-            const creditsRaw = Number(userData.thanksStampCredits ?? 0);
-            const currentCredits = Number.isFinite(creditsRaw) ? Math.max(0, Math.trunc(creditsRaw)) : 0;
-            const nextCredits = shouldConsumeCredit ? currentCredits - 1 : currentCredits;
+            const placements = placementsSnap.docs
+                .map((doc) => {
+                    const data = doc.data() || {};
+                    return {
+                        ref: doc.ref,
+                        sheetId: typeof data.sheetId === "string" ? data.sheetId : "",
+                        slotId: typeof data.slotId === "string" ? data.slotId : "",
+                        stampId: typeof data.stampId === "string" ? data.stampId : "",
+                    };
+                })
+                .filter((p) => p.sheetId === currentSheetId && p.slotId && p.stampId);
 
-            if (shouldConsumeCredit && currentCredits <= 0) {
-                throw new HttpsError("failed-precondition", STAMP_SHEET_MESSAGES.CREDIT_NOT_ENOUGH);
+            const uniqueSlots = new Set<string>();
+            for (const p of placements) {
+                if (!currentValidSlots.has(p.slotId)) {
+                    throw new HttpsError("invalid-argument", STAMP_SHEET_MESSAGES.INVALID_SLOT_ID);
+                }
+                uniqueSlots.add(p.slotId);
+            }
+            if (uniqueSlots.size < currentValidSlots.size) {
+                throw new HttpsError("failed-precondition", STAMP_SHEET_MESSAGES.CURRENT_SHEET_NOT_FULL);
             }
 
             const now = FieldValue.serverTimestamp();
-            transaction.set(
-                placementRef,
-                {
-                    sheetId,
-                    slotId,
-                    stampId,
-                    updatedAt: now,
-                    createdAt: placementSnap.exists ? placementSnap.data()?.createdAt ?? now : now,
-                },
-                { merge: true }
-            );
+            const archiveRef = userRef.collection("stampSheetArchives").doc();
+            transaction.set(archiveRef, {
+                sheetId: currentSheetId,
+                placements: placements.map((p) => ({
+                    slotId: p.slotId,
+                    stampId: p.stampId,
+                })),
+                completedAt: now,
+                createdAt: now,
+                updatedAt: now,
+            }, { merge: false });
 
-            if (shouldConsumeCredit) {
-                transaction.update(userRef, {
-                    thanksStampCredits: nextCredits,
-                    updatedAt: now,
-                });
+            for (const doc of placementsSnap.docs) {
+                transaction.delete(doc.ref);
             }
 
+            transaction.update(userRef, {
+                activeStampSheetId: nextSheetId,
+                updatedAt: now,
+            });
+
             return {
-                consumed: shouldConsumeCredit,
-                remainingCredits: nextCredits,
+                archiveId: archiveRef.id,
+                nextSheetId,
             };
         });
 
         return {
             success: true,
-            consumed: result.consumed,
-            remainingCredits: result.remainingCredits,
-            sheetId,
-            slotId,
-            stampId,
+            archiveId: result.archiveId,
+            nextSheetId: result.nextSheetId,
         };
-    }
+    },
 );

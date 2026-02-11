@@ -1,5 +1,4 @@
 import 'dart:convert';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/services.dart';
@@ -90,33 +89,134 @@ class StampSheetPlacement {
   final String sheetId;
   final String slotId;
   final String stampId;
+  final int pageIndex;
+  final bool isNewFormat;
 
   const StampSheetPlacement({
     required this.docId,
     required this.sheetId,
     required this.slotId,
     required this.stampId,
+    required this.pageIndex,
+    this.isNewFormat = false,
   });
 
-  factory StampSheetPlacement.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+  /// doc ID の新旧フォーマットを判別してパース
+  /// 新: {sheetId}_p{N}_{slotId}  →  pageIndex = N, isNewFormat = true
+  /// 旧: {sheetId}_{slotId}       →  pageIndex = 0, isNewFormat = false
+  static final _newFormatRegex = RegExp(r'_p(\d+)_');
+
+  factory StampSheetPlacement.fromDoc(
+    DocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
     final data = doc.data() ?? const {};
+    final docId = doc.id;
+    final match = _newFormatRegex.firstMatch(docId);
+    final int pageIdx;
+    final bool newFmt;
+    if (match != null) {
+      pageIdx = int.tryParse(match.group(1) ?? '0') ?? 0;
+      newFmt = true;
+    } else {
+      pageIdx = (data['pageIndex'] as num?)?.toInt() ?? 0;
+      newFmt = false;
+    }
     return StampSheetPlacement(
-      docId: doc.id,
+      docId: docId,
       sheetId: (data['sheetId'] ?? '').toString(),
       slotId: (data['slotId'] ?? '').toString(),
       stampId: (data['stampId'] ?? '').toString(),
+      pageIndex: pageIdx,
+      isNewFormat: newFmt,
     );
   }
 }
 
-class StampApplyResult {
-  final bool consumed;
-  final int remainingCredits;
+class StampSnapshotEntry {
+  final int pageIndex;
+  final String sheetId;
+  final String slotId;
+  final String stampId;
 
-  const StampApplyResult({
-    required this.consumed,
-    required this.remainingCredits,
+  const StampSnapshotEntry({
+    required this.pageIndex,
+    required this.sheetId,
+    required this.slotId,
+    required this.stampId,
   });
+
+  Map<String, dynamic> toMap() => {
+    'pageIndex': pageIndex,
+    'sheetId': sheetId,
+    'slotId': slotId,
+    'stampId': stampId,
+  };
+}
+
+class StampSnapshotSyncResult {
+  final int credits;
+  final int version;
+  final int entries;
+
+  const StampSnapshotSyncResult({
+    required this.credits,
+    required this.version,
+    required this.entries,
+  });
+
+  factory StampSnapshotSyncResult.fromMap(Map<String, dynamic> map) {
+    int asInt(dynamic value, int fallback) {
+      if (value is num) return value.toInt();
+      return fallback;
+    }
+
+    return StampSnapshotSyncResult(
+      credits: asInt(map['credits'], 0),
+      version: asInt(map['version'], 0),
+      entries: asInt(map['entries'], 0),
+    );
+  }
+}
+
+class StampSheetArchive {
+  final String id;
+  final String sheetId;
+  final DateTime? completedAt;
+  final Map<String, String> bySlot;
+
+  const StampSheetArchive({
+    required this.id,
+    required this.sheetId,
+    required this.completedAt,
+    required this.bySlot,
+  });
+
+  factory StampSheetArchive.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data() ?? const {};
+    final placementsRaw = data['placements'];
+    final bySlot = <String, String>{};
+    if (placementsRaw is List) {
+      for (final raw in placementsRaw) {
+        if (raw is! Map) continue;
+        final map = Map<String, dynamic>.from(raw);
+        final slotId = (map['slotId'] ?? '').toString();
+        final stampId = (map['stampId'] ?? '').toString();
+        if (slotId.isEmpty || stampId.isEmpty) continue;
+        bySlot[slotId] = stampId;
+      }
+    }
+    final completedAtRaw = data['completedAt'];
+    DateTime? completedAt;
+    if (completedAtRaw is Timestamp) {
+      completedAt = completedAtRaw.toDate();
+    }
+    return StampSheetArchive(
+      id: doc.id,
+      sheetId: (data['sheetId'] ?? '').toString(),
+      completedAt: completedAt,
+      bySlot: bySlot,
+    );
+  }
 }
 
 class StampSheetService {
@@ -134,11 +234,14 @@ class StampSheetService {
     FirebaseFunctions? functions,
   }) : _firestore = firestore ?? FirebaseFirestore.instance,
        _functions =
-           functions ?? FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+           functions ??
+           FirebaseFunctions.instanceFor(region: 'asia-northeast1');
 
   Future<List<StampSheetDefinition>> fetchCatalog() async {
-    final catalogDoc =
-        await _firestore.collection('settings').doc('stampSheetCatalog').get();
+    final catalogDoc = await _firestore
+        .collection('settings')
+        .doc('stampSheetCatalog')
+        .get();
     final layoutDoc = await _firestore
         .collection('settings')
         .doc('stampSheetLayoutCatalog')
@@ -242,21 +345,39 @@ class StampSheetService {
     ).copyWithSheetId(sheetId);
   }
 
-  Stream<List<StampSheetPlacement>> watchPlacements(
+  /// 全ページの配置データを取得し、ページごとにグループ化して返す。
+  /// 旧/新format が混在する場合、同一 pageIndex+slotId で新形式を優先。
+  Stream<Map<int, List<StampSheetPlacement>>> watchAllPlacementsByPage(
     String userId,
-    String sheetId,
   ) {
     return _firestore
         .collection('users')
         .doc(userId)
         .collection('stampSheet')
         .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
+        .map((snapshot) {
+          final all = snapshot.docs
               .map(StampSheetPlacement.fromDoc)
-              .where((placement) => placement.sheetId == sheetId)
-              .toList(),
-        );
+              .where((p) => p.sheetId.isNotEmpty && p.slotId.isNotEmpty)
+              .toList();
+
+          // 新形式を優先: 同一(pageIndex, slotId)で旧・新が共存 → 新のみ採用
+          final newFormatKeys = <String>{};
+          for (final p in all) {
+            if (p.isNewFormat) {
+              newFormatKeys.add('${p.pageIndex}_${p.slotId}');
+            }
+          }
+
+          final byPage = <int, List<StampSheetPlacement>>{};
+          for (final p in all) {
+            final key = '${p.pageIndex}_${p.slotId}';
+            if (!p.isNewFormat && newFormatKeys.contains(key)) continue;
+            byPage.putIfAbsent(p.pageIndex, () => <StampSheetPlacement>[]);
+            byPage[p.pageIndex]!.add(p);
+          }
+          return byPage;
+        });
   }
 
   Future<void> setActiveSheet(String sheetId) async {
@@ -264,22 +385,38 @@ class StampSheetService {
     await callable.call({'sheetId': sheetId});
   }
 
-  Future<StampApplyResult> applyStampToSlot({
-    required String sheetId,
-    required String slotId,
-    required String stampId,
+  Future<StampSnapshotSyncResult> syncSnapshot({
+    required int baseVersion,
+    required List<StampSnapshotEntry> entries,
   }) async {
-    final callable = _functions.httpsCallable('applyStampToSheetSlot');
+    final callable = _functions.httpsCallable('syncStampSheetSnapshot');
     final result = await callable.call({
-      'sheetId': sheetId,
-      'slotId': slotId,
-      'stampId': stampId,
+      'baseVersion': baseVersion,
+      'entries': entries.map((e) => e.toMap()).toList(),
     });
     final data = Map<String, dynamic>.from(result.data as Map);
-    return StampApplyResult(
-      consumed: data['consumed'] == true,
-      remainingCredits: (data['remainingCredits'] as num?)?.toInt() ?? 0,
-    );
+    return StampSnapshotSyncResult.fromMap(data);
+  }
+
+  Future<void> archiveAndStartNextSheet({
+    required String currentSheetId,
+    required String nextSheetId,
+  }) async {
+    final callable = _functions.httpsCallable('archiveAndStartNextStampSheet');
+    await callable.call({
+      'currentSheetId': currentSheetId,
+      'nextSheetId': nextSheetId,
+    });
+  }
+
+  Stream<List<StampSheetArchive>> watchArchives(String userId) {
+    return _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('stampSheetArchives')
+        .orderBy('completedAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map(StampSheetArchive.fromDoc).toList());
   }
 }
 
