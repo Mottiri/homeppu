@@ -1,13 +1,12 @@
-/**
- * 通知送信ヘルパー
- * Phase 6: index.ts から分離
+﻿/**
+ * Notification helper utilities.
  */
 
 import * as admin from "firebase-admin";
 import { db, FieldValue } from "./firebase";
 
 /**
- * 指定ユーザーにプッシュ通知のみを送信（Firestore保存なし）
+ * Sends push notification only (does not write Firestore notification docs).
  */
 export async function sendPushOnly(
     userId: string,
@@ -25,18 +24,13 @@ export async function sendPushOnly(
             return;
         }
 
-        // チャンネルIDの決定
-        let channelId = "default_channel";
-        if (data?.type === "task_reminder" || data?.type === "task_due" || data?.type === "goal_reminder") {
-            channelId = "task_reminders";
-        }
+        const channelId = "default_channel";
 
-        // FCM dataペイロードは全て文字列である必要があるため変換
+        // FCM data payload accepts only string values.
         const stringifiedData: { [key: string]: string } = {};
         if (data) {
             for (const [key, value] of Object.entries(data)) {
                 if (value !== undefined && value !== null) {
-                    // Timestamp オブジェクトの場合は toDate().toISOString() を使用
                     if (typeof value === "object" && "toDate" in value && typeof value.toDate === "function") {
                         stringifiedData[key] = value.toDate().toISOString();
                     } else {
@@ -72,7 +66,6 @@ export async function sendPushOnly(
         await admin.messaging().send(message);
         console.log(`Push notification sent to user ${userId}: ${title} (channel: ${channelId})`);
     } catch (error: unknown) {
-        // トークンが無効な場合はトークンを削除
         if (error && typeof error === "object" && "code" in error) {
             const firebaseError = error as { code: string };
             if (
@@ -90,11 +83,8 @@ export async function sendPushOnly(
 }
 
 /**
- * 通知をFirestoreに保存（FCM送信はonNotificationCreatedトリガーが担当）
- * 
- * 設計変更: 2026-01-14
- * - FCM送信を削除（二重通知の原因だったため）
- * - Firestore保存のみ → onNotificationCreated が自動でFCM送信
+ * Writes in-app notification to Firestore.
+ * Push delivery is handled by the onNotificationCreated trigger.
  */
 export async function sendPushNotification(
     userId: string,
@@ -109,8 +99,6 @@ export async function sendPushNotification(
     }
 ): Promise<void> {
     try {
-        // Firestoreに通知ドキュメントを保存
-        // FCM送信は onNotificationCreated トリガーが自動的に行う
         if (options) {
             await db.collection("users").doc(userId).collection("notifications").add({
                 userId: userId,
@@ -126,11 +114,9 @@ export async function sendPushNotification(
             });
             console.log(`Notification saved to Firestore for user: ${userId} (FCM will be sent by onNotificationCreated)`);
         } else {
-            // optionsがない場合は警告ログを出力（通知が作成されないため）
             console.warn(`sendPushNotification called without options - notification will NOT be created for user: ${userId}`);
         }
     } catch (error) {
         console.error(`Failed to save notification for ${userId}: `, error);
     }
 }
-

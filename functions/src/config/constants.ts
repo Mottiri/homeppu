@@ -11,8 +11,6 @@ export const CLOUD_TASK_FUNCTIONS = {
   generateAICommentV1: "generateAICommentV1",
   generateAIReactionV1: "generateAIReactionV1",
   executeAIPostGeneration: "executeAIPostGeneration",
-  executeTaskReminder: "executeTaskReminder",
-  executeGoalReminder: "executeGoalReminder",
   cleanupDeletedCircle: "cleanupDeletedCircle",
   executeCircleAIPost: "executeCircleAIPost",
 } as const;

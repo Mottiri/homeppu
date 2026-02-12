@@ -4,7 +4,6 @@ enum NotificationType {
   comment,
   reaction,
   system,
-  // サークル関連
   joinRequestReceived,
   joinRequestApproved,
   joinRequestRejected,
@@ -12,38 +11,30 @@ enum NotificationType {
   circleSettingsChanged,
   circleGhostWarning,
   circleGhostDeleted,
-  // タスク関連
-  taskReminder,
-  taskScheduled,
-  goalReminder,
-  // サポート（問い合わせ）関連
-  inquiryReply, // 運営から返信があった
-  inquiryStatusChanged, // ステータスが変更された
-  inquiryReceived, // 新規問い合わせ受信（管理者向け）
-  inquiryUserReply, // ユーザーから返信があった（管理者向け）
-  inquiryDeletionWarning, // 削除予告通知
-  // 管理者向け
-  adminReport, // 新規通報（管理者向け）
-  reviewNeeded, // モデレーションの要対応（管理者向け）
-  postDeleted, // 投稿削除通知（ユーザー向け）
-  postHidden, // 投稿非表示通知（ユーザー向け）
-  userBanned, // BAN通知（ユーザー向け）
-  userUnbanned, // BAN解除通知（ユーザー向け）
+  inquiryReply,
+  inquiryStatusChanged,
+  inquiryReceived,
+  inquiryUserReply,
+  inquiryDeletionWarning,
+  adminReport,
+  reviewNeeded,
+  postDeleted,
+  postHidden,
+  userBanned,
+  userUnbanned,
 }
 
-/// 通知のカテゴリ（タブ分類用）
 enum NotificationCategory {
-  support, // サポート通知
-  timeline, // TL通知（コメント、リアクション）
-  circle, // サークル通知
-  task, // タスク通知
+  support,
+  timeline,
+  circle,
 }
 
-/// NotificationTypeからカテゴリを取得
 NotificationCategory getCategoryFromType(NotificationType type) {
   switch (type) {
     case NotificationType.comment:
     case NotificationType.reaction:
+    case NotificationType.system:
       return NotificationCategory.timeline;
     case NotificationType.joinRequestReceived:
     case NotificationType.joinRequestApproved:
@@ -53,10 +44,6 @@ NotificationCategory getCategoryFromType(NotificationType type) {
     case NotificationType.circleGhostWarning:
     case NotificationType.circleGhostDeleted:
       return NotificationCategory.circle;
-    case NotificationType.taskReminder:
-    case NotificationType.taskScheduled:
-    case NotificationType.goalReminder:
-      return NotificationCategory.task;
     case NotificationType.inquiryReply:
     case NotificationType.inquiryStatusChanged:
     case NotificationType.inquiryReceived:
@@ -69,28 +56,23 @@ NotificationCategory getCategoryFromType(NotificationType type) {
     case NotificationType.userBanned:
     case NotificationType.userUnbanned:
       return NotificationCategory.support;
-    case NotificationType.system:
-      return NotificationCategory.timeline; // システム通知はTLに分類
   }
 }
 
 class NotificationModel {
   final String id;
-  final String userId; // 通知を受け取るユーザー
-  final String senderId; // アクションを起こしたユーザー
+  final String userId;
+  final String senderId;
   final String senderName;
-  final String senderAvatarUrl; // アバターアイコン用（インデックスなどの場合は適宜変更）
+  final String senderAvatarUrl;
   final NotificationType type;
   final String title;
   final String body;
-  final String? postId; // 関連する投稿ID
-  final String? circleId; // 関連するサークルID
-  final String? inquiryId; // 関連する問い合わせID（サポート通知用）
-  final String? taskId; // 関連するタスクID
-  final String? goalId; // 関連する目標ID
-  final String? reportId; // 関連する通報ID
-  final String? contentId; // 通報対象コンテンツID
-  final DateTime? scheduledAt; // タスクの予定日時
+  final String? postId;
+  final String? circleId;
+  final String? inquiryId;
+  final String? reportId;
+  final String? contentId;
   final bool isRead;
   final DateTime createdAt;
 
@@ -106,11 +88,8 @@ class NotificationModel {
     this.postId,
     this.circleId,
     this.inquiryId,
-    this.taskId,
-    this.goalId,
     this.reportId,
     this.contentId,
-    this.scheduledAt,
     this.isRead = false,
     required this.createdAt,
   });
@@ -129,15 +108,8 @@ class NotificationModel {
       postId: data['postId'],
       circleId: data['circleId'],
       inquiryId: data['inquiryId'],
-      taskId: data['taskId'],
-      goalId: data['goalId'],
       reportId: data['reportId'],
       contentId: data['contentId'],
-      scheduledAt: data['scheduledAt'] != null
-          ? (data['scheduledAt'] is Timestamp
-                ? (data['scheduledAt'] as Timestamp).toDate()
-                : DateTime.tryParse(data['scheduledAt'].toString()))
-          : null,
       isRead: data['isRead'] ?? false,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
@@ -149,25 +121,20 @@ class NotificationModel {
       'senderId': senderId,
       'senderName': senderName,
       'senderAvatarUrl': senderAvatarUrl,
-      'type': type.name, // Enumの名前をそのまま保存
+      'type': type.name,
       'title': title,
       'body': body,
       'postId': postId,
       'circleId': circleId,
       'inquiryId': inquiryId,
-      'taskId': taskId,
-      'goalId': goalId,
       'reportId': reportId,
       'contentId': contentId,
-      'scheduledAt': scheduledAt == null ? null : Timestamp.fromDate(scheduledAt!),
       'isRead': isRead,
       'createdAt': Timestamp.fromDate(createdAt),
     };
   }
 
   static NotificationType _parseNotificationType(String? typeStr) {
-    if (typeStr == null) return NotificationType.system;
-
     switch (typeStr) {
       case 'comment':
         return NotificationType.comment;
@@ -187,13 +154,6 @@ class NotificationModel {
         return NotificationType.circleGhostWarning;
       case 'circle_ghost_deleted':
         return NotificationType.circleGhostDeleted;
-      case 'task_reminder':
-        return NotificationType.taskReminder;
-      case 'task_scheduled':
-        return NotificationType.taskScheduled;
-      case 'goal_reminder':
-        return NotificationType.goalReminder;
-      // サポート関連
       case 'inquiry_reply':
         return NotificationType.inquiryReply;
       case 'inquiry_status_changed':
@@ -204,7 +164,6 @@ class NotificationModel {
         return NotificationType.inquiryUserReply;
       case 'inquiry_deletion_warning':
         return NotificationType.inquiryDeletionWarning;
-      // 管理者・ユーザー向け
       case 'admin_report':
         return NotificationType.adminReport;
       case 'review_needed':

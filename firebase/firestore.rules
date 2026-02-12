@@ -112,21 +112,6 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Tasks
-    match /tasks/{taskId} {
-      allow read, update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow delete: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid);
-    }
-
-    // Goals
-    match /goals/{goalId} {
-      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || resource.data.isPublic == true);
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow delete: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid);
-    }
-
     // Posts (created via Cloud Functions)
     match /posts/{postId} {
       allow read: if isAuthenticated();

@@ -1,5 +1,10 @@
 ﻿﻿# index.ts 分割リファクタリング計画
 
+> [!WARNING]
+> 2026-02-12時点でタスク/目標機能は本体から廃止済みです。  
+> この文書内の task/goal 関連記述は履歴資料として扱ってください。
+
+
 ## 進捗サマリー
 
 | フェーズ | ステータス | 完了日 |
@@ -1327,5 +1332,6 @@ if (!await verifyCloudTasksRequest(request, CLOUD_TASK_FUNCTIONS.generateAIComme
 - Firebase Functions では、すべてのexportが `index.ts` から見える必要がある
 - 分割後も `index.ts` で再エクスポートすれば既存の呼び出しに影響なし
 - Cloud Functions のデプロイ名は export 名で決まるため、リネーム不要
+
 
 

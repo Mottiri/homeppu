@@ -25,7 +25,6 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
   // カテゴリタブの定義
   static const _tabs = [
     (NotificationCategory.timeline, 'timeline', Icons.chat_bubble_outline),
-    (NotificationCategory.task, 'task', Icons.task_alt),
     (NotificationCategory.circle, 'circle', Icons.group_outlined),
     (NotificationCategory.support, 'support', Icons.support_agent),
   ];
@@ -84,7 +83,6 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
               final labelKey = tab.$2;
               final label = switch (labelKey) {
                 'timeline' => AppMessages.notification.tabTimeline,
-                'task' => AppMessages.notification.tabTask,
                 'circle' => AppMessages.notification.tabCircle,
                 'support' => AppMessages.notification.tabSupport,
                 _ => labelKey,
@@ -280,28 +278,6 @@ class _NotificationTile extends ConsumerWidget {
         }
 
         // 遷移先を決定
-        final taskTypes = [
-          NotificationType.taskReminder,
-          NotificationType.taskScheduled,
-        ];
-        if (taskTypes.contains(notification.type) && context.mounted) {
-          if (notification.taskId != null) {
-            context.go(
-              '/tasks',
-              extra: {
-                'highlightTaskId': notification.taskId,
-                'highlightRequestId': DateTime.now().millisecondsSinceEpoch,
-                if (notification.scheduledAt != null)
-                  'targetDate': notification.scheduledAt,
-                'forceRefresh': true,
-              },
-            );
-          } else {
-            context.go('/tasks');
-          }
-          return;
-        }
-
         if (notification.type == NotificationType.reviewNeeded &&
             context.mounted) {
           context.push('/admin-review');
@@ -312,16 +288,6 @@ class _NotificationTile extends ConsumerWidget {
                 notification.type == NotificationType.circleGhostDeleted) &&
             context.mounted) {
           context.go('/circles');
-          return;
-        }
-
-        if (notification.type == NotificationType.goalReminder &&
-            context.mounted) {
-          if (notification.goalId != null) {
-            context.push('/goals/detail/${notification.goalId}');
-          } else {
-            context.push('/goals');
-          }
           return;
         }
 

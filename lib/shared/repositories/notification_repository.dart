@@ -120,12 +120,6 @@ class NotificationRepository {
           'circle_ghost_warning',
           'circle_ghost_deleted',
         ];
-      case NotificationCategory.task:
-        return const [
-          'task_reminder',
-          'task_scheduled',
-          'goal_reminder',
-        ];
       case NotificationCategory.support:
         return const [
           'inquiry_reply',

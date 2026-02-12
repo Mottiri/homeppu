@@ -10,7 +10,6 @@ setGlobalOptions({ region: LOCATION });
 // ===============================================
 export { initializeNameParts, getNameParts, updateUserName } from "./callable/names";
 export { reportContent } from "./callable/reports";
-export { createTask, getTasks } from "./callable/tasks";
 export {
     createInquiry,
     sendInquiryMessage,
@@ -65,9 +64,7 @@ export {
 export { onCircleCreated, onCircleUpdated } from "./triggers/circles";
 export { onPostCreated } from "./triggers/posts";
 export { onNotificationCreated, onCommentCreatedNotify, onReactionAddedNotify } from "./triggers/notifications";
-export { onTaskUpdated, scheduleTaskReminders, scheduleTaskRemindersOnCreate } from "./triggers/tasks";
 export { onReactionCreated } from "./triggers/reactions";
-export { scheduleGoalReminders, scheduleGoalRemindersOnCreate, onGoalUpdatedForVirtue } from "./triggers/goals";
 export { onUserCreated, onUserUpdated, onUserDeleted } from "./triggers/users";
 
 // ===============================================
@@ -81,7 +78,6 @@ export {
     cleanupBannedUsers,
     cleanupUnverifiedUsers,
 } from "./scheduled/cleanup";
-export { executeTaskReminder, executeGoalReminder } from "./scheduled/reminders";
 
 // ===============================================
 // Circle AI

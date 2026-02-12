@@ -10,8 +10,6 @@ export const COLLECTIONS = {
     COMMENTS: "comments",
     REACTIONS: "reactions",
     CIRCLES: "circles",
-    TASKS: "tasks",
-    GOALS: "goals",
     REPORTS: "reports",
     INQUIRIES: "inquiries",
     NOTIFICATIONS: "notifications",

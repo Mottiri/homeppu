@@ -31,10 +31,6 @@ service firebase.storage {
       return request.resource.size < 100 * 1024 * 1024;
     }
 
-    function isValidFileSize() {
-      return request.resource.size < 50 * 1024 * 1024;
-    }
-
     function isValidProfileSize() {
       return request.resource.size < 5 * 1024 * 1024;
     }
@@ -104,15 +100,6 @@ service firebase.storage {
                    && isCircleOwnerOrSubOwnerOrAdmin(circleId)
                    && isValidProfileSize()
                    && isImage();
-    }
-
-    // Task attachments (image/file)
-    match /task_attachments/{userId}/{taskId}/{fileName} {
-      allow read: if isAuthenticated() && request.auth.uid == userId;
-      allow write: if isAuthenticated()
-                   && request.auth.uid == userId
-                   && isValidFileSize();
-      allow delete: if isAuthenticated() && request.auth.uid == userId;
     }
 
     // Inquiry attachments

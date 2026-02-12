@@ -111,40 +111,7 @@ export const cleanupOrphanedMedia = onSchedule(
         }
 
         // ===============================================
-        // 3. タスク添付のクリーンアップ
-        // ===============================================
-        console.log("Checking task attachments...");
-        const [taskFiles] = await bucket.getFiles({ prefix: "task_attachments/" });
-
-        for (const file of taskFiles) {
-            checkedCount++;
-            try {
-                const [metadata] = await file.getMetadata();
-                const taskTimeCreated = metadata.timeCreated;
-                const taskCreatedAt = taskTimeCreated ? new Date(taskTimeCreated).getTime() : 0;
-
-                // 24時間以上経過していないならスキップ
-                if (now - taskCreatedAt < TWENTY_FOUR_HOURS) continue;
-
-                // パスからtaskIdを抽出: task_attachments/{userId}/{taskId}/{fileName}
-                const pathParts = file.name.split("/");
-                if (pathParts.length >= 3) {
-                    const taskId = pathParts[2];
-                    const taskDoc = await db.collection("tasks").doc(taskId).get();
-
-                    if (!taskDoc.exists) {
-                        console.log(`Orphan (task deleted): ${file.name}`);
-                        await file.delete();
-                        deletedCount++;
-                    }
-                }
-            } catch (error) {
-                console.error(`Error checking ${file.name}:`, error);
-            }
-        }
-
-        // ===============================================
-        // 4. 孤立サークル投稿のクリーンアップ（Firestore）
+        // 3. 孤立サークル投稿のクリーンアップ（Firestore）
         // ===============================================
         console.log("Checking orphaned circle posts...");
         let orphanedPostsDeleted = 0;
@@ -215,7 +182,7 @@ export const cleanupOrphanedMedia = onSchedule(
         }
 
         // ===============================================
-        // 5. 孤立コメントのクリーンアップ（Firestore）
+        // 4. 孤立コメントのクリーンアップ（Firestore）
         // ===============================================
         console.log("Checking orphaned comments...");
         let orphanedCommentsDeleted = 0;
@@ -251,7 +218,7 @@ export const cleanupOrphanedMedia = onSchedule(
         }
 
         // ===============================================
-        // 6. 孤立リアクションのクリーンアップ（Firestore）
+        // 5. 孤立リアクションのクリーンアップ（Firestore）
         // ===============================================
         console.log("Checking orphaned reactions...");
         let orphanedReactionsDeleted = 0;

@@ -47,7 +47,7 @@ class _MainShellState extends ConsumerState<MainShell>
     final location = GoRouterState.of(context).matchedLocation;
     if (location.startsWith('/home')) return 0;
     if (location.startsWith('/circles')) return 1;
-    if (location.startsWith('/stamps') || location.startsWith('/tasks')) {
+    if (location.startsWith('/stamps')) {
       return 2;
     }
     if (location.startsWith('/profile') || location.startsWith('/user')) {

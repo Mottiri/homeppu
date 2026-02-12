@@ -1,4 +1,5 @@
-import 'dart:io';
+﻿import 'dart:io';
+
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
@@ -6,20 +7,18 @@ import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
+
 import '../models/post_model.dart';
 
-/// メディアアップロードサービス
 class MediaService {
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final ImagePicker _imagePicker = ImagePicker();
   final Uuid _uuid = const Uuid();
 
-  // アップロード制限
-  static const int maxImageSize = 5 * 1024 * 1024; // 5MB
-  static const int maxVideoSize = 30 * 1024 * 1024; // 30MB
-  static const int maxMediaCount = 4; // 最大4つのメディア
+  static const int maxImageSize = 5 * 1024 * 1024;
+  static const int maxVideoSize = 30 * 1024 * 1024;
+  static const int maxMediaCount = 4;
 
-  // 許可される拡張子
   static const List<String> allowedImageExtensions = [
     'jpg',
     'jpeg',
@@ -27,6 +26,7 @@ class MediaService {
     'gif',
     'webp',
   ];
+
   static const List<String> allowedVideoExtensions = [
     'mp4',
     'mov',
@@ -34,9 +34,8 @@ class MediaService {
     'mkv',
   ];
 
-  /// ギャラリーから画像を選択
   Future<List<XFile>> pickImages({int maxCount = 4}) async {
-    final List<XFile> images = await _imagePicker.pickMultiImage(
+    final images = await _imagePicker.pickMultiImage(
       imageQuality: 85,
       maxWidth: 1920,
       maxHeight: 1920,
@@ -44,9 +43,8 @@ class MediaService {
     return images.take(maxCount).toList();
   }
 
-  /// カメラで撮影
   Future<XFile?> takePhoto() async {
-    return await _imagePicker.pickImage(
+    return _imagePicker.pickImage(
       source: ImageSource.camera,
       imageQuality: 85,
       maxWidth: 1920,
@@ -54,23 +52,20 @@ class MediaService {
     );
   }
 
-  /// ギャラリーから動画を選択
   Future<XFile?> pickVideo() async {
-    return await _imagePicker.pickVideo(
+    return _imagePicker.pickVideo(
       source: ImageSource.gallery,
       maxDuration: const Duration(minutes: 3),
     );
   }
 
-  /// カメラで動画を撮影
   Future<XFile?> recordVideo() async {
-    return await _imagePicker.pickVideo(
+    return _imagePicker.pickVideo(
       source: ImageSource.camera,
       maxDuration: const Duration(minutes: 1),
     );
   }
 
-  /// ファイルをFirebase Storageにアップロード
   Future<MediaItem> uploadFile({
     required String filePath,
     required String userId,
@@ -81,18 +76,15 @@ class MediaService {
     final file = File(filePath);
     final fileSize = await file.length();
 
-    // サイズチェック（画像: 5MB、動画: 30MB）
     final maxSize = type == MediaType.video ? maxVideoSize : maxImageSize;
     if (fileSize > maxSize) {
-      throw Exception('ファイルサイズが大きすぎます（最大${maxSize ~/ (1024 * 1024)}MB）');
+      throw Exception('File is too large (max ${maxSize ~/ (1024 * 1024)}MB)');
     }
 
-    // ファイル名を生成
     final extension = path.extension(filePath).toLowerCase();
     final uniqueFileName = '${_uuid.v4()}$extension';
     final storagePath = 'posts/$userId/${type.name}s/$uniqueFileName';
 
-    // アップロード
     final ref = _storage.ref().child(storagePath);
     final uploadTask = ref.putFile(
       file,
@@ -101,24 +93,20 @@ class MediaService {
         customMetadata: {
           'originalFileName': fileName ?? path.basename(filePath),
           'uploadedAt': DateTime.now().millisecondsSinceEpoch.toString(),
-          'postId': 'PENDING', // 投稿前は PENDING、投稿後に実際のpostIdに更新
+          'postId': 'PENDING',
         },
       ),
     );
 
-    // 進捗を通知
     if (onProgress != null) {
       uploadTask.snapshotEvents.listen((event) {
-        final progress = event.bytesTransferred / event.totalBytes;
-        onProgress(progress);
+        onProgress(event.bytesTransferred / event.totalBytes);
       });
     }
 
-    // 完了を待つ
     final snapshot = await uploadTask;
     final downloadUrl = await snapshot.ref.getDownloadURL();
 
-    // 動画の場合はサムネイルを生成してアップロード
     String? thumbnailUrl;
     if (type == MediaType.video) {
       thumbnailUrl = await _generateAndUploadThumbnail(
@@ -137,36 +125,12 @@ class MediaService {
     );
   }
 
-  /// 動画のサムネイルを生成してアップロード
   Future<String?> _generateAndUploadThumbnail({
     required String videoPath,
     required String userId,
   }) async {
     try {
-      debugPrint(
-        'MediaService: ========== Thumbnail Generation Start ==========',
-      );
-      debugPrint('MediaService: Video path: $videoPath');
-
-      // ファイルの存在確認
-      final videoFile = File(videoPath);
-      final exists = await videoFile.exists();
-      debugPrint('MediaService: Video file exists: $exists');
-
-      if (!exists) {
-        debugPrint('MediaService: ERROR - Video file does not exist!');
-        return null;
-      }
-
-      final fileSize = await videoFile.length();
-      debugPrint('MediaService: Video file size: ${fileSize ~/ 1024}KB');
-
-      // 一時ディレクトリを取得
       final tempDir = await getTemporaryDirectory();
-      debugPrint('MediaService: Temp directory: ${tempDir.path}');
-
-      // サムネイルを生成
-      debugPrint('MediaService: Calling VideoThumbnail.thumbnailFile...');
       final thumbnailPath = await VideoThumbnail.thumbnailFile(
         video: videoPath,
         thumbnailPath: tempDir.path,
@@ -174,35 +138,14 @@ class MediaService {
         maxHeight: 800,
         quality: 90,
       );
-      debugPrint('MediaService: Thumbnail result: $thumbnailPath');
 
-      if (thumbnailPath == null) {
-        debugPrint(
-          'MediaService: ERROR - Failed to generate thumbnail (null returned)',
-        );
-        return null;
-      }
+      if (thumbnailPath == null) return null;
 
-      // サムネイルファイルの存在確認
       final thumbnailFile = File(thumbnailPath);
-      final thumbExists = await thumbnailFile.exists();
-      debugPrint('MediaService: Thumbnail file exists: $thumbExists');
+      if (!await thumbnailFile.exists()) return null;
 
-      if (!thumbExists) {
-        debugPrint(
-          'MediaService: ERROR - Thumbnail file does not exist after generation!',
-        );
-        return null;
-      }
-
-      final thumbSize = await thumbnailFile.length();
-      debugPrint('MediaService: Thumbnail file size: ${thumbSize ~/ 1024}KB');
-
-      // サムネイルをFirebase Storageにアップロード
-      debugPrint('MediaService: Uploading thumbnail to Firebase Storage...');
       final thumbnailFileName = '${_uuid.v4()}_thumb.jpg';
-      final thumbnailStoragePath =
-          'posts/$userId/thumbnails/$thumbnailFileName';
+      final thumbnailStoragePath = 'posts/$userId/thumbnails/$thumbnailFileName';
 
       final ref = _storage.ref().child(thumbnailStoragePath);
       final uploadTask = ref.putFile(
@@ -219,46 +162,33 @@ class MediaService {
       final snapshot = await uploadTask;
       final thumbnailUrl = await snapshot.ref.getDownloadURL();
 
-      // 一時ファイルを削除
       try {
         await thumbnailFile.delete();
-        debugPrint('MediaService: Temp thumbnail deleted');
-      } catch (e) {
-        debugPrint('MediaService: Failed to delete temp thumbnail: $e');
-      }
+      } catch (_) {}
 
-      debugPrint(
-        'MediaService: ========== Thumbnail Generation Success ==========',
-      );
-      debugPrint('MediaService: Thumbnail URL: $thumbnailUrl');
       return thumbnailUrl;
     } catch (e, stackTrace) {
-      debugPrint(
-        'MediaService: ========== Thumbnail Generation FAILED ==========',
-      );
-      debugPrint('MediaService: Error: $e');
-      debugPrint('MediaService: Stack trace: $stackTrace');
+      debugPrint('MediaService thumbnail generation failed: $e');
+      debugPrint('$stackTrace');
       return null;
     }
   }
 
-  /// 複数ファイルをアップロード
   Future<List<MediaItem>> uploadMultiple({
     required List<String> filePaths,
     required String userId,
     required MediaType type,
     Function(int current, int total, double progress)? onProgress,
   }) async {
-    final List<MediaItem> results = [];
+    final results = <MediaItem>[];
 
     for (int i = 0; i < filePaths.length; i++) {
       final item = await uploadFile(
         filePath: filePaths[i],
         userId: userId,
         type: type,
-        onProgress: (progress) {
-          onProgress?.call(i + 1, filePaths.length, progress);
-        },
+        onProgress: (progress) =>
+            onProgress?.call(i + 1, filePaths.length, progress),
       );
       results.add(item);
     }
@@ -266,73 +196,23 @@ class MediaService {
     return results;
   }
 
-  /// タスク添付ファイルをアップロード
-  Future<String> uploadTaskAttachment({
-    required String filePath,
-    required String userId,
-    required String taskId,
-    Function(double)? onProgress,
-  }) async {
-    final file = File(filePath);
-    final fileSize = await file.length();
-
-    // サイズチェック (5MB - 画像のみ対応)
-    if (fileSize > maxImageSize) {
-      throw Exception('ファイルサイズが大きすぎます（最大${maxImageSize ~/ (1024 * 1024)}MB）');
-    }
-
-    // ファイル名を生成
-    final extension = path.extension(filePath).toLowerCase();
-    final uniqueFileName = '${_uuid.v4()}$extension';
-    final storagePath = 'task_attachments/$userId/$taskId/$uniqueFileName';
-
-    // アップロード
-    final ref = _storage.ref().child(storagePath);
-    final uploadTask = ref.putFile(
-      file,
-      SettableMetadata(
-        contentType: _getMimeType(extension),
-        customMetadata: {
-          'originalFileName': path.basename(filePath),
-          'uploadedAt': DateTime.now().toIso8601String(),
-        },
-      ),
-    );
-
-    // 進捗を通知
-    if (onProgress != null) {
-      uploadTask.snapshotEvents.listen((event) {
-        final progress = event.bytesTransferred / event.totalBytes;
-        onProgress(progress);
-      });
-    }
-
-    // 完了を待つ
-    final snapshot = await uploadTask;
-    return await snapshot.ref.getDownloadURL();
-  }
-
-  /// サークル画像（アイコン・ヘッダー）をアップロード
   Future<String> uploadCircleImage({
     required String filePath,
     required String circleId,
-    required String imageType, // 'icon' or 'cover'
+    required String imageType,
     Function(double)? onProgress,
   }) async {
     final file = File(filePath);
     final fileSize = await file.length();
 
-    // サイズチェック (5MB)
     if (fileSize > maxImageSize) {
-      throw Exception('ファイルサイズが大きすぎます（最大${maxImageSize ~/ (1024 * 1024)}MB）');
+      throw Exception('File is too large (max ${maxImageSize ~/ (1024 * 1024)}MB)');
     }
 
-    // ファイル名を生成
     final extension = path.extension(filePath).toLowerCase();
     final uniqueFileName = '${_uuid.v4()}$extension';
     final storagePath = 'circles/$circleId/$imageType/$uniqueFileName';
 
-    // アップロード
     final ref = _storage.ref().child(storagePath);
     final uploadTask = ref.putFile(
       file,
@@ -342,34 +222,26 @@ class MediaService {
       ),
     );
 
-    // 進捗を通知
     if (onProgress != null) {
       uploadTask.snapshotEvents.listen((event) {
-        final progress = event.bytesTransferred / event.totalBytes;
-        onProgress(progress);
+        onProgress(event.bytesTransferred / event.totalBytes);
       });
     }
 
-    // 完了を待つ
     final snapshot = await uploadTask;
-    return await snapshot.ref.getDownloadURL();
+    return snapshot.ref.getDownloadURL();
   }
 
-  /// 問い合わせ画像をアップロード
   Future<String> uploadInquiryImage(File file, {required String userId}) async {
     final fileSize = await file.length();
-
-    // サイズチェック (5MB)
     if (fileSize > maxImageSize) {
-      throw Exception('ファイルサイズが大きすぎます（最大${maxImageSize ~/ (1024 * 1024)}MB）');
+      throw Exception('File is too large (max ${maxImageSize ~/ (1024 * 1024)}MB)');
     }
 
-    // ファイル名を生成
     final extension = path.extension(file.path).toLowerCase();
     final uniqueFileName = '${_uuid.v4()}$extension';
     final storagePath = 'inquiries/$userId/$uniqueFileName';
 
-    // アップロード
     final ref = _storage.ref().child(storagePath);
     final uploadTask = ref.putFile(
       file,
@@ -379,37 +251,22 @@ class MediaService {
       ),
     );
 
-    // 完了を待つ
     final snapshot = await uploadTask;
-    return await snapshot.ref.getDownloadURL();
+    return snapshot.ref.getDownloadURL();
   }
 
-  /// メディアを削除
   Future<void> deleteMedia(String url) async {
     try {
-      debugPrint('MediaService.deleteMedia: Attempting to delete');
-      debugPrint('  URL: $url');
-
       final ref = _storage.refFromURL(url);
-      final fullPath = ref.fullPath;
-      debugPrint('  Extracted path: $fullPath');
-
       await ref.delete();
-      debugPrint('MediaService.deleteMedia: ✓ Successfully deleted $fullPath');
     } on FirebaseException catch (e) {
-      debugPrint('MediaService.deleteMedia: ✗ FirebaseException');
-      debugPrint('  Code: ${e.code}');
-      debugPrint('  Message: ${e.message}');
-      debugPrint('  URL: $url');
+      debugPrint('MediaService.deleteMedia FirebaseException: ${e.code} ${e.message}');
     } catch (e, stackTrace) {
-      debugPrint('MediaService.deleteMedia: ✗ Error: $e');
-      debugPrint('  Type: ${e.runtimeType}');
-      debugPrint('  URL: $url');
-      debugPrint('  Stack: $stackTrace');
+      debugPrint('MediaService.deleteMedia error: $e');
+      debugPrint('$stackTrace');
     }
   }
 
-  /// MIMEタイプを取得
   String _getMimeType(String extension) {
     final ext = extension.toLowerCase().replaceAll('.', '');
     switch (ext) {
@@ -449,13 +306,11 @@ class MediaService {
     }
   }
 
-  /// 拡張子からMediaTypeを判定（画像または動画）
   MediaType getMediaType(String filePath) {
     final ext = path.extension(filePath).toLowerCase().replaceAll('.', '');
     if (allowedVideoExtensions.contains(ext)) {
       return MediaType.video;
     }
-    // デフォルトは画像
     return MediaType.image;
   }
 }

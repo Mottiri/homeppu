@@ -240,7 +240,6 @@ class AuthService {
     AvatarParts? avatarParts,
     String? postMode,
     Map<String, bool>? notificationSettings,
-    Map<String, bool>? autoPostSettings,
   }) async {
     final updates = <String, dynamic>{'updatedAt': Timestamp.now()};
 
@@ -251,9 +250,6 @@ class AuthService {
     if (postMode != null) updates['postMode'] = postMode;
     if (notificationSettings != null) {
       updates['notificationSettings'] = notificationSettings;
-    }
-    if (autoPostSettings != null) {
-      updates['autoPostSettings'] = autoPostSettings;
     }
 
     await _firestore.collection('users').doc(uid).update(updates);

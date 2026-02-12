@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,14 +16,14 @@ import 'shared/services/app_check_service.dart';
 import 'shared/services/notification_service.dart';
 import 'shared/services/subscription_service.dart';
 
-/// グローバルナビゲーションキー（通知タップ時のナビゲーション用）
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Firebase初期化
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   await AppCheckService.initialize();
   await MobileAds.instance.initialize();
 
@@ -32,13 +32,10 @@ void main() async {
     await SubscriptionService.instance.logIn(currentUser.uid);
   }
 
-  // バックグラウンド通知ハンドラーを設定
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
-  // 通知サービス初期化
   await NotificationService().initialize();
 
-  // ロケールデータの初期化 (DateFormat用)
   await initializeDateFormatting('ja');
 
   runApp(const ProviderScope(child: HomeppuApp()));
@@ -55,7 +52,6 @@ class _HomeppuAppState extends ConsumerState<HomeppuApp> {
   @override
   void initState() {
     super.initState();
-    // コールバック登録を遅延実行（ルーターの準備を待つ）
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _setupNotificationCallback();
     });
@@ -72,10 +68,9 @@ class _HomeppuAppState extends ConsumerState<HomeppuApp> {
     GoRouter router,
     NotificationPayload payload,
   ) {
-    debugPrint('通知ナビゲーション: type=${payload.type}');
+    debugPrint('Notification tap: type=${payload.type}');
 
     switch (payload.type) {
-      // 投稿関連
       case 'comment':
       case 'reaction':
         if (payload.postId != null) {
@@ -83,7 +78,6 @@ class _HomeppuAppState extends ConsumerState<HomeppuApp> {
         }
         break;
 
-      // サークル関連
       case 'join_request_received':
         if (payload.circleId != null) {
           router.push(
@@ -113,35 +107,6 @@ class _HomeppuAppState extends ConsumerState<HomeppuApp> {
         router.go('/circles');
         break;
 
-      // タスク関連
-      case 'task_reminder':
-      case 'task_scheduled':
-        if (payload.taskId != null) {
-          final scheduledAt = payload.scheduledAt != null
-              ? DateTime.tryParse(payload.scheduledAt!)
-              : null;
-          router.go(
-            '/tasks',
-            extra: {
-              'highlightTaskId': payload.taskId,
-              'highlightRequestId': DateTime.now().millisecondsSinceEpoch,
-              if (scheduledAt != null) 'targetDate': scheduledAt,
-              'forceRefresh': true,
-            },
-          );
-        } else {
-          router.go('/tasks');
-        }
-        break;
-      case 'goal_reminder':
-        if (payload.goalId != null) {
-          router.push('/goals/detail/${payload.goalId}');
-        } else {
-          router.go('/goals');
-        }
-        break;
-
-      // 問い合わせ関連（ユーザー向け）
       case 'inquiry_reply':
       case 'inquiry_status_changed':
       case 'inquiry_deletion_warning':
@@ -150,7 +115,6 @@ class _HomeppuAppState extends ConsumerState<HomeppuApp> {
         }
         break;
 
-      // 問い合わせ関連（管理者向け）
       case 'inquiry_received':
       case 'inquiry_user_reply':
         if (payload.inquiryId != null) {
@@ -158,7 +122,6 @@ class _HomeppuAppState extends ConsumerState<HomeppuApp> {
         }
         break;
 
-      // 管理者向け通報
       case 'admin_report':
         if (payload.contentId != null) {
           router.push('/admin/reports/content/${payload.contentId}');
@@ -170,7 +133,6 @@ class _HomeppuAppState extends ConsumerState<HomeppuApp> {
         router.push('/admin-review');
         break;
 
-      // 投稿削除・非表示
       case 'post_deleted':
         router.go('/notifications');
         break;
@@ -180,7 +142,6 @@ class _HomeppuAppState extends ConsumerState<HomeppuApp> {
         }
         break;
 
-      // デフォルト
       default:
         router.go('/notifications');
         break;
@@ -202,11 +163,10 @@ class _HomeppuAppState extends ConsumerState<HomeppuApp> {
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: const [
-        Locale('ja'), // 日本語
+        Locale('ja'),
       ],
       builder: (context, child) {
         return MediaQuery(
-          // システムフォントスケールを制限（読みやすさ維持）
           data: MediaQuery.of(context).copyWith(
             textScaler: TextScaler.linear(
               MediaQuery.of(context).textScaler.scale(1.0).clamp(0.8, 1.2),
@@ -218,3 +178,4 @@ class _HomeppuAppState extends ConsumerState<HomeppuApp> {
     );
   }
 }
+

@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'ban_record_model.dart';
 import 'avatar_parts_model.dart';
 
@@ -75,7 +75,6 @@ class UserModel {
   final DateTime? lastNameChangeAt; // 最後に名前を変更した日時
   final String? fcmToken; // プッシュ通知用トークン
   final Map<String, bool> notificationSettings; // 通知設定
-  final Map<String, bool> autoPostSettings; // 自動投稿設定
   final String? headerImageUrl; // ヘッダー画像URL
   final int? headerImageIndex; // デフォルトヘッダー画像のインデックス（0-5）
   final int? headerPrimaryColor; // ヘッダー画像から抽出したメイン色（ARGB int）
@@ -120,7 +119,6 @@ class UserModel {
 
     this.fcmToken,
     this.notificationSettings = const {'comments': true, 'reactions': true},
-    this.autoPostSettings = const {'milestones': true, 'goals': true},
     this.headerImageUrl,
     this.headerImageIndex,
     this.headerPrimaryColor,
@@ -185,9 +183,6 @@ class UserModel {
       notificationSettings: Map<String, bool>.from(
         data['notificationSettings'] ?? {'comments': true, 'reactions': true},
       ),
-      autoPostSettings: Map<String, bool>.from(
-        data['autoPostSettings'] ?? {'milestones': true, 'goals': true},
-      ),
       headerImageUrl: data['headerImageUrl'],
       headerImageIndex: data['headerImageIndex'],
       headerPrimaryColor: data['headerPrimaryColor'],
@@ -238,7 +233,6 @@ class UserModel {
       if (lastNameChangeAt != null)
         'lastNameChangeAt': Timestamp.fromDate(lastNameChangeAt!),
       'notificationSettings': notificationSettings,
-      'autoPostSettings': autoPostSettings,
       if (headerImageUrl != null) 'headerImageUrl': headerImageUrl,
       if (headerImageIndex != null) 'headerImageIndex': headerImageIndex,
       if (headerPrimaryColor != null) 'headerPrimaryColor': headerPrimaryColor,
@@ -285,7 +279,6 @@ class UserModel {
     DateTime? lastNameChangeAt,
     String? fcmToken,
     Map<String, bool>? notificationSettings,
-    Map<String, bool>? autoPostSettings,
     String? headerImageUrl,
     int? headerImageIndex,
     int? headerPrimaryColor,
@@ -333,7 +326,6 @@ class UserModel {
       lastNameChangeAt: lastNameChangeAt ?? this.lastNameChangeAt,
       fcmToken: fcmToken ?? this.fcmToken,
       notificationSettings: notificationSettings ?? this.notificationSettings,
-      autoPostSettings: autoPostSettings ?? this.autoPostSettings,
       headerImageUrl: headerImageUrl ?? this.headerImageUrl,
       headerImageIndex: headerImageIndex ?? this.headerImageIndex,
       headerPrimaryColor: headerPrimaryColor ?? this.headerPrimaryColor,

@@ -1,4 +1,4 @@
-/// アプリ内メッセージ定義
+﻿/// アプリ内メッセージ定義
 ///
 /// 「ほめっぷ」のフレンドリーなトーンを全画面で統一するためのメッセージ集。
 ///
@@ -33,9 +33,6 @@ class AppMessages {
 
   // ===== ホーム関連 =====
   static const home = _HomeMessages();
-
-  // ===== 目標関連 =====
-  static const goal = _GoalMessages();
 
   // ===== オンボーディング関連 =====
   static const onboarding = _OnboardingMessages();
@@ -82,26 +79,6 @@ class _SuccessMessages {
   String get circleLeft => 'サークルを退会したよ';
   String get circleDeleted => 'サークルを削除しました';
   String get circleUpdated => 'サークルを更新しました';
-
-  // タスク関連
-  String get taskCreated => 'タスクを追加したよ！';
-  String get taskCompleted => 'タスク完了！お疲れさま✨';
-  String get taskDeleted => 'タスクを削除したよ';
-  String taskDeletedCount(int count) => '$count件を削除しました';
-  String get categoryDeleted => 'カテゴリを削除しました';
-  String get taskCompletionReverted => '完了を取り消しました';
-  String get taskCompletionRevertedWithPostDeleted => '完了を取り消しました。自動投稿を削除しました';
-  String taskCompletedWithVirtue(int streak) => '🎉 タスク完了！ (+徳ポイント)';
-  String taskMilestone(int streak, String message) =>
-      '🎉 $streak日連続達成！$message！';
-  String get goalCompleted => '🎉 目標達成！おめでとうございます！';
-  String get goalCompletedWithPost => '🎉 目標達成！おめでとうございます！目標達成を投稿しました！';
-  String taskMilestoneWithPost(int streak, String message) =>
-      '🎉 $streak日連続達成！$message！タスクを完了したことを投稿しました！';
-
-  // 目標関連
-  String get goalCreated => '目標を作成しました！頑張りましょう✨';
-  String get goalUpdated => '目標を更新しました！';
 
   // ユーザー関連
   String get profileUpdated => 'プロフィールを更新したよ！';
@@ -186,25 +163,13 @@ class _ConfirmMessages {
 
   // 削除確認
   String deletePost() => 'この投稿を削除する？\nこの操作は取り消せないよ';
-  String deleteTask() => 'このタスクを削除する？';
   String deleteCircle(String name) => '「$name」を削除する？\nメンバー全員がアクセスできなくなるよ';
   String deleteComment() => 'このコメントを削除する？';
-  String deleteCategory() => 'このカテゴリを削除する？';
-  String get deleteCategoryTitle => 'カテゴリを削除';
-  String deleteCategoryMessage(String name) =>
-      '「$name」を削除しますか？\n含まれるタスクも削除されます。';
   String get deleteTitle => '削除の確認';
   String deleteItem(String itemName, {String? additionalMessage}) =>
       additionalMessage != null
       ? '「$itemName」を削除しますか？\n$additionalMessage'
       : '「$itemName」を削除しますか？';
-  String get deleteTasksTitle => 'タスクを削除';
-  String deleteTasksMessage(int count) =>
-      '$count件のタスクを削除しますか？\n\n'
-      '※繰り返し設定のあるタスクは、今日の分のみが削除されます（次回以降は残ります）。';
-  String get deleteTaskTitle => 'タスクの削除';
-  String get deleteTaskMessage => 'このタスクを削除してもよろしいですか？';
-  String get deleteRecurringTaskTitle => '繰り返しタスクの削除';
 
   // 退会・解除
   String leaveCircle() => '本当にこのサークルを退会する？';
@@ -212,11 +177,6 @@ class _ConfirmMessages {
 
   // ログアウト
   String get logout => '本当にログアウトする？\nまた会えるのを楽しみにしてるね💫';
-
-  // タスク更新
-  String get updateSettingsTitle => '設定の変更';
-  String get updateRecurrenceTitle => '繰り返し設定の変更';
-  String get updateNotificationTitle => '通知設定の変更';
 
   // 徳ポイント・サブスク購入
   String get purchaseVirtueTitle => '徳ポイント購入';
@@ -271,10 +231,6 @@ class _LabelMessages {
   String get relogin => 'ログインし直す';
   String get add => '追加';
   String get dontShowAgain => '今後表示しない';
-  String get deleteThisTask => 'このタスクのみ削除';
-  String get deleteFutureTasks => 'これ以降のタスクも削除';
-  String get updateThisTask => 'このタスクのみ変更';
-  String get updateFutureTasks => 'これ以降のタスクも変更';
 }
 
 /// ローディングメッセージ
@@ -295,15 +251,9 @@ class _EmptyMessages {
   String get posts => 'まだ投稿がないよ\n最初の投稿をしてみよう！';
   String get comments => 'まだコメントがないよ';
   String get notifications => '通知はまだないよ';
-  String get tasks => 'タスクがないよ\n新しいタスクを追加してみよう！';
   String get circles => 'サークルがないよ\n新しいサークルを探してみよう！';
   String get followers => 'まだフォロワーがいないよ';
   String get following => 'まだ誰もフォローしていないよ';
-  String get goals => '目標がないよ\n新しい目標を設定してみよう！';
-  String get taskNoneForDate => 'まだタスクがありません';
-  String get taskAddPrompt => 'タスクを追加しよう！';
-  String get dailyTaskAddPrompt => '毎日のタスクを追加しよう！';
-  String categoryTaskAddPrompt(String name) => '$name のタスクを追加しよう！';
   String get adminReviewEmpty => '審査待ちの投稿はありません';
 }
 
@@ -423,53 +373,6 @@ class _HomeMessages {
   String get emptyFollowingDescription => '「おすすめ」タブで気になる人を\n見つけてフォローしてみよう！';
 }
 
-/// 目標関連メッセージ
-class _GoalMessages {
-  const _GoalMessages();
-
-  String get title => '目標';
-  String get streamError => 'エラーが発生しました';
-  String get inProgressTitle => '進行中の目標';
-  String get reorderDone => '完了';
-  String get reorderLabel => '並替';
-  String get headerTitle => '目標を達成しよう！';
-  String get headerDescription => '小さな積み重ねが大きな成果に✨';
-  String get hallOfFameTitle => '殿堂入り';
-  String get hallOfFameSubtitle => '達成した目標を見る';
-  String get newGoal => '新しい目標';
-  String get notFound => '目標が見つかりません';
-  String get completeButton => '目標を達成する！';
-  String get revertButton => '未完了に戻す（再開）';
-  String get accumulationTitle => 'これまでの積み上げ';
-  String get tabIncomplete => '未完了';
-  String get tabComplete => '完了';
-  String get emptyTasksTitle => 'まだタスクがありません';
-  String get emptyTasksDescription => 'タスクを作成して目標に紐づけよう';
-  String get taskAddPrompt => 'タスクを追加してください';
-  String get deleteGoalTitle => '目標を削除';
-  String get deleteGoalMessage => '紐づいているすべてのタスクも削除されます。\nこの操作は取り消せません。';
-  String get congratsTitle => 'おめでとう！🎉';
-  String get hallOfFamePrompt => '目標を「殿堂入り」にしますか？';
-  String get deleteFutureTasksNote => '未来のタスクがあれば削除されます';
-  String get hallOfFameConfirm => '殿堂入りへ';
-  String get completeSuccess => 'おめでとう！目標を達成しました！🎊';
-  String get resumed => '目標を再開しました';
-  String get deadlineToday => '今日まで！';
-  String deadlineRemainingDays(int days) => 'あと$days日';
-  String deadlineOverdueDays(int days) => '$days日超過';
-  String get unitMinutes => '分';
-  String get unitHours => '時間';
-  String get unitDays => '日';
-  String get dateToday => '今日';
-  String get dateTomorrow => '明日';
-  String get dateYesterday => '昨日';
-  String daysLater(int days) => '$days日後';
-
-  String get completedTitle => '殿堂入り';
-  String get completedEmptyTitle => 'まだ達成した目標はありません';
-  String get completedEmptyDescription => '目標を達成すると、ここに表示されます';
-}
-
 /// オンボーディング関連メッセージ
 class _OnboardingMessages {
   const _OnboardingMessages();
@@ -495,7 +398,6 @@ class _NotificationMessages {
   String get markAllRead => '全て既読にする';
   String get empty => 'まだ通知はありません';
   String get tabTimeline => 'TL';
-  String get tabTask => 'タスク';
   String get tabCircle => 'サークル';
   String get tabSupport => 'サポート';
   String minutesAgo(int minutes) => '$minutes分前';
@@ -684,11 +586,8 @@ class _ProfileMessages {
   String get commentNotificationSubtitle => '投稿へのコメントを通知します';
   String get reactionNotificationTitle => 'リアクション通知';
   String get reactionNotificationSubtitle => '投稿へのリアクションを通知します';
-  String get autoPostSettingsTitle => '自動投稿設定';
   String get milestonesTitle => 'ストリーク達成時';
   String get milestonesSubtitle => '連続達成（マイルストーン）した時に自動で投稿します';
-  String get goalAutoPostTitle => '目標達成時';
-  String get goalAutoPostSubtitle => '目標を達成した時に自動で投稿します';
   String get privacyTitle => '公開範囲';
   String privacyCurrent(String label) => '現在: $label';
   String get privacyInfo => '次回以降の投稿から適用されます\n過去の投稿は変わりません';
