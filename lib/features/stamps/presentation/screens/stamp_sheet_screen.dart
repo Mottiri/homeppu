@@ -58,7 +58,6 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
   bool _isShowingSelectDialog = false;
   bool _isShowingCatalogSheet = false;
   bool _routeListenerAttached = false;
-  bool _showNextSheetSelectionFab = false;
   GoRouterDelegate? _routerDelegate;
   String _lastFlowDebugSignature = '';
 
@@ -577,7 +576,11 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
     state.pendingNextSheetFrom = null;
     state.localBySlot.clear();
     state.isDirty = false;
-    state.awaitingServerEcho = false;
+    // Wait for server echo of the new (empty) active sheet.
+    // This avoids briefly applying stale full placements right after switching.
+    state.awaitingServerEcho = true;
+    state.awaitingSheetId = sheet.id;
+    state.awaitingStartedAtMs = DateTime.now().millisecondsSinceEpoch;
     state.awaitingBySlot.clear();
     await _setPendingNextSheet(user.uid, null);
   }
@@ -771,18 +774,6 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                     final canUndo =
                         !hasPendingFromState &&
                         _latestFilledSlotId(layout, state.localBySlot) != null;
-                    final isSheetComplete =
-                        state.localBySlot.length >= layout.slots.length;
-                    if (isSheetComplete && state.pendingNextSheetFrom == null) {
-                      state.pendingNextSheetFrom = selected.id;
-                      _debugStampFlow('auto_set_pending_from_complete_sheet', {
-                        'sheet': selected.id,
-                      });
-                      unawaited(_setPendingNextSheet(user.uid, selected.id));
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (mounted) setState(() {});
-                      });
-                    }
                     if (hasPendingFromState && _showStampBar) {
                       WidgetsBinding.instance.addPostFrameCallback((_) {
                         if (mounted) {
@@ -790,33 +781,15 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                         }
                       });
                     }
-                    final shouldShowNextSheetFab =
-                        state.pendingNextSheetFrom != null || isSheetComplete;
-                    if (_showNextSheetSelectionFab != shouldShowNextSheetFab) {
-                      _debugStampFlow('toggle_next_sheet_fab_flag', {
-                        'before': _showNextSheetSelectionFab,
-                        'after': shouldShowNextSheetFab,
-                        'pending': state.pendingNextSheetFrom,
-                        'isComplete': isSheetComplete,
-                      });
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (mounted) {
-                          setState(() {
-                            _showNextSheetSelectionFab = shouldShowNextSheetFab;
-                          });
-                        }
-                      });
-                    }
                     final hasPendingSelection =
-                        state.pendingNextSheetFrom != null ||
-                        _showNextSheetSelectionFab;
+                        state.pendingNextSheetFrom != null;
                     final signature =
-                        'pending=${state.pendingNextSheetFrom}|fabFlag=$_showNextSheetSelectionFab|showBar=$_showStampBar|hasPending=$hasPendingSelection';
+                        'pending=${state.pendingNextSheetFrom}|showBar=$_showStampBar|hasPending=$hasPendingSelection';
                     if (_lastFlowDebugSignature != signature) {
                       _lastFlowDebugSignature = signature;
                       _debugStampFlow('fab_state', {
                         'pending': state.pendingNextSheetFrom,
-                        'fabFlag': _showNextSheetSelectionFab,
+                        'fabFlag': false,
                         'showStampBar': _showStampBar,
                         'hasPendingSelection': hasPendingSelection,
                       });
@@ -1027,18 +1000,7 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                                       ),
                                     ),
                                   )
-                                : _showStampBar
-                                ? const SizedBox.shrink()
-                                : FloatingActionButton(
-                                    onPressed: () {
-                                      _debugStampFlow('tap_open_stamp_bar_fab');
-                                      setState(() => _showStampBar = true);
-                                    },
-                                    tooltip: AppMessages.stamp.selectStamp,
-                                    child: const Icon(
-                                      Icons.auto_awesome_outlined,
-                                    ),
-                                  ),
+                                : const SizedBox.shrink(),
                           ),
                         ),
                       ],
@@ -1072,6 +1034,22 @@ class _SheetCanvas extends StatelessWidget {
       if (type.value == id) return type;
     }
     return null;
+  }
+
+  // Visual alignment tweak:
+  // Apply step-wise nudge to right-side columns:
+  // 3rd from right < 2nd from right < rightmost.
+  double _adjustSlotX(double x) {
+    if (x >= 0.74) {
+      return (x + 0.010).clamp(0.0, 1.0);
+    }
+    if (x >= 0.56) {
+      return (x + 0.007).clamp(0.0, 1.0);
+    }
+    if (x >= 0.39) {
+      return (x + 0.004).clamp(0.0, 1.0);
+    }
+    return x;
   }
 
   @override
@@ -1126,7 +1104,7 @@ class _SheetCanvas extends StatelessWidget {
             for (final slot in layout.slots)
               if (bySlot[slot.slotId] != null)
                 Positioned(
-                  left: left + (slot.x * sheetW),
+                  left: left + (_adjustSlotX(slot.x) * sheetW),
                   top: top + (slot.y * sheetH),
                   width: slot.w * sheetW,
                   height: slot.h * sheetH,
