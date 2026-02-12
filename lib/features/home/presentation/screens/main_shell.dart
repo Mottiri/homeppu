@@ -93,8 +93,8 @@ class _MainShellState extends ConsumerState<MainShell>
 
     final currentIndex = _getCurrentIndex(context);
     if (currentIndex != _previousIndex) {
-      final wasSpecialScreen = _previousIndex == 1 || _previousIndex == 2;
-      final isSpecialScreen = currentIndex == 1 || currentIndex == 2;
+      final wasSpecialScreen = _previousIndex == 1;
+      final isSpecialScreen = currentIndex == 1;
 
       if (isSpecialScreen && !wasSpecialScreen) {
         _rotationController.forward();
@@ -107,15 +107,6 @@ class _MainShellState extends ConsumerState<MainShell>
       }
       _previousIndex = currentIndex;
     }
-
-    const stampButtonGradient = LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [
-        Color(0xFF81C784),
-        Color(0xFF66BB6A),
-      ],
-    );
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
@@ -170,9 +161,8 @@ class _MainShellState extends ConsumerState<MainShell>
                   child: AnimatedBuilder(
                     animation: _rotationAnimation,
                     builder: (context, child) {
-                      final isStampScreen = currentIndex == 2;
                       final isCircleScreen = currentIndex == 1;
-                      final isSpecialScreen = isStampScreen || isCircleScreen;
+                      final isSpecialScreen = isCircleScreen;
 
                       const circleButtonGradient = LinearGradient(
                         begin: Alignment.topLeft,
@@ -188,12 +178,7 @@ class _MainShellState extends ConsumerState<MainShell>
                       IconData buttonIcon;
                       double iconSize;
 
-                      if (isStampScreen) {
-                        buttonGradient = stampButtonGradient;
-                        shadowColor = const Color(0xFF66BB6A);
-                        buttonIcon = Icons.auto_awesome_rounded;
-                        iconSize = 28;
-                      } else if (isCircleScreen) {
+                      if (isCircleScreen) {
                         buttonGradient = circleButtonGradient;
                         shadowColor = const Color(0xFF00ACC1);
                         buttonIcon = Icons.group_add_rounded;
@@ -227,9 +212,7 @@ class _MainShellState extends ConsumerState<MainShell>
                         child: Transform.rotate(
                           angle: rotationAngle,
                           child: Transform.rotate(
-                            angle: (isStampScreen || isCircleScreen)
-                                ? -1.5708
-                                : 0,
+                            angle: isCircleScreen ? -1.5708 : 0,
                             child: Icon(
                               buttonIcon,
                               color: Colors.white,
