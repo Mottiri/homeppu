@@ -58,5 +58,6 @@ node functions/scripts/register-stamp-sheets.js
 
 1. スクリプト実行後、`stampSheetCatalog` / `stampSheetLayoutCatalog` の内容を確認
 2. アプリを再起動（新規アセット追加時はホットリロードだけでは反映されない場合あり）
-3. スタンプ画面で台紙が選べることを確認
-4. 枠タップでスタンプ押印できることを確認
+3. デザイン一覧画面（`/stamps/catalog`）で追加台紙が表示されることを確認
+4. スタンプ画面で追加台紙へ切り替え、シート長押しでスタンプ押印できることを確認
+5. シート満了後、アーカイブ画面（`/stamps/archives`）でプレビューと完成日が表示されることを確認

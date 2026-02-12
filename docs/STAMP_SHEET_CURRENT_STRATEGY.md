@@ -1,4 +1,4 @@
-# スタンプシート 現行方針・引き継ぎメモ（2026-02-11）
+# スタンプシート 現行方針・引き継ぎメモ（2026-02-12）
 
 この資料は、スタンプシート機能の現在方針と実装上の重要点を、他AI/他担当へ引き継ぐためにまとめたものです。
 
@@ -15,7 +15,8 @@
   - 選択後、満了シートをアーカイブして次シートを現在シートにする
 - 初回表示時:
   - まだアクティブシート未設定なら、最初のシート選択ダイアログを表示
-- シート一覧画面は「デザイン閲覧 + 購入導線」用途。
+- シート一覧画面は別画面（`/stamps/catalog`）で「デザイン閲覧 + 購入導線」を提供する。
+- アーカイブ一覧は別画面（`/stamps/archives`）で 3x3 グリッド + ページネーション表示を行う。
 - 旧ページネーション方式は廃止方針。
 
 ## 2. 解放/購入ルール
@@ -41,6 +42,8 @@
 - `settings/stampSheetCatalog`
 - `settings/stampSheetLayoutCatalog`
 - `settings/virtueShop`
+- Firestore Rules:
+  - `users/{uid}/stampSheetArchives/{archiveId}` はオーナー read のみ許可（write 不可）
 
 ## 4. 楽観UI整合の仕組み（重要）
 
@@ -113,10 +116,17 @@
   - ダイアログ表示中にアプリ終了して再表示される
 - 購入:
   - rare/epic台紙の購入導線が機能する
+- 画面導線:
+  - スタンプ画面AppBarのデザイン一覧アイコンで `/stamps/catalog` へ遷移できる
+  - スタンプ画面AppBarのアーカイブアイコンで `/stamps/archives` へ遷移できる
+- アーカイブ:
+  - 複数件時にページネーション（ドット）が表示される
+  - 各カードで完成日（日付）が表示される
 
 ## 9. 次担当へのチェック項目
 
 - `stamp_sheet_screen.dart` で旧ページネーション前提のロジックが再流入していないか
+- `stamp_sheet_catalog_screen.dart` / `stamp_sheet_archives_screen.dart` のルーティングが `app_router.dart` と一致しているか
 - `functions/src/index.ts` で旧Callable export が復活していないか
 - 価格/文言の変更時:
   - Flutter表示文言は `lib/core/constants/app_messages.dart`
