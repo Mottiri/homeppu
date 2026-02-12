@@ -278,100 +278,157 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
     required UserModel user,
     required List<StampSheetDefinition> sheets,
   }) async {
+    bool isSelectingSheet = false;
+    String? selectingSheetId;
+
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
       builder: (context) {
-        return SafeArea(
-          child: SizedBox(
-            height: MediaQuery.of(context).size.height * 0.75,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                  child: Text(
-                    AppMessages.stamp.designCatalogTitle,
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                ),
-                Expanded(
-                  child: ListView.separated(
-                    itemCount: sheets.length,
-                    separatorBuilder: (context, index) =>
-                        const Divider(height: 1, indent: 84, endIndent: 16),
-                    itemBuilder: (context, index) {
-                      final sheet = sheets[index];
-                      final unlocked = _isSheetUnlocked(sheet, user);
-                      Future<void> handleUnlockedSelection() async {
-                        final state = _runtime(user.uid);
-                        try {
-                          if (state.pendingNextSheetFrom != null) {
-                            await _chooseNextSheet(sheet, user);
-                          } else {
-                            await _selectFirstSheet(sheet, user);
-                          }
-                          if (context.mounted) Navigator.of(context).pop();
-                        } catch (_) {
-                          _toast(AppMessages.error.general, error: true);
-                        }
-                      }
-
-                      return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 6,
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return SafeArea(
+              child: SizedBox(
+                height: MediaQuery.of(context).size.height * 0.75,
+                child: Stack(
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                          child: Text(
+                            AppMessages.stamp.designCatalogTitle,
+                            style: Theme.of(context).textTheme.headlineSmall,
+                          ),
                         ),
-                        onTap: unlocked ? handleUnlockedSelection : null,
-                        leading: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: SizedBox(
-                            width: 64,
-                            height: 64,
-                            child: Image.asset(
-                              sheet.assetPath,
-                              fit: BoxFit.cover,
+                        Expanded(
+                          child: ListView.separated(
+                            itemCount: sheets.length,
+                            separatorBuilder: (context, index) =>
+                                const Divider(height: 1, indent: 84, endIndent: 16),
+                            itemBuilder: (context, index) {
+                              final sheet = sheets[index];
+                              final unlocked = _isSheetUnlocked(sheet, user);
+                              final isThisSelecting =
+                                  isSelectingSheet && selectingSheetId == sheet.id;
+                              Future<void> handleUnlockedSelection() async {
+                                if (isSelectingSheet) return;
+                                setModalState(() {
+                                  isSelectingSheet = true;
+                                  selectingSheetId = sheet.id;
+                                });
+                                final state = _runtime(user.uid);
+                                try {
+                                  if (state.pendingNextSheetFrom != null) {
+                                    await _chooseNextSheet(sheet, user);
+                                  } else {
+                                    await _selectFirstSheet(sheet, user);
+                                  }
+                                  if (context.mounted) Navigator.of(context).pop();
+                                } catch (_) {
+                                  _toast(AppMessages.error.general, error: true);
+                                  if (context.mounted) {
+                                    setModalState(() {
+                                      isSelectingSheet = false;
+                                      selectingSheetId = null;
+                                    });
+                                  }
+                                }
+                              }
+
+                              return ListTile(
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 6,
+                                ),
+                                onTap: (unlocked && !isSelectingSheet)
+                                    ? handleUnlockedSelection
+                                    : null,
+                                leading: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: SizedBox(
+                                    width: 64,
+                                    height: 64,
+                                    child: Image.asset(
+                                      sheet.assetPath,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                ),
+                                title: Text(
+                                  sheet.id,
+                                  style: Theme.of(context).textTheme.titleMedium,
+                                ),
+                                subtitle: Text(
+                                  AppMessages.stamp.sheetRarityLabel(sheet.rarity),
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(color: AppColors.textSecondary),
+                                ),
+                                trailing: isThisSelecting
+                                    ? const SizedBox(
+                                        width: 24,
+                                        height: 24,
+                                        child: CircularProgressIndicator(strokeWidth: 2.5),
+                                      )
+                                    : unlocked
+                                        ? FilledButton.tonal(
+                                            onPressed: isSelectingSheet
+                                                ? null
+                                                : handleUnlockedSelection,
+                                            child: Text(AppMessages.stamp.owned),
+                                          )
+                                        : FilledButton(
+                                            onPressed: isSelectingSheet
+                                                ? null
+                                                : () async {
+                                                    await _virtueShopService.purchaseVirtueItem(
+                                                      itemType: 'stamp_sheet',
+                                                      itemId: sheet.id,
+                                                    );
+                                                    ref.invalidate(currentUserProvider);
+                                                    ref.invalidate(virtueStatusProvider);
+                                                    ref.invalidate(virtueHistoryProvider);
+                                                    ref.invalidate(virtueShopConfigProvider);
+                                                    if (context.mounted) {
+                                                      Navigator.of(context).pop();
+                                                    }
+                                                  },
+                                            child: Text(AppMessages.label.purchase),
+                                          ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (isSelectingSheet)
+                      Positioned.fill(
+                        child: ColoredBox(
+                          color: Colors.black.withValues(alpha: 0.20),
+                          child: Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const CircularProgressIndicator(
+                                  color: AppColors.primary,
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  AppMessages.loading.general,
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ],
                             ),
                           ),
                         ),
-                        title: Text(
-                          sheet.id,
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        subtitle: Text(
-                          AppMessages.stamp.sheetRarityLabel(sheet.rarity),
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: AppColors.textSecondary),
-                        ),
-                        trailing: unlocked
-                            ? FilledButton.tonal(
-                                onPressed: handleUnlockedSelection,
-                                child: Text(AppMessages.stamp.owned),
-                              )
-                            : FilledButton(
-                                onPressed: () async {
-                                  await _virtueShopService.purchaseVirtueItem(
-                                    itemType: 'stamp_sheet',
-                                    itemId: sheet.id,
-                                  );
-                                  ref.invalidate(currentUserProvider);
-                                  ref.invalidate(virtueStatusProvider);
-                                  ref.invalidate(virtueHistoryProvider);
-                                  ref.invalidate(virtueShopConfigProvider);
-                                  if (context.mounted) {
-                                    Navigator.of(context).pop();
-                                  }
-                                },
-                                child: Text(AppMessages.label.purchase),
-                              ),
-                      );
-                    },
-                  ),
+                      ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );

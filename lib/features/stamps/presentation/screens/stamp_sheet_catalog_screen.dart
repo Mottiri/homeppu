@@ -146,7 +146,7 @@ class _StampSheetCatalogScreenState extends ConsumerState<StampSheetCatalogScree
               child: Text(AppMessages.label.purchase),
             ),
           if (!unlocked && sheet.rarity == 'epic')
-            FilledButton.tonal(
+            FilledButton(
               onPressed: () {
                 Navigator.of(dialogContext).pop();
                 context.push('/premium');
