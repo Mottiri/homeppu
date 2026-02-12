@@ -655,11 +655,14 @@ class _StampMessages {
   String get designSelect => 'デザイン閲覧';
   String get designCatalogTitle => 'シート一覧';
   String get chooseNextSheetTitle => '次のシートを選択';
+  String get chooseNextSheetFabLabel => '次を選ぶ';
   String get chooseFirstSheetTitle => '最初のシートを選択';
   String get sheetCompleted => 'シート完成！';
   String get chooseNextSheetBody => '次のページに使うシートを選んでください';
+  String get chooseNextSheetRequired => '次のシートを選択してください';
   String sheetRarityLabel(String rarity) => 'レア度: $rarity';
   String get owned => '所持済み';
+  String get selectAction => '選択する';
   String get helpTitle => 'スタンプシートの使い方';
   String get helpBody =>
       'シートを長押しすると空いている枠にスタンプを押せます。\n'

@@ -56,6 +56,20 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
   Timer? _flushDebounce;
   bool _showStampBar = false;
   bool _isShowingSelectDialog = false;
+  bool _isShowingCatalogSheet = false;
+  bool _routeListenerAttached = false;
+  bool _showNextSheetSelectionFab = false;
+  GoRouterDelegate? _routerDelegate;
+  String _lastFlowDebugSignature = '';
+
+  void _debugStampFlow(String event, [Map<String, Object?> extra = const {}]) {
+    final buffer = StringBuffer('[STAMP_FLOW] $event');
+    if (extra.isNotEmpty) {
+      buffer.write(' ');
+      buffer.write(extra.entries.map((e) => '${e.key}=${e.value}').join(', '));
+    }
+    debugPrint(buffer.toString());
+  }
 
   @override
   void initState() {
@@ -66,12 +80,40 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_routeListenerAttached) return;
+    _routerDelegate = GoRouter.of(context).routerDelegate;
+    _routeListenerAttached = true;
+    _routerDelegate?.addListener(_handleRouteChanged);
+  }
+
+  @override
   void dispose() {
+    if (_routeListenerAttached) {
+      _routerDelegate?.removeListener(_handleRouteChanged);
+    }
     WidgetsBinding.instance.removeObserver(this);
     _flushDebounce?.cancel();
     _confettiController.dispose();
     unawaited(_flushSnapshotNow());
     super.dispose();
+  }
+
+  void _handleRouteChanged() {
+    if (!mounted) return;
+    final location = GoRouterState.of(context).uri.toString();
+    _debugStampFlow('route_changed', {
+      'location': location,
+      'selectDialog': _isShowingSelectDialog,
+      'catalogSheet': _isShowingCatalogSheet,
+    });
+    if (location.startsWith('/stamps')) return;
+    if (_isShowingSelectDialog || _isShowingCatalogSheet) {
+      _debugStampFlow('route_left_stamps_try_close_modals');
+      unawaited(Navigator.of(context, rootNavigator: true).maybePop());
+      unawaited(Navigator.of(context).maybePop());
+    }
   }
 
   @override
@@ -278,21 +320,52 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
     required UserModel user,
     required List<StampSheetDefinition> sheets,
   }) async {
+    int rarityRank(String rarity) {
+      switch (rarity) {
+        case 'common':
+          return 0;
+        case 'rare':
+          return 1;
+        case 'epic':
+          return 2;
+        default:
+          return 99;
+      }
+    }
+
+    final sortedSheets = [...sheets]..sort((a, b) {
+      final aUnlocked = _isSheetUnlocked(a, user);
+      final bUnlocked = _isSheetUnlocked(b, user);
+      if (aUnlocked != bUnlocked) return aUnlocked ? -1 : 1;
+
+      final rarityCompare = rarityRank(a.rarity).compareTo(rarityRank(b.rarity));
+      if (rarityCompare != 0) return rarityCompare;
+
+      return a.id.compareTo(b.id);
+    });
+    final visibleSheets = sortedSheets
+        .where((sheet) => _isSheetUnlocked(sheet, user))
+        .toList();
+
     bool isSelectingSheet = false;
     String? selectingSheetId;
 
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return SafeArea(
-              child: SizedBox(
-                height: MediaQuery.of(context).size.height * 0.75,
-                child: Stack(
-                  children: [
+    _isShowingCatalogSheet = true;
+    _debugStampFlow('open_catalog_start', {'visibleSheets': visibleSheets.length});
+    try {
+      await showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        isScrollControlled: true,
+        useRootNavigator: false,
+        builder: (context) {
+          return StatefulBuilder(
+            builder: (context, setModalState) {
+              return SafeArea(
+                child: SizedBox(
+                  height: MediaQuery.of(context).size.height * 0.75,
+                  child: Stack(
+                    children: [
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -305,15 +378,18 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                         ),
                         Expanded(
                           child: ListView.separated(
-                            itemCount: sheets.length,
+                            physics: const AlwaysScrollableScrollPhysics(
+                              parent: BouncingScrollPhysics(),
+                            ),
+                            itemCount: visibleSheets.length,
                             separatorBuilder: (context, index) =>
                                 const Divider(height: 1, indent: 84, endIndent: 16),
                             itemBuilder: (context, index) {
-                              final sheet = sheets[index];
+                              final sheet = visibleSheets[index];
                               final unlocked = _isSheetUnlocked(sheet, user);
                               final isThisSelecting =
                                   isSelectingSheet && selectingSheetId == sheet.id;
-                              Future<void> handleUnlockedSelection() async {
+                              Future<void> applySheetSelection() async {
                                 if (isSelectingSheet) return;
                                 setModalState(() {
                                   isSelectingSheet = true;
@@ -338,13 +414,40 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                                 }
                               }
 
+                              Future<void> showSheetPreviewDialog() async {
+                                await showDialog<void>(
+                                  context: context,
+                                  useRootNavigator: false,
+                                  barrierDismissible: true,
+                                  builder: (_) {
+                                    return Dialog(
+                                      backgroundColor: Colors.transparent,
+                                      insetPadding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 24,
+                                      ),
+                                      child: AspectRatio(
+                                        aspectRatio: 2 / 3,
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(16),
+                                          child: Image.asset(
+                                            sheet.assetPath,
+                                            fit: BoxFit.contain,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                );
+                              }
+
                               return ListTile(
                                 contentPadding: const EdgeInsets.symmetric(
                                   horizontal: 20,
                                   vertical: 6,
                                 ),
                                 onTap: (unlocked && !isSelectingSheet)
-                                    ? handleUnlockedSelection
+                                    ? showSheetPreviewDialog
                                     : null,
                                 leading: ClipRRect(
                                   borderRadius: BorderRadius.circular(12),
@@ -373,11 +476,11 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                                         child: CircularProgressIndicator(strokeWidth: 2.5),
                                       )
                                     : unlocked
-                                        ? FilledButton.tonal(
+                                        ? FilledButton(
                                             onPressed: isSelectingSheet
                                                 ? null
-                                                : handleUnlockedSelection,
-                                            child: Text(AppMessages.stamp.owned),
+                                                : applySheetSelection,
+                                            child: Text(AppMessages.stamp.selectAction),
                                           )
                                         : FilledButton(
                                             onPressed: isSelectingSheet
@@ -424,14 +527,18 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                           ),
                         ),
                       ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            );
-          },
-        );
-      },
-    );
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      _isShowingCatalogSheet = false;
+      _debugStampFlow('open_catalog_end');
+    }
   }
 
   Future<void> _selectFirstSheet(
@@ -482,10 +589,12 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
   }) async {
     if (_isShowingSelectDialog) return;
     _isShowingSelectDialog = true;
+    _debugStampFlow('show_selection_dialog', {'first': first});
     await showDialog<void>(
       context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
+      barrierDismissible: true,
+      useRootNavigator: false,
+      builder: (dialogContext) => AlertDialog(
         title: Text(
           first
               ? AppMessages.stamp.chooseFirstSheetTitle
@@ -499,9 +608,8 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
         actions: [
           FilledButton(
             onPressed: () async {
-              if (Navigator.of(context, rootNavigator: true).canPop()) {
-                Navigator.of(context, rootNavigator: true).pop();
-              }
+              Navigator.of(dialogContext).pop();
+              _debugStampFlow('selection_dialog_tap_design_select');
               if (!mounted) return;
               await _openCatalog(
                 user: user,
@@ -531,6 +639,7 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
       ),
     );
     _isShowingSelectDialog = false;
+    _debugStampFlow('selection_dialog_closed');
   }
 
   @override
@@ -563,14 +672,6 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
           ),
         ],
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      floatingActionButton: _showStampBar
-          ? null
-          : FloatingActionButton(
-              onPressed: () => setState(() => _showStampBar = true),
-              tooltip: AppMessages.stamp.selectStamp,
-              child: const Icon(Icons.auto_awesome_outlined),
-            ),
       body: Container(
         decoration: const BoxDecoration(gradient: AppColors.warmGradient),
         child: FutureBuilder<List<StampSheetDefinition>>(
@@ -612,6 +713,13 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                         state.pendingNextSheetFrom = await _getPendingNextSheet(
                           user.uid,
                         );
+                        _debugStampFlow('load_pending_next_sheet', {
+                          'user': user.uid,
+                          'pending': state.pendingNextSheetFrom,
+                        });
+                        if (mounted) {
+                          setState(() {});
+                        }
                         final firstRequired = await _isFirstSheetRequired(
                           user.uid,
                         );
@@ -658,8 +766,61 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                     }
 
                     final layout = layouts[selected.id]!;
+                    final hasPendingFromState =
+                        state.pendingNextSheetFrom != null;
                     final canUndo =
+                        !hasPendingFromState &&
                         _latestFilledSlotId(layout, state.localBySlot) != null;
+                    final isSheetComplete =
+                        state.localBySlot.length >= layout.slots.length;
+                    if (isSheetComplete && state.pendingNextSheetFrom == null) {
+                      state.pendingNextSheetFrom = selected.id;
+                      _debugStampFlow('auto_set_pending_from_complete_sheet', {
+                        'sheet': selected.id,
+                      });
+                      unawaited(_setPendingNextSheet(user.uid, selected.id));
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) setState(() {});
+                      });
+                    }
+                    if (hasPendingFromState && _showStampBar) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) {
+                          setState(() => _showStampBar = false);
+                        }
+                      });
+                    }
+                    final shouldShowNextSheetFab =
+                        state.pendingNextSheetFrom != null || isSheetComplete;
+                    if (_showNextSheetSelectionFab != shouldShowNextSheetFab) {
+                      _debugStampFlow('toggle_next_sheet_fab_flag', {
+                        'before': _showNextSheetSelectionFab,
+                        'after': shouldShowNextSheetFab,
+                        'pending': state.pendingNextSheetFrom,
+                        'isComplete': isSheetComplete,
+                      });
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) {
+                          setState(() {
+                            _showNextSheetSelectionFab = shouldShowNextSheetFab;
+                          });
+                        }
+                      });
+                    }
+                    final hasPendingSelection =
+                        state.pendingNextSheetFrom != null ||
+                        _showNextSheetSelectionFab;
+                    final signature =
+                        'pending=${state.pendingNextSheetFrom}|fabFlag=$_showNextSheetSelectionFab|showBar=$_showStampBar|hasPending=$hasPendingSelection';
+                    if (_lastFlowDebugSignature != signature) {
+                      _lastFlowDebugSignature = signature;
+                      _debugStampFlow('fab_state', {
+                        'pending': state.pendingNextSheetFrom,
+                        'fabFlag': _showNextSheetSelectionFab,
+                        'showStampBar': _showStampBar,
+                        'hasPendingSelection': hasPendingSelection,
+                      });
+                    }
 
                     return Stack(
                       children: [
@@ -723,6 +884,13 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                                   layout: layout,
                                   bySlot: state.localBySlot,
                                   onLongPress: () {
+                                    if (state.pendingNextSheetFrom != null) {
+                                      _toast(
+                                        AppMessages.stamp.chooseNextSheetRequired,
+                                        error: true,
+                                      );
+                                      return;
+                                    }
                                     setState(() => _showStampBar = true);
                                   },
                                 ),
@@ -738,13 +906,20 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                             numberOfParticles: 20,
                           ),
                         ),
-                        if (_showStampBar)
+                        if (_showStampBar && state.pendingNextSheetFrom == null)
                           _StampBar(
                             isUnlocked: (type) =>
                                 _isReactionUnlocked(type, user),
                             onClose: () =>
                                 setState(() => _showStampBar = false),
                             onTap: (type) async {
+                              if (state.pendingNextSheetFrom != null) {
+                                _toast(
+                                  AppMessages.stamp.chooseNextSheetRequired,
+                                  error: true,
+                                );
+                                return;
+                              }
                               if (!_isReactionUnlocked(type, user)) {
                                 _toast(
                                   AppMessages.stamp.stampLocked,
@@ -764,8 +939,21 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                                 state.localBySlot,
                               );
                               if (slotId == null) {
+                                if (state.pendingNextSheetFrom == null) {
+                                  state.pendingNextSheetFrom = selected.id;
+                                  _debugStampFlow('set_pending_on_sheet_full', {
+                                    'sheet': selected.id,
+                                  });
+                                  await _setPendingNextSheet(
+                                    user.uid,
+                                    selected.id,
+                                  );
+                                  if (mounted) {
+                                    setState(() {});
+                                  }
+                                }
                                 _toast(
-                                  AppMessages.stamp.sheetFull,
+                                  AppMessages.stamp.chooseNextSheetRequired,
                                   error: true,
                                 );
                                 return;
@@ -782,6 +970,11 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                                   state.pendingNextSheetFrom == null) {
                                 _confettiController.play();
                                 state.pendingNextSheetFrom = selected.id;
+                                _debugStampFlow('sheet_completed_set_pending', {
+                                  'sheet': selected.id,
+                                  'filled': state.localBySlot.length,
+                                  'slots': layout.slots.length,
+                                });
                                 await _setPendingNextSheet(
                                   user.uid,
                                   selected.id,
@@ -796,6 +989,58 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                               }
                             },
                           ),
+                        Positioned(
+                          right: 16,
+                          bottom: 16,
+                          child: SafeArea(
+                            top: false,
+                            child: hasPendingSelection
+                                ? SizedBox(
+                                    width: 172,
+                                    height: 56,
+                                    child: ElevatedButton.icon(
+                                      onPressed: () async {
+                                        _debugStampFlow('tap_next_sheet_fab');
+                                        final latestSheets =
+                                            await (_catalogFuture ??=
+                                                _sheetService.fetchCatalog());
+                                        if (!mounted) return;
+                                        await _openCatalog(
+                                          user: user,
+                                          sheets: latestSheets,
+                                        );
+                                      },
+                                      icon: const Icon(
+                                        Icons.collections_bookmark_outlined,
+                                      ),
+                                      label: Text(
+                                        AppMessages.stamp.chooseNextSheetFabLabel,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      style: ElevatedButton.styleFrom(
+                                        shape: const StadiumBorder(),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 12,
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                : _showStampBar
+                                ? const SizedBox.shrink()
+                                : FloatingActionButton(
+                                    onPressed: () {
+                                      _debugStampFlow('tap_open_stamp_bar_fab');
+                                      setState(() => _showStampBar = true);
+                                    },
+                                    tooltip: AppMessages.stamp.selectStamp,
+                                    child: const Icon(
+                                      Icons.auto_awesome_outlined,
+                                    ),
+                                  ),
+                          ),
+                        ),
                       ],
                     );
                   },
