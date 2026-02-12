@@ -133,6 +133,7 @@ export const NOTIFICATION_TITLES = {
 export const NOTIFICATION_BODIES = {
     POST_HIDDEN_BY_REPORTS: "複数の通報があったため、投稿を一時的に非表示にしました。内容をご確認ください。",
     POST_DELETED_BY_ADMIN: "運営による確認の結果、投稿が削除されました。",
+    COMMENT_THANKED: "あなたのコメントがいいね！されました。",
     REPORT_SUBMITTED: "通報内容を運営チームで確認します。ご協力ありがとうございます。",
     flaggedPost: (reason: string) => `フラグ付き投稿があります: ${reason}`,
 } as const;

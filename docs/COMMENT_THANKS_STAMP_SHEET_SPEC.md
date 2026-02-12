@@ -119,7 +119,7 @@
 ## 9. 受け入れ基準
 - 投稿主のみが返信コメントへお礼いいねできる。
 - 同一コメントへの2回目いいねは不可。
-- いいねされたコメント投稿者の回数が増える（現行はテスト運用で `+20`）。
+- いいねされたコメント投稿者の回数が増える（`+1`）。
 - シート空き枠への配置で回数が1減る。
 - 未解放スタンプはシートで選べない。
 - タスクタブが表示されず、スタンプシートタブが表示される。
@@ -136,7 +136,7 @@
 ### 実装済み
 - 投稿主がコメントに対して `いいね！` を 1 回だけ付与できる Callable を実装（`likeCommentAsPostOwner`）。
 - `いいね！` 付与時に、コメント投稿者へ `thanksStampCredits` を加算するサーバー処理を実装。
-- 注記: 現在値はテスト運用で一時的に `+20`（`functions/src/callable/comments.ts` の `THANKS_STAMP_CREDITS_PER_LIKE`）。
+- 加算値は `+1`（`functions/src/callable/comments.ts` の `THANKS_STAMP_CREDITS_PER_LIKE`）。
 - スタンプシート同期 Callable を実装（`syncStampSheetSnapshot`）。
 - アクティブシート切替 Callable を実装（`setActiveStampSheet`）。
 - 満了アーカイブ + 次シート開始 Callable を実装（`archiveAndStartNextStampSheet`）。

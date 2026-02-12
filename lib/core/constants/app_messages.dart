@@ -649,7 +649,7 @@ class _StampMessages {
 
   String get thanksSent => 'いいね！しました';
   String get thanksReceived => 'いいね！されたよ';
-  String get thanksGiven => 'お礼スタンプを20個獲得しました';
+  String get thanksGiven => 'お礼スタンプを1個獲得しました';
   String get thanksAlreadyGiven => 'このコメントには既に付与済みです';
   String get postOwnerOnly => '投稿主のみ実行できます';
   String get designSelect => 'デザイン閲覧';

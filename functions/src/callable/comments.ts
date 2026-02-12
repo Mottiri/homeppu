@@ -13,6 +13,8 @@ import { AI_MODELS, LOCATION } from "../config/constants";
 import {
     AUTH_ERRORS,
     COMMENT_THANKS_MESSAGES,
+    NOTIFICATION_BODIES,
+    NOTIFICATION_TITLES,
     PERMISSION_ERRORS,
     RESOURCE_ERRORS,
     STAMP_SHEET_MESSAGES,
@@ -28,7 +30,7 @@ const EPIC_STAMP_SHEET_REACTIONS = new Set(["rainbow", "hundred", "confetti"]);
 const SETTINGS_COLLECTION = "settings";
 const VIRTUE_SHOP_SETTINGS_DOC = "virtueShop";
 const STAMP_SHEET_CATALOG_DOC = "stampSheetCatalog";
-const THANKS_STAMP_CREDITS_PER_LIKE = 20;
+const THANKS_STAMP_CREDITS_PER_LIKE = 1;
 
 function normalizeRarity(raw: unknown): "common" | "rare" | "epic" {
     if (raw === "rare") return "rare";
@@ -572,8 +574,13 @@ export const likeCommentAsPostOwner = onCall(
 
             const alreadyThanked = commentData.thanksLikedByPostOwner === true;
             const commentOwnerRef = db.collection("users").doc(commentOwnerId);
+            const actorRef = db.collection("users").doc(userId);
             const commentOwnerSnap = await transaction.get(commentOwnerRef);
+            const actorSnap = await transaction.get(actorRef);
             if (!commentOwnerSnap.exists) {
+                throw new HttpsError("not-found", RESOURCE_ERRORS.USER_NOT_FOUND);
+            }
+            if (!actorSnap.exists) {
                 throw new HttpsError("not-found", RESOURCE_ERRORS.USER_NOT_FOUND);
             }
 
@@ -600,6 +607,26 @@ export const likeCommentAsPostOwner = onCall(
             transaction.update(commentOwnerRef, {
                 thanksStampCredits: nextCredits,
                 updatedAt: now,
+            });
+
+            const actorData = actorSnap.data() || {};
+            const senderName = typeof actorData.displayName === "string" && actorData.displayName.trim()
+                ? actorData.displayName.trim()
+                : LABELS.SOMEONE;
+            const senderAvatarUrl = String(actorData.avatarIndex ?? "");
+            const notificationRef = commentOwnerRef.collection("notifications").doc();
+            transaction.set(notificationRef, {
+                userId: commentOwnerId,
+                senderId: userId,
+                senderName,
+                senderAvatarUrl,
+                type: "reaction",
+                title: NOTIFICATION_TITLES.REACTION,
+                body: NOTIFICATION_BODIES.COMMENT_THANKED,
+                postId,
+                isRead: false,
+                createdAt: now,
+                pushPolicy: "bySettings",
             });
 
             return {
