@@ -37,6 +37,19 @@ class _StampSheetCatalogScreenState extends ConsumerState<StampSheetCatalogScree
     return user.unlockedStampSheets.contains(sheet.unlockKey);
   }
 
+  int _rarityRank(String rarity) {
+    switch (rarity) {
+      case 'common':
+        return 0;
+      case 'rare':
+        return 1;
+      case 'epic':
+        return 2;
+      default:
+        return 99;
+    }
+  }
+
   void _toast(String message, {bool error = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -185,9 +198,23 @@ class _StampSheetCatalogScreenState extends ConsumerState<StampSheetCatalogScree
               );
             }
             final sheets = snapshot.data!;
+            final sortedSheets = [...sheets]..sort((a, b) {
+              final rarityCompare =
+                  _rarityRank(a.rarity).compareTo(_rarityRank(b.rarity));
+              if (rarityCompare != 0) return rarityCompare;
+
+              final aUnlocked = _isSheetUnlocked(a, user);
+              final bUnlocked = _isSheetUnlocked(b, user);
+              if (aUnlocked != bUnlocked) return aUnlocked ? -1 : 1;
+
+              return a.id.compareTo(b.id);
+            });
             return GridView.builder(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-              itemCount: sheets.length,
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
+              itemCount: sortedSheets.length,
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
                 crossAxisSpacing: 18,
@@ -195,40 +222,24 @@ class _StampSheetCatalogScreenState extends ConsumerState<StampSheetCatalogScree
                 childAspectRatio: 0.78,
               ),
               itemBuilder: (context, index) {
-                final sheet = sheets[index];
+                final sheet = sortedSheets[index];
                 final unlocked = _isSheetUnlocked(sheet, user);
                 return GestureDetector(
                   onTap: () =>
                       _showSheetPreview(sheet: sheet, unlocked: unlocked, user: user),
                   child: Stack(
                     children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          gradient: AppColors.cardGradient,
-                          borderRadius: BorderRadius.circular(18),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.primary.withValues(alpha: 0.10),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
-                            ),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Image.asset(sheet.assetPath, fit: BoxFit.contain),
+                            if (!unlocked)
+                              Container(
+                                color: Colors.black.withValues(alpha: 0.18),
+                              ),
                           ],
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(10),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                Image.asset(sheet.assetPath, fit: BoxFit.contain),
-                                if (!unlocked)
-                                  Container(
-                                    color: Colors.black.withValues(alpha: 0.18),
-                                  ),
-                              ],
-                            ),
-                          ),
                         ),
                       ),
                       Positioned(

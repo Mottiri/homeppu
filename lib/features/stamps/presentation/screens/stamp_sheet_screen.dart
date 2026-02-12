@@ -563,6 +563,14 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
           ),
         ],
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButton: _showStampBar
+          ? null
+          : FloatingActionButton(
+              onPressed: () => setState(() => _showStampBar = true),
+              tooltip: AppMessages.stamp.selectStamp,
+              child: const Icon(Icons.auto_awesome_outlined),
+            ),
       body: Container(
         decoration: const BoxDecoration(gradient: AppColors.warmGradient),
         child: FutureBuilder<List<StampSheetDefinition>>(
