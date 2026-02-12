@@ -19,6 +19,7 @@ import '../../../../shared/services/circle_service.dart';
 import '../../../../shared/services/comment_thanks_service.dart';
 import '../../../../shared/widgets/public_user_avatar.dart';
 import '../../../../shared/widgets/report_dialog.dart';
+import '../../../../shared/widgets/ad_banner.dart';
 
 import '../../../home/presentation/widgets/post_card.dart';
 
@@ -141,9 +142,22 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     );
 
     return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          onPressed: () => context.pop(),
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(58),
+          child: AdBanner(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+          ),
+        ),
+      ),
       body: Container(
         decoration: BoxDecoration(gradient: userGradient),
         child: SafeArea(
+          top: false,
           child: Column(
             children: [
               Expanded(
@@ -203,20 +217,6 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
 
                     return CustomScrollView(
                       slivers: [
-                        // 戻るボタン（スクロールで非表示）
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-                            child: Row(
-                              children: [
-                                IconButton(
-                                  onPressed: () => context.pop(),
-                                  icon: const Icon(Icons.arrow_back_rounded),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
                         // 投稿本体（PostCardウィジェットを再利用）
                         SliverToBoxAdapter(
                           child: _buildPostCard(post, currentUser, isAdmin),

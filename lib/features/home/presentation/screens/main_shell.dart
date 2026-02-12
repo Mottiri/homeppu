@@ -24,6 +24,12 @@ class _MainShellState extends ConsumerState<MainShell>
   late final AnimationController _rotationController;
   late final Animation<double> _rotationAnimation;
   int _previousIndex = 0;
+  bool _isBottomNavVisible = true;
+  double _scrollDeltaAccumulator = 0;
+  double? _lastScrollPixels;
+  int _scrollAccumulatorDirection = 0; // 1: down, -1: up
+  static const double _hideThreshold = 24;
+  static const double _showThreshold = 72;
 
   @override
   void initState() {
@@ -92,6 +98,10 @@ class _MainShellState extends ConsumerState<MainShell>
     }
 
     final currentIndex = _getCurrentIndex(context);
+    final isTimelineScreen = currentIndex == 0;
+    if (!isTimelineScreen && !_isBottomNavVisible) {
+      _isBottomNavVisible = true;
+    }
     if (currentIndex != _previousIndex) {
       final wasSpecialScreen = _previousIndex == 1;
       final isSpecialScreen = currentIndex == 1;
@@ -110,135 +120,208 @@ class _MainShellState extends ConsumerState<MainShell>
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
-      body: widget.child,
+      body: NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          if (!isTimelineScreen) return false;
+          if (notification is ScrollStartNotification) {
+            _lastScrollPixels = notification.metrics.pixels;
+            _scrollDeltaAccumulator = 0;
+            _scrollAccumulatorDirection = 0;
+            return false;
+          }
+          if (notification is ScrollUpdateNotification) {
+            final delta =
+                notification.scrollDelta ??
+                (notification.metrics.pixels -
+                    (_lastScrollPixels ?? notification.metrics.pixels));
+            _lastScrollPixels = notification.metrics.pixels;
+            if (delta > 0) {
+              if (_scrollAccumulatorDirection != 1) {
+                _scrollAccumulatorDirection = 1;
+                _scrollDeltaAccumulator = 0;
+              }
+              _scrollDeltaAccumulator += delta.abs();
+              if (_isBottomNavVisible &&
+                  _scrollDeltaAccumulator >= _hideThreshold) {
+                _scrollDeltaAccumulator = 0;
+                setState(() => _isBottomNavVisible = false);
+              }
+            } else if (delta < 0) {
+              if (_scrollAccumulatorDirection != -1) {
+                _scrollAccumulatorDirection = -1;
+                _scrollDeltaAccumulator = 0;
+              }
+              _scrollDeltaAccumulator += delta.abs();
+              if (!_isBottomNavVisible &&
+                  _scrollDeltaAccumulator >= _showThreshold) {
+                _scrollDeltaAccumulator = 0;
+                setState(() => _isBottomNavVisible = true);
+              }
+            }
+            return false;
+          }
+          if (notification is ScrollEndNotification) {
+            _scrollDeltaAccumulator = 0;
+            _lastScrollPixels = null;
+            _scrollAccumulatorDirection = 0;
+          }
+          return false;
+        },
+        child: widget.child,
+      ),
       extendBody: true,
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.1),
-              blurRadius: 20,
-              offset: const Offset(0, -4),
-            ),
-          ],
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _NavItem(
-                  icon: Icons.home_outlined,
-                  activeIcon: Icons.home_rounded,
-                  label: 'ホーム',
-                  isActive: currentIndex == 0,
-                  onTap: () {
-                    if (currentIndex == 0) {
-                      ref.read(homeScrollToTopProvider.notifier).state++;
-                    } else {
-                      context.go('/home');
-                    }
-                  },
+      bottomNavigationBar: ClipRect(
+        child: AnimatedAlign(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.bottomCenter,
+          heightFactor: _isBottomNavVisible ? 1 : 0,
+          child: AnimatedSlide(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            offset: _isBottomNavVisible ? Offset.zero : const Offset(0, 1.0),
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 180),
+              opacity: _isBottomNavVisible ? 1 : 0,
+              child: IgnorePointer(
+                ignoring: !_isBottomNavVisible,
+                child: Container(
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    blurRadius: 20,
+                    offset: const Offset(0, -4),
+                  ),
+                ],
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
                 ),
-                _NavItem(
-                  icon: Icons.groups_outlined,
-                  activeIcon: Icons.groups_rounded,
-                  label: 'サークル',
-                  isActive: currentIndex == 1,
-                  onTap: () {
-                    if (currentIndex == 1) {
-                      ref.read(circleScrollToTopProvider.notifier).state++;
-                    } else {
-                      context.go('/circles');
-                    }
-                  },
-                ),
-                GestureDetector(
-                  onTap: () => _handleCenterButtonTap(context, currentIndex),
-                  child: AnimatedBuilder(
-                    animation: _rotationAnimation,
-                    builder: (context, child) {
-                      final isCircleScreen = currentIndex == 1;
-                      final isSpecialScreen = isCircleScreen;
+              ),
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 8,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _NavItem(
+                        icon: Icons.home_outlined,
+                        activeIcon: Icons.home_rounded,
+                        label: 'ホーム',
+                        isActive: currentIndex == 0,
+                        onTap: () {
+                          if (currentIndex == 0) {
+                            ref.read(homeScrollToTopProvider.notifier).state++;
+                          } else {
+                            context.go('/home');
+                          }
+                        },
+                      ),
+                      _NavItem(
+                        icon: Icons.groups_outlined,
+                        activeIcon: Icons.groups_rounded,
+                        label: 'サークル',
+                        isActive: currentIndex == 1,
+                        onTap: () {
+                          if (currentIndex == 1) {
+                            ref.read(circleScrollToTopProvider.notifier).state++;
+                          } else {
+                            context.go('/circles');
+                          }
+                        },
+                      ),
+                      GestureDetector(
+                        onTap: () => _handleCenterButtonTap(context, currentIndex),
+                        child: AnimatedBuilder(
+                          animation: _rotationAnimation,
+                          builder: (context, child) {
+                            final isCircleScreen = currentIndex == 1;
+                            final isSpecialScreen = isCircleScreen;
 
-                      const circleButtonGradient = LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Color(0xFF4DD0E1),
-                          Color(0xFF00ACC1),
-                        ],
-                      );
+                            const circleButtonGradient = LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                Color(0xFF4DD0E1),
+                                Color(0xFF00ACC1),
+                              ],
+                            );
 
-                      LinearGradient buttonGradient;
-                      Color shadowColor;
-                      IconData buttonIcon;
-                      double iconSize;
+                            LinearGradient buttonGradient;
+                            Color shadowColor;
+                            IconData buttonIcon;
+                            double iconSize;
 
-                      if (isCircleScreen) {
-                        buttonGradient = circleButtonGradient;
-                        shadowColor = const Color(0xFF00ACC1);
-                        buttonIcon = Icons.group_add_rounded;
-                        iconSize = 26;
-                      } else {
-                        buttonGradient = AppColors.primaryGradient;
-                        shadowColor = AppColors.primary;
-                        buttonIcon = Icons.add_rounded;
-                        iconSize = 32;
-                      }
+                            if (isCircleScreen) {
+                              buttonGradient = circleButtonGradient;
+                              shadowColor = const Color(0xFF00ACC1);
+                              buttonIcon = Icons.group_add_rounded;
+                              iconSize = 26;
+                            } else {
+                              buttonGradient = AppColors.primaryGradient;
+                              shadowColor = AppColors.primary;
+                              buttonIcon = Icons.add_rounded;
+                              iconSize = 32;
+                            }
 
-                      final rotationAngle = isSpecialScreen
-                          ? _rotationAnimation.value * 3.14159
-                          : 0.0;
+                            final rotationAngle = isSpecialScreen
+                                ? _rotationAnimation.value * 3.14159
+                                : 0.0;
 
-                      return AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        width: 64,
-                        height: 64,
-                        decoration: BoxDecoration(
-                          gradient: buttonGradient,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: shadowColor.withValues(alpha: 0.4),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
+                            return AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              width: 64,
+                              height: 64,
+                              decoration: BoxDecoration(
+                                gradient: buttonGradient,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: shadowColor.withValues(alpha: 0.4),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: Transform.rotate(
+                                angle: rotationAngle,
+                                child: Transform.rotate(
+                                  angle: isCircleScreen ? -1.5708 : 0,
+                                  child: Icon(
+                                    buttonIcon,
+                                    color: Colors.white,
+                                    size: iconSize,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
                         ),
-                        child: Transform.rotate(
-                          angle: rotationAngle,
-                          child: Transform.rotate(
-                            angle: isCircleScreen ? -1.5708 : 0,
-                            child: Icon(
-                              buttonIcon,
-                              color: Colors.white,
-                              size: iconSize,
-                            ),
-                          ),
-                        ),
-                      );
-                    },
+                      ),
+                      _NavItem(
+                        icon: Icons.collections_bookmark_outlined,
+                        activeIcon: Icons.collections_bookmark_rounded,
+                        label: AppMessages.stamp.navLabel,
+                        isActive: currentIndex == 2,
+                        onTap: () => context.go('/stamps'),
+                      ),
+                      _NavItem(
+                        icon: Icons.person_outline,
+                        activeIcon: Icons.person_rounded,
+                        label: 'マイページ',
+                        isActive: currentIndex == 3,
+                        onTap: () => context.go('/profile'),
+                      ),
+                    ],
                   ),
                 ),
-                _NavItem(
-                  icon: Icons.collections_bookmark_outlined,
-                  activeIcon: Icons.collections_bookmark_rounded,
-                  label: AppMessages.stamp.navLabel,
-                  isActive: currentIndex == 2,
-                  onTap: () => context.go('/stamps'),
+              ),
                 ),
-                _NavItem(
-                  icon: Icons.person_outline,
-                  activeIcon: Icons.person_rounded,
-                  label: 'マイページ',
-                  isActive: currentIndex == 3,
-                  onTap: () => context.go('/profile'),
-                ),
-              ],
+              ),
             ),
           ),
         ),
