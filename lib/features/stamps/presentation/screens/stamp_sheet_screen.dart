@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/constants/app_colors.dart';
@@ -96,7 +98,8 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
 
   String _firstSheetRequiredKey(String userId) =>
       'stamp_first_sheet_required_$userId';
-  String _nextSheetPendingKey(String userId) => 'stamp_next_sheet_pending_$userId';
+  String _nextSheetPendingKey(String userId) =>
+      'stamp_next_sheet_pending_$userId';
 
   Future<void> _setFirstSheetRequired(String userId, bool required) async {
     final prefs = await SharedPreferences.getInstance();
@@ -180,7 +183,10 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
     });
   }
 
-  List<StampSnapshotEntry> _entriesFrom(String sheetId, Map<String, String> map) {
+  List<StampSnapshotEntry> _entriesFrom(
+    String sheetId,
+    Map<String, String> map,
+  ) {
     final entries = <StampSnapshotEntry>[];
     map.forEach((slotId, stampId) {
       entries.add(
@@ -247,7 +253,10 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
     return null;
   }
 
-  String? _latestFilledSlotId(StampSheetLayout layout, Map<String, String> map) {
+  String? _latestFilledSlotId(
+    StampSheetLayout layout,
+    Map<String, String> map,
+  ) {
     for (var i = layout.slots.length - 1; i >= 0; i--) {
       final slot = layout.slots[i];
       if ((map[slot.slotId] ?? '').isNotEmpty) return slot.slotId;
@@ -268,7 +277,6 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
   Future<void> _openCatalog({
     required UserModel user,
     required List<StampSheetDefinition> sheets,
-    required bool forSelection,
   }) async {
     await showModalBottomSheet<void>(
       context: context,
@@ -278,57 +286,90 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
         return SafeArea(
           child: SizedBox(
             height: MediaQuery.of(context).size.height * 0.75,
-            child: ListView.builder(
-              itemCount: sheets.length,
-              itemBuilder: (context, index) {
-                final sheet = sheets[index];
-                final unlocked = _isSheetUnlocked(sheet, user);
-                Future<void> handleUnlockedSelection() async {
-                  if (!forSelection) return;
-                  final state = _runtime(user.uid);
-                  try {
-                    if (state.pendingNextSheetFrom != null) {
-                      await _chooseNextSheet(sheet, user);
-                    } else {
-                      await _selectFirstSheet(sheet, user);
-                    }
-                    if (context.mounted) Navigator.of(context).pop();
-                  } catch (_) {
-                    _toast(AppMessages.error.general, error: true);
-                  }
-                }
-                return ListTile(
-                  onTap: unlocked ? handleUnlockedSelection : null,
-                  leading: SizedBox(
-                    width: 56,
-                    height: 56,
-                    child: Image.asset(sheet.assetPath, fit: BoxFit.cover),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                  child: Text(
+                    AppMessages.stamp.designCatalogTitle,
+                    style: Theme.of(context).textTheme.headlineSmall,
                   ),
-                  title: Text(sheet.id),
-                  subtitle: Text(sheet.rarity),
-                  trailing: unlocked
-                      ? FilledButton.tonal(
-                          onPressed: handleUnlockedSelection,
-                          child: Text(AppMessages.stamp.owned),
-                        )
-                      : FilledButton(
-                          onPressed: () async {
-                            await _virtueShopService.purchaseVirtueItem(
-                              itemType: 'stamp_sheet',
-                              itemId: sheet.id,
-                            );
-                            ref.invalidate(currentUserProvider);
-                            ref.invalidate(virtueStatusProvider);
-                            ref.invalidate(virtueHistoryProvider);
-                            ref.invalidate(virtueShopConfigProvider);
-                            if (context.mounted) {
-                              Navigator.of(context).pop();
-                            }
-                          },
-                          child: Text(AppMessages.label.purchase),
+                ),
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: sheets.length,
+                    separatorBuilder: (context, index) =>
+                        const Divider(height: 1, indent: 84, endIndent: 16),
+                    itemBuilder: (context, index) {
+                      final sheet = sheets[index];
+                      final unlocked = _isSheetUnlocked(sheet, user);
+                      Future<void> handleUnlockedSelection() async {
+                        final state = _runtime(user.uid);
+                        try {
+                          if (state.pendingNextSheetFrom != null) {
+                            await _chooseNextSheet(sheet, user);
+                          } else {
+                            await _selectFirstSheet(sheet, user);
+                          }
+                          if (context.mounted) Navigator.of(context).pop();
+                        } catch (_) {
+                          _toast(AppMessages.error.general, error: true);
+                        }
+                      }
+
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 6,
                         ),
-                );
-              },
+                        onTap: unlocked ? handleUnlockedSelection : null,
+                        leading: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: SizedBox(
+                            width: 64,
+                            height: 64,
+                            child: Image.asset(
+                              sheet.assetPath,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                        title: Text(
+                          sheet.id,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        subtitle: Text(
+                          AppMessages.stamp.sheetRarityLabel(sheet.rarity),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: AppColors.textSecondary),
+                        ),
+                        trailing: unlocked
+                            ? FilledButton.tonal(
+                                onPressed: handleUnlockedSelection,
+                                child: Text(AppMessages.stamp.owned),
+                              )
+                            : FilledButton(
+                                onPressed: () async {
+                                  await _virtueShopService.purchaseVirtueItem(
+                                    itemType: 'stamp_sheet',
+                                    itemId: sheet.id,
+                                  );
+                                  ref.invalidate(currentUserProvider);
+                                  ref.invalidate(virtueStatusProvider);
+                                  ref.invalidate(virtueHistoryProvider);
+                                  ref.invalidate(virtueShopConfigProvider);
+                                  if (context.mounted) {
+                                    Navigator.of(context).pop();
+                                  }
+                                },
+                                child: Text(AppMessages.label.purchase),
+                              ),
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
           ),
         );
@@ -336,7 +377,10 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
     );
   }
 
-  Future<void> _selectFirstSheet(StampSheetDefinition sheet, UserModel user) async {
+  Future<void> _selectFirstSheet(
+    StampSheetDefinition sheet,
+    UserModel user,
+  ) async {
     if (!_isSheetUnlocked(sheet, user)) {
       _toast(AppMessages.stamp.sheetLocked, error: true);
       return;
@@ -353,7 +397,10 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
     _scheduleFlush();
   }
 
-  Future<void> _chooseNextSheet(StampSheetDefinition sheet, UserModel user) async {
+  Future<void> _chooseNextSheet(
+    StampSheetDefinition sheet,
+    UserModel user,
+  ) async {
     final state = _runtime(user.uid);
     final currentSheet = state.pendingNextSheetFrom;
     if (currentSheet == null) return;
@@ -393,7 +440,7 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
               : AppMessages.stamp.chooseNextSheetBody,
         ),
         actions: [
-          TextButton(
+          FilledButton(
             onPressed: () async {
               if (Navigator.of(context, rootNavigator: true).canPop()) {
                 Navigator.of(context, rootNavigator: true).pop();
@@ -402,11 +449,11 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
               await _openCatalog(
                 user: user,
                 sheets: sheets,
-                forSelection: true,
               );
               if (!mounted) return;
               final state = _runtime(user.uid);
-              final latestUser = ref.read(currentUserProvider).valueOrNull ?? user;
+              final latestUser =
+                  ref.read(currentUserProvider).valueOrNull ?? user;
               final firstRequired = await _isFirstSheetRequired(user.uid);
               final needsFirst =
                   first &&
@@ -444,196 +491,254 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
         title: Text(AppMessages.stamp.title),
         actions: [
           IconButton(
+            onPressed: () => context.push('/stamps/catalog'),
+            icon: const Icon(Icons.palette_outlined),
+            tooltip: AppMessages.stamp.designCatalogTitle,
+          ),
+          IconButton(
+            onPressed: () => context.push('/stamps/archives'),
+            icon: const Icon(Icons.inventory_2_outlined),
+            tooltip: AppMessages.stamp.archiveTitle,
+          ),
+          IconButton(
             onPressed: () => _toast(AppMessages.stamp.helpBody),
             icon: const Icon(Icons.help_outline),
           ),
         ],
       ),
-      body: FutureBuilder<List<StampSheetDefinition>>(
-        future: _catalogFuture,
-        builder: (context, catalogSnapshot) {
-          if (!catalogSnapshot.hasData) {
-            return const Center(
-              child: CircularProgressIndicator(color: AppColors.primary),
-            );
-          }
-          final sheets = catalogSnapshot.data!;
-          return FutureBuilder<Map<String, StampSheetLayout>>(
-            future: _layoutsFuture,
-            builder: (context, layoutSnapshot) {
-              if (!layoutSnapshot.hasData) {
-                return const Center(
-                  child: CircularProgressIndicator(color: AppColors.primary),
-                );
-              }
-              final layouts = layoutSnapshot.data!;
-              return StreamBuilder<Map<int, List<StampSheetPlacement>>>(
-                stream: _sheetService.watchAllPlacementsByPage(user.uid),
-                builder: (context, placementSnapshot) {
-                  final hasPlacementData = placementSnapshot.hasData;
-                  final pageMap =
-                      placementSnapshot.data ?? const <int, List<StampSheetPlacement>>{};
-                  final state = _runtime(user.uid);
-                  final selected = _resolveSelectedSheet(sheets, state, user);
-                  final serverBySlot = _serverBySlot(pageMap, selected.id);
-                  if (!state.initialized) {
-                    state.initialized = true;
-                    state.localCredits = user.thanksStampCredits;
-                    state.baseVersion = user.stampSheetVersion;
-                    state.localBySlot
-                      ..clear()
-                      ..addAll(serverBySlot);
-                    unawaited(() async {
-                      state.pendingNextSheetFrom = await _getPendingNextSheet(user.uid);
-                      final firstRequired = await _isFirstSheetRequired(user.uid);
-                      if (!mounted) return;
-                      if ((user.activeStampSheetId == null || firstRequired) &&
-                          state.pendingNextSheetFrom == null) {
-                        await _showSelectionDialog(user: user, sheets: sheets, first: true);
-                      } else if (state.pendingNextSheetFrom != null) {
-                        await _showSelectionDialog(user: user, sheets: sheets, first: false);
-                      }
-                    }());
-                  } else if (!state.isDirty && !state.isSending && hasPlacementData) {
-                    final awaitingCurrentSheet =
-                        state.awaitingServerEcho &&
-                        state.awaitingSheetId == selected.id;
-                    final echoMatched =
-                        awaitingCurrentSheet &&
-                        _mapEquals(serverBySlot, state.awaitingBySlot);
-                    final echoExpired =
-                        awaitingCurrentSheet &&
-                        (DateTime.now().millisecondsSinceEpoch -
-                                state.awaitingStartedAtMs) >
-                            5000;
-                    if (!awaitingCurrentSheet || echoMatched || echoExpired) {
-                      state.awaitingServerEcho = false;
-                      state.awaitingBySlot.clear();
+      body: Container(
+        decoration: const BoxDecoration(gradient: AppColors.warmGradient),
+        child: FutureBuilder<List<StampSheetDefinition>>(
+          future: _catalogFuture,
+          builder: (context, catalogSnapshot) {
+            if (!catalogSnapshot.hasData) {
+              return const Center(
+                child: CircularProgressIndicator(color: AppColors.primary),
+              );
+            }
+            final sheets = catalogSnapshot.data!;
+            return FutureBuilder<Map<String, StampSheetLayout>>(
+              future: _layoutsFuture,
+              builder: (context, layoutSnapshot) {
+                if (!layoutSnapshot.hasData) {
+                  return const Center(
+                    child: CircularProgressIndicator(color: AppColors.primary),
+                  );
+                }
+                final layouts = layoutSnapshot.data!;
+                return StreamBuilder<Map<int, List<StampSheetPlacement>>>(
+                  stream: _sheetService.watchAllPlacementsByPage(user.uid),
+                  builder: (context, placementSnapshot) {
+                    final hasPlacementData = placementSnapshot.hasData;
+                    final pageMap =
+                        placementSnapshot.data ??
+                        const <int, List<StampSheetPlacement>>{};
+                    final state = _runtime(user.uid);
+                    final selected = _resolveSelectedSheet(sheets, state, user);
+                    final serverBySlot = _serverBySlot(pageMap, selected.id);
+                    if (!state.initialized) {
+                      state.initialized = true;
+                      state.localCredits = user.thanksStampCredits;
+                      state.baseVersion = user.stampSheetVersion;
                       state.localBySlot
                         ..clear()
                         ..addAll(serverBySlot);
-                      state.localCredits = user.thanksStampCredits;
-                      state.baseVersion = user.stampSheetVersion;
+                      unawaited(() async {
+                        state.pendingNextSheetFrom = await _getPendingNextSheet(
+                          user.uid,
+                        );
+                        final firstRequired = await _isFirstSheetRequired(
+                          user.uid,
+                        );
+                        if (!mounted) return;
+                        if ((user.activeStampSheetId == null ||
+                                firstRequired) &&
+                            state.pendingNextSheetFrom == null) {
+                          await _showSelectionDialog(
+                            user: user,
+                            sheets: sheets,
+                            first: true,
+                          );
+                        } else if (state.pendingNextSheetFrom != null) {
+                          await _showSelectionDialog(
+                            user: user,
+                            sheets: sheets,
+                            first: false,
+                          );
+                        }
+                      }());
+                    } else if (!state.isDirty &&
+                        !state.isSending &&
+                        hasPlacementData) {
+                      final awaitingCurrentSheet =
+                          state.awaitingServerEcho &&
+                          state.awaitingSheetId == selected.id;
+                      final echoMatched =
+                          awaitingCurrentSheet &&
+                          _mapEquals(serverBySlot, state.awaitingBySlot);
+                      final echoExpired =
+                          awaitingCurrentSheet &&
+                          (DateTime.now().millisecondsSinceEpoch -
+                                  state.awaitingStartedAtMs) >
+                              5000;
+                      if (!awaitingCurrentSheet || echoMatched || echoExpired) {
+                        state.awaitingServerEcho = false;
+                        state.awaitingBySlot.clear();
+                        state.localBySlot
+                          ..clear()
+                          ..addAll(serverBySlot);
+                        state.localCredits = user.thanksStampCredits;
+                        state.baseVersion = user.stampSheetVersion;
+                      }
                     }
-                  }
 
-                  final layout = layouts[selected.id]!;
-                  final canUndo = _latestFilledSlotId(layout, state.localBySlot) != null;
+                    final layout = layouts[selected.id]!;
+                    final canUndo =
+                        _latestFilledSlotId(layout, state.localBySlot) != null;
 
-                  return Stack(
-                    children: [
-                      Column(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    AppMessages.stamp.creditsLabel(
-                                      state.localCredits < 0 ? 0 : state.localCredits,
+                    return Stack(
+                      children: [
+                        Column(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.star_rounded,
+                                    color: AppColors.accent,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      AppMessages.stamp.creditsLabel(
+                                        state.localCredits < 0
+                                            ? 0
+                                            : state.localCredits,
+                                      ),
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleMedium,
                                     ),
                                   ),
-                                ),
-                                IconButton(
-                                  onPressed: () => _openCatalog(
-                                    user: user,
-                                    sheets: sheets,
-                                    forSelection: false,
+                                  IconButton(
+                                    onPressed: canUndo
+                                        ? () {
+                                            final slotId = _latestFilledSlotId(
+                                              layout,
+                                              state.localBySlot,
+                                            );
+                                            if (slotId == null) return;
+                                            setState(() {
+                                              state.localBySlot.remove(slotId);
+                                              state.localCredits += 1;
+                                              state.isDirty = true;
+                                              state.mutationSeq += 1;
+                                            });
+                                            _scheduleFlush();
+                                          }
+                                        : null,
+                                    icon: const Icon(Icons.undo, size: 18),
+                                    tooltip: AppMessages.stamp.undoAction,
                                   ),
-                                  icon: const Icon(Icons.palette_outlined),
-                                ),
-                                TextButton.icon(
-                                  onPressed: canUndo
-                                      ? () {
-                                          final slotId =
-                                              _latestFilledSlotId(layout, state.localBySlot);
-                                          if (slotId == null) return;
-                                          setState(() {
-                                            state.localBySlot.remove(slotId);
-                                            state.localCredits += 1;
-                                            state.isDirty = true;
-                                            state.mutationSeq += 1;
-                                          });
-                                          _scheduleFlush();
-                                        }
-                                      : null,
-                                  icon: const Icon(Icons.undo),
-                                  label: Text(AppMessages.stamp.undoAction),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
-                              child: _SheetCanvas(
-                                sheetAssetPath: selected.assetPath,
-                                layout: layout,
-                                bySlot: state.localBySlot,
-                                onLongPress: () {
-                                  setState(() => _showStampBar = true);
-                                },
+                                ],
                               ),
                             ),
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  0,
+                                  16,
+                                  110,
+                                ),
+                                child: _SheetCanvas(
+                                  sheetAssetPath: selected.assetPath,
+                                  layout: layout,
+                                  bySlot: state.localBySlot,
+                                  onLongPress: () {
+                                    setState(() => _showStampBar = true);
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        Align(
+                          alignment: Alignment.topCenter,
+                          child: ConfettiWidget(
+                            confettiController: _confettiController,
+                            blastDirectionality: BlastDirectionality.explosive,
+                            numberOfParticles: 20,
                           ),
-                        ],
-                      ),
-                      Align(
-                        alignment: Alignment.topCenter,
-                        child: ConfettiWidget(
-                          confettiController: _confettiController,
-                          blastDirectionality: BlastDirectionality.explosive,
-                          numberOfParticles: 20,
                         ),
-                      ),
-                      if (_showStampBar)
-                        _StampBar(
-                          isUnlocked: (type) => _isReactionUnlocked(type, user),
-                          onClose: () => setState(() => _showStampBar = false),
-                          onTap: (type) async {
-                            if (!_isReactionUnlocked(type, user)) {
-                              _toast(AppMessages.stamp.stampLocked, error: true);
-                              return;
-                            }
-                            if (state.localCredits <= 0) {
-                              _toast(AppMessages.stamp.creditNotEnough, error: true);
-                              return;
-                            }
-                            final slotId = _nextEmptySlotId(layout, state.localBySlot);
-                            if (slotId == null) {
-                              _toast(AppMessages.stamp.sheetFull, error: true);
-                              return;
-                            }
-                            setState(() {
-                              state.localBySlot[slotId] = type.value;
-                              state.localCredits -= 1;
-                              state.isDirty = true;
-                              state.mutationSeq += 1;
-                            });
-                            _scheduleFlush();
-                            if (state.localBySlot.length >= layout.slots.length &&
-                                state.pendingNextSheetFrom == null) {
-                              _confettiController.play();
-                              state.pendingNextSheetFrom = selected.id;
-                              await _setPendingNextSheet(user.uid, selected.id);
-                              if (mounted) {
-                                await _showSelectionDialog(
-                                  user: user,
-                                  sheets: sheets,
-                                  first: false,
+                        if (_showStampBar)
+                          _StampBar(
+                            isUnlocked: (type) =>
+                                _isReactionUnlocked(type, user),
+                            onClose: () =>
+                                setState(() => _showStampBar = false),
+                            onTap: (type) async {
+                              if (!_isReactionUnlocked(type, user)) {
+                                _toast(
+                                  AppMessages.stamp.stampLocked,
+                                  error: true,
                                 );
+                                return;
                               }
-                            }
-                          },
-                        ),
-                    ],
-                  );
-                },
-              );
-            },
-          );
-        },
+                              if (state.localCredits <= 0) {
+                                _toast(
+                                  AppMessages.stamp.creditNotEnough,
+                                  error: true,
+                                );
+                                return;
+                              }
+                              final slotId = _nextEmptySlotId(
+                                layout,
+                                state.localBySlot,
+                              );
+                              if (slotId == null) {
+                                _toast(
+                                  AppMessages.stamp.sheetFull,
+                                  error: true,
+                                );
+                                return;
+                              }
+                              setState(() {
+                                state.localBySlot[slotId] = type.value;
+                                state.localCredits -= 1;
+                                state.isDirty = true;
+                                state.mutationSeq += 1;
+                              });
+                              _scheduleFlush();
+                              if (state.localBySlot.length >=
+                                      layout.slots.length &&
+                                  state.pendingNextSheetFrom == null) {
+                                _confettiController.play();
+                                state.pendingNextSheetFrom = selected.id;
+                                await _setPendingNextSheet(
+                                  user.uid,
+                                  selected.id,
+                                );
+                                if (mounted) {
+                                  await _showSelectionDialog(
+                                    user: user,
+                                    sheets: sheets,
+                                    first: false,
+                                  );
+                                }
+                              }
+                            },
+                          ),
+                      ],
+                    );
+                  },
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }
@@ -673,7 +778,9 @@ class _SheetCanvas extends StatelessWidget {
           sheetW = sheetH * ratio;
         }
         final left = (areaW - sheetW) / 2;
-        final top = (areaH - sheetH) / 2;
+        final centeredTop = (areaH - sheetH) / 2;
+        final upwardOffset = areaH * 0.05;
+        final top = (centeredTop - upwardOffset).clamp(0.0, areaH - sheetH);
         return Stack(
           children: [
             Positioned(
@@ -683,9 +790,26 @@ class _SheetCanvas extends StatelessWidget {
               height: sheetH,
               child: GestureDetector(
                 onLongPress: onLongPress,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: Image.asset(sheetAssetPath, fit: BoxFit.fill),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.18),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                      ),
+                      BoxShadow(
+                        color: AppColors.secondary.withValues(alpha: 0.08),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: Image.asset(sheetAssetPath, fit: BoxFit.fill),
+                  ),
                 ),
               ),
             ),
@@ -698,7 +822,7 @@ class _SheetCanvas extends StatelessWidget {
                   height: slot.h * sheetH,
                   child: IgnorePointer(
                     child: Padding(
-                      padding: const EdgeInsets.all(2),
+                      padding: const EdgeInsets.all(3),
                       child: Image.asset(
                         _reactionById(bySlot[slot.slotId]!)?.assetPath ?? '',
                         fit: BoxFit.contain,
@@ -730,76 +854,112 @@ class _StampBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.bottomCenter,
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.74),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.85),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: AppColors.primaryLight.withValues(alpha: 0.3),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.08),
+                  blurRadius: 16,
+                  offset: const Offset(0, -4),
+                ),
+              ],
+            ),
+            child: SafeArea(
+              top: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: Text(
-                      AppMessages.stamp.selectStamp,
-                      style: const TextStyle(color: Colors.white),
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          AppMessages.stamp.selectStamp,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: onClose,
+                        icon: Icon(
+                          Icons.close_rounded,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    onPressed: onClose,
-                    icon: const Icon(Icons.close, color: Colors.white),
+                  const SizedBox(height: 4),
+                  SizedBox(
+                    height: 72,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: ReactionType.values.length,
+                      separatorBuilder: (context, index) =>
+                          const SizedBox(width: 10),
+                      itemBuilder: (context, index) {
+                        final type = ReactionType.values[index];
+                        final unlocked = isUnlocked(type);
+                        return GestureDetector(
+                          onTap: unlocked ? () => onTap(type) : null,
+                          child: Opacity(
+                            opacity: unlocked ? 1 : 0.4,
+                            child: Stack(
+                              children: [
+                                Container(
+                                  width: 64,
+                                  height: 64,
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surfaceVariant,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: unlocked
+                                          ? AppColors.primaryLight.withValues(
+                                              alpha: 0.5,
+                                            )
+                                          : Colors.transparent,
+                                    ),
+                                  ),
+                                  child: Image.asset(type.assetPath),
+                                ),
+                                if (!unlocked)
+                                  Positioned(
+                                    right: 2,
+                                    bottom: 2,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.9,
+                                        ),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.lock_rounded,
+                                        size: 12,
+                                        color: AppColors.textHint,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                   ),
                 ],
               ),
-              SizedBox(
-                height: 66,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: ReactionType.values.length,
-                  separatorBuilder: (context, index) =>
-                      const SizedBox(width: 8),
-                  itemBuilder: (context, index) {
-                    final type = ReactionType.values[index];
-                    final unlocked = isUnlocked(type);
-                    return GestureDetector(
-                      onTap: unlocked ? () => onTap(type) : null,
-                      child: Opacity(
-                        opacity: unlocked ? 1 : 0.45,
-                        child: Stack(
-                          children: [
-                            Container(
-                              width: 58,
-                              height: 58,
-                              padding: const EdgeInsets.all(5),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Image.asset(type.assetPath),
-                            ),
-                            if (!unlocked)
-                              const Positioned(
-                                right: 2,
-                                bottom: 2,
-                                child: Icon(
-                                  Icons.lock_rounded,
-                                  size: 14,
-                                  color: Colors.black54,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),

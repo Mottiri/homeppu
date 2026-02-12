@@ -23,6 +23,8 @@ import '../../features/circle/presentation/screens/join_requests_screen.dart';
 import '../../features/circle/presentation/screens/members_list_screen.dart';
 import '../../features/tasks/presentation/screens/tasks_screen.dart';
 import '../../features/stamps/presentation/screens/stamp_sheet_screen.dart';
+import '../../features/stamps/presentation/screens/stamp_sheet_archives_screen.dart';
+import '../../features/stamps/presentation/screens/stamp_sheet_catalog_screen.dart';
 import '../../features/goals/presentation/screens/goal_list_screen.dart';
 import '../../features/goals/presentation/screens/create_goal_screen.dart';
 import '../../features/goals/presentation/screens/goal_detail_screen.dart';
@@ -159,6 +161,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: '/stamps',
             name: 'stamps',
             builder: (context, state) => const StampSheetScreen(),
+          ),
+          GoRoute(
+            path: '/stamps/catalog',
+            name: 'stampCatalog',
+            builder: (context, state) => const StampSheetCatalogScreen(),
+          ),
+          GoRoute(
+            path: '/stamps/archives',
+            name: 'stampArchives',
+            builder: (context, state) => const StampSheetArchivesScreen(),
           ),
           GoRoute(
             path: '/tasks',

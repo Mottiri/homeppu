@@ -771,8 +771,12 @@ class _StampMessages {
   String get undoAction => '取り消し';
   String get undoDone => '最新のスタンプを取り消しました';
   String get undoUnavailable => '取り消せるスタンプがありません';
-  String get sheetConfigNotReady =>
-      'スタンプシート設定を同期中です。少し待ってからもう一度お試しください。';
+  String get sheetConfigNotReady => 'スタンプシート設定を同期中です。少し待ってからもう一度お試しください。';
+  String get archiveTitle => 'コレクション';
+  String get archiveEmpty => 'まだアーカイブはありません';
+  String archiveItemTitle(String sheetId) => 'シート: $sheetId';
+  String archiveCompletedAt(String value) => '$value 完成 🎉';
+  String get archivePreviewUnavailable => 'このシートのプレビューを表示できません';
 }
 
 /// 徳ポイント関連メッセージ
@@ -792,4 +796,3 @@ class _VirtueMessages {
   String get historyEmpty => 'まだ履歴がないよ';
   String get historyLoadFailed => '履歴を読み込めませんでした';
 }
-

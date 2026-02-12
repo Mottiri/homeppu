@@ -66,6 +66,12 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Stamp sheet archives are server-managed (read-only for owner)
+      match /stampSheetArchives/{archiveId} {
+        allow read: if isAuthenticated() && isOwner(userId);
+        allow write: if false;
+      }
+
       // Categories
       match /categories/{categoryId} {
         allow read, create, update, delete: if isAuthenticated() && isOwner(userId);
