@@ -32,13 +32,8 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen>
     with SingleTickerProviderStateMixin {
-  static const double _headerHideThreshold = 24;
-  static const double _headerShowThreshold = 24;
   late TabController _tabController;
   final ScrollController _scrollController = ScrollController();
-  bool _isHeaderCollapsed = false;
-  double _headerScrollAccumulator = 0;
-  int _headerScrollDirection = 0; // 1: down, -1: up
 
   @override
   void initState() {
@@ -51,63 +46,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _tabController.dispose();
     _scrollController.dispose();
     super.dispose();
-  }
-
-  bool _handleHeaderScrollNotification(ScrollNotification notification) {
-    if (notification.metrics.axis != Axis.vertical) return false;
-
-    if (notification is ScrollStartNotification) {
-      _headerScrollAccumulator = 0;
-      _headerScrollDirection = 0;
-      return false;
-    }
-
-    if (notification is ScrollUpdateNotification) {
-      final delta = notification.scrollDelta ?? 0;
-      final pixels = notification.metrics.pixels;
-
-      if (pixels <= 0) {
-        if (_isHeaderCollapsed) {
-          setState(() => _isHeaderCollapsed = false);
-        }
-        _headerScrollAccumulator = 0;
-        _headerScrollDirection = 0;
-        return false;
-      }
-
-      if (delta > 0) {
-        if (_headerScrollDirection != 1) {
-          _headerScrollDirection = 1;
-          _headerScrollAccumulator = 0;
-        }
-        _headerScrollAccumulator += delta.abs();
-        if (!_isHeaderCollapsed &&
-            _headerScrollAccumulator >= _headerHideThreshold) {
-          _headerScrollAccumulator = 0;
-          setState(() => _isHeaderCollapsed = true);
-        }
-      } else if (delta < 0) {
-        if (_headerScrollDirection != -1) {
-          _headerScrollDirection = -1;
-          _headerScrollAccumulator = 0;
-        }
-        _headerScrollAccumulator += delta.abs();
-        if (_isHeaderCollapsed &&
-            _headerScrollAccumulator >= _headerShowThreshold) {
-          _headerScrollAccumulator = 0;
-          setState(() => _isHeaderCollapsed = false);
-        }
-      }
-      return false;
-    }
-
-    if (notification is ScrollEndNotification) {
-      _headerScrollAccumulator = 0;
-      _headerScrollDirection = 0;
-      return false;
-    }
-
-    return false;
   }
 
   @override
@@ -129,9 +67,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     // ユーザーのヘッダー色を取得（設定されていればその色、なければデフォルト）
     final user = currentUser.valueOrNull;
     final isSubscriber = user?.isSubscriber ?? false;
-    final showLogoSection = !_isHeaderCollapsed;
-    final showTabsSection = !_isHeaderCollapsed;
-    final showAdSection = !_isHeaderCollapsed || !isSubscriber;
     final primaryColor = user?.headerPrimaryColor != null
         ? Color(user!.headerPrimaryColor!)
         : AppColors.primary;
@@ -158,147 +93,36 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           gradient: userGradient,
         ),
         child: SafeArea(
-          child: NotificationListener<ScrollNotification>(
-            onNotification: _handleHeaderScrollNotification,
-            child: NestedScrollView(
-              controller: _scrollController,
-              headerSliverBuilder: (context, innerBoxIsScrolled) {
-                return [
-                  SliverToBoxAdapter(
-                    child: _AnimatedHeaderSection(
-                      visible: showLogoSection,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              Image.asset(
-                                    'assets/icons/logo.png',
-                                    width: 72,
-                                    height: 72,
-                                  )
-                                  .animate(
-                                    onPlay: (controller) => controller.repeat(),
-                                  )
-                                  .shimmer(
-                                    duration: 3000.ms,
-                                    color: AppColors.primary.withValues(alpha: 0.1),
-                                  ),
-                              Positioned(
-                                right: 0,
-                                child: currentUser.when(
-                                  data: (user) {
-                                    if (user == null) return const SizedBox.shrink();
-                                    return StreamBuilder<int>(
-                                      stream: ref
-                                          .watch(notificationRepositoryProvider)
-                                          .getUnreadCountStream(user.uid),
-                                      builder: (context, snapshot) {
-                                        final count = snapshot.data ?? 0;
-                                        return Stack(
-                                          children: [
-                                            IconButton(
-                                              icon: const Icon(
-                                                Icons.notifications_outlined,
-                                                size: 28,
-                                              ),
-                                              onPressed: () =>
-                                                  context.push('/notifications'),
-                                            ),
-                                            if (count > 0)
-                                              Positioned(
-                                                right: 8,
-                                                top: 8,
-                                                child: Container(
-                                                  padding: const EdgeInsets.all(4),
-                                                  decoration: const BoxDecoration(
-                                                    color: AppColors.error,
-                                                    shape: BoxShape.circle,
-                                                  ),
-                                                  constraints: const BoxConstraints(
-                                                    minWidth: 16,
-                                                    minHeight: 16,
-                                                  ),
-                                                  child: Text(
-                                                    count > 99 ? '99+' : '$count',
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 10,
-                                                      fontWeight: FontWeight.bold,
-                                                    ),
-                                                    textAlign: TextAlign.center,
-                                                  ),
-                                                ),
-                                              ),
-                                          ],
-                                        );
-                                      },
-                                    );
-                                  },
-                                  loading: () => const SizedBox.shrink(),
-                                  error: (e, _) => const SizedBox.shrink(),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
+          child: NestedScrollView(
+            controller: _scrollController,
+            headerSliverBuilder: (context, innerBoxIsScrolled) {
+              return [
+                SliverPersistentHeader(
+                  pinned: true,
+                  delegate: _TimelineHeaderDelegate(
+                    isSubscriber: isSubscriber,
+                    currentUserAsync: currentUser,
+                    tabController: _tabController,
                   ),
-                  SliverToBoxAdapter(
-                    child: _AnimatedHeaderSection(
-                      visible: showAdSection,
-                      child: const AdBanner(
-                        padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
-                      ),
-                    ),
-                  ),
-                  SliverToBoxAdapter(
-                    child: _AnimatedHeaderSection(
-                      visible: showTabsSection,
-                      child: TabBar(
-                        controller: _tabController,
-                        labelColor: AppColors.primary,
-                        unselectedLabelColor: AppColors.textHint,
-                        indicatorColor: AppColors.primary,
-                        indicatorWeight: 3,
-                        indicatorSize: TabBarIndicatorSize.label,
-                        labelStyle: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 15,
-                        ),
-                        unselectedLabelStyle: const TextStyle(
-                          fontWeight: FontWeight.normal,
-                          fontSize: 15,
-                        ),
-                        tabs: [
-                          Tab(text: AppMessages.home.tabRecommended),
-                          Tab(text: AppMessages.home.tabFollowing),
-                        ],
-                      ),
-                    ),
-                  ),
-                ];
-              },
-              body: TabBarView(
-                controller: _tabController,
-                children: [
-                  // おすすめタブ（全体のタイムライン）
-                  _TimelineTab(
-                    isFollowingOnly: false,
-                    currentUser: currentUser.valueOrNull,
-                    refreshKey: refreshKey,
-                  ),
-                  // フォロー中タブ
-                  _TimelineTab(
-                    isFollowingOnly: true,
-                    currentUser: currentUser.valueOrNull,
-                    refreshKey: refreshKey,
-                  ),
-                ],
-              ),
+                ),
+              ];
+            },
+            body: TabBarView(
+              controller: _tabController,
+              children: [
+                // おすすめタブ（全体のタイムライン）
+                _TimelineTab(
+                  isFollowingOnly: false,
+                  currentUser: currentUser.valueOrNull,
+                  refreshKey: refreshKey,
+                ),
+                // フォロー中タブ
+                _TimelineTab(
+                  isFollowingOnly: true,
+                  currentUser: currentUser.valueOrNull,
+                  refreshKey: refreshKey,
+                ),
+              ],
             ),
           ),
         ),
@@ -307,29 +131,212 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   }
 }
 
-class _AnimatedHeaderSection extends StatelessWidget {
-  final bool visible;
+class _TimelineHeaderDelegate extends SliverPersistentHeaderDelegate {
+  static const double _logoSectionHeight = 88;
+  static const double _adSectionHeight = 58;
+  static const double _tabSectionHeight = 48;
+
+  final bool isSubscriber;
+  final AsyncValue<UserModel?> currentUserAsync;
+  final TabController tabController;
+
+  _TimelineHeaderDelegate({
+    required this.isSubscriber,
+    required this.currentUserAsync,
+    required this.tabController,
+  });
+
+  @override
+  double get maxExtent =>
+      _logoSectionHeight + (isSubscriber ? 0 : _adSectionHeight) + _tabSectionHeight;
+
+  @override
+  double get minExtent => isSubscriber ? 0 : _adSectionHeight;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    final range = (maxExtent - minExtent).clamp(0.0, double.infinity);
+    final t = range == 0 ? 1.0 : (shrinkOffset / range).clamp(0.0, 1.0);
+    final logoFactor = 1.0 - t;
+    final tabFactor = 1.0 - t;
+
+    return ClipRect(
+      child: SizedBox.expand(
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _HeaderSection(
+                height: _logoSectionHeight,
+                factor: logoFactor,
+                child: _LogoAndNotificationRow(currentUserAsync: currentUserAsync),
+              ),
+              if (!isSubscriber)
+                const _HeaderSection(
+                  height: _adSectionHeight,
+                  factor: 1,
+                  child: AdBanner(
+                    padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    reserveSpace: true,
+                  ),
+                ),
+              _HeaderSection(
+                height: _tabSectionHeight,
+                factor: tabFactor,
+                child: TabBar(
+                  controller: tabController,
+                  labelColor: AppColors.primary,
+                  unselectedLabelColor: AppColors.textHint,
+                  indicatorColor: AppColors.primary,
+                  indicatorWeight: 3,
+                  indicatorSize: TabBarIndicatorSize.label,
+                  labelStyle: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                  ),
+                  unselectedLabelStyle: const TextStyle(
+                    fontWeight: FontWeight.normal,
+                    fontSize: 15,
+                  ),
+                  tabs: [
+                    Tab(text: AppMessages.home.tabRecommended),
+                    Tab(text: AppMessages.home.tabFollowing),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(_TimelineHeaderDelegate oldDelegate) {
+    return isSubscriber != oldDelegate.isSubscriber ||
+        currentUserAsync != oldDelegate.currentUserAsync ||
+        tabController != oldDelegate.tabController;
+  }
+}
+
+class _HeaderSection extends StatelessWidget {
+  final double height;
+  final double factor;
   final Widget child;
 
-  const _AnimatedHeaderSection({required this.visible, required this.child});
+  const _HeaderSection({
+    required this.height,
+    required this.factor,
+    required this.child,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return ClipRect(
-      child: AnimatedAlign(
-        duration: const Duration(milliseconds: 240),
-        curve: Curves.easeOutCubic,
-        alignment: Alignment.topCenter,
-        heightFactor: visible ? 1 : 0,
-        child: AnimatedSlide(
-          duration: const Duration(milliseconds: 240),
-          curve: Curves.easeOutCubic,
-          offset: visible ? Offset.zero : const Offset(0, -0.25),
-          child: AnimatedOpacity(
-            duration: const Duration(milliseconds: 180),
-            opacity: visible ? 1 : 0,
-            child: IgnorePointer(ignoring: !visible, child: child),
+    return SizedBox(
+      height: height * factor,
+      child: ClipRect(
+        child: Align(
+          alignment: Alignment.topCenter,
+          heightFactor: factor,
+          child: Opacity(
+            opacity: factor.clamp(0, 1),
+            child: IgnorePointer(ignoring: factor < 0.02, child: child),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LogoAndNotificationRow extends StatelessWidget {
+  final AsyncValue<UserModel?> currentUserAsync;
+
+  const _LogoAndNotificationRow({required this.currentUserAsync});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+      child: SizedBox(
+        width: double.infinity,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Image.asset(
+                  'assets/icons/logo.png',
+                  width: 72,
+                  height: 72,
+                )
+                .animate(
+                  onPlay: (controller) => controller.repeat(),
+                )
+                .shimmer(
+                  duration: 3000.ms,
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                ),
+            Positioned(
+              right: 0,
+              child: currentUserAsync.when(
+                data: (user) {
+                  if (user == null) return const SizedBox.shrink();
+                  return Consumer(
+                    builder: (context, ref, _) {
+                      final repo = ref.watch(notificationRepositoryProvider);
+                      return StreamBuilder<int>(
+                        stream: repo.getUnreadCountStream(user.uid),
+                        builder: (context, snapshot) {
+                          final count = snapshot.data ?? 0;
+                          return Stack(
+                            children: [
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.notifications_outlined,
+                                  size: 28,
+                                ),
+                                onPressed: () => context.push('/notifications'),
+                              ),
+                              if (count > 0)
+                                Positioned(
+                                  right: 8,
+                                  top: 8,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: const BoxDecoration(
+                                      color: AppColors.error,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    constraints: const BoxConstraints(
+                                      minWidth: 16,
+                                      minHeight: 16,
+                                    ),
+                                    child: Text(
+                                      count > 99 ? '99+' : '$count',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          );
+                        },
+                      );
+                    },
+                  );
+                },
+                loading: () => const SizedBox.shrink(),
+                error: (e, _) => const SizedBox.shrink(),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -436,7 +443,6 @@ class _PostsListState extends ConsumerState<_PostsList> {
   bool _isLoadingMore = false;
   bool _hasError = false;
   bool _showScrollToTopFab = false;
-  final ScrollController _listController = ScrollController();
   double _fabScrollAccumulator = 0;
   int _fabScrollDirection = 0; // 1: down, -1: up
   ProviderSubscription<int>? _homeScrollTopSubscription;
@@ -466,7 +472,6 @@ class _PostsListState extends ConsumerState<_PostsList> {
   @override
   void dispose() {
     _homeScrollTopSubscription?.close();
-    _listController.dispose();
     super.dispose();
   }
 
@@ -570,8 +575,9 @@ class _PostsListState extends ConsumerState<_PostsList> {
   }
 
   void _scrollToTop() {
-    if (_listController.hasClients) {
-      _listController.animateTo(
+    final controller = PrimaryScrollController.maybeOf(context);
+    if (controller != null && controller.hasClients) {
+      controller.animateTo(
         0,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOutCubic,
@@ -679,7 +685,6 @@ class _PostsListState extends ConsumerState<_PostsList> {
         onRefresh: _refreshPosts,
         color: AppColors.primary,
         child: ListView(
-          controller: _listController,
           children: [
             SizedBox(height: MediaQuery.of(context).size.height * 0.3),
             Center(
@@ -724,8 +729,6 @@ class _PostsListState extends ConsumerState<_PostsList> {
                 return NotificationListener<ScrollNotification>(
                   onNotification: _handleScrollNotification,
                   child: ListView.builder(
-                    controller: _listController,
-                    primary: false,
                     padding: const EdgeInsets.only(bottom: 120),
                     itemCount: totalCount,
                     itemBuilder: (context, index) {
