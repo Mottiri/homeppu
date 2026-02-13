@@ -25,6 +25,9 @@ class CirclesScreen extends ConsumerStatefulWidget {
 }
 
 class _CirclesScreenState extends ConsumerState<CirclesScreen> {
+  static const double _scrollToTopFabMinOffset = 120;
+  static const double _fabShowThreshold = 24;
+  static const double _fabHideThreshold = 72;
   int _selectedTab = 0; // 0: みんなの, 1: 参加中
   String _selectedCategory = CircleService.categories.first;
   final TextEditingController _searchController = TextEditingController();
@@ -40,6 +43,9 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   DocumentSnapshot? _lastDocument;
   final ScrollController _scrollController = ScrollController();
   bool _isScrollable = false;
+  bool _showScrollToTopFab = false;
+  double _fabScrollAccumulator = 0;
+  int _fabScrollDirection = 0; // 1: down, -1: up
 
   // 並び順・フィルター用の状態
   _SortOption _selectedSort = _SortOption.newest;
@@ -189,6 +195,75 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     }
   }
 
+  void _scrollToTop() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    if (_showScrollToTopFab) {
+      setState(() => _showScrollToTopFab = false);
+    }
+  }
+
+  bool _handleScrollNotification(ScrollNotification notification) {
+    if (notification is ScrollStartNotification) {
+      _fabScrollAccumulator = 0;
+      _fabScrollDirection = 0;
+      return false;
+    }
+
+    if (notification is ScrollUpdateNotification) {
+      final delta = notification.scrollDelta ?? 0;
+      final pixels = notification.metrics.pixels;
+
+      if (pixels <= _scrollToTopFabMinOffset) {
+        if (_showScrollToTopFab) {
+          setState(() => _showScrollToTopFab = false);
+        }
+        _fabScrollAccumulator = 0;
+        _fabScrollDirection = 0;
+        return false;
+      }
+
+      if (delta > 0) {
+        if (_fabScrollDirection != 1) {
+          _fabScrollDirection = 1;
+          _fabScrollAccumulator = 0;
+        }
+        _fabScrollAccumulator += delta.abs();
+        if (!_showScrollToTopFab &&
+            _fabScrollAccumulator >= _fabShowThreshold) {
+          _fabScrollAccumulator = 0;
+          setState(() => _showScrollToTopFab = true);
+        }
+      } else if (delta < 0) {
+        if (_fabScrollDirection != -1) {
+          _fabScrollDirection = -1;
+          _fabScrollAccumulator = 0;
+        }
+        _fabScrollAccumulator += delta.abs();
+        if (_showScrollToTopFab &&
+            _fabScrollAccumulator >= _fabHideThreshold) {
+          _fabScrollAccumulator = 0;
+          setState(() => _showScrollToTopFab = false);
+        }
+      }
+
+      return false;
+    }
+
+    if (notification is ScrollEndNotification) {
+      _fabScrollAccumulator = 0;
+      _fabScrollDirection = 0;
+      return false;
+    }
+
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUser = ref.watch(currentUserProvider).valueOrNull;
@@ -199,13 +274,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
 
     // サークルボタンタップでスクロールトップを監視
     ref.listen<int>(circleScrollToTopProvider, (previous, next) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          0,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
+      _scrollToTop();
     });
 
     // ユーザーのヘッダー色を取得（設定されていればその色、なければデフォルト）
@@ -233,184 +302,215 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         decoration: BoxDecoration(gradient: userGradient),
         child: SafeArea(
           bottom: false,
-          child: InfiniteScrollListener(
-            isLoadingMore: !isSearchMode && _isLoadingMore,
-            hasMore: !isSearchMode && _hasMore,
-            onLoadMore: _loadMoreCircles,
-            child: RefreshIndicator(
-              onRefresh: _loadCircles,
-              child: CustomScrollView(
-                controller: _scrollController,
-                slivers: [
-                // ヘッダー（シンプルに「サークル」のみ中央表示）
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-                    child: Center(
-                      child: Text(
-                        AppMessages.circle.listTitle,
-                        style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-                ),
-
-                // 検索バー
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.05),
-                            blurRadius: 10,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: TextField(
-                        controller: _searchController,
-                        onChanged: (value) => _performSearch(value),
-                        decoration: InputDecoration(
-                          hintText: AppMessages.circle.searchHint,
-                          hintStyle: TextStyle(color: Colors.grey[400]),
-                          prefixIcon: Icon(
-                            Icons.search,
-                            color: Colors.grey[400],
-                          ),
-                          suffixIcon: _searchController.text.isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(Icons.close, size: 20),
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    _performSearch('');
-                                  },
-                                )
-                              : null,
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 14,
+          child: Stack(
+            children: [
+              InfiniteScrollListener(
+                isLoadingMore: !isSearchMode && _isLoadingMore,
+                hasMore: !isSearchMode && _hasMore,
+                onLoadMore: _loadMoreCircles,
+                child: RefreshIndicator(
+                  onRefresh: _loadCircles,
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: _handleScrollNotification,
+                    child: CustomScrollView(
+                      controller: _scrollController,
+                      slivers: [
+                        // ヘッダー（シンプルに「サークル」のみ中央表示）
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                            child: Center(
+                              child: Text(
+                                AppMessages.circle.listTitle,
+                                style: Theme.of(context).textTheme.headlineSmall
+                                    ?.copyWith(fontWeight: FontWeight.bold),
+                              ),
+                            ),
                           ),
                         ),
+
+                        // 検索バー
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.05),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: TextField(
+                                controller: _searchController,
+                                onChanged: (value) => _performSearch(value),
+                                decoration: InputDecoration(
+                                  hintText: AppMessages.circle.searchHint,
+                                  hintStyle: TextStyle(color: Colors.grey[400]),
+                                  prefixIcon: Icon(
+                                    Icons.search,
+                                    color: Colors.grey[400],
+                                  ),
+                                  suffixIcon: _searchController.text.isNotEmpty
+                                      ? IconButton(
+                                          icon: const Icon(Icons.close, size: 20),
+                                          onPressed: () {
+                                            _searchController.clear();
+                                            _performSearch('');
+                                          },
+                                        )
+                                      : null,
+                                  border: InputBorder.none,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 14,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        const SliverToBoxAdapter(child: SizedBox(height: 16)),
+
+                        // タブセレクター（みんなの / 参加中）
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Row(
+                              children: [
+                                _buildTabButton(AppMessages.circle.tabAll, 0),
+                                const SizedBox(width: 12),
+                                _buildTabButton(AppMessages.circle.tabJoined, 1),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        const SliverToBoxAdapter(child: SizedBox(height: 12)),
+
+                        // 並び順・フィルター選択
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Row(
+                              children: [
+                                // 並び順ドロップダウン
+                                _buildSortDropdown(isAdmin),
+                                const SizedBox(width: 8),
+                                // フィルタードロップダウン
+                                _buildFilterDropdown(),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        const SliverToBoxAdapter(child: SizedBox(height: 8)),
+
+                        // カテゴリチップ
+                        SliverToBoxAdapter(
+                          child: SizedBox(
+                            height: 40,
+                            child: ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              itemCount: CircleService.categories.length,
+                              itemBuilder: (context, index) {
+                                final category = CircleService.categories[index];
+                                final isSelected = category == _selectedCategory;
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: FilterChip(
+                                    label: Text(category),
+                                    selected: isSelected,
+                                    onSelected: (selected) {
+                                      setState(() => _selectedCategory = category);
+                                      _loadCircles();
+                                    },
+                                    selectedColor: AppColors.primary.withValues(
+                                      alpha: 0.2,
+                                    ),
+                                    checkmarkColor: AppColors.primary,
+                                    labelStyle: TextStyle(
+                                      color: isSelected
+                                          ? AppColors.primary
+                                          : Colors.grey[700],
+                                      fontWeight: isSelected
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
+                                    ),
+                                    backgroundColor: Colors.white,
+                                    side: BorderSide(
+                                      color: isSelected
+                                          ? AppColors.primary
+                                          : Colors.grey[300]!,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+
+                        const SliverToBoxAdapter(child: SizedBox(height: 16)),
+
+                        // サークルリスト
+                        _searchController.text.isNotEmpty
+                            ? _buildSearchResults()
+                            : _buildCircleList(currentUser?.uid),
+
+                        // LoadMoreFooter（ショートリスト用手動フォールバック）
+                        SliverToBoxAdapter(
+                          child: LoadMoreFooter(
+                            hasMore: !isSearchMode && _hasMore,
+                            isLoadingMore: !isSearchMode && _isLoadingMore,
+                            isInitialLoadComplete: !_isLoading,
+                            canLoadMore: _lastDocument != null,
+                            isScrollable: _isScrollable,
+                            onLoadMore: _loadMoreCircles,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 24,
+                bottom: MediaQuery.paddingOf(context).bottom + 28,
+                child: AnimatedSlide(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  offset: _showScrollToTopFab
+                      ? Offset.zero
+                      : const Offset(0, 1.2),
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 180),
+                    opacity: _showScrollToTopFab ? 1 : 0,
+                    child: IgnorePointer(
+                      ignoring: !_showScrollToTopFab,
+                      child: FloatingActionButton.small(
+                        heroTag: 'circles_scroll_top_fab',
+                        onPressed: _scrollToTop,
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        child: const Icon(Icons.keyboard_arrow_up_rounded),
                       ),
                     ),
                   ),
                 ),
-
-                const SliverToBoxAdapter(child: SizedBox(height: 16)),
-
-                // タブセレクター（みんなの / 参加中）
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: [
-                        _buildTabButton(AppMessages.circle.tabAll, 0),
-                        const SizedBox(width: 12),
-                        _buildTabButton(AppMessages.circle.tabJoined, 1),
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SliverToBoxAdapter(child: SizedBox(height: 12)),
-
-                // 並び順・フィルター選択
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: [
-                        // 並び順ドロップダウン
-                        _buildSortDropdown(isAdmin),
-                        const SizedBox(width: 8),
-                        // フィルタードロップダウン
-                        _buildFilterDropdown(),
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SliverToBoxAdapter(child: SizedBox(height: 8)),
-
-                // カテゴリチップ
-                SliverToBoxAdapter(
-                  child: SizedBox(
-                    height: 40,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: CircleService.categories.length,
-                      itemBuilder: (context, index) {
-                        final category = CircleService.categories[index];
-                        final isSelected = category == _selectedCategory;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: FilterChip(
-                            label: Text(category),
-                            selected: isSelected,
-                            onSelected: (selected) {
-                              setState(() => _selectedCategory = category);
-                              _loadCircles();
-                            },
-                            selectedColor: AppColors.primary.withValues(
-                              alpha: 0.2,
-                            ),
-                            checkmarkColor: AppColors.primary,
-                            labelStyle: TextStyle(
-                              color: isSelected
-                                  ? AppColors.primary
-                                  : Colors.grey[700],
-                              fontWeight: isSelected
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                            ),
-                            backgroundColor: Colors.white,
-                            side: BorderSide(
-                              color: isSelected
-                                  ? AppColors.primary
-                                  : Colors.grey[300]!,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-
-                const SliverToBoxAdapter(child: SizedBox(height: 16)),
-
-                // サークルリスト
-                _searchController.text.isNotEmpty
-                    ? _buildSearchResults()
-                    : _buildCircleList(currentUser?.uid),
-
-                // LoadMoreFooter（ショートリスト用手動フォールバック）
-                SliverToBoxAdapter(
-                  child: LoadMoreFooter(
-                    hasMore: !isSearchMode && _hasMore,
-                    isLoadingMore: !isSearchMode && _isLoadingMore,
-                    isInitialLoadComplete: !_isLoading,
-                    canLoadMore: _lastDocument != null,
-                    isScrollable: _isScrollable,
-                    onLoadMore: _loadMoreCircles,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
-      ),
-      // FABは中央ボタンで対応するため削除
     );
   }
 

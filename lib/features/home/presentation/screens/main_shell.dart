@@ -98,8 +98,8 @@ class _MainShellState extends ConsumerState<MainShell>
     }
 
     final currentIndex = _getCurrentIndex(context);
-    final isTimelineScreen = currentIndex == 0;
-    if (!isTimelineScreen && !_isBottomNavVisible) {
+    final isScrollReactiveScreen = currentIndex == 0 || currentIndex == 1;
+    if (!isScrollReactiveScreen && !_isBottomNavVisible) {
       _isBottomNavVisible = true;
     }
     if (currentIndex != _previousIndex) {
@@ -122,7 +122,7 @@ class _MainShellState extends ConsumerState<MainShell>
       resizeToAvoidBottomInset: false,
       body: NotificationListener<ScrollNotification>(
         onNotification: (notification) {
-          if (!isTimelineScreen) return false;
+          if (!isScrollReactiveScreen) return false;
           if (notification is ScrollStartNotification) {
             _lastScrollPixels = notification.metrics.pixels;
             _scrollDeltaAccumulator = 0;
