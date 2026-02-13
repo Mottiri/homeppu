@@ -336,11 +336,19 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
           ),
           _buildFeatureRow(
             AppMessages.profile.premiumFeatureAds,
-            isReady: false,
+            isReady: true,
           ),
           _buildFeatureRow(
             AppMessages.profile.premiumFeatureCircles,
-            isReady: false,
+            isReady: true,
+          ),
+          _buildFeatureRow(
+            AppMessages.profile.premiumFeatureProfileImage,
+            isReady: true,
+          ),
+          _buildFeatureRow(
+            AppMessages.profile.premiumFeatureHeaderImage,
+            isReady: true,
           ),
         ],
       ),

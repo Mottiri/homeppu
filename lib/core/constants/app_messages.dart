@@ -559,6 +559,8 @@ class _ProfileMessages {
   String get premiumFeatureEpic => 'Epicアイテム解放';
   String get premiumFeatureAds => '広告表示OFF';
   String get premiumFeatureCircles => 'サークル機能解放';
+  String get premiumFeatureProfileImage => 'プロフィール画像設定機能解放';
+  String get premiumFeatureHeaderImage => 'プロフィールヘッダー画像設定機能解放';
   String get premiumPriceLabel => '/月';
   String get premiumProcessing => '購入処理中...';
   String get premiumProcessingWait => '少々お待ちください';
@@ -676,11 +678,6 @@ class _StampMessages {
   String sheetRarityLabel(String rarity) => 'レア度: $rarity';
   String get owned => '所持済み';
   String get selectAction => '選択する';
-  String get helpTitle => 'スタンプシートの使い方';
-  String get helpBody =>
-      'シートを長押しすると空いている枠にスタンプを押せます。\n'
-      'シートは1枚表示で、空き枠に自動でスタンプが入ります。\n'
-      '右上の🎨アイコンからデザインを確認・購入できます。';
   String pageLabel(int current, int total) => '$current / $total';
   String get firstSheetPrompt => 'スタンプを押すシートを選んでください';
   String get undoAction => '取り消し';

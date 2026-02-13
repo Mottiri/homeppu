@@ -703,10 +703,6 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
             icon: const Icon(Icons.inventory_2_outlined),
             tooltip: AppMessages.stamp.archiveTitle,
           ),
-          IconButton(
-            onPressed: () => _toast(AppMessages.stamp.helpBody),
-            icon: const Icon(Icons.help_outline),
-          ),
         ],
       ),
       body: Container(
