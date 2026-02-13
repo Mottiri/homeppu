@@ -27,6 +27,50 @@ import {
     VIRTUE_MESSAGES,
 } from "../config/messages";
 
+const POSTS_PER_MINUTE_LIMIT = 2;
+const POSTS_DAILY_LIMIT = 15;
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+function getJstDayStart(now: Date = new Date()): Date {
+    const jstNow = new Date(now.getTime() + JST_OFFSET_MS);
+    jstNow.setUTCHours(0, 0, 0, 0);
+    return new Date(jstNow.getTime() - JST_OFFSET_MS);
+}
+
+async function enforcePostRateLimits(userId: string): Promise<void> {
+    const oneMinuteAgo = admin.firestore.Timestamp.fromDate(
+        new Date(Date.now() - 60000)
+    );
+    const dayStart = admin.firestore.Timestamp.fromDate(getJstDayStart());
+
+    const [recentPosts, dailyPosts] = await Promise.all([
+        db
+            .collection("posts")
+            .where("userId", "==", userId)
+            .where("createdAt", ">", oneMinuteAgo)
+            .get(),
+        db
+            .collection("posts")
+            .where("userId", "==", userId)
+            .where("createdAt", ">=", dayStart)
+            .get(),
+    ]);
+
+    if (recentPosts.size >= POSTS_PER_MINUTE_LIMIT) {
+        throw new HttpsError(
+            "resource-exhausted",
+            VALIDATION_ERRORS.RATE_LIMITED_PER_MINUTE
+        );
+    }
+
+    if (dailyPosts.size >= POSTS_DAILY_LIMIT) {
+        throw new HttpsError(
+            "resource-exhausted",
+            VALIDATION_ERRORS.RATE_LIMITED_DAILY_15
+        );
+    }
+}
+
 /**
  * レート制限付きの投稿作成（スパム対策）
  */
@@ -36,23 +80,7 @@ export const createPostWithRateLimit = onCall(
         const userId = requireAuth(request);
         const data = request.data;
         const shouldGrantVirtue = data?.grantVirtue !== false;
-
-        // レート制限チェック（1分間に5投稿まで）
-        const oneMinuteAgo = admin.firestore.Timestamp.fromDate(
-            new Date(Date.now() - 60000)
-        );
-        const recentPosts = await db
-            .collection("posts")
-            .where("userId", "==", userId)
-            .where("createdAt", ">", oneMinuteAgo)
-            .get();
-
-        if (recentPosts.size >= 5) {
-            throw new HttpsError(
-                "resource-exhausted",
-                VALIDATION_ERRORS.RATE_LIMITED
-            );
-        }
+        await enforcePostRateLimits(userId);
 
         // 投稿を作成
         const postRef = db.collection("posts").doc();
@@ -116,6 +144,7 @@ export const createPostWithModeration = onCall(
         console.log("=== createPostWithModeration START ===");
 
         const userId = requireAuth(request);
+        await enforcePostRateLimits(userId);
         const {
             content,
             userDisplayName,
@@ -353,26 +382,7 @@ ${content}
         }
 
         // ===============================================
-        // 3. レート制限チェック
-        // ===============================================
-        const oneMinuteAgo = admin.firestore.Timestamp.fromDate(
-            new Date(Date.now() - 60000)
-        );
-        const recentPosts = await db
-            .collection("posts")
-            .where("userId", "==", userId)
-            .where("createdAt", ">", oneMinuteAgo)
-            .get();
-
-        if (recentPosts.size >= 5) {
-            throw new HttpsError(
-                "resource-exhausted",
-                VALIDATION_ERRORS.RATE_LIMITED
-            );
-        }
-
-        // ===============================================
-        // 4. 投稿を作成
+        // 3. 投稿を作成
         // ===============================================
         const postRef = db.collection("posts").doc();
         await postRef.set({

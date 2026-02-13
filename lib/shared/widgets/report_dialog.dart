@@ -296,9 +296,6 @@ class NegativeContentDialog extends StatelessWidget {
     final suggestion = parts.length > 1 ? parts[1] : null;
     final virtueInfo = parts.length > 2 ? parts[2] : null;
 
-    // BAN時はフッターメッセージを非表示
-    final isBanMessage = message.contains('アカウントが制限されている');
-
     return AlertDialog(
       title: Row(
         children: [
@@ -356,16 +353,6 @@ class NegativeContentDialog extends StatelessWidget {
                 style: Theme.of(
                   context,
                 ).textTheme.labelSmall?.copyWith(color: AppColors.textHint),
-              ),
-            ],
-            // BAN時はフッターメッセージを非表示
-            if (!isBanMessage) ...[
-              const SizedBox(height: 16),
-              Text(
-                'ほめっぷは「世界一優しいSNS」を目指しているよ。\nポジティブな言葉で投稿し直してみてね！',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
               ),
             ],
           ],

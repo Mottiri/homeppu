@@ -75,6 +75,8 @@ export const VALIDATION_ERRORS = {
     MISSING_POST_ID_CONTENT: "Missing postId or content",
 
     RATE_LIMITED: "投稿が多すぎます。少し待ってから再度投稿してください",
+    RATE_LIMITED_PER_MINUTE: "短時間での投稿が多すぎます。少し待ってから再度投稿してください",
+    RATE_LIMITED_DAILY_15: "1日に投稿できる回数は15回までです。明日また投稿してください",
 
     reactionLimitExceeded: (max: number) => `1つの投稿に対するリアクションは${max}回までです`,
 } as const;

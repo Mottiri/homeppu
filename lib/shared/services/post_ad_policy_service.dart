@@ -12,17 +12,7 @@ class PostAdPolicyService {
   Future<bool> shouldShowAdOnThisPost(String userId) async {
     final prefs = await SharedPreferences.getInstance();
     await _syncDayBoundary(prefs, userId);
-
-    final shownToday =
-        prefs.getInt(_key(_shownTodayKeyPrefix, userId)) ?? 0;
-    if (shownToday >= AppConstants.postInterstitialAdDailyLimit) {
-      if (kDebugMode) {
-        debugPrint(
-          '[PostAdPolicy] skip: daily_limit reached shownToday=$shownToday',
-        );
-      }
-      return false;
-    }
+    final shownToday = prefs.getInt(_key(_shownTodayKeyPrefix, userId)) ?? 0;
 
     final pendingKey = _key(_pendingKeyPrefix, userId);
     final pending = prefs.getInt(pendingKey) ?? 0;

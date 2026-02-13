@@ -517,6 +517,13 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     }
 
     if (moderationError != null) {
+      final isShortWindowRateLimit =
+          moderationError.code == 'resource-exhausted' &&
+          moderationError.message.contains('短時間での投稿が多すぎます');
+      if (isShortWindowRateLimit) {
+        SnackBarHelper.showError(context, moderationError.message);
+        return;
+      }
       await NegativeContentDialog.show(
         context: context,
         message: moderationError.message,
