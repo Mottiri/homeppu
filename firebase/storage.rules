@@ -59,8 +59,10 @@ service firebase.storage {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated()
                    && request.auth.uid == userId
-                   && isValidProfileSize()
-                   && isImage();
+                   && (
+                     request.resource == null ||
+                     (isValidProfileSize() && isImage())
+                   );
     }
 
     // Post images

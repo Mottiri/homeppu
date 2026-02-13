@@ -62,7 +62,12 @@ class ProfileFollowingUserItem extends StatelessWidget {
               children: [
                 AvatarWidget(
                   avatarIndex: user.avatarIndex,
-                  avatarParts: user.avatarParts,
+                  avatarParts: user.profileVisualMode == 'avatar'
+                      ? user.avatarParts
+                      : null,
+                  imageUrl: user.profileVisualMode == 'image'
+                      ? user.profileImageUrl
+                      : null,
                   size: 56,
                   borderRadius: BorderRadius.circular(14),
                 ),

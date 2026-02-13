@@ -1,9 +1,10 @@
 import { onDocumentCreated, onDocumentDeleted, onDocumentUpdated } from "firebase-functions/v2/firestore";
 
-import { db, FieldValue } from "../helpers/firebase";
+import { db, FieldValue, storage } from "../helpers/firebase";
 import { LOCATION } from "../config/constants";
 import { buildPublicUserData } from "../helpers/public-users";
 import { COLLECTIONS } from "../config/collections";
+import { deleteStorageFileFromUrl } from "../helpers/storage";
 
 const SUBSCRIPTION_FALLBACK_DOC_ID = "subscriptionFallback";
 const DEFAULT_SUBSCRIPTION_FALLBACK = {
@@ -196,6 +197,59 @@ async function applySubscriptionFallbackIfNeeded(
   return true;
 }
 
+function toProfileVisualMode(value: unknown): "icon" | "avatar" | "image" {
+  return value === "avatar" || value === "image" ? value : "icon";
+}
+
+async function deleteProfileImageIfExists(
+  profileImageStoragePath: string | null,
+  profileImageUrl: string | null
+) {
+  try {
+    if (profileImageStoragePath) {
+      await storage.bucket().file(profileImageStoragePath).delete();
+      return;
+    }
+    if (profileImageUrl) {
+      await deleteStorageFileFromUrl(profileImageUrl);
+    }
+  } catch (error) {
+    console.warn("Failed to delete profile image:", error);
+  }
+}
+
+async function applyProfileImageSubscriptionFallbackIfNeeded(
+  userId: string,
+  beforeData: Record<string, unknown>,
+  afterData: Record<string, unknown>,
+  isSubscriber: boolean
+): Promise<boolean> {
+  if (isSubscriber) return false;
+
+  const mode = toProfileVisualMode(afterData.profileVisualMode);
+  const profileImageUrl = toStringOrNull(afterData.profileImageUrl);
+  const profileImageStoragePath = toStringOrNull(afterData.profileImageStoragePath);
+
+  if (mode !== "image" && !profileImageUrl && !profileImageStoragePath) {
+    return false;
+  }
+
+  const beforeStoragePath = toStringOrNull(beforeData.profileImageStoragePath);
+  const beforeImageUrl = toStringOrNull(beforeData.profileImageUrl);
+  const deleteStoragePath = profileImageStoragePath ?? beforeStoragePath;
+  const deleteImageUrl = profileImageUrl ?? beforeImageUrl;
+
+  await deleteProfileImageIfExists(deleteStoragePath, deleteImageUrl);
+
+  await db.collection(COLLECTIONS.USERS).doc(userId).update({
+    profileVisualMode: "icon",
+    profileImageUrl: FieldValue.delete(),
+    profileImageStoragePath: FieldValue.delete(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  return true;
+}
+
 export const onUserCreated = onDocumentCreated(
   {
     document: "users/{userId}",
@@ -227,17 +281,26 @@ export const onUserUpdated = onDocumentUpdated(
     const afterData = afterSnap.data() as Record<string, unknown>;
     const beforeData = beforeSnap.data() as Record<string, unknown>;
 
-    const wasSubscriber = beforeData.isSubscriber === true;
     const isSubscriber = afterData.isSubscriber === true;
 
     let publicSource = afterData;
+    let requiresRefresh = false;
+
     if (!isSubscriber) {
-      const applied = await applySubscriptionFallbackIfNeeded(userId, afterData);
-      if (applied) {
-        const refreshed = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-        if (refreshed.exists) {
-          publicSource = refreshed.data() as Record<string, unknown>;
-        }
+      const appliedSubscriptionFallback = await applySubscriptionFallbackIfNeeded(userId, afterData);
+      const appliedProfileImageFallback = await applyProfileImageSubscriptionFallbackIfNeeded(
+        userId,
+        beforeData,
+        afterData,
+        isSubscriber
+      );
+      requiresRefresh = appliedSubscriptionFallback || appliedProfileImageFallback;
+    }
+
+    if (requiresRefresh) {
+      const refreshed = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+      if (refreshed.exists) {
+        publicSource = refreshed.data() as Record<string, unknown>;
       }
     }
 

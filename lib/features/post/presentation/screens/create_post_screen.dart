@@ -619,7 +619,12 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                           children: [
                             AvatarWidget(
                               avatarIndex: user.avatarIndex,
-                              avatarParts: user.avatarParts,
+                              avatarParts: user.profileVisualMode == 'avatar'
+                                  ? user.avatarParts
+                                  : null,
+                              imageUrl: user.profileVisualMode == 'image'
+                                  ? user.profileImageUrl
+                                  : null,
                               size: 48,
                             ),
                             const SizedBox(width: 12),

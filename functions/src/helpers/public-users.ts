@@ -8,6 +8,8 @@ export function buildPublicUserData(data: UserData) {
     bio: data.bio ?? null,
     avatarIndex: data.avatarIndex ?? 0,
     avatarParts: data.avatarParts ?? null,
+    profileVisualMode: data.profileVisualMode ?? "icon",
+    profileImageUrl: data.profileImageUrl ?? null,
     postMode: data.postMode ?? "ai",
     isAI: data.isAI ?? false,
     totalPosts: data.totalPosts ?? 0,

@@ -569,6 +569,15 @@ class _ProfileMessages {
   String get premiumComingSoon => '準備中';
 
   String get profileEditTitle => 'プロフィール編集';
+  String get profileVisualLabel => 'アイコン設定';
+  String get profileImageModeLabel => '画像設定';
+  String get tapToEditAvatar => 'タップして編集';
+  String get tapToChangeImage => 'タップして変更';
+  String get profileImageCropTitle => '画像を調整';
+  String get profileImageRequired => '画像を選択してください';
+  String get profileImageSubscriptionTitle => 'サブスク限定';
+  String get profileImageSubscriptionMessage => 'この機能はサブスク課金限定の機能だよ';
+  String get profileImageUnlockAction => '画像アイコン機能解放';
   String get headerImageLabel => 'ヘッダー画像';
   String get defaultHeaderLabel => 'デフォルト画像';
   String get processing => '処理中...';

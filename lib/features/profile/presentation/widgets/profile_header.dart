@@ -136,7 +136,14 @@ class ProfileHeader extends StatelessWidget {
                       ),
                       child: AvatarWidget(
                         avatarIndex: user.avatarIndex,
-                        avatarParts: user.avatarParts,
+                        avatarParts:
+                            user.profileVisualMode == 'avatar'
+                            ? user.avatarParts
+                            : null,
+                        imageUrl:
+                            user.profileVisualMode == 'image'
+                            ? user.profileImageUrl
+                            : null,
                         size: 100,
                         borderRadius: BorderRadius.circular(22),
                       ),

@@ -125,6 +125,7 @@ class AvatarWidget extends StatelessWidget {
   final Color? backgroundColor;
   final AvatarParts? avatarParts;
   final BorderRadius? borderRadius;
+  final String? imageUrl;
 
   const AvatarWidget({
     super.key,
@@ -133,21 +134,41 @@ class AvatarWidget extends StatelessWidget {
     this.backgroundColor,
     this.avatarParts,
     this.borderRadius,
+    this.imageUrl,
   });
 
   @override
   Widget build(BuildContext context) {
+    final effectiveBorderRadius =
+        borderRadius ?? BorderRadius.circular(size * 0.28);
+
+    if (imageUrl != null && imageUrl!.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: effectiveBorderRadius,
+        child: Image.network(
+          imageUrl!,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) =>
+              _buildFallbackAvatar(effectiveBorderRadius),
+        ),
+      );
+    }
+
     if (avatarParts != null) {
       return AvatarPartsWidget(
         parts: avatarParts!,
         size: size,
         backgroundColor: backgroundColor,
-        borderRadius: borderRadius,
+        borderRadius: effectiveBorderRadius,
       );
     }
+    return _buildFallbackAvatar(effectiveBorderRadius);
+  }
+
+  Widget _buildFallbackAvatar(BorderRadius effectiveBorderRadius) {
     final safeIndex = avatarIndex.clamp(0, presetAvatars.length - 1);
-    final effectiveBorderRadius =
-        borderRadius ?? BorderRadius.circular(size * 0.28);
 
     return Container(
       width: size,

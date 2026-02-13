@@ -24,12 +24,12 @@ class PublicUserAvatar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentUser = ref.watch(currentUserProvider).valueOrNull;
-    if (currentUser != null &&
-        currentUser.uid == userId &&
-        currentUser.avatarParts != null) {
+    if (currentUser != null && currentUser.uid == userId) {
+      final mode = currentUser.profileVisualMode;
       return AvatarWidget(
         avatarIndex: avatarIndex,
-        avatarParts: currentUser.avatarParts,
+        avatarParts: mode == 'avatar' ? currentUser.avatarParts : null,
+        imageUrl: mode == 'image' ? currentUser.profileImageUrl : null,
         size: size,
         backgroundColor: backgroundColor,
         borderRadius: borderRadius,
@@ -45,10 +45,14 @@ class PublicUserAvatar extends ConsumerWidget {
       );
     }
 
+    final data = ref.watch(publicUserDocProvider(userId)).valueOrNull;
+    final mode = (data?['profileVisualMode'] as String?) ?? 'icon';
+    final imageUrl = data?['profileImageUrl'] as String?;
     final parts = ref.watch(publicUserAvatarPartsProvider(userId));
     return AvatarWidget(
       avatarIndex: avatarIndex,
-      avatarParts: parts,
+      avatarParts: mode == 'avatar' ? parts : null,
+      imageUrl: mode == 'image' ? imageUrl : null,
       size: size,
       backgroundColor: backgroundColor,
       borderRadius: borderRadius,

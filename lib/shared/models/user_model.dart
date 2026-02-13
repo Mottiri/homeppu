@@ -79,6 +79,9 @@ class UserModel {
   final int? headerImageIndex; // デフォルトヘッダー画像のインデックス（0-5）
   final int? headerPrimaryColor; // ヘッダー画像から抽出したメイン色（ARGB int）
   final int? headerSecondaryColor; // ヘッダー画像から抽出したサブ色（ARGB int）
+  final String profileVisualMode; // 'icon' | 'avatar' | 'image'
+  final String? profileImageUrl; // プロフィール画像URL
+  final String? profileImageStoragePath; // プロフィール画像Storageパス
 
   UserModel({
     required this.uid,
@@ -123,6 +126,9 @@ class UserModel {
     this.headerImageIndex,
     this.headerPrimaryColor,
     this.headerSecondaryColor,
+    this.profileVisualMode = 'icon',
+    this.profileImageUrl,
+    this.profileImageStoragePath,
   });
 
   factory UserModel.fromFirestore(DocumentSnapshot doc) {
@@ -187,6 +193,9 @@ class UserModel {
       headerImageIndex: data['headerImageIndex'],
       headerPrimaryColor: data['headerPrimaryColor'],
       headerSecondaryColor: data['headerSecondaryColor'],
+      profileVisualMode: data['profileVisualMode'] ?? 'icon',
+      profileImageUrl: data['profileImageUrl'],
+      profileImageStoragePath: data['profileImageStoragePath'],
     );
   }
 
@@ -238,6 +247,10 @@ class UserModel {
       if (headerPrimaryColor != null) 'headerPrimaryColor': headerPrimaryColor,
       if (headerSecondaryColor != null)
         'headerSecondaryColor': headerSecondaryColor,
+      'profileVisualMode': profileVisualMode,
+      if (profileImageUrl != null) 'profileImageUrl': profileImageUrl,
+      if (profileImageStoragePath != null)
+        'profileImageStoragePath': profileImageStoragePath,
     };
   }
 
@@ -283,6 +296,9 @@ class UserModel {
     int? headerImageIndex,
     int? headerPrimaryColor,
     int? headerSecondaryColor,
+    String? profileVisualMode,
+    String? profileImageUrl,
+    String? profileImageStoragePath,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -330,6 +346,10 @@ class UserModel {
       headerImageIndex: headerImageIndex ?? this.headerImageIndex,
       headerPrimaryColor: headerPrimaryColor ?? this.headerPrimaryColor,
       headerSecondaryColor: headerSecondaryColor ?? this.headerSecondaryColor,
+      profileVisualMode: profileVisualMode ?? this.profileVisualMode,
+      profileImageUrl: profileImageUrl ?? this.profileImageUrl,
+      profileImageStoragePath:
+          profileImageStoragePath ?? this.profileImageStoragePath,
     );
   }
 }
