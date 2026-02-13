@@ -32,8 +32,13 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen>
     with SingleTickerProviderStateMixin {
+  static const double _headerHideThreshold = 24;
+  static const double _headerShowThreshold = 24;
   late TabController _tabController;
   final ScrollController _scrollController = ScrollController();
+  bool _isHeaderCollapsed = false;
+  double _headerScrollAccumulator = 0;
+  int _headerScrollDirection = 0; // 1: down, -1: up
 
   @override
   void initState() {
@@ -46,6 +51,63 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _tabController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  bool _handleHeaderScrollNotification(ScrollNotification notification) {
+    if (notification.metrics.axis != Axis.vertical) return false;
+
+    if (notification is ScrollStartNotification) {
+      _headerScrollAccumulator = 0;
+      _headerScrollDirection = 0;
+      return false;
+    }
+
+    if (notification is ScrollUpdateNotification) {
+      final delta = notification.scrollDelta ?? 0;
+      final pixels = notification.metrics.pixels;
+
+      if (pixels <= 0) {
+        if (_isHeaderCollapsed) {
+          setState(() => _isHeaderCollapsed = false);
+        }
+        _headerScrollAccumulator = 0;
+        _headerScrollDirection = 0;
+        return false;
+      }
+
+      if (delta > 0) {
+        if (_headerScrollDirection != 1) {
+          _headerScrollDirection = 1;
+          _headerScrollAccumulator = 0;
+        }
+        _headerScrollAccumulator += delta.abs();
+        if (!_isHeaderCollapsed &&
+            _headerScrollAccumulator >= _headerHideThreshold) {
+          _headerScrollAccumulator = 0;
+          setState(() => _isHeaderCollapsed = true);
+        }
+      } else if (delta < 0) {
+        if (_headerScrollDirection != -1) {
+          _headerScrollDirection = -1;
+          _headerScrollAccumulator = 0;
+        }
+        _headerScrollAccumulator += delta.abs();
+        if (_isHeaderCollapsed &&
+            _headerScrollAccumulator >= _headerShowThreshold) {
+          _headerScrollAccumulator = 0;
+          setState(() => _isHeaderCollapsed = false);
+        }
+      }
+      return false;
+    }
+
+    if (notification is ScrollEndNotification) {
+      _headerScrollAccumulator = 0;
+      _headerScrollDirection = 0;
+      return false;
+    }
+
+    return false;
   }
 
   @override
@@ -66,6 +128,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     // ユーザーのヘッダー色を取得（設定されていればその色、なければデフォルト）
     final user = currentUser.valueOrNull;
+    final isSubscriber = user?.isSubscriber ?? false;
+    final showLogoSection = !_isHeaderCollapsed;
+    final showTabsSection = !_isHeaderCollapsed;
+    final showAdSection = !_isHeaderCollapsed || !isSubscriber;
     final primaryColor = user?.headerPrimaryColor != null
         ? Color(user!.headerPrimaryColor!)
         : AppColors.primary;
@@ -92,141 +158,147 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           gradient: userGradient,
         ),
         child: SafeArea(
-          child: NestedScrollView(
-            controller: _scrollController,
-            headerSliverBuilder: (context, innerBoxIsScrolled) {
-              return [
-                // ヘッダー（ロゴ中央 + 通知アイコン右）
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        // ロゴ（中央）- 繊細なアニメーション
-                        Image.asset(
-                              'assets/icons/logo.png',
-                              width: 72,
-                              height: 72,
-                            )
-                            .animate(
-                              onPlay: (controller) => controller.repeat(),
-                            )
-                            .shimmer(
-                              duration: 3000.ms,
-                              color: AppColors.primary.withValues(alpha: 0.1),
-                            ),
-                        // 通知アイコン（右端）
-                        Positioned(
-                          right: 0,
-                          child: currentUser.when(
-                            data: (user) {
-                              if (user == null) return const SizedBox.shrink();
-                              return StreamBuilder<int>(
-                                stream: ref
-                                    .watch(notificationRepositoryProvider)
-                                    .getUnreadCountStream(user.uid),
-                                builder: (context, snapshot) {
-                                  final count = snapshot.data ?? 0;
-                                  return Stack(
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(
-                                          Icons.notifications_outlined,
-                                          size: 28,
-                                        ),
-                                        onPressed: () =>
-                                            context.push('/notifications'),
-                                      ),
-                                      if (count > 0)
-                                        Positioned(
-                                          right: 8,
-                                          top: 8,
-                                          child: Container(
-                                            padding: const EdgeInsets.all(4),
-                                            decoration: const BoxDecoration(
-                                              color: AppColors.error,
-                                              shape: BoxShape.circle,
-                                            ),
-                                            constraints: const BoxConstraints(
-                                              minWidth: 16,
-                                              minHeight: 16,
-                                            ),
-                                            child: Text(
-                                              count > 99 ? '99+' : '$count',
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.bold,
+          child: NotificationListener<ScrollNotification>(
+            onNotification: _handleHeaderScrollNotification,
+            child: NestedScrollView(
+              controller: _scrollController,
+              headerSliverBuilder: (context, innerBoxIsScrolled) {
+                return [
+                  SliverToBoxAdapter(
+                    child: _AnimatedHeaderSection(
+                      visible: showLogoSection,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Image.asset(
+                                    'assets/icons/logo.png',
+                                    width: 72,
+                                    height: 72,
+                                  )
+                                  .animate(
+                                    onPlay: (controller) => controller.repeat(),
+                                  )
+                                  .shimmer(
+                                    duration: 3000.ms,
+                                    color: AppColors.primary.withValues(alpha: 0.1),
+                                  ),
+                              Positioned(
+                                right: 0,
+                                child: currentUser.when(
+                                  data: (user) {
+                                    if (user == null) return const SizedBox.shrink();
+                                    return StreamBuilder<int>(
+                                      stream: ref
+                                          .watch(notificationRepositoryProvider)
+                                          .getUnreadCountStream(user.uid),
+                                      builder: (context, snapshot) {
+                                        final count = snapshot.data ?? 0;
+                                        return Stack(
+                                          children: [
+                                            IconButton(
+                                              icon: const Icon(
+                                                Icons.notifications_outlined,
+                                                size: 28,
                                               ),
-                                              textAlign: TextAlign.center,
+                                              onPressed: () =>
+                                                  context.push('/notifications'),
                                             ),
-                                          ),
-                                        ),
-                                    ],
-                                  );
-                                },
-                              );
-                            },
-                            loading: () => const SizedBox.shrink(),
-                            error: (e, _) => const SizedBox.shrink(),
+                                            if (count > 0)
+                                              Positioned(
+                                                right: 8,
+                                                top: 8,
+                                                child: Container(
+                                                  padding: const EdgeInsets.all(4),
+                                                  decoration: const BoxDecoration(
+                                                    color: AppColors.error,
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                  constraints: const BoxConstraints(
+                                                    minWidth: 16,
+                                                    minHeight: 16,
+                                                  ),
+                                                  child: Text(
+                                                    count > 99 ? '99+' : '$count',
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                    textAlign: TextAlign.center,
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        );
+                                      },
+                                    );
+                                  },
+                                  loading: () => const SizedBox.shrink(),
+                                  error: (e, _) => const SizedBox.shrink(),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
+                      ),
                     ),
                   ),
-                ),
-
-                SliverToBoxAdapter(
-                  child: const AdBanner(
-                    padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
-                  ),
-                ),
-
-                // タブバー
-                SliverPersistentHeader(
-                  pinned: false,
-                  delegate: _SliverTabBarDelegate(
-                    TabBar(
-                      controller: _tabController,
-                      labelColor: AppColors.primary,
-                      unselectedLabelColor: AppColors.textHint,
-                      indicatorColor: AppColors.primary,
-                      indicatorWeight: 3,
-                      indicatorSize: TabBarIndicatorSize.label,
-                      labelStyle: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
+                  SliverToBoxAdapter(
+                    child: _AnimatedHeaderSection(
+                      visible: showAdSection,
+                      child: const AdBanner(
+                        padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
                       ),
-                      unselectedLabelStyle: const TextStyle(
-                        fontWeight: FontWeight.normal,
-                        fontSize: 15,
-                      ),
-                      tabs: [
-                        Tab(text: AppMessages.home.tabRecommended),
-                        Tab(text: AppMessages.home.tabFollowing),
-                      ],
                     ),
                   ),
-                ),
-              ];
-            },
-            body: TabBarView(
-              controller: _tabController,
-              children: [
-                // おすすめタブ（全体のタイムライン）
-                _TimelineTab(
-                  isFollowingOnly: false,
-                  currentUser: currentUser.valueOrNull,
-                  refreshKey: refreshKey,
-                ),
-                // フォロー中タブ
-                _TimelineTab(
-                  isFollowingOnly: true,
-                  currentUser: currentUser.valueOrNull,
-                  refreshKey: refreshKey,
-                ),
-              ],
+                  SliverToBoxAdapter(
+                    child: _AnimatedHeaderSection(
+                      visible: showTabsSection,
+                      child: TabBar(
+                        controller: _tabController,
+                        labelColor: AppColors.primary,
+                        unselectedLabelColor: AppColors.textHint,
+                        indicatorColor: AppColors.primary,
+                        indicatorWeight: 3,
+                        indicatorSize: TabBarIndicatorSize.label,
+                        labelStyle: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                        ),
+                        unselectedLabelStyle: const TextStyle(
+                          fontWeight: FontWeight.normal,
+                          fontSize: 15,
+                        ),
+                        tabs: [
+                          Tab(text: AppMessages.home.tabRecommended),
+                          Tab(text: AppMessages.home.tabFollowing),
+                        ],
+                      ),
+                    ),
+                  ),
+                ];
+              },
+              body: TabBarView(
+                controller: _tabController,
+                children: [
+                  // おすすめタブ（全体のタイムライン）
+                  _TimelineTab(
+                    isFollowingOnly: false,
+                    currentUser: currentUser.valueOrNull,
+                    refreshKey: refreshKey,
+                  ),
+                  // フォロー中タブ
+                  _TimelineTab(
+                    isFollowingOnly: true,
+                    currentUser: currentUser.valueOrNull,
+                    refreshKey: refreshKey,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -235,31 +307,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   }
 }
 
-/// タブバー用のデリゲート
-class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
-  final TabBar tabBar;
+class _AnimatedHeaderSection extends StatelessWidget {
+  final bool visible;
+  final Widget child;
 
-  _SliverTabBarDelegate(this.tabBar);
-
-  @override
-  double get minExtent => tabBar.preferredSize.height;
+  const _AnimatedHeaderSection({required this.visible, required this.child});
 
   @override
-  double get maxExtent => tabBar.preferredSize.height;
-
-  @override
-  Widget build(
-    BuildContext context,
-    double shrinkOffset,
-    bool overlapsContent,
-  ) {
-    return Container(color: Colors.transparent, child: tabBar);
-  }
-
-  @override
-  bool shouldRebuild(_SliverTabBarDelegate oldDelegate) {
-    // タブバーが変わった場合は再構築（新着ドット表示のため）
-    return tabBar != oldDelegate.tabBar;
+  Widget build(BuildContext context) {
+    return ClipRect(
+      child: AnimatedAlign(
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.topCenter,
+        heightFactor: visible ? 1 : 0,
+        child: AnimatedSlide(
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOutCubic,
+          offset: visible ? Offset.zero : const Offset(0, -0.25),
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 180),
+            opacity: visible ? 1 : 0,
+            child: IgnorePointer(ignoring: !visible, child: child),
+          ),
+        ),
+      ),
+    );
   }
 }
 
