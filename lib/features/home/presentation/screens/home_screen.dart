@@ -352,6 +352,9 @@ class _PostsList extends ConsumerStatefulWidget {
 
 class _PostsListState extends ConsumerState<_PostsList> {
   static const int _nativeAdInterval = 10;
+  static const double _scrollToTopFabMinOffset = 120;
+  static const double _fabShowThreshold = 24;
+  static const double _fabHideThreshold = 72;
 
   List<PostModel> _posts = [];
   DocumentSnapshot? _lastDocument;
@@ -359,6 +362,11 @@ class _PostsListState extends ConsumerState<_PostsList> {
   bool _isLoading = true;
   bool _isLoadingMore = false;
   bool _hasError = false;
+  bool _showScrollToTopFab = false;
+  final ScrollController _listController = ScrollController();
+  double _fabScrollAccumulator = 0;
+  int _fabScrollDirection = 0; // 1: down, -1: up
+  ProviderSubscription<int>? _homeScrollTopSubscription;
 
   int _nativeAdCountForPosts(int postsCount) => postsCount ~/ _nativeAdInterval;
 
@@ -375,7 +383,18 @@ class _PostsListState extends ConsumerState<_PostsList> {
   @override
   void initState() {
     super.initState();
+    _homeScrollTopSubscription = ref.listenManual<int>(
+      homeScrollToTopProvider,
+      (previous, next) => _scrollToTop(),
+    );
     _loadPosts();
+  }
+
+  @override
+  void dispose() {
+    _homeScrollTopSubscription?.close();
+    _listController.dispose();
+    super.dispose();
   }
 
   @override
@@ -477,6 +496,75 @@ class _PostsListState extends ConsumerState<_PostsList> {
     }
   }
 
+  void _scrollToTop() {
+    if (_listController.hasClients) {
+      _listController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    if (_showScrollToTopFab) {
+      setState(() => _showScrollToTopFab = false);
+    }
+  }
+
+  bool _handleScrollNotification(ScrollNotification notification) {
+    if (notification is ScrollStartNotification) {
+      _fabScrollAccumulator = 0;
+      _fabScrollDirection = 0;
+      return false;
+    }
+
+    if (notification is ScrollUpdateNotification) {
+      final delta = notification.scrollDelta ?? 0;
+      final pixels = notification.metrics.pixels;
+
+      if (pixels <= _scrollToTopFabMinOffset) {
+        if (_showScrollToTopFab) {
+          setState(() => _showScrollToTopFab = false);
+        }
+        _fabScrollAccumulator = 0;
+        _fabScrollDirection = 0;
+        return false;
+      }
+
+      if (delta > 0) {
+        if (_fabScrollDirection != 1) {
+          _fabScrollDirection = 1;
+          _fabScrollAccumulator = 0;
+        }
+        _fabScrollAccumulator += delta.abs();
+        if (!_showScrollToTopFab &&
+            _fabScrollAccumulator >= _fabShowThreshold) {
+          _fabScrollAccumulator = 0;
+          setState(() => _showScrollToTopFab = true);
+        }
+      } else if (delta < 0) {
+        if (_fabScrollDirection != -1) {
+          _fabScrollDirection = -1;
+          _fabScrollAccumulator = 0;
+        }
+        _fabScrollAccumulator += delta.abs();
+        if (_showScrollToTopFab &&
+            _fabScrollAccumulator >= _fabHideThreshold) {
+          _fabScrollAccumulator = 0;
+          setState(() => _showScrollToTopFab = false);
+        }
+      }
+
+      return false;
+    }
+
+    if (notification is ScrollEndNotification) {
+      _fabScrollAccumulator = 0;
+      _fabScrollDirection = 0;
+      return false;
+    }
+
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -518,6 +606,7 @@ class _PostsListState extends ConsumerState<_PostsList> {
         onRefresh: _refreshPosts,
         color: AppColors.primary,
         child: ListView(
+          controller: _listController,
           children: [
             SizedBox(height: MediaQuery.of(context).size.height * 0.3),
             Center(
@@ -545,56 +634,90 @@ class _PostsListState extends ConsumerState<_PostsList> {
       );
     }
 
-    return InfiniteScrollListener(
-      isLoadingMore: _isLoadingMore,
-      hasMore: _hasMore,
-      onLoadMore: _loadMorePosts,
-      child: RefreshIndicator(
-        onRefresh: _refreshPosts,
-        color: AppColors.primary,
-        child: Builder(
-          builder: (context) {
-            final contentCount =
-                _posts.length + _nativeAdCountForPosts(_posts.length);
-            final totalCount = contentCount + (_isLoadingMore ? 1 : 0);
-            return ListView.builder(
-          primary: false,
-          padding: const EdgeInsets.only(bottom: 120),
-          itemCount: totalCount,
-          itemBuilder: (context, index) {
-            if (_isLoadingMore && index == contentCount) {
-              // ローディングインジケーター
-              return const Padding(
-                padding: EdgeInsets.all(16),
-                child: Center(
-                  child: CircularProgressIndicator(color: AppColors.primary),
-                ),
-              );
-            }
+    return Stack(
+      children: [
+        InfiniteScrollListener(
+          isLoadingMore: _isLoadingMore,
+          hasMore: _hasMore,
+          onLoadMore: _loadMorePosts,
+          child: RefreshIndicator(
+            onRefresh: _refreshPosts,
+            color: AppColors.primary,
+            child: Builder(
+              builder: (context) {
+                final contentCount =
+                    _posts.length + _nativeAdCountForPosts(_posts.length);
+                final totalCount = contentCount + (_isLoadingMore ? 1 : 0);
+                return NotificationListener<ScrollNotification>(
+                  onNotification: _handleScrollNotification,
+                  child: ListView.builder(
+                    controller: _listController,
+                    primary: false,
+                    padding: const EdgeInsets.only(bottom: 120),
+                    itemCount: totalCount,
+                    itemBuilder: (context, index) {
+                      if (_isLoadingMore && index == contentCount) {
+                        // ローディングインジケーター
+                        return const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        );
+                      }
 
-            if (_isNativeAdIndex(index)) {
-              return NativeFeedAdCard(
-                key: ValueKey('native_ad_slot_$index'),
-              );
-            }
+                      if (_isNativeAdIndex(index)) {
+                        return NativeFeedAdCard(
+                          key: ValueKey('native_ad_slot_$index'),
+                        );
+                      }
 
-            final postIndex = _postIndexFromDisplayIndex(index);
-            final post = _posts[postIndex];
-            return PostCard(
-              key: ValueKey(post.id),
-              post: post,
-              onDeleted: () {
-                // 自分の投稿を削除した場合、ローカルリストから即座に削除
-                setState(() {
-                  _posts.removeAt(postIndex);
-                });
+                      final postIndex = _postIndexFromDisplayIndex(index);
+                      final post = _posts[postIndex];
+                      return PostCard(
+                        key: ValueKey(post.id),
+                        post: post,
+                        onDeleted: () {
+                          // 自分の投稿を削除した場合、ローカルリストから即座に削除
+                          setState(() {
+                            _posts.removeAt(postIndex);
+                          });
+                        },
+                      );
+                    },
+                  ),
+                );
               },
-            );
-          },
-            );
-          },
+            ),
+          ),
         ),
-      ),
+        Positioned(
+          right: 24,
+          bottom: MediaQuery.paddingOf(context).bottom + 28,
+          child: AnimatedSlide(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            offset: _showScrollToTopFab ? Offset.zero : const Offset(0, 1.2),
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 180),
+              opacity: _showScrollToTopFab ? 1 : 0,
+              child: IgnorePointer(
+                ignoring: !_showScrollToTopFab,
+                child: FloatingActionButton.small(
+                  heroTag:
+                      'home_scroll_top_fab_${widget.query.hashCode}_${widget.currentUserId ?? 'guest'}',
+                  onPressed: _scrollToTop,
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  child: const Icon(Icons.keyboard_arrow_up_rounded),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
