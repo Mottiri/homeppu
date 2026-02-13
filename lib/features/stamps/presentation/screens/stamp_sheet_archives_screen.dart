@@ -71,13 +71,41 @@ class _StampSheetArchivesScreenState
       );
     }
 
+    final primaryColor = user.headerPrimaryColor != null
+        ? Color(user.headerPrimaryColor!)
+        : AppColors.primary;
+    final secondaryColor = user.headerSecondaryColor != null
+        ? Color(user.headerSecondaryColor!)
+        : AppColors.secondary;
+    final userGradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        primaryColor.withValues(alpha: 0.25),
+        secondaryColor.withValues(alpha: 0.15),
+        const Color(0xFFFDF8F3),
+      ],
+      stops: const [0.0, 0.5, 1.0],
+    );
+    final topInset = MediaQuery.paddingOf(context).top;
+    final appBarReservedHeight = topInset + kToolbarHeight;
+
     return Scaffold(
-      appBar: AppBar(title: Text(AppMessages.stamp.archiveTitle)),
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        title: Text(AppMessages.stamp.archiveTitle),
+      ),
       body: Container(
-        decoration: const BoxDecoration(gradient: AppColors.warmGradient),
-        child: FutureBuilder<List<StampSheetDefinition>>(
-          future: _catalogFuture,
-          builder: (context, catalogSnapshot) {
+        decoration: BoxDecoration(gradient: userGradient),
+        child: Padding(
+          padding: EdgeInsets.only(top: appBarReservedHeight),
+          child: FutureBuilder<List<StampSheetDefinition>>(
+            future: _catalogFuture,
+            builder: (context, catalogSnapshot) {
             if (!catalogSnapshot.hasData) {
               return const Center(
                 child: CircularProgressIndicator(color: AppColors.primary),
@@ -270,7 +298,8 @@ class _StampSheetArchivesScreenState
                 );
               },
             );
-          },
+            },
+          ),
         ),
       ),
     );

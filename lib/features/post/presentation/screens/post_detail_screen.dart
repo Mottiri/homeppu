@@ -121,6 +121,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
 
     // ユーザーのヘッダー色を取得
     final currentUser = ref.watch(currentUserProvider).valueOrNull;
+    final isSubscriber = currentUser?.isSubscriber ?? false;
     final isAdmin = ref.watch(isAdminProvider).valueOrNull ?? false;
     final primaryColor = currentUser?.headerPrimaryColor != null
         ? Color(currentUser!.headerPrimaryColor!)
@@ -140,19 +141,30 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
       ],
       stops: const [0.0, 0.5, 1.0],
     );
+    final topInset = MediaQuery.paddingOf(context).top;
+    final appBarReservedHeight =
+        topInset + kToolbarHeight + (isSubscriber ? 0 : 58);
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        forceMaterialTransparency: true,
         leading: IconButton(
           onPressed: () => context.pop(),
           icon: const Icon(Icons.arrow_back_rounded),
         ),
-        bottom: const PreferredSize(
-          preferredSize: Size.fromHeight(58),
-          child: AdBanner(
-            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-          ),
-        ),
+        bottom: isSubscriber
+            ? null
+            : const PreferredSize(
+                preferredSize: Size.fromHeight(58),
+                child: AdBanner(
+                  padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                ),
+              ),
       ),
       body: Container(
         decoration: BoxDecoration(gradient: userGradient),
@@ -160,6 +172,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
           top: false,
           child: Column(
             children: [
+              SizedBox(height: appBarReservedHeight),
               Expanded(
                 child: StreamBuilder<DocumentSnapshot>(
                   stream: _postStream,
@@ -306,7 +319,6 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                         ),
 
                         // スペーサー
-                        const SliverToBoxAdapter(child: SizedBox(height: 100)),
                       ],
                     );
                   },
@@ -327,6 +339,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                   ],
                 ),
                 child: SafeArea(
+                  top: false,
                   child: currentUser?.isBanned == true
                       // BANユーザー向けメッセージ
                       ? Container(

@@ -15,6 +15,7 @@ import '../../../../shared/models/user_model.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/providers/moderation_provider.dart';
 import '../../../../shared/providers/virtue_shop_provider.dart';
+import '../../../../shared/widgets/ad_banner.dart';
 import '../../../../shared/services/stamp_sheet_service.dart';
 import '../../../../shared/services/virtue_shop_service.dart';
 
@@ -655,9 +656,42 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
       );
     }
 
+    final primaryColor = user.headerPrimaryColor != null
+        ? Color(user.headerPrimaryColor!)
+        : AppColors.primary;
+    final secondaryColor = user.headerSecondaryColor != null
+        ? Color(user.headerSecondaryColor!)
+        : AppColors.secondary;
+    final isSubscriber = user.isSubscriber;
+    final userGradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        primaryColor.withValues(alpha: 0.25),
+        secondaryColor.withValues(alpha: 0.15),
+        const Color(0xFFFDF8F3),
+      ],
+      stops: const [0.0, 0.5, 1.0],
+    );
+    final topInset = MediaQuery.paddingOf(context).top;
+    final appBarReservedHeight = topInset + kToolbarHeight + (isSubscriber ? 0 : 58);
+
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
         title: Text(AppMessages.stamp.title),
+        bottom: isSubscriber
+            ? null
+            : const PreferredSize(
+                preferredSize: Size.fromHeight(58),
+                child: AdBanner(
+                  padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                ),
+              ),
         actions: [
           IconButton(
             onPressed: () => context.push('/stamps/catalog'),
@@ -676,10 +710,12 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
         ],
       ),
       body: Container(
-        decoration: const BoxDecoration(gradient: AppColors.warmGradient),
-        child: FutureBuilder<List<StampSheetDefinition>>(
-          future: _catalogFuture,
-          builder: (context, catalogSnapshot) {
+        decoration: BoxDecoration(gradient: userGradient),
+        child: Padding(
+          padding: EdgeInsets.only(top: appBarReservedHeight),
+          child: FutureBuilder<List<StampSheetDefinition>>(
+            future: _catalogFuture,
+            builder: (context, catalogSnapshot) {
             if (!catalogSnapshot.hasData) {
               return const Center(
                 child: CircularProgressIndicator(color: AppColors.primary),
@@ -1009,7 +1045,8 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                 );
               },
             );
-          },
+            },
+          ),
         ),
       ),
     );
