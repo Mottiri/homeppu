@@ -13,7 +13,7 @@ export const IMAGE_MODERATION_PROMPT = `
 - adult: 成人向けコンテンツ、露出の多い画像、性的な内容
 - violence: 暴力的な画像、血液、怪我、残虐な内容、血まみれ
 - hate: ヘイトシンボル、差別的な画像
-- dangerous: 危険な行為、違法行為、武器
+- dangerous: 違法行為、麻薬、薬
 
 上記に該当しない場合は isInappropriate: false としてください。
 
@@ -32,7 +32,7 @@ export const VIDEO_MODERATION_PROMPT = `
 - adult: 成人向けコンテンツ、露出の多い映像、性的な内容
 - violence: 暴力的な映像、血液、怪我、残虐な内容
 - hate: ヘイトシンボル、差別的な内容
-- dangerous: 危険な行為、違法行為、武器
+- dangerous: 違法行為、麻薬、薬
 
 上記に該当しない場合は isInappropriate: false としてください。
 
@@ -42,38 +42,15 @@ export const VIDEO_MODERATION_PROMPT = `
 `;
 
 /**
- * 画像モデレーション用プロンプト（Callable版 - より詳細）
+ * 画像モデレーション用プロンプト（Callable用も共通利用）
  */
-export const IMAGE_MODERATION_CALLABLE_PROMPT = `
-この画像がSNSへの投稿として適切かどうか判定してください。
-
-【ブロック対象（isInappropriate: true）】
-- adult: 成人向けコンテンツ、露出の多い画像、性的な内容
-- violence: 暴力的な画像、血液、怪我、残虐な内容
-- hate: ヘイトシンボル、差別的な画像
-- dangerous: 危険な行為、違法行為、武器
-
-【許可する内容（isInappropriate: false）】
-- 通常の人物写真（水着でも一般的なものはOK）
-- 風景、食べ物、ペット
-- 趣味の写真
-- 芸術作品（明らかにアダルトでない限り）
-
-【回答形式】
-必ず以下のJSON形式のみで回答してください：
-{
-  "isInappropriate": true または false,
-  "category": "adult" | "violence" | "hate" | "dangerous" | "none",
-  "confidence": 0から1の数値,
-  "reason": "判定理由"
-}
-`;
+export const IMAGE_MODERATION_CALLABLE_PROMPT = IMAGE_MODERATION_PROMPT;
 
 /**
  * テキストモデレーション用プロンプトを生成
  */
 export function getTextModerationPrompt(text: string, postContent: string = ""): string {
-    return `
+  return `
 あなたはSNSのコミュニティマネージャーです。以下のテキストが、ポジティブで優しいSNS「ほめっぷ」にふさわしいかどうか（攻撃的、誹謗中傷、不適切でないか）を判定してください。
 文脈として、ユーザーは「投稿内容」に対して「コメント」をしようとしています。
 たとえ一見普通の言葉でも、文脈によって嫌味や攻撃になる場合はネガティブと判定してください。
