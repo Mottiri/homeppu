@@ -94,8 +94,20 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
       ref.invalidate(virtueStatusProvider);
     } on ModerationException catch (e) {
       if (mounted) {
-        // ネガティブコンテンツが検出された場合
-        await NegativeContentDialog.show(context: context, message: e.message);
+        final isCommentRateLimit =
+            e.code == 'resource-exhausted' &&
+            e.message.contains('コメントは60秒で2回までです');
+        if (isCommentRateLimit) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(e.message),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        } else {
+          // ネガティブコンテンツが検出された場合
+          await NegativeContentDialog.show(context: context, message: e.message);
+        }
         // 徳ポイント状態を更新
         ref.invalidate(virtueStatusProvider);
       }

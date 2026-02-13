@@ -30,45 +30,71 @@ import {
 const POSTS_PER_MINUTE_LIMIT = 2;
 const POSTS_DAILY_LIMIT = 15;
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const POST_RATE_WINDOW_MS = 60 * 1000;
 
-function getJstDayStart(now: Date = new Date()): Date {
+function getJstDateKey(now: Date = new Date()): string {
     const jstNow = new Date(now.getTime() + JST_OFFSET_MS);
-    jstNow.setUTCHours(0, 0, 0, 0);
-    return new Date(jstNow.getTime() - JST_OFFSET_MS);
+    return jstNow.toISOString().slice(0, 10);
 }
 
 async function enforcePostRateLimits(userId: string): Promise<void> {
-    const oneMinuteAgo = admin.firestore.Timestamp.fromDate(
-        new Date(Date.now() - 60000)
-    );
-    const dayStart = admin.firestore.Timestamp.fromDate(getJstDayStart());
+    const userRef = db.collection("users").doc(userId);
+    await db.runTransaction(async (transaction) => {
+        const snap = await transaction.get(userRef);
+        if (!snap.exists) {
+            throw new HttpsError("not-found", AUTH_ERRORS.UNAUTHENTICATED);
+        }
 
-    const [recentPosts, dailyPosts] = await Promise.all([
-        db
-            .collection("posts")
-            .where("userId", "==", userId)
-            .where("createdAt", ">", oneMinuteAgo)
-            .get(),
-        db
-            .collection("posts")
-            .where("userId", "==", userId)
-            .where("createdAt", ">=", dayStart)
-            .get(),
-    ]);
+        const data = snap.data() || {};
+        const nowMs = Date.now();
 
-    if (recentPosts.size >= POSTS_PER_MINUTE_LIMIT) {
-        throw new HttpsError(
-            "resource-exhausted",
-            VALIDATION_ERRORS.RATE_LIMITED_PER_MINUTE
+        const rawWindowStart = Number(data.postRateWindowStartMs ?? 0);
+        const rawRateCount = Number(data.postRateCount ?? 0);
+        const windowStartMs = Number.isFinite(rawWindowStart) ? Math.max(0, Math.trunc(rawWindowStart)) : 0;
+        const rateCount = Number.isFinite(rawRateCount) ? Math.max(0, Math.trunc(rawRateCount)) : 0;
+        const withinWindow = nowMs - windowStartMs < POST_RATE_WINDOW_MS;
+        const nextWindowStartMs = withinWindow ? windowStartMs : nowMs;
+        const nextRateCount = withinWindow ? rateCount : 0;
+        const currentDateKey = getJstDateKey();
+        const prevDateKey = typeof data.postDailyDateKey === "string" ? data.postDailyDateKey : "";
+        const rawDailyCount = Number(data.postDailyCount ?? 0);
+        const baseDailyCount = Number.isFinite(rawDailyCount) ? Math.max(0, Math.trunc(rawDailyCount)) : 0;
+        const currentDailyCount = prevDateKey === currentDateKey ? baseDailyCount : 0;
+
+        console.log(
+            `[POST_RATE] user=${userId} withinWindow=${withinWindow} ` +
+            `rateCount=${rateCount} nextRateCount=${nextRateCount} ` +
+            `dateKey=${currentDateKey} prevDateKey=${prevDateKey} dailyCount=${currentDailyCount}`
         );
-    }
 
-    if (dailyPosts.size >= POSTS_DAILY_LIMIT) {
-        throw new HttpsError(
-            "resource-exhausted",
-            VALIDATION_ERRORS.RATE_LIMITED_DAILY_15
+        if (nextRateCount >= POSTS_PER_MINUTE_LIMIT) {
+            console.log(`[POST_RATE] blocked minute limit user=${userId}`);
+            throw new HttpsError(
+                "resource-exhausted",
+                VALIDATION_ERRORS.RATE_LIMITED_PER_MINUTE
+            );
+        }
+
+        if (currentDailyCount >= POSTS_DAILY_LIMIT) {
+            console.log(`[POST_RATE] blocked daily limit user=${userId} dailyCount=${currentDailyCount}`);
+            throw new HttpsError(
+                "resource-exhausted",
+                VALIDATION_ERRORS.RATE_LIMITED_DAILY_15
+            );
+        }
+
+        transaction.update(userRef, {
+            postRateWindowStartMs: nextWindowStartMs,
+            postRateCount: nextRateCount + 1,
+            postDailyDateKey: currentDateKey,
+            postDailyCount: currentDailyCount + 1,
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+        console.log(
+            `[POST_RATE] updated user=${userId} postRateCount=${nextRateCount + 1} ` +
+            `postDailyCount=${currentDailyCount + 1}`
         );
-    }
+    });
 }
 
 /**

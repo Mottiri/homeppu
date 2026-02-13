@@ -33,6 +33,8 @@ const SETTINGS_COLLECTION = "settings";
 const VIRTUE_SHOP_SETTINGS_DOC = "virtueShop";
 const STAMP_SHEET_CATALOG_DOC = "stampSheetCatalog";
 const THANKS_STAMP_CREDITS_PER_LIKE = 1;
+const COMMENTS_PER_MINUTE_LIMIT = 2;
+const COMMENT_RATE_WINDOW_MS = 60 * 1000;
 
 function normalizeRarity(raw: unknown): "common" | "rare" | "epic" {
     if (raw === "rare") return "rare";
@@ -325,7 +327,8 @@ export const createCommentWithModeration = onCall(
         }
 
         // ユーザーがBANされているかチェック
-        const userDoc = await db.collection("users").doc(userId).get();
+        const userRef = db.collection("users").doc(userId);
+        const userDoc = await userRef.get();
         if (userDoc.exists && userDoc.data()?.isBanned) {
             throw new HttpsError("permission-denied", AUTH_ERRORS.BANNED);
         }
@@ -352,7 +355,38 @@ export const createCommentWithModeration = onCall(
             );
         }
 
-        // 2. コメント保存
+        // 2. 60秒2回制限（ユーザードキュメントで管理）
+        await db.runTransaction(async (transaction) => {
+            const snap = await transaction.get(userRef);
+            if (!snap.exists) {
+                throw new HttpsError("not-found", RESOURCE_ERRORS.USER_NOT_FOUND);
+            }
+
+            const data = snap.data() || {};
+            const nowMs = Date.now();
+            const rawWindowStart = Number(data.commentRateWindowStartMs ?? 0);
+            const rawCount = Number(data.commentRateCount ?? 0);
+            const windowStartMs = Number.isFinite(rawWindowStart) ? Math.max(0, Math.trunc(rawWindowStart)) : 0;
+            const count = Number.isFinite(rawCount) ? Math.max(0, Math.trunc(rawCount)) : 0;
+            const withinWindow = nowMs - windowStartMs < COMMENT_RATE_WINDOW_MS;
+            const nextWindowStartMs = withinWindow ? windowStartMs : nowMs;
+            const nextCount = withinWindow ? count : 0;
+
+            if (nextCount >= COMMENTS_PER_MINUTE_LIMIT) {
+                throw new HttpsError(
+                    "resource-exhausted",
+                    VALIDATION_ERRORS.COMMENT_RATE_LIMITED_PER_MINUTE
+                );
+            }
+
+            transaction.update(userRef, {
+                commentRateWindowStartMs: nextWindowStartMs,
+                commentRateCount: nextCount + 1,
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        });
+
+        // 3. コメント保存
         const commentRef = db.collection("comments").doc();
         await commentRef.set({
             postId,
@@ -365,7 +399,7 @@ export const createCommentWithModeration = onCall(
             isVisibleNow: true, // 即時表示
         });
 
-        // 3. 投稿のコメント数を更新
+        // 4. 投稿のコメント数を更新
         await db.collection("posts").doc(postId).update({
             commentCount: FieldValue.increment(1),
         });
