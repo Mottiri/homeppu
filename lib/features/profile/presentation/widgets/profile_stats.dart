@@ -8,6 +8,7 @@ class ProfileStats extends StatelessWidget {
   final int virtue;
   final Color primaryAccent;
   final Color secondaryAccent;
+  final bool isVirtueLoading;
   final VoidCallback? onVirtueTap;
 
   const ProfileStats({
@@ -17,6 +18,7 @@ class ProfileStats extends StatelessWidget {
     required this.virtue,
     required this.primaryAccent,
     required this.secondaryAccent,
+    this.isVirtueLoading = false,
     this.onVirtueTap,
   });
 
@@ -63,6 +65,7 @@ class ProfileStats extends StatelessWidget {
                   child: _buildStat(
                     label: '徳',
                     value: '$virtue',
+                    isLoading: isVirtueLoading,
                     onTap: onVirtueTap,
                   ),
                 ),
@@ -77,6 +80,7 @@ class ProfileStats extends StatelessWidget {
   Widget _buildStat({
     required String label,
     required String value,
+    bool isLoading = false,
     VoidCallback? onTap,
   }) {
     final content = Column(
@@ -90,10 +94,20 @@ class ProfileStats extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-        ),
+        if (isLoading)
+          const SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.2,
+              color: AppColors.textSecondary,
+            ),
+          )
+        else
+          Text(
+            value,
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          ),
       ],
     );
 

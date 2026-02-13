@@ -56,6 +56,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _showScrollToTopFab = false;
   double _fabScrollAccumulator = 0;
   int _fabScrollDirection = 0; // 1: down, -1: up
+  bool _isVirtueLoading = false;
 
   // ヘッダー画像とカラーパレット
   late int _headerImageIndex;
@@ -206,6 +207,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Future<void> _openVirtueDialog() async {
+    if (_isVirtueLoading) return;
+    setState(() => _isVirtueLoading = true);
     try {
       final status = await ref.read(virtueStatusProvider.future);
       if (!mounted) return;
@@ -217,6 +220,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       debugPrint('ProfileScreen: virtue status load failed: $e');
       if (mounted) {
         SnackBarHelper.showError(context, AppMessages.error.network);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isVirtueLoading = false);
       }
     }
   }
@@ -464,6 +471,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   virtue: user.virtue,
                   primaryAccent: _primaryAccent,
                   secondaryAccent: _secondaryAccent,
+                  isVirtueLoading: _isVirtueLoading,
                   onVirtueTap: _isOwnProfile
                       ? () {
                           _openVirtueDialog();
