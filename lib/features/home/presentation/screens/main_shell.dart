@@ -9,6 +9,7 @@ import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../circle/presentation/screens/circles_screen.dart';
 import 'home_screen.dart';
+import '../../../profile/presentation/screens/profile_screen.dart';
 
 class MainShell extends ConsumerStatefulWidget {
   final Widget child;
@@ -76,6 +77,10 @@ class _MainShellState extends ConsumerState<MainShell>
     }
 
     if (currentIndex == 1) {
+      if (!(currentUser?.isSubscriber ?? false)) {
+        await _showCircleSubscriptionDialog(context);
+        return;
+      }
       context.push('/create-circle');
       return;
     }
@@ -86,9 +91,104 @@ class _MainShellState extends ConsumerState<MainShell>
     }
   }
 
+  Future<void> _showCircleSubscriptionDialog(BuildContext context) async {
+    final rootContext = context;
+    bool isProcessing = false;
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                constraints: const BoxConstraints(maxWidth: 340),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      AppMessages.profile.circleSubscriptionTitle,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      AppMessages.profile.circleSubscriptionMessage,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: isProcessing
+                            ? null
+                            : () {
+                                setDialogState(() => isProcessing = true);
+                                Navigator.of(dialogContext).pop();
+                                Future.microtask(() {
+                                  if (!rootContext.mounted) return;
+                                  rootContext.push('/premium');
+                                });
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.virtue,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: isProcessing
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text(
+                                AppMessages.profile.circleUnlockAction,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextButton(
+                      onPressed: isProcessing
+                          ? null
+                          : () => Navigator.of(dialogContext).pop(),
+                      child: Text(
+                        AppMessages.label.cancel,
+                        style: TextStyle(color: AppColors.textSecondary),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUser = ref.watch(currentUserProvider).valueOrNull;
+    final isSubscriber = currentUser?.isSubscriber ?? false;
     if (currentUser?.banStatus == 'permanent') {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (GoRouterState.of(context).matchedLocation != '/ban-appeal') {
@@ -98,7 +198,16 @@ class _MainShellState extends ConsumerState<MainShell>
     }
 
     final currentIndex = _getCurrentIndex(context);
-    final isScrollReactiveScreen = currentIndex == 0 || currentIndex == 1;
+    if (!isSubscriber && currentIndex == 1) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (GoRouterState.of(context).matchedLocation.startsWith('/circles')) {
+          context.go('/home');
+        }
+      });
+    }
+    final isScrollReactiveScreen =
+        currentIndex == 0 || currentIndex == 1 || currentIndex == 3;
     if (!isScrollReactiveScreen && !_isBottomNavVisible) {
       _isBottomNavVisible = true;
     }
@@ -225,8 +334,13 @@ class _MainShellState extends ConsumerState<MainShell>
                         icon: Icons.groups_outlined,
                         activeIcon: Icons.groups_rounded,
                         label: 'サークル',
-                        isActive: currentIndex == 1,
+                        isActive: currentIndex == 1 && isSubscriber,
+                        showLockBadge: !isSubscriber,
                         onTap: () {
+                          if (!isSubscriber) {
+                            _showCircleSubscriptionDialog(context);
+                            return;
+                          }
                           if (currentIndex == 1) {
                             ref.read(circleScrollToTopProvider.notifier).state++;
                           } else {
@@ -314,7 +428,13 @@ class _MainShellState extends ConsumerState<MainShell>
                         activeIcon: Icons.person_rounded,
                         label: 'マイページ',
                         isActive: currentIndex == 3,
-                        onTap: () => context.go('/profile'),
+                        onTap: () {
+                          if (currentIndex == 3) {
+                            ref.read(profileScrollToTopProvider.notifier).state++;
+                          } else {
+                            context.go('/profile');
+                          }
+                        },
                       ),
                     ],
                   ),
@@ -335,6 +455,7 @@ class _NavItem extends StatelessWidget {
   final IconData activeIcon;
   final String label;
   final bool isActive;
+  final bool showLockBadge;
   final VoidCallback onTap;
 
   const _NavItem({
@@ -342,6 +463,7 @@ class _NavItem extends StatelessWidget {
     required this.activeIcon,
     required this.label,
     required this.isActive,
+    this.showLockBadge = false,
     required this.onTap,
   });
 
@@ -355,10 +477,32 @@ class _NavItem extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              isActive ? activeIcon : icon,
-              color: isActive ? AppColors.primary : AppColors.textHint,
-              size: 26,
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(
+                  isActive ? activeIcon : icon,
+                  color: isActive ? AppColors.primary : AppColors.textHint,
+                  size: 26,
+                ),
+                if (showLockBadge)
+                  Positioned(
+                    right: -6,
+                    top: -5,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.lock_outline,
+                        size: 12,
+                        color: AppColors.textHint,
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 4),
             Text(

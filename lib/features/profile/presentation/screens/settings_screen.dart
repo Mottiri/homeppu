@@ -110,6 +110,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _changeHeaderImage() async {
     final user = ref.read(currentUserProvider).valueOrNull;
     if (user == null) return;
+    if (!user.isSubscriber) {
+      await _showProfileImageSubscriptionDialog(
+        unlockActionLabel: AppMessages.profile.profileHeaderUnlockAction,
+      );
+      return;
+    }
 
     // 画像を選択
     final picker = ImagePicker();
@@ -331,7 +337,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     });
   }
 
-  Future<void> _showProfileImageSubscriptionDialog() async {
+  Future<void> _showProfileImageSubscriptionDialog({
+    String? unlockActionLabel,
+  }) async {
     final rootContext = context;
     bool isProcessing = false;
     await showDialog<void>(
@@ -397,7 +405,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 ),
                               )
                             : Text(
-                                AppMessages.profile.profileImageUnlockAction,
+                                unlockActionLabel ??
+                                    AppMessages.profile.profileImageUnlockAction,
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
@@ -870,6 +879,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       builder: (context, ref, _) {
                         final user = ref.watch(currentUserProvider).valueOrNull;
                         final hasCustomHeader = user?.headerImageUrl != null;
+                        final isSubscriber = user?.isSubscriber ?? false;
 
                         return Column(
                           children: [
@@ -953,7 +963,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               child: OutlinedButton.icon(
                                 onPressed: _isUploadingHeader
                                     ? null
-                                    : _changeHeaderImage,
+                                    : (isSubscriber
+                                          ? _changeHeaderImage
+                                          : () =>
+                                                _showProfileImageSubscriptionDialog(
+                                                  unlockActionLabel: AppMessages
+                                                      .profile
+                                                      .profileHeaderUnlockAction,
+                                                )),
                                 icon: _isUploadingHeader
                                     ? const SizedBox(
                                         width: 16,
@@ -962,7 +979,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                           strokeWidth: 2,
                                         ),
                                       )
-                                    : const Icon(Icons.image),
+                                    : Icon(
+                                        isSubscriber
+                                            ? Icons.image
+                                            : Icons.lock_outline,
+                                      ),
                                 label: Text(
                                   _isUploadingHeader
                                       ? AppMessages.profile.processing

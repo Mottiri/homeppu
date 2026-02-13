@@ -578,6 +578,10 @@ class _ProfileMessages {
   String get profileImageSubscriptionTitle => 'サブスク限定';
   String get profileImageSubscriptionMessage => 'この機能はサブスク課金限定の機能だよ';
   String get profileImageUnlockAction => '画像アイコン機能解放';
+  String get profileHeaderUnlockAction => '画像ヘッダー機能解放';
+  String get circleSubscriptionTitle => 'サブスク限定';
+  String get circleSubscriptionMessage => 'この機能はサブスク課金限定の機能だよ';
+  String get circleUnlockAction => 'サークル機能解放';
   String get headerImageLabel => 'ヘッダー画像';
   String get defaultHeaderLabel => 'デフォルト画像';
   String get processing => '処理中...';

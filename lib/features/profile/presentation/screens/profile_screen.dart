@@ -24,6 +24,9 @@ import '../widgets/profile_stats.dart';
 import '../../../../shared/widgets/infinite_scroll_listener.dart';
 import '../../../../shared/widgets/load_more_footer.dart';
 
+/// プロフィール画面のスクロールトップを要求するProvider
+final profileScrollToTopProvider = StateProvider<int>((ref) => 0);
+
 /// プロフィール画面
 class ProfileScreen extends ConsumerStatefulWidget {
   final String? userId; // nullの場合は自分のプロフィール
@@ -35,6 +38,9 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  static const double _scrollToTopFabMinOffset = 120;
+  static const double _fabShowThreshold = 24;
+  static const double _fabHideThreshold = 72;
   UserModel? _targetUser;
   bool _isLoading = true;
   bool _isOwnProfile = false;
@@ -45,7 +51,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   final _followService = FollowService();
   final _userPostsListKey = GlobalKey<ProfilePostsListState>();
   final ScrollController _scrollController = ScrollController();
+  ProviderSubscription<int>? _profileScrollTopSubscription;
   bool _isScrollable = false;
+  bool _showScrollToTopFab = false;
+  double _fabScrollAccumulator = 0;
+  int _fabScrollDirection = 0; // 1: down, -1: up
 
   // ヘッダー画像とカラーパレット
   late int _headerImageIndex;
@@ -92,6 +102,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         }
       },
     );
+    _profileScrollTopSubscription = ref.listenManual<int>(
+      profileScrollToTopProvider,
+      (previous, next) => _scrollToTop(),
+    );
     // 初回レイアウト後にスクロール可能か評価
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _updateScrollable();
@@ -101,6 +115,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   @override
   void dispose() {
     _adminSubscription?.close();
+    _profileScrollTopSubscription?.close();
     _scrollController.dispose();
     super.dispose();
   }
@@ -120,6 +135,74 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _updateScrollable();
     });
+  }
+
+  void _scrollToTop() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    if (_showScrollToTopFab) {
+      setState(() => _showScrollToTopFab = false);
+    }
+  }
+
+  bool _handleScrollNotification(ScrollNotification notification) {
+    if (notification is ScrollStartNotification) {
+      _fabScrollAccumulator = 0;
+      _fabScrollDirection = 0;
+      return false;
+    }
+
+    if (notification is ScrollUpdateNotification) {
+      final delta = notification.scrollDelta ?? 0;
+      final pixels = notification.metrics.pixels;
+
+      if (pixels <= _scrollToTopFabMinOffset) {
+        if (_showScrollToTopFab) {
+          setState(() => _showScrollToTopFab = false);
+        }
+        _fabScrollAccumulator = 0;
+        _fabScrollDirection = 0;
+        return false;
+      }
+
+      if (delta > 0) {
+        if (_fabScrollDirection != 1) {
+          _fabScrollDirection = 1;
+          _fabScrollAccumulator = 0;
+        }
+        _fabScrollAccumulator += delta.abs();
+        if (!_showScrollToTopFab &&
+            _fabScrollAccumulator >= _fabShowThreshold) {
+          _fabScrollAccumulator = 0;
+          setState(() => _showScrollToTopFab = true);
+        }
+      } else if (delta < 0) {
+        if (_fabScrollDirection != -1) {
+          _fabScrollDirection = -1;
+          _fabScrollAccumulator = 0;
+        }
+        _fabScrollAccumulator += delta.abs();
+        if (_showScrollToTopFab &&
+            _fabScrollAccumulator >= _fabHideThreshold) {
+          _fabScrollAccumulator = 0;
+          setState(() => _showScrollToTopFab = false);
+        }
+      }
+      return false;
+    }
+
+    if (notification is ScrollEndNotification) {
+      _fabScrollAccumulator = 0;
+      _fabScrollDirection = 0;
+      return false;
+    }
+
+    return false;
   }
 
   Future<void> _openVirtueDialog() async {
@@ -345,18 +428,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       value: SystemUiOverlayStyle.dark,
       child: Scaffold(
         body: Container(
-        decoration: const BoxDecoration(gradient: AppColors.warmGradient),
-        child: SafeArea(
-          child: InfiniteScrollListener(
-            isLoadingMore:
-                _userPostsListKey.currentState?.isLoadingMore ?? false,
-            hasMore: _userPostsListKey.currentState?.hasMore ?? false,
-            onLoadMore: () {
-              _userPostsListKey.currentState?.loadMoreCurrentTab();
-            },
-            child: CustomScrollView(
-              controller: _scrollController,
-              slivers: [
+          decoration: const BoxDecoration(gradient: AppColors.warmGradient),
+          child: SafeArea(
+            child: Stack(
+              children: [
+                InfiniteScrollListener(
+                  isLoadingMore:
+                      _userPostsListKey.currentState?.isLoadingMore ?? false,
+                  hasMore: _userPostsListKey.currentState?.hasMore ?? false,
+                  onLoadMore: () {
+                    _userPostsListKey.currentState?.loadMoreCurrentTab();
+                  },
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: _handleScrollNotification,
+                    child: CustomScrollView(
+                      controller: _scrollController,
+                      slivers: [
                 // ヘッダー画像 + アバター + 名前
                 ProfileHeader(
                   user: user,
@@ -457,12 +544,40 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   ),
                 ),
 
-                const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                        const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                      ],
+                    ),
+                  ),
+                ),
+                Positioned(
+                  right: 24,
+                  bottom: MediaQuery.paddingOf(context).bottom + 28,
+                  child: AnimatedSlide(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                    offset: _showScrollToTopFab
+                        ? Offset.zero
+                        : const Offset(0, 1.2),
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 180),
+                      opacity: _showScrollToTopFab ? 1 : 0,
+                      child: IgnorePointer(
+                        ignoring: !_showScrollToTopFab,
+                        child: FloatingActionButton.small(
+                          heroTag: 'profile_scroll_top_fab',
+                          onPressed: _scrollToTop,
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          child: const Icon(Icons.keyboard_arrow_up_rounded),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
         ),
-      ),
       ),
     );
   }
