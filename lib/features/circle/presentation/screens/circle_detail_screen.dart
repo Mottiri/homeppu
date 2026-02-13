@@ -31,6 +31,9 @@ class CircleDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
+  static const double _fabSwitchMinOffset = 120;
+  static const double _fabShowThreshold = 24;
+  static const double _fabHideThreshold = 72;
   bool _isJoining = false;
   bool _hasPendingRequest = false;
   bool _hasCheckedPending = false;
@@ -46,6 +49,9 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
   bool _isLoadingMorePosts = false;
   bool _isScrollable = false; // レイアウト後に再評価
   final ScrollController _scrollController = ScrollController();
+  bool _showScrollToTopFab = false;
+  double _fabScrollAccumulator = 0;
+  int _fabScrollDirection = 0; // 1: down, -1: up
 
   void _updatePinnedState(String postId, {required bool isPinned, bool clearTop = false}) {
     if (!mounted) return;
@@ -193,6 +199,88 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
         setState(() => _isLoadingMorePosts = false);
       }
     }
+  }
+
+  Future<void> _openCreatePost() async {
+    final currentUser = ref.read(currentUserProvider).valueOrNull;
+    if (currentUser?.isBanned == true) {
+      SnackBarHelper.showError(context, AppMessages.error.banned);
+      return;
+    }
+
+    final result = await context.push<bool>(
+      '/create-post',
+      extra: {'circleId': widget.circleId},
+    );
+    if (result == true && mounted) {
+      _loadPosts();
+    }
+  }
+
+  void _scrollToTop() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    if (_showScrollToTopFab) {
+      setState(() => _showScrollToTopFab = false);
+    }
+  }
+
+  bool _handleFabScrollNotification(ScrollNotification notification) {
+    if (notification is ScrollStartNotification) {
+      _fabScrollAccumulator = 0;
+      _fabScrollDirection = 0;
+      return false;
+    }
+
+    if (notification is ScrollUpdateNotification) {
+      final delta = notification.scrollDelta ?? 0;
+      final pixels = notification.metrics.pixels;
+
+      if (pixels <= _fabSwitchMinOffset) {
+        if (_showScrollToTopFab) {
+          setState(() => _showScrollToTopFab = false);
+        }
+        _fabScrollAccumulator = 0;
+        _fabScrollDirection = 0;
+        return false;
+      }
+
+      if (delta > 0) {
+        if (_fabScrollDirection != 1) {
+          _fabScrollDirection = 1;
+          _fabScrollAccumulator = 0;
+        }
+        _fabScrollAccumulator += delta.abs();
+        if (!_showScrollToTopFab && _fabScrollAccumulator >= _fabShowThreshold) {
+          _fabScrollAccumulator = 0;
+          setState(() => _showScrollToTopFab = true);
+        }
+      } else if (delta < 0) {
+        if (_fabScrollDirection != -1) {
+          _fabScrollDirection = -1;
+          _fabScrollAccumulator = 0;
+        }
+        _fabScrollAccumulator += delta.abs();
+        if (_showScrollToTopFab && _fabScrollAccumulator >= _fabHideThreshold) {
+          _fabScrollAccumulator = 0;
+          setState(() => _showScrollToTopFab = false);
+        }
+      }
+      return false;
+    }
+
+    if (notification is ScrollEndNotification) {
+      _fabScrollAccumulator = 0;
+      _fabScrollDirection = 0;
+      return false;
+    }
+
+    return false;
   }
 
   Future<void> _checkPendingRequest(String userId) async {
@@ -747,28 +835,54 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
         return Scaffold(
           backgroundColor: Colors.grey[50],
           floatingActionButton: canPost
-              ? FloatingActionButton(
-                  onPressed: () async {
-                    // BANユーザーチェック
-                    if (currentUser?.isBanned == true) {
-                      SnackBarHelper.showError(
-                        context,
-                        AppMessages.error.banned,
+              ? AnimatedContainer(
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeOutCubic,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: (_showScrollToTopFab
+                                ? AppColors.primary
+                                : const Color(0xFF00ACC1))
+                            .withValues(alpha: 0.35),
+                        blurRadius: 14,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: FloatingActionButton(
+                  onPressed: _showScrollToTopFab ? _scrollToTop : _openCreatePost,
+                  backgroundColor: _showScrollToTopFab
+                      ? AppColors.primary
+                      : const Color(0xFF00ACC1),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 260),
+                    switchInCurve: Curves.easeOutBack,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) {
+                      final rotate = Tween<double>(
+                        begin: 0.92,
+                        end: 1.0,
+                      ).animate(animation);
+                      return FadeTransition(
+                        opacity: animation,
+                        child: ScaleTransition(
+                          scale: animation,
+                          child: RotationTransition(
+                            turns: rotate,
+                            child: child,
+                          ),
+                        ),
                       );
-                      return;
-                    }
-
-                    final result = await context.push<bool>(
-                      '/create-post',
-                      extra: {'circleId': widget.circleId},
-                    );
-                    // 投稿作成成功後、リストをリロード
-                    if (result == true) {
-                      _loadPosts();
-                    }
-                  },
-                  backgroundColor: const Color(0xFF00ACC1), // シアン
-                  child: const Icon(Icons.edit, color: Colors.white),
+                    },
+                    child: Icon(
+                      _showScrollToTopFab ? Icons.keyboard_arrow_up : Icons.edit,
+                      key: ValueKey(_showScrollToTopFab),
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
                 )
               : null,
           body: InfiniteScrollListener(
@@ -778,9 +892,11 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
             child: RefreshIndicator(
               onRefresh: _refreshPosts,
               color: AppColors.primary,
-              child: CustomScrollView(
-                controller: _scrollController,
-                slivers: [
+              child: NotificationListener<ScrollNotification>(
+                onNotification: _handleFabScrollNotification,
+                child: CustomScrollView(
+                  controller: _scrollController,
+                  slivers: [
                   // ヘッダー
                   CircleHeader(
                     circle: circle,
@@ -986,8 +1102,9 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                     ),
                   ),
 
-                  const SliverToBoxAdapter(child: SizedBox(height: 100)),
-                ],
+                    const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                  ],
+                ),
               ),
             ),
           ),
