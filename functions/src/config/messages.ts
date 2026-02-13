@@ -235,6 +235,8 @@ export const MODERATION_MESSAGES = {
 // ===============================================
 export const VIRTUE_MESSAGES = {
     POST_CREATE_GRANT_REASON: "投稿作成による徳ポイント加算",
+    COMMENT_THANKS_GIVEN_GRANT_REASON: "コメントにいいね！した",
+    COMMENT_THANKS_RECEIVED_GRANT_REASON: "コメントがいいね！された",
     ADMIN_DELETE_POST_PENALTY_REASON: "運営削除（通報対応）",
 } as const;
 

@@ -9,6 +9,8 @@ export const VIRTUE_ROUTE_KEYS = {
     postCreate: "post_create",
     reactionGiven: "reaction_given",
     reactionReceived: "reaction_received",
+    commentThanksGiven: "comment_thanks_given",
+    commentThanksReceived: "comment_thanks_received",
     goalComplete: "goal_complete",
     taskStreak: "task_streak",
 } as const;
@@ -22,6 +24,10 @@ export type VirtuePolicy = {
     reactionGivenDailyCap: number;
     reactionReceivedPoints: number;
     reactionReceivedDailyCap: number;
+    commentThanksGivenPoints: number;
+    commentThanksGivenDailyCap: number;
+    commentThanksReceivedPoints: number;
+    commentThanksReceivedDailyCap: number;
     goalCompletePoints: number;
     goalCompleteDailyCap: number;
     streak3Points: number;
@@ -33,11 +39,15 @@ export type VirtuePolicy = {
 
 const DEFAULT_VIRTUE_POLICY: VirtuePolicy = {
     postCreatePoints: 3,
-    postCreateDailyCap: 30,
+    postCreateDailyCap: 15,
     reactionGivenPoints: 1,
     reactionGivenDailyCap: 10,
     reactionReceivedPoints: 1,
-    reactionReceivedDailyCap: 20,
+    reactionReceivedDailyCap: 10,
+    commentThanksGivenPoints: 1,
+    commentThanksGivenDailyCap: 10,
+    commentThanksReceivedPoints: 5,
+    commentThanksReceivedDailyCap: 20,
     goalCompletePoints: 8,
     goalCompleteDailyCap: 16,
     streak3Points: 10,
@@ -65,6 +75,22 @@ function toVirtuePolicy(data: Record<string, unknown> | undefined): VirtuePolicy
         reactionGivenDailyCap: toNonNegativeInt(data?.reactionGivenDailyCap, DEFAULT_VIRTUE_POLICY.reactionGivenDailyCap),
         reactionReceivedPoints: toNonNegativeInt(data?.reactionReceivedPoints, DEFAULT_VIRTUE_POLICY.reactionReceivedPoints),
         reactionReceivedDailyCap: toNonNegativeInt(data?.reactionReceivedDailyCap, DEFAULT_VIRTUE_POLICY.reactionReceivedDailyCap),
+        commentThanksGivenPoints: toNonNegativeInt(
+            data?.commentThanksGivenPoints,
+            DEFAULT_VIRTUE_POLICY.commentThanksGivenPoints
+        ),
+        commentThanksGivenDailyCap: toNonNegativeInt(
+            data?.commentThanksGivenDailyCap,
+            DEFAULT_VIRTUE_POLICY.commentThanksGivenDailyCap
+        ),
+        commentThanksReceivedPoints: toNonNegativeInt(
+            data?.commentThanksReceivedPoints,
+            DEFAULT_VIRTUE_POLICY.commentThanksReceivedPoints
+        ),
+        commentThanksReceivedDailyCap: toNonNegativeInt(
+            data?.commentThanksReceivedDailyCap,
+            DEFAULT_VIRTUE_POLICY.commentThanksReceivedDailyCap
+        ),
         goalCompletePoints: toNonNegativeInt(data?.goalCompletePoints, DEFAULT_VIRTUE_POLICY.goalCompletePoints),
         goalCompleteDailyCap: toNonNegativeInt(data?.goalCompleteDailyCap, DEFAULT_VIRTUE_POLICY.goalCompleteDailyCap),
         streak3Points: toNonNegativeInt(data?.streak3Points, DEFAULT_VIRTUE_POLICY.streak3Points),
@@ -189,4 +215,3 @@ export async function grantVirtue(params: GrantVirtueParams): Promise<{ granted:
         return { granted, newVirtue };
     });
 }
-

@@ -21,9 +21,11 @@ import {
     VALIDATION_ERRORS,
     LABELS,
     MODERATION_MESSAGES,
+    VIRTUE_MESSAGES,
 } from "../config/messages";
 import { getTextModerationPrompt } from "../ai/prompts/moderation";
 import { ModerationResult } from "../types";
+import { getVirtuePolicy, grantVirtue, VIRTUE_ROUTE_KEYS } from "../helpers/virtue-policy";
 
 const EPIC_REACTIONS = new Set(["rainbow", "hundred"]);
 const EPIC_STAMP_SHEET_REACTIONS = new Set(["rainbow", "hundred", "confetti"]);
@@ -591,6 +593,11 @@ export const likeCommentAsPostOwner = onCall(
                 return {
                     alreadyThanked: true,
                     credits: currentCredits,
+                    actorId: userId,
+                    actorIsAI: actorSnap.data()?.isAI === true,
+                    commentOwnerId,
+                    commentOwnerIsAI: commentOwnerSnap.data()?.isAI === true,
+                    postId,
                 };
             }
 
@@ -632,8 +639,43 @@ export const likeCommentAsPostOwner = onCall(
             return {
                 alreadyThanked: false,
                 credits: nextCredits,
+                actorId: userId,
+                actorIsAI: actorSnap.data()?.isAI === true,
+                commentOwnerId,
+                commentOwnerIsAI: commentOwnerSnap.data()?.isAI === true,
+                postId,
             };
         });
+
+        if (!result.alreadyThanked && !result.commentOwnerIsAI) {
+            const virtuePolicy = await getVirtuePolicy();
+            const grants: Promise<{ granted: number; newVirtue?: number }>[] = [];
+            grants.push(
+                grantVirtue({
+                    userId: result.commentOwnerId,
+                    routeKey: VIRTUE_ROUTE_KEYS.commentThanksReceived,
+                    points: virtuePolicy.commentThanksReceivedPoints,
+                    dailyCap: virtuePolicy.commentThanksReceivedDailyCap,
+                    reason: VIRTUE_MESSAGES.COMMENT_THANKS_RECEIVED_GRANT_REASON,
+                    source: "comment_thanks_received",
+                    targetId: result.postId,
+                })
+            );
+            if (!result.actorIsAI) {
+                grants.push(
+                    grantVirtue({
+                        userId: result.actorId,
+                        routeKey: VIRTUE_ROUTE_KEYS.commentThanksGiven,
+                        points: virtuePolicy.commentThanksGivenPoints,
+                        dailyCap: virtuePolicy.commentThanksGivenDailyCap,
+                        reason: VIRTUE_MESSAGES.COMMENT_THANKS_GIVEN_GRANT_REASON,
+                        source: "comment_thanks_given",
+                        targetId: result.postId,
+                    })
+                );
+            }
+            await Promise.all(grants);
+        }
 
         return {
             success: true,
