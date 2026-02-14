@@ -98,63 +98,6 @@ async function enforcePostRateLimits(userId: string): Promise<void> {
 }
 
 /**
- * レート制限付きの投稿作成（スパム対策）
- */
-export const createPostWithRateLimit = onCall(
-    { region: LOCATION, enforceAppCheck: true },
-    async (request) => {
-        const userId = requireAuth(request);
-        const data = request.data;
-        const shouldGrantVirtue = data?.grantVirtue !== false;
-        await enforcePostRateLimits(userId);
-
-        // 投稿を作成
-        const postRef = db.collection("posts").doc();
-        await postRef.set({
-            ...data,
-            userId: userId,
-            createdAt: FieldValue.serverTimestamp(),
-            reactions: { love: 0, praise: 0, cheer: 0, empathy: 0 },
-            commentCount: 0,
-            isVisible: true,
-        });
-
-        const circleId = data?.circleId as string | undefined | null;
-        if (circleId) {
-            try {
-                await db.collection("circles").doc(circleId).update({
-                    postCount: FieldValue.increment(1),
-                    recentActivity: FieldValue.serverTimestamp(),
-                    lastHumanPostAt: FieldValue.serverTimestamp(),
-                });
-            } catch (error) {
-                console.error("Failed to update circle counters:", error);
-            }
-        }
-
-        // ユーザーの投稿数を更新
-        await db.collection("users").doc(userId).update({
-            totalPosts: FieldValue.increment(1),
-        });
-
-        if (shouldGrantVirtue) {
-            const virtuePolicy = await getVirtuePolicy();
-            await grantVirtue({
-                userId,
-                routeKey: VIRTUE_ROUTE_KEYS.postCreate,
-                points: virtuePolicy.postCreatePoints,
-                dailyCap: virtuePolicy.postCreateDailyCap,
-                reason: VIRTUE_MESSAGES.POST_CREATE_GRANT_REASON,
-                source: "post_create",
-                targetId: postRef.id,
-            });
-        }
-
-        return { success: true, postId: postRef.id };
-    }
-);
-
-/**
  * モデレーション付き投稿作成
  * ネガティブな内容は投稿を拒否し、徳を減少
  */

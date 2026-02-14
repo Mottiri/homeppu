@@ -57,10 +57,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   String _getErrorMessage(String error) {
-    if (error.contains('user-not-found')) {
-      return AppMessages.auth.loginUserNotFound;
-    } else if (error.contains('wrong-password')) {
-      return AppMessages.auth.loginWrongPassword;
+    if (error.contains('user-not-found') ||
+        error.contains('wrong-password') ||
+        error.contains('invalid-credential')) {
+      return AppMessages.auth.loginEmailOrPasswordInvalid;
     } else if (error.contains('invalid-email')) {
       return AppMessages.auth.loginInvalidEmail;
     } else if (error.contains('too-many-requests')) {

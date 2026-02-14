@@ -442,6 +442,7 @@ class _AuthMessages {
   const _AuthMessages();
 
   // ログイン
+  String get loginEmailOrPasswordInvalid => 'メールアドレスかパスワードが間違っているよ、確認してね';
   String get loginUserNotFound => 'このメールアドレスは登録されていないみたい🔍';
   String get loginWrongPassword => 'パスワードが違うみたい🔐';
   String get loginInvalidEmail => 'メールアドレスの形式を確認してね📧';

@@ -105,5 +105,6 @@ flutter:
     - assets/reactions/
     - assets/stamp_sheets/
     - assets/stamp_sheets/layouts/
+    - assets/onbord/
   
   # フォントはGoogle Fontsパッケージで動的に読み込み

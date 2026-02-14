@@ -1499,18 +1499,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
 
             const SizedBox(height: 100),
-
-            const SizedBox(height: 32),
-
-            // バージョン情報
-            Center(
-              child: Text(
-                'Version 1.0.0',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-
-            const SizedBox(height: 100),
           ],
         ),
       ),

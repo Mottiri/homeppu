@@ -37,32 +37,6 @@ class AIService {
     }
   }
 
-  /// レート制限付きで投稿を作成
-  Future<String?> createPostWithRateLimit({
-    required String content,
-    required String userDisplayName,
-    required int userAvatarIndex,
-    required String postMode,
-    String? circleId,
-    bool grantVirtue = true,
-  }) async {
-    try {
-      final callable = _functions.httpsCallable('createPostWithRateLimit');
-      final result = await callable.call({
-        'content': content,
-        'userDisplayName': userDisplayName,
-        'userAvatarIndex': userAvatarIndex,
-        'postMode': postMode,
-        'circleId': circleId,
-        'grantVirtue': grantVirtue,
-      });
-      return result.data['postId'] as String?;
-    } catch (e) {
-      debugPrint('投稿作成エラー: $e');
-      rethrow;
-    }
-  }
-
   /// AIユーザーを全削除（管理者用）
   Future<void> deleteAllAIUsers() async {
     try {
