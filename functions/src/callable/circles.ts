@@ -26,6 +26,64 @@ import {
   SUCCESS_MESSAGES,
 } from "../config/messages";
 
+async function assertSubscriber(userId: string): Promise<void> {
+  const userDoc = await db.collection("users").doc(userId).get();
+  if (!userDoc.exists) {
+    throw new HttpsError("not-found", RESOURCE_ERRORS.USER_NOT_FOUND);
+  }
+  if (userDoc.data()?.isSubscriber !== true) {
+    throw new HttpsError("permission-denied", PERMISSION_ERRORS.EPIC_REACTION_REQUIRES_SUBSCRIPTION);
+  }
+}
+
+export const startCircleBrowseTrial = onCall(
+  {
+    region: LOCATION,
+    enforceAppCheck: true,
+  },
+  async (request) => {
+    const userId = requireAuth(request, AUTH_ERRORS.UNAUTHENTICATED_ALT);
+    const userRef = db.collection("users").doc(userId);
+    const result = await db.runTransaction(async (tx) => {
+      const userDoc = await tx.get(userRef);
+      if (!userDoc.exists) {
+        throw new HttpsError("not-found", RESOURCE_ERRORS.USER_NOT_FOUND);
+      }
+      const userData = userDoc.data()!;
+      if (userData.isSubscriber === true) {
+        return { allowed: true, isSubscriber: true };
+      }
+      if (userData.circleTrialUsed === true) {
+        throw new HttpsError("failed-precondition", VALIDATION_ERRORS.ALREADY_APPLIED);
+      }
+      tx.update(userRef, {
+        circleTrialUsed: true,
+        circleTrialUsedAt: FieldValue.serverTimestamp(),
+        circleTrialLastStartedAt: FieldValue.serverTimestamp(),
+      });
+      return { allowed: true, isSubscriber: false };
+    });
+    return result;
+  }
+);
+
+export const endCircleBrowseTrial = onCall(
+  {
+    region: LOCATION,
+    enforceAppCheck: true,
+  },
+  async (request) => {
+    const userId = requireAuth(request, AUTH_ERRORS.UNAUTHENTICATED_ALT);
+    await db.collection("users").doc(userId).set(
+      {
+        circleTrialLastEndedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+    return { success: true };
+  }
+);
+
 /**
  * サークルを削除
  * 1. ソフトデリート（即座にUIから非表示）
@@ -500,6 +558,7 @@ export const sendJoinRequest = onCall(
     }
 
     try {
+      await assertSubscriber(userId);
       // サークル情報を取得
       const circleDoc = await db.collection("circles").doc(circleId).get();
       if (!circleDoc.exists) {
@@ -585,6 +644,8 @@ export const joinCircle = onCall(
     if (!circleId) {
       throw new HttpsError("invalid-argument", VALIDATION_ERRORS.CIRCLE_ID_REQUIRED);
     }
+
+    await assertSubscriber(userId);
 
     const userDoc = await db.collection("users").doc(userId).get();
     if (userDoc.exists && userDoc.data()?.isBanned) {

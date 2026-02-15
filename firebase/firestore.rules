@@ -21,6 +21,11 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.admin == true;
     }
 
+    function isSubscriberUser() {
+      let userData = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return userData.isSubscriber == true;
+    }
+
     // Circle ownership helpers
     function isCircleOwnerOrSubOwner(circleId) {
       let circleData = get(/databases/$(database)/documents/circles/$(circleId)).data;
@@ -57,7 +62,11 @@ service cloud.firestore {
           'unlockedStampSheets',
           'activeStampSheetId',
           'thanksStampCredits',
-          'rewardedReactionUnlocks'
+          'rewardedReactionUnlocks',
+          'circleTrialUsed',
+          'circleTrialUsedAt',
+          'circleTrialLastStartedAt',
+          'circleTrialLastEndedAt'
         ]);
 
       // Stamp sheet placements are server-managed
@@ -172,7 +181,10 @@ service cloud.firestore {
         resource.data.ownerId == request.auth.uid ||
         isAdmin()
       );
-      allow create: if isAuthenticated() && (isNotBanned() || isAdmin());
+      allow create: if isAuthenticated() && (
+        (isNotBanned() && isSubscriberUser()) ||
+        isAdmin()
+      );
       allow update: if isAuthenticated() && (
         (isCircleOwnerOrSubOwner(circleId) && isNotBanned()) ||
         isAdmin()

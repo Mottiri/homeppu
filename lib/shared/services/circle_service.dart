@@ -271,6 +271,20 @@ class CircleService {
     await callable.call({'circleId': circleId});
   }
 
+  Future<bool> startCircleBrowseTrial() async {
+    final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+    final callable = functions.httpsCallable('startCircleBrowseTrial');
+    final result = await callable.call();
+    final data = Map<String, dynamic>.from(result.data as Map);
+    return data['allowed'] == true;
+  }
+
+  Future<void> endCircleBrowseTrial() async {
+    final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+    final callable = functions.httpsCallable('endCircleBrowseTrial');
+    await callable.call();
+  }
+
   // サークル退会
   Future<void> leaveCircle(String circleId) async {
     final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');

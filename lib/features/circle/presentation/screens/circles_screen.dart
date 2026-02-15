@@ -10,6 +10,7 @@ import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/models/circle_model.dart';
 import '../../../../shared/services/circle_service.dart';
 import '../../../../shared/providers/auth_provider.dart';
+import '../../../../shared/providers/circle_trial_provider.dart';
 import '../../../../shared/widgets/infinite_scroll_listener.dart';
 import '../../../../shared/widgets/load_more_footer.dart';
 
@@ -269,6 +270,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     final currentUser = ref.watch(currentUserProvider).valueOrNull;
     final isAdminAsync = ref.watch(isAdminProvider);
     final isAdmin = isAdminAsync.valueOrNull ?? false;
+    final isCircleTrialSession = ref.watch(circleTrialSessionProvider);
     final isSearchMode =
         _searchController.text.isNotEmpty || _isSearching;
 
@@ -464,7 +466,10 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
                         // サークルリスト
                         _searchController.text.isNotEmpty
                             ? _buildSearchResults()
-                            : _buildCircleList(currentUser?.uid),
+                            : _buildCircleList(
+                                currentUser?.uid,
+                                currentUser?.isSubscriber ?? false,
+                              ),
 
                         // LoadMoreFooter（ショートリスト用手動フォールバック）
                         SliverToBoxAdapter(
@@ -482,6 +487,51 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
                   ),
                 ),
               ),
+              if (isCircleTrialSession && !(currentUser?.isSubscriber ?? false))
+                Positioned(
+                  top: 8,
+                  left: 12,
+                  right: 12,
+                  child: IgnorePointer(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.95),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.1),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.visibility_outlined,
+                            size: 16,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '${AppMessages.circle.trialBannerTitle}  ${AppMessages.circle.trialBannerDescription}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               Positioned(
                 right: 24,
                 bottom: MediaQuery.paddingOf(context).bottom + 28,
@@ -560,7 +610,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     );
   }
 
-  Widget _buildCircleList(String? userId) {
+  Widget _buildCircleList(String? userId, bool isSubscriber) {
     // ローディング中
     if (_isLoading) {
       return const SliverFillRemaining(
@@ -620,7 +670,14 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
               ),
               const SizedBox(height: 24),
               ElevatedButton.icon(
-                onPressed: () => context.push('/create-circle'),
+                onPressed: isSubscriber
+                    ? () => context.push('/create-circle')
+                    : () {
+                        SnackBarHelper.showError(
+                          context,
+                          AppMessages.profile.circleSubscriptionMessage,
+                        );
+                      },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,

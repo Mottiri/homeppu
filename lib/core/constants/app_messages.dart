@@ -356,6 +356,9 @@ class _CircleMessages {
   String get filterHasPosts => '投稿あり';
   String get filterPublic => '公開';
   String get filterInviteOnly => '招待制';
+  String get trialBannerTitle => '初回サークル体験中';
+  String get trialBannerDescription =>
+      'この体験では閲覧のみ可能です（作成・参加はできません）。画面遷移またはアプリ終了で体験は終了し、再度閲覧できません。';
 }
 
 /// ホーム関連メッセージ
@@ -383,11 +386,11 @@ class _OnboardingMessages {
   String get alreadyHaveAccount => 'すでにアカウントをお持ちの方';
 
   String get page1Title => 'ようこそ、ほめっぷへ';
-  String get page1Description => '世界一優しいSNSへようこそ！\nここでは誰もがあなたを応援してくれるよ';
+  String get page1Description => 'ほめっぷに来てくれてありがとう！\n私は座敷童のちゃむちゃんです';
   String get page2Title => 'たくさん褒められよう';
-  String get page2Description => '日常の小さなことを投稿するだけで\nAIや仲間から温かい言葉が届くよ';
-  String get page3Title => 'ポジティブな空間';
-  String get page3Description => 'ネガティブな言葉は一切なし\n安心して自分を表現してね';
+  String get page2Description => 'ほめっぷではあなたの投稿に\nAIや仲間から温かい言葉が届くよ';
+  String get page3Title => 'おうちのような安心感';
+  String get page3Description => 'あなたのHomeのようなアプリ\nほめっぷを楽しんでね';
 }
 
 /// 通知関連メッセージ

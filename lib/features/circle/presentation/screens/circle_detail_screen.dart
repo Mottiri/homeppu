@@ -310,6 +310,13 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
       SnackBarHelper.showError(context, AppMessages.error.banned);
       return;
     }
+    if (!(currentUser?.isSubscriber ?? false)) {
+      SnackBarHelper.showError(
+        context,
+        AppMessages.profile.circleSubscriptionMessage,
+      );
+      return;
+    }
 
     // ルールがある場合は同意ダイアログを表示
     if (circle.rules != null && circle.rules!.isNotEmpty) {

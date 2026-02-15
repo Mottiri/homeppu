@@ -7,6 +7,8 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_messages.dart';
 import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/providers/auth_provider.dart';
+import '../../../../shared/providers/circle_trial_provider.dart';
+import '../../../../shared/services/circle_service.dart';
 import '../../../circle/presentation/screens/circles_screen.dart';
 import 'home_screen.dart';
 import '../../../profile/presentation/screens/profile_screen.dart';
@@ -31,6 +33,7 @@ class _MainShellState extends ConsumerState<MainShell>
   int _scrollAccumulatorDirection = 0; // 1: down, -1: up
   static const double _hideThreshold = 24;
   static const double _showThreshold = 72;
+  bool _isEndingCircleTrial = false;
 
   @override
   void initState() {
@@ -53,7 +56,9 @@ class _MainShellState extends ConsumerState<MainShell>
   int _getCurrentIndex(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
     if (location.startsWith('/home')) return 0;
-    if (location.startsWith('/circles')) return 1;
+    if (location.startsWith('/circles') || location.startsWith('/circle/')) {
+      return 1;
+    }
     if (location.startsWith('/stamps')) {
       return 2;
     }
@@ -185,10 +190,52 @@ class _MainShellState extends ConsumerState<MainShell>
     );
   }
 
+  Future<void> _startCircleTrialAndOpen() async {
+    try {
+      final allowed = await ref.read(circleServiceProvider).startCircleBrowseTrial();
+      if (!mounted) return;
+      if (!allowed) {
+        await _showCircleSubscriptionDialog(context);
+        return;
+      }
+      ref.read(circleTrialSessionProvider.notifier).state = true;
+      context.go('/circles');
+    } catch (_) {
+      if (!mounted) return;
+      await _showCircleSubscriptionDialog(context);
+    }
+  }
+
+  void _clearCircleTrialIfNeeded({
+    required bool isSubscriber,
+    required int currentIndex,
+  }) {
+    if (isSubscriber || currentIndex == 1 || _isEndingCircleTrial) return;
+    final isTrialSession = ref.read(circleTrialSessionProvider);
+    if (!isTrialSession) return;
+
+    _isEndingCircleTrial = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        _isEndingCircleTrial = false;
+        return;
+      }
+      ref.read(circleTrialSessionProvider.notifier).state = false;
+      try {
+        await ref.read(circleServiceProvider).endCircleBrowseTrial();
+      } catch (_) {
+        // best effort
+      } finally {
+        _isEndingCircleTrial = false;
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUser = ref.watch(currentUserProvider).valueOrNull;
     final isSubscriber = currentUser?.isSubscriber ?? false;
+    final isCircleTrialSession = ref.watch(circleTrialSessionProvider);
     if (currentUser?.banStatus == 'permanent') {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (GoRouterState.of(context).matchedLocation != '/ban-appeal') {
@@ -198,14 +245,19 @@ class _MainShellState extends ConsumerState<MainShell>
     }
 
     final currentIndex = _getCurrentIndex(context);
-    if (!isSubscriber && currentIndex == 1) {
+    if (!isSubscriber && currentIndex == 1 && !isCircleTrialSession) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        if (GoRouterState.of(context).matchedLocation.startsWith('/circles')) {
+        final location = GoRouterState.of(context).matchedLocation;
+        if (location.startsWith('/circles') || location.startsWith('/circle/')) {
           context.go('/home');
         }
       });
     }
+    _clearCircleTrialIfNeeded(
+      isSubscriber: isSubscriber,
+      currentIndex: currentIndex,
+    );
     final isScrollReactiveScreen =
         currentIndex == 0 || currentIndex == 1 || currentIndex == 3;
     if (!isScrollReactiveScreen && !_isBottomNavVisible) {
@@ -334,11 +386,19 @@ class _MainShellState extends ConsumerState<MainShell>
                         icon: Icons.groups_outlined,
                         activeIcon: Icons.groups_rounded,
                         label: 'サークル',
-                        isActive: currentIndex == 1 && isSubscriber,
-                        showLockBadge: !isSubscriber,
-                        onTap: () {
+                        isActive: currentIndex == 1 && (isSubscriber || isCircleTrialSession),
+                        showLockBadge: !isSubscriber && !isCircleTrialSession,
+                        onTap: () async {
                           if (!isSubscriber) {
-                            _showCircleSubscriptionDialog(context);
+                            if (isCircleTrialSession) {
+                              if (currentIndex == 1) {
+                                ref.read(circleScrollToTopProvider.notifier).state++;
+                              } else {
+                                context.go('/circles');
+                              }
+                              return;
+                            }
+                            await _startCircleTrialAndOpen();
                             return;
                           }
                           if (currentIndex == 1) {

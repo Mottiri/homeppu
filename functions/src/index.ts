@@ -31,6 +31,8 @@ export { initializeAIAccounts, generateAIPosts } from "./callable/ai";
 export {
     deleteCircle,
     cleanupDeletedCircle,
+    startCircleBrowseTrial,
+    endCircleBrowseTrial,
     approveJoinRequest,
     rejectJoinRequest,
     sendJoinRequest,
