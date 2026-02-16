@@ -620,7 +620,6 @@ class _MainShellState extends ConsumerState<MainShell>
         if (tutorialStep == TutorialPhase1Step.homeWelcome)
           Positioned.fill(
             child: TutorialOverlay(
-              debugTag: 'homeWelcome',
               message: AppMessages.tutorial.welcomeHome,
               spotlightRect: _tutorialSpotlightRect,
               onSpotlightTap: () {
@@ -629,9 +628,6 @@ class _MainShellState extends ConsumerState<MainShell>
                 ref.read(tutorialPhase1Provider.notifier).advance();
               },
               circularSpotlight: false,
-              spotlightColor: const Color(0xFFFFC1C1),
-              frameBorderWidth: 3.2,
-              frameGlowOpacity: 0.78,
               // ボトムナビ実測高さの上に配置（端末差分を吸収）
               bubbleBottomOffset:
                   MediaQuery.of(context).padding.bottom +

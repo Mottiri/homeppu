@@ -1822,7 +1822,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 !(tutorialStep == TutorialPhase1Step.finished &&
                     _isFinishedTutorialOverlayDismissed))
               TutorialOverlay(
-                debugTag: 'settings-$tutorialStep',
                 message: tutorialMessage,
                 spotlightRect: _tutorialSpotlightRect,
                 pulseMinScale: 1.0,

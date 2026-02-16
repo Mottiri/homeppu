@@ -1,6 +1,4 @@
-﻿import 'dart:async';
-
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
 
@@ -19,12 +17,8 @@ class TutorialOverlay extends StatelessWidget {
     this.characterAssetPath = 'assets/onbord/onbord_01.png',
     this.bubbleBottomOffset,
     this.circularSpotlight = false,
-    this.spotlightColor = const Color(0xFFFFC1C1),
     this.pulseMinScale = 0.94,
     this.pulseMaxScale = 1.06,
-    this.frameBorderWidth = 2.6,
-    this.frameGlowOpacity = 0.55,
-    this.debugTag = 'overlay',
   });
 
   final String message;
@@ -36,15 +30,9 @@ class TutorialOverlay extends StatelessWidget {
   final VoidCallback? onMaskTap;
   final String characterAssetPath;
   final double? bubbleBottomOffset;
-
-  // kept for API compatibility with callers; frame is intentionally disabled.
   final bool circularSpotlight;
-  final Color spotlightColor;
   final double pulseMinScale;
   final double pulseMaxScale;
-  final double frameBorderWidth;
-  final double frameGlowOpacity;
-  final String debugTag;
 
   @override
   Widget build(BuildContext context) {
@@ -215,7 +203,8 @@ class _MaskWithHoleClipper extends CustomClipper<Path> {
     final full = Path()..addRect(Offset.zero & size);
     final hole = circular
         ? (Path()..addOval(holeRect))
-        : (Path()..addRRect(
+        : (Path()
+          ..addRRect(
             RRect.fromRectAndRadius(holeRect, const Radius.circular(16)),
           ));
     return Path.combine(PathOperation.difference, full, hole);

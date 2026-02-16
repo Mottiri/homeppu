@@ -627,7 +627,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       });
                     }
                     return TutorialOverlay(
-                      debugTag: 'profileSettings',
                       message: AppMessages.tutorial.tapSettings,
                       spotlightRect: _settingsIconRect,
                       onSpotlightTap: () async {
