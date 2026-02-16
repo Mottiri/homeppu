@@ -20,6 +20,8 @@ import '../../../../shared/services/comment_thanks_service.dart';
 import '../../../../shared/widgets/public_user_avatar.dart';
 import '../../../../shared/widgets/report_dialog.dart';
 import '../../../../shared/widgets/ad_banner.dart';
+import '../../../../shared/providers/tutorial_phase2_provider.dart';
+import '../../../../shared/widgets/tutorial_overlay.dart';
 
 import '../../../home/presentation/widgets/post_card.dart';
 
@@ -39,6 +41,22 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
   Timer? _refreshTimer;
   late final Stream<DocumentSnapshot> _postStream;
   late final Stream<QuerySnapshot> _commentsStream;
+  final GlobalKey _tutorialOverlayStackKey = GlobalKey();
+  final GlobalKey _tutorialTargetCommentKey = GlobalKey();
+  Rect? _tutorialCommentRect;
+  bool _phase2TutorialInitialized = false;
+  TutorialPhase2Step? _lastLoggedPhase2Step;
+  bool? _lastLoggedPhase2OverlayVisible;
+  bool? _lastLoggedHasTutorialTarget;
+  int? _lastLoggedCommentCount;
+
+  bool _isRectNearlyEqual(Rect? a, Rect? b, {double tolerance = 0.5}) {
+    if (a == null || b == null) return a == b;
+    return (a.left - b.left).abs() <= tolerance &&
+        (a.top - b.top).abs() <= tolerance &&
+        (a.width - b.width).abs() <= tolerance &&
+        (a.height - b.height).abs() <= tolerance;
+  }
 
   @override
   void initState() {
@@ -127,12 +145,34 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     }
   }
 
+  Future<void> _resolveTutorialCommentRect() async {
+    debugPrint('[TUTORIAL_PHASE2] resolve rect requested');
+    final rect = await resolveRectWithRetry(
+      _tutorialTargetCommentKey,
+      ancestorKey: _tutorialOverlayStackKey,
+    );
+    debugPrint('[TUTORIAL_PHASE2] resolve rect result: $rect');
+    if (!mounted) return;
+    if (_isRectNearlyEqual(rect, _tutorialCommentRect)) return;
+    debugPrint(
+      '[TUTORIAL_PHASE2] update rect: old=$_tutorialCommentRect new=$rect',
+    );
+    setState(() => _tutorialCommentRect = rect);
+  }
+
   @override
   Widget build(BuildContext context) {
     timeago.setLocaleMessages('ja', timeago.JaMessages());
 
     // ユーザーのヘッダー色を取得
     final currentUser = ref.watch(currentUserProvider).valueOrNull;
+    final tutorialStep = ref.watch(tutorialPhase2Provider);
+    if (_lastLoggedPhase2Step != tutorialStep) {
+      debugPrint(
+        '[TUTORIAL_PHASE2] step changed: $_lastLoggedPhase2Step -> $tutorialStep',
+      );
+      _lastLoggedPhase2Step = tutorialStep;
+    }
     final isSubscriber = currentUser?.isSubscriber ?? false;
     final isAdmin = ref.watch(isAdminProvider).valueOrNull ?? false;
     final primaryColor = currentUser?.headerPrimaryColor != null
@@ -219,6 +259,21 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                     }
 
                     final post = PostModel.fromFirestore(postSnapshot.data!);
+                    final currentUserId = currentUser?.uid;
+                    final isOwnPost =
+                        currentUserId != null && currentUserId == post.userId;
+
+                    if (isOwnPost &&
+                        currentUser != null &&
+                        !_phase2TutorialInitialized) {
+                      _phase2TutorialInitialized = true;
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!mounted) return;
+                        ref
+                            .read(tutorialPhase2Provider.notifier)
+                            .restoreOrStart(currentUser);
+                      });
+                    }
 
                     // 非表示の投稿（削除済み）の場合、トーストを表示して戻る
                     if (!post.isVisible) {
@@ -240,97 +295,232 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                       );
                     }
 
-                    return CustomScrollView(
-                      slivers: [
-                        // 投稿本体（PostCardウィジェットを再利用）
-                        SliverToBoxAdapter(
-                          child: _buildPostCard(post, currentUser, isAdmin),
-                        ),
-
-                        // コメントヘッダー
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 8,
+                    return Stack(
+                      key: _tutorialOverlayStackKey,
+                      clipBehavior: Clip.none,
+                      children: [
+                        CustomScrollView(
+                          physics: tutorialStep ==
+                                  TutorialPhase2Step.commentLongPress
+                              ? const NeverScrollableScrollPhysics()
+                              : null,
+                          slivers: [
+                            // 投稿本体（PostCardウィジェットを再利用）
+                            SliverToBoxAdapter(
+                              child: _buildPostCard(post, currentUser, isAdmin),
                             ),
-                            child: Text(
-                              'コメント',
-                              style: Theme.of(context).textTheme.titleMedium,
+
+                            // コメントヘッダー
+                            SliverToBoxAdapter(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 8,
+                                ),
+                                child: Text(
+                                  'コメント',
+                                  style: Theme.of(context).textTheme.titleMedium,
+                                ),
+                              ),
+                            ),
+
+                            // コメントリスト
+                            StreamBuilder<QuerySnapshot>(
+                              stream: _commentsStream,
+                              builder: (context, commentSnapshot) {
+                                if (!commentSnapshot.hasData) {
+                                  return const SliverToBoxAdapter(
+                                    child: Center(
+                                      child: Padding(
+                                        padding: EdgeInsets.all(20),
+                                        child: CircularProgressIndicator(
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }
+
+                                final comments = commentSnapshot.data!.docs
+                                    .map((doc) => CommentModel.fromFirestore(doc))
+                                    .where((c) => c.isVisibleNow)
+                                    .toList();
+
+                                if (comments.isEmpty) {
+                                  if (_tutorialCommentRect != null) {
+                                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                                      if (!mounted) return;
+                                      setState(() => _tutorialCommentRect = null);
+                                    });
+                                  }
+                                  return SliverToBoxAdapter(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(40),
+                                      child: Center(
+                                        child: Column(
+                                          children: [
+                                            const Text(
+                                              '💬',
+                                              style: TextStyle(fontSize: 40),
+                                            ),
+                                            const SizedBox(height: 12),
+                                            Text(
+                                              'まだコメントがないよ',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodyMedium
+                                                  ?.copyWith(
+                                                    color: AppColors.textSecondary,
+                                                  ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              '最初のコメントを送ってみよう！',
+                                              style: Theme.of(
+                                                context,
+                                              ).textTheme.bodySmall,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }
+
+                                final tutorialTargetIndex =
+                                    tutorialStep ==
+                                                TutorialPhase2Step.commentLongPress &&
+                                            isOwnPost
+                                        ? comments.indexWhere(
+                                            (c) => c.userId != post.userId,
+                                          )
+                                        : -1;
+                                final hasTutorialTarget = tutorialTargetIndex >= 0;
+                                final commentCount = comments.length;
+                                if (_lastLoggedCommentCount != commentCount ||
+                                    _lastLoggedHasTutorialTarget !=
+                                        hasTutorialTarget) {
+                                  debugPrint(
+                                    '[TUTORIAL_PHASE2] comments=$commentCount '
+                                    'hasTarget=$hasTutorialTarget '
+                                    'targetIndex=$tutorialTargetIndex '
+                                    'step=$tutorialStep '
+                                    'isOwnPost=$isOwnPost',
+                                  );
+                                  _lastLoggedCommentCount = commentCount;
+                                  _lastLoggedHasTutorialTarget =
+                                      hasTutorialTarget;
+                                }
+
+                                if (tutorialStep ==
+                                        TutorialPhase2Step.commentLongPress &&
+                                    hasTutorialTarget &&
+                                    _tutorialCommentRect == null) {
+                                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                                    _resolveTutorialCommentRect();
+                                  });
+                                } else if (!(tutorialStep ==
+                                            TutorialPhase2Step.commentLongPress &&
+                                        hasTutorialTarget) &&
+                                    _tutorialCommentRect != null) {
+                                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                                    if (!mounted) return;
+                                    setState(() => _tutorialCommentRect = null);
+                                  });
+                                }
+
+                                return SliverList(
+                                  delegate: SliverChildBuilderDelegate(
+                                    (context, index) {
+                                      final comment = comments[index];
+                                      final isTutorialTarget = hasTutorialTarget &&
+                                          index == tutorialTargetIndex;
+                                      return _CommentTile(
+                                        key: isTutorialTarget
+                                            ? ValueKey('${comment.id}_tutorial')
+                                            : ValueKey(comment.id),
+                                        comment: comment,
+                                        postOwnerId: post.userId,
+                                        disableTapActions: isTutorialTarget,
+                                        spotlightCardKey: isTutorialTarget
+                                            ? _tutorialTargetCommentKey
+                                            : null,
+                                        onThanksCompleted: isTutorialTarget &&
+                                                tutorialStep ==
+                                                    TutorialPhase2Step
+                                                        .commentLongPress
+                                            ? () async {
+                                                await ref
+                                                    .read(
+                                                      tutorialPhase2Provider
+                                                          .notifier,
+                                                    )
+                                                    .markCompleted();
+                                              }
+                                            : null,
+                                      );
+                                    },
+                                    childCount: comments.length,
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                        if (isOwnPost && tutorialStep == TutorialPhase2Step.detailIntro)
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            top: -appBarReservedHeight,
+                            bottom: 0,
+                            child: TutorialOverlay(
+                              message: AppMessages.tutorial.postDetailOverview,
+                              onMaskTap: () async {
+                                await ref
+                                    .read(tutorialPhase2Provider.notifier)
+                                    .advance();
+                              },
+                              bubbleBottomOffset:
+                                  MediaQuery.of(context).padding.bottom + 16,
                             ),
                           ),
-                        ),
-
-                        // コメントリスト
-                        StreamBuilder<QuerySnapshot>(
-                          stream: _commentsStream,
-                          builder: (context, commentSnapshot) {
-                            if (!commentSnapshot.hasData) {
-                              return const SliverToBoxAdapter(
-                                child: Center(
-                                  child: Padding(
-                                    padding: EdgeInsets.all(20),
-                                    child: CircularProgressIndicator(
-                                      color: AppColors.primary,
-                                    ),
-                                  ),
-                                ),
+                        if (isOwnPost &&
+                            tutorialStep == TutorialPhase2Step.commentLongPress &&
+                            _tutorialCommentRect != null)
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            top: -appBarReservedHeight,
+                            bottom: 0,
+                            child: TutorialOverlay(
+                              message: AppMessages.tutorial.postDetailLongPressComment,
+                              // Overlay is shifted upward to cover AppBar area,
+                              // so shift spotlight down by the same amount.
+                              spotlightRect: _tutorialCommentRect!.shift(
+                                Offset(0, appBarReservedHeight),
+                              ),
+                              passThroughSpotlight: true,
+                              onMaskTap: () {},
+                            ),
+                          ),
+                        Builder(
+                          builder: (context) {
+                            final overlayVisible = isOwnPost &&
+                                tutorialStep ==
+                                    TutorialPhase2Step.commentLongPress &&
+                                _tutorialCommentRect != null;
+                            if (_lastLoggedPhase2OverlayVisible !=
+                                overlayVisible) {
+                              debugPrint(
+                                '[TUTORIAL_PHASE2] overlayVisible=$overlayVisible '
+                                'step=$tutorialStep rect=$_tutorialCommentRect',
                               );
+                              _lastLoggedPhase2OverlayVisible =
+                                  overlayVisible;
                             }
-
-                            final comments = commentSnapshot.data!.docs
-                                .map((doc) => CommentModel.fromFirestore(doc))
-                                .where((c) => c.isVisibleNow)
-                                .toList();
-
-                            if (comments.isEmpty) {
-                              return SliverToBoxAdapter(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(40),
-                                  child: Center(
-                                    child: Column(
-                                      children: [
-                                        const Text(
-                                          '💬',
-                                          style: TextStyle(fontSize: 40),
-                                        ),
-                                        const SizedBox(height: 12),
-                                        Text(
-                                          'まだコメントがないよ',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodyMedium
-                                              ?.copyWith(
-                                                color: AppColors.textSecondary,
-                                              ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          '最初のコメントを送ってみよう！',
-                                          style: Theme.of(
-                                            context,
-                                          ).textTheme.bodySmall,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }
-
-                            return SliverList(
-                              delegate: SliverChildBuilderDelegate((
-                                context,
-                                index,
-                              ) {
-                                final comment = comments[index];
-                                return _CommentTile(comment: comment, postOwnerId: post.userId);
-                              }, childCount: comments.length),
-                            );
+                            return const SizedBox.shrink();
                           },
                         ),
-
-                        // スペーサー
                       ],
                     );
                   },
@@ -352,7 +542,10 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                 ),
                 child: SafeArea(
                   top: false,
-                  child: currentUser?.isBanned == true
+                  child: IgnorePointer(
+                    ignoring:
+                        tutorialStep == TutorialPhase2Step.commentLongPress,
+                    child: currentUser?.isBanned == true
                       // BANユーザー向けメッセージ
                       ? Container(
                           padding: const EdgeInsets.symmetric(
@@ -430,6 +623,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                             ),
                           ],
                         ),
+                  ),
                 ),
               ),
             ],
@@ -482,10 +676,17 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
 class _CommentTile extends StatefulWidget {
   final CommentModel comment;
   final String postOwnerId;
+  final bool disableTapActions;
+  final Future<void> Function()? onThanksCompleted;
+  final Key? spotlightCardKey;
 
   const _CommentTile({
+    super.key,
     required this.comment,
     required this.postOwnerId,
+    this.disableTapActions = false,
+    this.onThanksCompleted,
+    this.spotlightCardKey,
   });
 
   @override
@@ -500,6 +701,7 @@ class _CommentTileState extends State<_CommentTile> {
       widget.comment.thanksLikedByPostOwner || _optimisticThanked;
 
   void _navigateToProfile(BuildContext context) {
+    if (widget.disableTapActions) return;
     context.push('/profile/${widget.comment.userId}');
   }
 
@@ -606,7 +808,9 @@ class _CommentTileState extends State<_CommentTile> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           GestureDetector(
-            onTap: () => _navigateToProfile(context),
+            onTap: widget.disableTapActions
+                ? null
+                : () => _navigateToProfile(context),
             child: PublicUserAvatar(
               userId: widget.comment.userId,
               avatarIndex: widget.comment.userAvatarIndex,
@@ -616,8 +820,18 @@ class _CommentTileState extends State<_CommentTile> {
           const SizedBox(width: 12),
           Expanded(
             child: GestureDetector(
-              onLongPress: canThanks && !_isSubmitting ? handleThanksTap : null,
+              onLongPress: canThanks && !_isSubmitting
+                  ? () async {
+                      // Tutorial completion is based on long-press action itself.
+                      final onThanksCompleted = widget.onThanksCompleted;
+                      if (onThanksCompleted != null) {
+                        unawaited(onThanksCompleted());
+                      }
+                      await handleThanksTap();
+                    }
+                  : null,
               child: Container(
+                key: widget.spotlightCardKey,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceVariant,
@@ -629,7 +843,9 @@ class _CommentTileState extends State<_CommentTile> {
                     Row(
                       children: [
                         GestureDetector(
-                          onTap: () => _navigateToProfile(context),
+                          onTap: widget.disableTapActions
+                              ? null
+                              : () => _navigateToProfile(context),
                           child: Text(
                             widget.comment.userDisplayName,
                             style: Theme.of(context).textTheme.titleSmall

@@ -82,6 +82,8 @@ class UserModel {
   final String? profileImageStoragePath; // プロフィール画像Storageパス
   final bool tutorialPhase1Completed; // 初回チュートリアルPhase1完了
   final String? tutorialPhase1Step; // チュートリアル進行ステップ（中断復帰用）
+  final bool tutorialPhase2Completed; // 初回チュートリアルPhase2完了
+  final String? tutorialPhase2Step; // チュートリアル進行ステップ（中断復帰用）
 
   UserModel({
     required this.uid,
@@ -131,6 +133,8 @@ class UserModel {
     this.profileImageStoragePath,
     this.tutorialPhase1Completed = true,
     this.tutorialPhase1Step,
+    this.tutorialPhase2Completed = false,
+    this.tutorialPhase2Step,
   });
 
   factory UserModel.fromFirestore(DocumentSnapshot doc) {
@@ -199,6 +203,8 @@ class UserModel {
       profileImageStoragePath: data['profileImageStoragePath'],
       tutorialPhase1Completed: data['tutorialPhase1Completed'] ?? false,
       tutorialPhase1Step: data['tutorialPhase1Step'],
+      tutorialPhase2Completed: data['tutorialPhase2Completed'] ?? false,
+      tutorialPhase2Step: data['tutorialPhase2Step'],
     );
   }
 
@@ -256,6 +262,8 @@ class UserModel {
         'profileImageStoragePath': profileImageStoragePath,
       'tutorialPhase1Completed': tutorialPhase1Completed,
       if (tutorialPhase1Step != null) 'tutorialPhase1Step': tutorialPhase1Step,
+      'tutorialPhase2Completed': tutorialPhase2Completed,
+      if (tutorialPhase2Step != null) 'tutorialPhase2Step': tutorialPhase2Step,
     };
   }
 
@@ -306,6 +314,8 @@ class UserModel {
     String? profileImageStoragePath,
     bool? tutorialPhase1Completed,
     String? tutorialPhase1Step,
+    bool? tutorialPhase2Completed,
+    String? tutorialPhase2Step,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -360,6 +370,9 @@ class UserModel {
       tutorialPhase1Completed:
           tutorialPhase1Completed ?? this.tutorialPhase1Completed,
       tutorialPhase1Step: tutorialPhase1Step ?? this.tutorialPhase1Step,
+      tutorialPhase2Completed:
+          tutorialPhase2Completed ?? this.tutorialPhase2Completed,
+      tutorialPhase2Step: tutorialPhase2Step ?? this.tutorialPhase2Step,
     );
   }
 }

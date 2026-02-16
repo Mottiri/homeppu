@@ -428,6 +428,12 @@ class _TutorialMessages {
   String get homeOverview => 'ここはホーム画面だよ\nみんなの投稿がここに表示されるよ';
   String get homeLongPress => 'カード長押しでリアクションスタンプが押せるよ';
 
+  // Post detail explanation (Phase 2)
+  String get postDetailOverview =>
+      'ここは投稿詳細画面だよ\nあなたの投稿についたコメントを確認できるよ';
+  String get postDetailLongPressComment =>
+      '他の人のコメントを長押しすると\n投稿主として「いいね」を返せるよ';
+
   // 共通
   String get nextAction => '次へ';
 

@@ -145,6 +145,7 @@ class AuthService {
           namePrefix: namePrefix,
           nameSuffix: nameSuffix,
           tutorialPhase1Completed: false,
+          tutorialPhase2Completed: false,
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );

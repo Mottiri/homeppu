@@ -97,7 +97,16 @@ class TutorialOverlay extends StatelessWidget {
             ),
           ),
         ),
-        ..._buildPassThroughMaskLayers(baseHoleRect, maskColor),
+        Positioned.fill(
+          child: _PassThroughMaskLayers(
+            baseHoleRect: baseHoleRect,
+            circular: circularSpotlight,
+            maskColor: maskColor,
+            minScale: pulseMinScale,
+            maxScale: pulseMaxScale,
+            onTap: onMaskTap,
+          ),
+        ),
       ];
     }
 
@@ -115,46 +124,6 @@ class TutorialOverlay extends StatelessWidget {
     ];
   }
 
-  List<Widget> _buildPassThroughMaskLayers(Rect holeRect, Color maskColor) {
-    Widget tappableMask({required Widget child}) {
-      return GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onMaskTap ?? () {},
-        child: child,
-      );
-    }
-
-    return [
-      Positioned(
-        left: 0,
-        right: 0,
-        top: 0,
-        height: holeRect.top.clamp(0, double.infinity).toDouble(),
-        child: tappableMask(child: ColoredBox(color: maskColor)),
-      ),
-      Positioned(
-        left: 0,
-        right: 0,
-        top: holeRect.bottom,
-        bottom: 0,
-        child: tappableMask(child: ColoredBox(color: maskColor)),
-      ),
-      Positioned(
-        left: 0,
-        top: holeRect.top,
-        width: holeRect.left.clamp(0, double.infinity).toDouble(),
-        height: holeRect.height,
-        child: tappableMask(child: ColoredBox(color: maskColor)),
-      ),
-      Positioned(
-        left: holeRect.right,
-        right: 0,
-        top: holeRect.top,
-        height: holeRect.height,
-        child: tappableMask(child: ColoredBox(color: maskColor)),
-      ),
-    ];
-  }
 }
 
 class _CoachBubble extends StatelessWidget {
@@ -303,6 +272,8 @@ class _AnimatedMaskWithHoleState extends State<_AnimatedMaskWithHole>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _scale;
+  bool get _isStaticPulse =>
+      (widget.maxScale - widget.minScale).abs() < 0.0001;
 
   @override
   void initState() {
@@ -310,11 +281,30 @@ class _AnimatedMaskWithHoleState extends State<_AnimatedMaskWithHole>
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
-    )..repeat(reverse: true);
+    );
     _scale = Tween<double>(
       begin: widget.minScale,
       end: widget.maxScale,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+    if (!_isStaticPulse) {
+      _controller.repeat(reverse: true);
+    } else {
+      _controller.value = 0;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _AnimatedMaskWithHole oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final wasStatic =
+        (oldWidget.maxScale - oldWidget.minScale).abs() < 0.0001;
+    if (wasStatic == _isStaticPulse) return;
+    if (_isStaticPulse) {
+      _controller.stop();
+      _controller.value = 0;
+    } else {
+      _controller.repeat(reverse: true);
+    }
   }
 
   @override
@@ -325,6 +315,21 @@ class _AnimatedMaskWithHoleState extends State<_AnimatedMaskWithHole>
 
   @override
   Widget build(BuildContext context) {
+    if (_isStaticPulse) {
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onTap ?? () {},
+        child: ClipPath(
+          clipBehavior: Clip.hardEdge,
+          clipper: _MaskWithHoleClipper(
+            holeRect: widget.baseHoleRect,
+            circular: widget.circular,
+          ),
+          child: ColoredBox(color: widget.maskColor),
+        ),
+      );
+    }
+
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, _) {
@@ -346,6 +351,134 @@ class _AnimatedMaskWithHoleState extends State<_AnimatedMaskWithHole>
           ),
         );
       },
+    );
+  }
+}
+
+class _PassThroughMaskLayers extends StatefulWidget {
+  const _PassThroughMaskLayers({
+    required this.baseHoleRect,
+    required this.circular,
+    required this.maskColor,
+    required this.minScale,
+    required this.maxScale,
+    this.onTap,
+  });
+
+  final Rect baseHoleRect;
+  final bool circular;
+  final Color maskColor;
+  final double minScale;
+  final double maxScale;
+  final VoidCallback? onTap;
+
+  @override
+  State<_PassThroughMaskLayers> createState() => _PassThroughMaskLayersState();
+}
+
+class _PassThroughMaskLayersState extends State<_PassThroughMaskLayers>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _scale;
+  bool get _isStaticPulse =>
+      (widget.maxScale - widget.minScale).abs() < 0.0001;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _scale = Tween<double>(
+      begin: widget.minScale,
+      end: widget.maxScale,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+    if (!_isStaticPulse) {
+      _controller.repeat(reverse: true);
+    } else {
+      _controller.value = 0;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _PassThroughMaskLayers oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final wasStatic =
+        (oldWidget.maxScale - oldWidget.minScale).abs() < 0.0001;
+    if (wasStatic == _isStaticPulse) return;
+    if (_isStaticPulse) {
+      _controller.stop();
+      _controller.value = 0;
+    } else {
+      _controller.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Widget _tappableMask({required Widget child}) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onTap ?? () {},
+      child: child,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isStaticPulse) {
+      return _buildLayers(widget.baseHoleRect);
+    }
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final holeRect = Rect.fromCenter(
+          center: widget.baseHoleRect.center,
+          width: widget.baseHoleRect.width * _scale.value,
+          height: widget.baseHoleRect.height * _scale.value,
+        );
+        return _buildLayers(holeRect);
+      },
+    );
+  }
+
+  Widget _buildLayers(Rect holeRect) {
+    return Stack(
+      children: [
+        Positioned(
+          left: 0,
+          right: 0,
+          top: 0,
+          height: holeRect.top.clamp(0, double.infinity).toDouble(),
+          child: _tappableMask(child: ColoredBox(color: widget.maskColor)),
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          top: holeRect.bottom,
+          bottom: 0,
+          child: _tappableMask(child: ColoredBox(color: widget.maskColor)),
+        ),
+        Positioned(
+          left: 0,
+          top: holeRect.top,
+          width: holeRect.left.clamp(0, double.infinity).toDouble(),
+          height: holeRect.height,
+          child: _tappableMask(child: ColoredBox(color: widget.maskColor)),
+        ),
+        Positioned(
+          left: holeRect.right,
+          right: 0,
+          top: holeRect.top,
+          height: holeRect.height,
+          child: _tappableMask(child: ColoredBox(color: widget.maskColor)),
+        ),
+      ],
     );
   }
 }
