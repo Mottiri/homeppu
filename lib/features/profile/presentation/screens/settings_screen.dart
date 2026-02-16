@@ -73,14 +73,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _isUploadingHeader = false;
   bool _isUploadingProfileImage = false;
   bool _isCompletingPhase1Tutorial = false;
+  bool _isFinishedTutorialOverlayDismissed = false;
   bool _didAutoScrollToPrivacy = false;
-  bool _didAutoAdvanceFromSettingsScroll = false;
   int _privacyCardResolveRetryCount = 0;
   TutorialPhase1Step? _lastTutorialStep;
   PrivacyMode _tutorialSelectedMode = PrivacyMode.ai;
+  bool _isPrivacyExpandedForTutorial = false;
+  int _privacyTileVersion = 0;
   final GlobalKey _tutorialOverlayStackKey = GlobalKey();
   final GlobalKey _privacyCardKey = GlobalKey();
-  Rect? _privacyCardRect;
+  final GlobalKey _privacyOptionAiKey = GlobalKey();
+  final GlobalKey _privacyOptionMixKey = GlobalKey();
+  final GlobalKey _privacyOptionHumanKey = GlobalKey();
+  Rect? _tutorialSpotlightRect;
 
   @override
   void initState() {
@@ -704,10 +709,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   void _maybeAutoScrollToPrivacyCard() {
     if (_didAutoScrollToPrivacy) return;
+    debugPrint(
+      '[TUTORIAL_SCROLL] schedule auto-scroll '
+      'didAuto=$_didAutoScrollToPrivacy retry=$_privacyCardResolveRetryCount',
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted || _didAutoScrollToPrivacy) return;
       final targetContext = _privacyCardKey.currentContext;
       if (targetContext == null) {
+        debugPrint(
+          '[TUTORIAL_SCROLL] target context not ready '
+          'retry=$_privacyCardResolveRetryCount/12',
+        );
         if (_privacyCardResolveRetryCount < 12) {
           _privacyCardResolveRetryCount++;
           await Future.delayed(const Duration(milliseconds: 120));
@@ -715,23 +728,72 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         }
         return;
       }
+      debugPrint('[TUTORIAL_SCROLL] target context resolved');
       _didAutoScrollToPrivacy = true;
+      try {
+        debugPrint(
+          '[TUTORIAL_SCROLL] ensureVisible start '
+          'offset=${_settingsScrollController.hasClients ? _settingsScrollController.offset.toStringAsFixed(1) : 'n/a'}',
+        );
+      } catch (_) {
+        debugPrint('[TUTORIAL_SCROLL] ensureVisible start offset=unavailable');
+      }
       await Scrollable.ensureVisible(
         targetContext,
         duration: const Duration(milliseconds: 380),
         curve: Curves.easeOutCubic,
         alignment: 0.08,
       );
-      final rect = await resolveRectWithRetry(
-        _privacyCardKey,
-        ancestorKey: _tutorialOverlayStackKey,
-      );
-      if (mounted && rect != null) {
-        setState(() => _privacyCardRect = rect);
+      try {
+        debugPrint(
+          '[TUTORIAL_SCROLL] ensureVisible done '
+          'offset=${_settingsScrollController.hasClients ? _settingsScrollController.offset.toStringAsFixed(1) : 'n/a'}',
+        );
+      } catch (_) {
+        debugPrint('[TUTORIAL_SCROLL] ensureVisible done offset=unavailable');
       }
+      await _resolveSpotlightRectForStep(ref.read(tutorialPhase1Provider));
       if (mounted) {
         setState(() {});
       }
+    });
+  }
+
+  Future<void> _resolveSpotlightRectForStep(TutorialPhase1Step step) async {
+    GlobalKey targetKey = _privacyCardKey;
+    switch (step) {
+      case TutorialPhase1Step.explainAI:
+        targetKey = _privacyOptionAiKey;
+        break;
+      case TutorialPhase1Step.explainMix:
+        targetKey = _privacyOptionMixKey;
+        break;
+      case TutorialPhase1Step.explainHuman:
+        targetKey = _privacyOptionHumanKey;
+        break;
+      case TutorialPhase1Step.settingsScroll:
+      case TutorialPhase1Step.finished:
+        targetKey = _privacyCardKey;
+        break;
+      default:
+        targetKey = _privacyCardKey;
+        break;
+    }
+
+    final rect = await resolveRectWithRetry(
+      targetKey,
+      ancestorKey: _tutorialOverlayStackKey,
+    );
+    debugPrint('[TUTORIAL_SCROLL] resolved rect(step=$step): $rect');
+    if (!mounted) return;
+    setState(() => _tutorialSpotlightRect = rect);
+  }
+
+  void _setTutorialPrivacyExpanded(bool expanded) {
+    if (_isPrivacyExpandedForTutorial == expanded) return;
+    setState(() {
+      _isPrivacyExpandedForTutorial = expanded;
+      _privacyTileVersion++;
     });
   }
 
@@ -739,12 +801,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final tutorialStep = ref.watch(tutorialPhase1Provider);
     if (_lastTutorialStep != tutorialStep) {
+      debugPrint(
+        '[TUTORIAL_SCROLL] step changed $_lastTutorialStep -> $tutorialStep',
+      );
       _lastTutorialStep = tutorialStep;
       if (tutorialStep == TutorialPhase1Step.settingsScroll) {
         _didAutoScrollToPrivacy = false;
-        _didAutoAdvanceFromSettingsScroll = false;
         _privacyCardResolveRetryCount = 0;
-        _privacyCardRect = null;
+        _tutorialSpotlightRect = null;
+        _isFinishedTutorialOverlayDismissed = false;
+        _setTutorialPrivacyExpanded(false);
+        debugPrint('[TUTORIAL_SCROLL] reset auto-scroll state for settingsScroll');
+      } else if (tutorialStep == TutorialPhase1Step.explainAI ||
+          tutorialStep == TutorialPhase1Step.explainMix ||
+          tutorialStep == TutorialPhase1Step.explainHuman ||
+          tutorialStep == TutorialPhase1Step.finished) {
+        if (tutorialStep != TutorialPhase1Step.finished) {
+          _isFinishedTutorialOverlayDismissed = false;
+        }
+        _setTutorialPrivacyExpanded(true);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _resolveSpotlightRectForStep(tutorialStep);
+        });
       }
     }
     final isPhase1Tutorial =
@@ -753,18 +832,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         tutorialStep != TutorialPhase1Step.profileSettings;
     if (isPhase1Tutorial) {
       _maybeAutoScrollToPrivacyCard();
-    }
-    if (tutorialStep == TutorialPhase1Step.settingsScroll &&
-        _didAutoScrollToPrivacy &&
-        !_didAutoAdvanceFromSettingsScroll) {
-      _didAutoAdvanceFromSettingsScroll = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        await Future.delayed(const Duration(milliseconds: 1500));
-        if (!mounted) return;
-        if (ref.read(tutorialPhase1Provider) == TutorialPhase1Step.settingsScroll) {
-          await ref.read(tutorialPhase1Provider.notifier).advance();
-        }
-      });
     }
 
     // チュートリアルステップに合うメッセージ
@@ -821,12 +888,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         child: Stack(
           key: _tutorialOverlayStackKey,
           children: [
-            ListView(
+            SingleChildScrollView(
               controller: _settingsScrollController,
-              padding: const EdgeInsets.all(16),
-              children: [
-                // プロフィール編集
-                Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // プロフィール編集
+                    Card(
                   child: Padding(
                     padding: const EdgeInsets.all(20),
                     child: Column(
@@ -1456,8 +1526,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 Card(
                   key: _privacyCardKey,
                   child: ExpansionTile(
-                    initiallyExpanded: isPhase1Tutorial,
-                    enabled: !isPhase1Tutorial,
+                    key: ValueKey('privacyTile-$_privacyTileVersion'),
+                    initiallyExpanded: isPhase1Tutorial
+                        ? _isPrivacyExpandedForTutorial
+                        : false,
+                    enabled: !isPhase1Tutorial ||
+                        tutorialStep == TutorialPhase1Step.settingsScroll,
+                    onExpansionChanged: (expanded) async {
+                      if (!isPhase1Tutorial) return;
+                      _setTutorialPrivacyExpanded(expanded);
+                      if (!expanded) return;
+                      await _resolveSpotlightRectForStep(
+                        ref.read(tutorialPhase1Provider),
+                      );
+                      if (ref.read(tutorialPhase1Provider) ==
+                          TutorialPhase1Step.settingsScroll) {
+                        await ref.read(tutorialPhase1Provider.notifier).advance();
+                      }
+                    },
                     leading: const Icon(Icons.visibility_outlined),
                     title: Text(AppMessages.profile.privacyTitle),
                     subtitle: Consumer(
@@ -1521,7 +1607,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 final isSelected = isPhase1Tutorial
                                     ? _tutorialSelectedMode == mode
                                     : user.postMode == mode.value;
+                                final optionKey = switch (mode) {
+                                  PrivacyMode.ai => _privacyOptionAiKey,
+                                  PrivacyMode.mix => _privacyOptionMixKey,
+                                  PrivacyMode.human => _privacyOptionHumanKey,
+                                };
                                 return Padding(
+                                  key: optionKey,
                                   padding: const EdgeInsets.only(bottom: 8),
                                   child: _PrivacyOption(
                                     mode: mode,
@@ -1529,28 +1621,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     onTap: () async {
                                       if (isSelected) return;
                                       if (isPhase1Tutorial) {
+                                        final step = ref.read(tutorialPhase1Provider);
+                                        if (step != TutorialPhase1Step.finished) {
+                                          return;
+                                        }
                                         setState(
                                           () => _tutorialSelectedMode = mode,
                                         );
-                                        final notifier = ref.read(
-                                          tutorialPhase1Provider.notifier,
-                                        );
-                                        final currentStep = ref.read(
-                                          tutorialPhase1Provider,
-                                        );
-                                        final shouldAdvance =
-                                            (currentStep ==
-                                                    TutorialPhase1Step.explainAI &&
-                                                mode == PrivacyMode.ai) ||
-                                            (currentStep ==
-                                                    TutorialPhase1Step.explainMix &&
-                                                mode == PrivacyMode.mix) ||
-                                            (currentStep ==
-                                                    TutorialPhase1Step.explainHuman &&
-                                                mode == PrivacyMode.human);
-                                        if (shouldAdvance) {
-                                          await notifier.advance();
-                                        }
+                                        await _completePhase1Tutorial();
                                         return;
                                       }
 
@@ -1733,20 +1811,60 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 100),
-              ],
+                    const SizedBox(height: 100),
+                  ],
+                ),
+              ),
             ),
             // チュートリアルオーバーレイ（Step 2-6）
-            if (isPhase1Tutorial && tutorialMessage != null)
+            if (isPhase1Tutorial &&
+                tutorialMessage != null &&
+                !(tutorialStep == TutorialPhase1Step.finished &&
+                    _isFinishedTutorialOverlayDismissed))
               TutorialOverlay(
+                debugTag: 'settings-$tutorialStep',
                 message: tutorialMessage,
-                spotlightRect: _privacyCardRect,
-                actionLabel: tutorialStep == TutorialPhase1Step.finished
-                    ? AppMessages.tutorial.phase1Confirm
+                spotlightRect: _tutorialSpotlightRect,
+                pulseMinScale: 1.0,
+                pulseMaxScale: 1.06,
+                onMaskTap: () async {
+                  final currentStep = ref.read(tutorialPhase1Provider);
+                  if (currentStep == TutorialPhase1Step.finished) {
+                    if (mounted) {
+                      setState(() => _isFinishedTutorialOverlayDismissed = true);
+                    }
+                    return;
+                  }
+                  if (currentStep == TutorialPhase1Step.explainAI ||
+                      currentStep == TutorialPhase1Step.explainMix ||
+                      currentStep == TutorialPhase1Step.explainHuman) {
+                    await ref.read(tutorialPhase1Provider.notifier).advance();
+                  }
+                },
+                onSpotlightTap:
+                    (tutorialStep == TutorialPhase1Step.settingsScroll ||
+                        tutorialStep == TutorialPhase1Step.explainAI ||
+                        tutorialStep == TutorialPhase1Step.explainMix ||
+                        tutorialStep == TutorialPhase1Step.explainHuman)
+                    ? () async {
+                        final currentStep = ref.read(tutorialPhase1Provider);
+                        if (currentStep == TutorialPhase1Step.settingsScroll) {
+                          _setTutorialPrivacyExpanded(true);
+                          await _resolveSpotlightRectForStep(currentStep);
+                          await ref
+                              .read(tutorialPhase1Provider.notifier)
+                              .advance();
+                          return;
+                        }
+                        if (currentStep == TutorialPhase1Step.explainAI ||
+                            currentStep == TutorialPhase1Step.explainMix ||
+                            currentStep == TutorialPhase1Step.explainHuman) {
+                          await ref
+                              .read(tutorialPhase1Provider.notifier)
+                              .advance();
+                        }
+                      }
                     : null,
-                onAction: tutorialStep == TutorialPhase1Step.finished
-                    ? _completePhase1Tutorial
-                    : () => ref.read(tutorialPhase1Provider.notifier).advance(),
                 isActionEnabled: !_isCompletingPhase1Tutorial,
               ),
           ],

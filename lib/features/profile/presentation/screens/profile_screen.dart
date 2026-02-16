@@ -627,8 +627,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       });
                     }
                     return TutorialOverlay(
+                      debugTag: 'profileSettings',
                       message: AppMessages.tutorial.tapSettings,
                       spotlightRect: _settingsIconRect,
+                      onSpotlightTap: () async {
+                        if (!mounted) return;
+                        await ref.read(tutorialPhase1Provider.notifier).advance();
+                        if (!mounted) return;
+                        context.push('/settings');
+                      },
                       circularSpotlight: true,
                     );
                   },

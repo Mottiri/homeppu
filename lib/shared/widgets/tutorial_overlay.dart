@@ -1,13 +1,9 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
 
-/// チュートリアルオーバーレイ
-///
-/// 画面全体にグレーマスクを重ね、指定された領域をスポットライト（穴）として透過する。
-/// 下部にキャラ画像 + 吹き出しを表示する。
 class TutorialOverlay extends StatelessWidget {
   static const double _spotlightPadding = 6;
 
@@ -19,97 +15,42 @@ class TutorialOverlay extends StatelessWidget {
     this.onAction,
     this.isActionEnabled = true,
     this.onSpotlightTap,
+    this.onMaskTap,
     this.characterAssetPath = 'assets/onbord/onbord_01.png',
     this.bubbleBottomOffset,
     this.circularSpotlight = false,
-    this.spotlightColor = Colors.white,
+    this.spotlightColor = const Color(0xFFFFC1C1),
     this.pulseMinScale = 0.94,
     this.pulseMaxScale = 1.06,
     this.frameBorderWidth = 2.6,
     this.frameGlowOpacity = 0.55,
+    this.debugTag = 'overlay',
   });
 
-  /// 吹き出しに表示するメッセージ
   final String message;
-
-  /// スポットライト領域（null の場合は穴なし＝全面マスク）
   final Rect? spotlightRect;
-
-  /// アクションボタンのラベル（null ならボタン非表示）
   final String? actionLabel;
-
-  /// アクションボタンのコールバック
   final VoidCallback? onAction;
-
-  /// アクションボタンの有効/無効
   final bool isActionEnabled;
-
-  /// スポットライト領域がタップされた時のコールバック
   final VoidCallback? onSpotlightTap;
-
-  /// キャラ画像のアセットパス
+  final VoidCallback? onMaskTap;
   final String characterAssetPath;
-
-  /// 吹き出しの下端オフセット（null の場合は safeArea + 16）
   final double? bubbleBottomOffset;
 
-  /// スポットライトを円形で表示するか
+  // kept for API compatibility with callers; frame is intentionally disabled.
   final bool circularSpotlight;
-
-  /// スポットライト枠の色
   final Color spotlightColor;
-
-  /// 脈動アニメーションの最小スケール
   final double pulseMinScale;
-
-  /// 脈動アニメーションの最大スケール
   final double pulseMaxScale;
-
-  /// フレーム線の太さ
   final double frameBorderWidth;
-
-  /// フレーム外周グローの不透明度
   final double frameGlowOpacity;
+  final String debugTag;
 
   @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // マスク領域
-        ..._buildMasks(context),
-
-        if (spotlightRect != null)
-          Builder(
-            builder: (context) {
-              final frameRect = spotlightRect!.inflate(_spotlightPadding);
-              return Positioned(
-                left: frameRect.left,
-                top: frameRect.top,
-                width: frameRect.width,
-                height: frameRect.height,
-                child: IgnorePointer(
-                  child: OverflowBox(
-                    alignment: Alignment.center,
-                    minWidth: frameRect.width,
-                    minHeight: frameRect.height,
-                    maxWidth: frameRect.width * 2.2,
-                    maxHeight: frameRect.height * 2.2,
-                    child: _AnimatedSpotlightFrame(
-                      rect: frameRect,
-                      circular: circularSpotlight,
-                      frameColor: spotlightColor,
-                      minScale: pulseMinScale,
-                      maxScale: pulseMaxScale,
-                      borderWidth: frameBorderWidth,
-                      glowOpacity: frameGlowOpacity,
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-
-        // スポットライト領域のタップ検出
+        ..._buildMasks(),
         if (spotlightRect != null && onSpotlightTap != null)
           Positioned.fromRect(
             rect: spotlightRect!,
@@ -119,13 +60,12 @@ class TutorialOverlay extends StatelessWidget {
               child: const SizedBox.expand(),
             ),
           ),
-
-        // キャラ + 吹き出し
         Positioned(
           left: 12,
           right: 12,
           bottom:
-              bubbleBottomOffset ?? (MediaQuery.of(context).padding.bottom + 16),
+              bubbleBottomOffset ??
+              (MediaQuery.of(context).padding.bottom + 16),
           child: _CoachBubble(
             message: message,
             actionLabel: actionLabel,
@@ -138,20 +78,20 @@ class TutorialOverlay extends StatelessWidget {
     );
   }
 
-  List<Widget> _buildMasks(BuildContext context) {
+  List<Widget> _buildMasks() {
     const maskColor = Color(0x66000000);
 
     if (spotlightRect == null) {
-      // 穴なし＝全面マスク
       return [
         Positioned.fill(
           child: GestureDetector(
-            onTap: () {}, // タップ吸収
+            onTap: onMaskTap ?? () {},
             child: const ColoredBox(color: maskColor),
           ),
         ),
       ];
     }
+
     return [
       Positioned.fill(
         child: _AnimatedMaskWithHole(
@@ -160,13 +100,13 @@ class TutorialOverlay extends StatelessWidget {
           maskColor: maskColor,
           minScale: pulseMinScale,
           maxScale: pulseMaxScale,
+          onTap: onMaskTap,
         ),
       ),
     ];
   }
 }
 
-/// キャラ + 吹き出しウィジェット
 class _CoachBubble extends StatelessWidget {
   const _CoachBubble({
     required this.message,
@@ -187,7 +127,6 @@ class _CoachBubble extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        // キャラ画像
         ClipRRect(
           borderRadius: BorderRadius.circular(12),
           child: Image.asset(
@@ -211,8 +150,6 @@ class _CoachBubble extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 10),
-
-        // 吹き出し
         Expanded(
           child: Container(
             padding: const EdgeInsets.all(16),
@@ -235,6 +172,7 @@ class _CoachBubble extends StatelessWidget {
                   message,
                   style: const TextStyle(
                     fontSize: 14,
+                    fontWeight: FontWeight.w400,
                     height: 1.5,
                     color: AppColors.textPrimary,
                   ),
@@ -267,17 +205,19 @@ class _CoachBubble extends StatelessWidget {
 }
 
 class _MaskWithHoleClipper extends CustomClipper<Path> {
+  const _MaskWithHoleClipper({required this.holeRect, required this.circular});
+
   final Rect holeRect;
   final bool circular;
-
-  const _MaskWithHoleClipper({required this.holeRect, required this.circular});
 
   @override
   Path getClip(Size size) {
     final full = Path()..addRect(Offset.zero & size);
     final hole = circular
         ? (Path()..addOval(holeRect))
-        : (Path()..addRRect(RRect.fromRectAndRadius(holeRect, const Radius.circular(16))));
+        : (Path()..addRRect(
+            RRect.fromRectAndRadius(holeRect, const Radius.circular(16)),
+          ));
     return Path.combine(PathOperation.difference, full, hole);
   }
 
@@ -287,123 +227,22 @@ class _MaskWithHoleClipper extends CustomClipper<Path> {
   }
 }
 
-class _AnimatedSpotlightFrame extends StatefulWidget {
-  final Rect rect;
-  final bool circular;
-  final Color frameColor;
-  final double minScale;
-  final double maxScale;
-  final double borderWidth;
-  final double glowOpacity;
-
-  const _AnimatedSpotlightFrame({
-    required this.rect,
-    required this.circular,
-    required this.frameColor,
-    required this.minScale,
-    required this.maxScale,
-    required this.borderWidth,
-    required this.glowOpacity,
-  });
-
-  @override
-  State<_AnimatedSpotlightFrame> createState() => _AnimatedSpotlightFrameState();
-}
-
-class _AnimatedSpotlightFrameState extends State<_AnimatedSpotlightFrame>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _scale;
-  late final Animation<double> _fillAlpha;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    )..repeat(reverse: true);
-    _scale = Tween<double>(begin: widget.minScale, end: widget.maxScale).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-    // 中身が静止に見えないよう、内側ハイライトの脈動を強める。
-    _fillAlpha = Tween<double>(begin: 0.04, end: 0.22).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, _) {
-          return Transform.scale(
-            scale: _scale.value,
-            child: Container(
-              width: widget.rect.width,
-              height: widget.rect.height,
-              decoration: widget.circular
-                  ? BoxDecoration(
-                      color: widget.frameColor.withValues(alpha: _fillAlpha.value),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: widget.frameColor,
-                        width: widget.borderWidth,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: widget.frameColor.withValues(
-                            alpha: widget.glowOpacity,
-                          ),
-                          blurRadius: 12,
-                        ),
-                      ],
-                    )
-                  : BoxDecoration(
-                      color: widget.frameColor.withValues(alpha: _fillAlpha.value),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: widget.frameColor,
-                        width: widget.borderWidth,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: widget.frameColor.withValues(
-                            alpha: widget.glowOpacity,
-                          ),
-                          blurRadius: 12,
-                        ),
-                      ],
-                    ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
 class _AnimatedMaskWithHole extends StatefulWidget {
-  final Rect baseHoleRect;
-  final bool circular;
-  final Color maskColor;
-  final double minScale;
-  final double maxScale;
-
   const _AnimatedMaskWithHole({
     required this.baseHoleRect,
     required this.circular,
     required this.maskColor,
     required this.minScale,
     required this.maxScale,
+    this.onTap,
   });
+
+  final Rect baseHoleRect;
+  final bool circular;
+  final Color maskColor;
+  final double minScale;
+  final double maxScale;
+  final VoidCallback? onTap;
 
   @override
   State<_AnimatedMaskWithHole> createState() => _AnimatedMaskWithHoleState();
@@ -421,9 +260,10 @@ class _AnimatedMaskWithHoleState extends State<_AnimatedMaskWithHole>
       vsync: this,
       duration: const Duration(milliseconds: 900),
     )..repeat(reverse: true);
-    _scale = Tween<double>(begin: widget.minScale, end: widget.maxScale).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _scale = Tween<double>(
+      begin: widget.minScale,
+      end: widget.maxScale,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override
@@ -443,7 +283,8 @@ class _AnimatedMaskWithHoleState extends State<_AnimatedMaskWithHole>
           height: widget.baseHoleRect.height * _scale.value,
         );
         return GestureDetector(
-          onTap: () {},
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onTap ?? () {},
           child: ClipPath(
             clipBehavior: Clip.hardEdge,
             clipper: _MaskWithHoleClipper(
@@ -458,10 +299,6 @@ class _AnimatedMaskWithHoleState extends State<_AnimatedMaskWithHole>
   }
 }
 
-/// GlobalKey から Rect を取得するヘルパー（リトライ付き）
-///
-/// 最大 [maxRetries] 回、[interval] ms 間隔でリトライする。
-/// 取得できなかった場合は null を返す。
 Future<Rect?> resolveRectWithRetry(
   GlobalKey key, {
   GlobalKey? ancestorKey,

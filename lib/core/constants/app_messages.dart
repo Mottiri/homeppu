@@ -407,7 +407,7 @@ class _TutorialMessages {
   String get tapSettings => '次は右上の設定アイコン⚙️をタップしてね';
 
   // Step 2: 設定画面（公開範囲カードへスクロール）
-  String get scrollToPrivacy => 'ここが「公開範囲」の設定だよ！\nどのモードで投稿するか選べるよ';
+  String get scrollToPrivacy => 'ここが「公開範囲」の設定だよ！\nまずはここをタップして開いてみてね';
 
   // Step 3: AIモード説明
   String get explainAI => 'AIだけが見れるモードだよ\n人間には見えないから安心して投稿できる！';
