@@ -434,6 +434,15 @@ class _TutorialMessages {
   String get postDetailLongPressComment =>
       '他の人のコメントを長押しすると\n投稿主として「いいね」を返せるよ';
 
+  // Stamp sheet explanation (Phase 3)
+  String get stampOverview =>
+      'ここはスタンプ画面だよ\n返信コメントでいいねをもらうと、ここでスタンプを押せるよ';
+  String get stampLongPressSheet => 'まずはシートを長押しして\nスタンプバーを開いてみよう';
+  String get stampCatalogGuide =>
+      'ここからスタンプシート一覧を開けるよ\n購入できるデザインもあるよ';
+  String get stampCollectionGuide => 'ここはコレクション（アーカイブ）だよ\n過去シートを確認できるよ';
+  String get stampUndoGuide => 'ここから最新のスタンプを取り消せるよ';
+
   // 共通
   String get nextAction => '次へ';
 

@@ -69,6 +69,7 @@ Future<void> _bootstrapMissingUserDoc(
     email: user.email ?? '',
     displayName: displayName,
     virtue: AppConstants.virtueInitial,
+    thanksStampCredits: 1,
     createdAt: now,
     updatedAt: now,
   );
@@ -142,10 +143,12 @@ class AuthService {
           avatarIndex: avatarIndex,
           avatarParts: avatarParts,
           virtue: AppConstants.virtueInitial,
+          thanksStampCredits: 1,
           namePrefix: namePrefix,
           nameSuffix: nameSuffix,
           tutorialPhase1Completed: false,
           tutorialPhase2Completed: false,
+          tutorialPhase3Completed: false,
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );

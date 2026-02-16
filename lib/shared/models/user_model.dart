@@ -84,6 +84,8 @@ class UserModel {
   final String? tutorialPhase1Step; // チュートリアル進行ステップ（中断復帰用）
   final bool tutorialPhase2Completed; // 初回チュートリアルPhase2完了
   final String? tutorialPhase2Step; // チュートリアル進行ステップ（中断復帰用）
+  final bool tutorialPhase3Completed; // 初回チュートリアルPhase3完了
+  final String? tutorialPhase3Step; // チュートリアル進行ステップ（中断復帰用）
 
   UserModel({
     required this.uid,
@@ -135,6 +137,8 @@ class UserModel {
     this.tutorialPhase1Step,
     this.tutorialPhase2Completed = false,
     this.tutorialPhase2Step,
+    this.tutorialPhase3Completed = false,
+    this.tutorialPhase3Step,
   });
 
   factory UserModel.fromFirestore(DocumentSnapshot doc) {
@@ -205,6 +209,8 @@ class UserModel {
       tutorialPhase1Step: data['tutorialPhase1Step'],
       tutorialPhase2Completed: data['tutorialPhase2Completed'] ?? false,
       tutorialPhase2Step: data['tutorialPhase2Step'],
+      tutorialPhase3Completed: data['tutorialPhase3Completed'] ?? false,
+      tutorialPhase3Step: data['tutorialPhase3Step'],
     );
   }
 
@@ -264,6 +270,8 @@ class UserModel {
       if (tutorialPhase1Step != null) 'tutorialPhase1Step': tutorialPhase1Step,
       'tutorialPhase2Completed': tutorialPhase2Completed,
       if (tutorialPhase2Step != null) 'tutorialPhase2Step': tutorialPhase2Step,
+      'tutorialPhase3Completed': tutorialPhase3Completed,
+      if (tutorialPhase3Step != null) 'tutorialPhase3Step': tutorialPhase3Step,
     };
   }
 
@@ -316,6 +324,8 @@ class UserModel {
     String? tutorialPhase1Step,
     bool? tutorialPhase2Completed,
     String? tutorialPhase2Step,
+    bool? tutorialPhase3Completed,
+    String? tutorialPhase3Step,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -373,6 +383,9 @@ class UserModel {
       tutorialPhase2Completed:
           tutorialPhase2Completed ?? this.tutorialPhase2Completed,
       tutorialPhase2Step: tutorialPhase2Step ?? this.tutorialPhase2Step,
+      tutorialPhase3Completed:
+          tutorialPhase3Completed ?? this.tutorialPhase3Completed,
+      tutorialPhase3Step: tutorialPhase3Step ?? this.tutorialPhase3Step,
     );
   }
 }

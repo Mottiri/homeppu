@@ -101,7 +101,9 @@ class TutorialOverlay extends StatelessWidget {
           child: _PassThroughMaskLayers(
             baseHoleRect: baseHoleRect,
             circular: circularSpotlight,
-            maskColor: maskColor,
+            // Keep tap-blocking layers invisible so only the rounded
+            // spotlight hole mask is rendered (avoids a second square mask look).
+            maskColor: Colors.transparent,
             minScale: pulseMinScale,
             maxScale: pulseMaxScale,
             onTap: onMaskTap,

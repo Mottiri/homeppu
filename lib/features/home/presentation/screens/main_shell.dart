@@ -9,6 +9,7 @@ import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/providers/circle_trial_provider.dart';
 import '../../../../shared/providers/tutorial_phase1_provider.dart';
+import '../../../../shared/providers/tutorial_phase3_provider.dart';
 import '../../../../shared/widgets/tutorial_overlay.dart';
 import '../../../../shared/services/circle_service.dart';
 import '../../../circle/presentation/screens/circles_screen.dart';
@@ -282,6 +283,7 @@ class _MainShellState extends ConsumerState<MainShell>
     final isSubscriber = currentUser?.isSubscriber ?? false;
     final isCircleTrialSession = ref.watch(circleTrialSessionProvider);
     final tutorialStep = ref.watch(tutorialPhase1Provider);
+    final tutorialPhase3Step = ref.watch(tutorialPhase3Provider);
     final location = GoRouterState.of(context).matchedLocation;
 
     // チュートリアル復元/開始（main_shell が中央管理）
@@ -387,6 +389,9 @@ class _MainShellState extends ConsumerState<MainShell>
     }
 
     final isTutorialActive = tutorialStep != TutorialPhase1Step.inactive;
+    final isStampTutorialActive =
+        location.startsWith('/stamps') &&
+        tutorialPhase3Step != TutorialPhase3Step.inactive;
 
     final page = Scaffold(
       resizeToAvoidBottomInset: false,
@@ -480,7 +485,7 @@ class _MainShellState extends ConsumerState<MainShell>
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
                           IgnorePointer(
-                            ignoring: isTutorialActive,
+                            ignoring: isTutorialActive || isStampTutorialActive,
                             child: _NavItem(
                               icon: Icons.home_outlined,
                               activeIcon: Icons.home_rounded,
@@ -498,7 +503,7 @@ class _MainShellState extends ConsumerState<MainShell>
                             ),
                           ),
                           IgnorePointer(
-                            ignoring: isTutorialActive,
+                            ignoring: isTutorialActive || isStampTutorialActive,
                             child: _NavItem(
                               icon: Icons.groups_outlined,
                               activeIcon: Icons.groups_rounded,
@@ -536,7 +541,7 @@ class _MainShellState extends ConsumerState<MainShell>
                             ),
                           ),
                           IgnorePointer(
-                            ignoring: isTutorialActive,
+                            ignoring: isTutorialActive || isStampTutorialActive,
                             child: GestureDetector(
                               onTap: () =>
                                   _handleCenterButtonTap(context, currentIndex),
@@ -610,7 +615,7 @@ class _MainShellState extends ConsumerState<MainShell>
                             ),
                           ),
                           IgnorePointer(
-                            ignoring: isTutorialActive,
+                            ignoring: isTutorialActive || isStampTutorialActive,
                             child: _NavItem(
                               icon: Icons.collections_bookmark_outlined,
                               activeIcon: Icons.collections_bookmark_rounded,
@@ -619,30 +624,33 @@ class _MainShellState extends ConsumerState<MainShell>
                               onTap: () => context.go('/stamps'),
                             ),
                           ),
-                          _NavItem(
-                            key: _myPageNavKey,
-                            icon: Icons.person_outline,
-                            activeIcon: Icons.person_rounded,
-                            label: 'マイページ',
-                            isActive: currentIndex == 3,
-                            onTap: () {
-                              // チュートリアル Step 0: マイページへ遷移して次のステップへ
-                              if (tutorialStep ==
-                                  TutorialPhase1Step.homeWelcome) {
-                                context.go('/profile');
-                                ref
-                                    .read(tutorialPhase1Provider.notifier)
-                                    .advance();
-                                return;
-                              }
-                              if (currentIndex == 3) {
-                                ref
-                                    .read(profileScrollToTopProvider.notifier)
-                                    .state++;
-                              } else {
-                                context.go('/profile');
-                              }
-                            },
+                          IgnorePointer(
+                            ignoring: isStampTutorialActive,
+                            child: _NavItem(
+                              key: _myPageNavKey,
+                              icon: Icons.person_outline,
+                              activeIcon: Icons.person_rounded,
+                              label: 'マイページ',
+                              isActive: currentIndex == 3,
+                              onTap: () {
+                                // チュートリアル Step 0: マイページへ遷移して次のステップへ
+                                if (tutorialStep ==
+                                    TutorialPhase1Step.homeWelcome) {
+                                  context.go('/profile');
+                                  ref
+                                      .read(tutorialPhase1Provider.notifier)
+                                      .advance();
+                                  return;
+                                }
+                                if (currentIndex == 3) {
+                                  ref
+                                      .read(profileScrollToTopProvider.notifier)
+                                      .state++;
+                                } else {
+                                  context.go('/profile');
+                                }
+                              },
+                            ),
                           ),
                         ],
                       ),

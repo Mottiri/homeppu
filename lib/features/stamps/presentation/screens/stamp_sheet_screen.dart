@@ -14,8 +14,10 @@ import '../../../../core/constants/app_messages.dart';
 import '../../../../shared/models/user_model.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/providers/moderation_provider.dart';
+import '../../../../shared/providers/tutorial_phase3_provider.dart';
 import '../../../../shared/providers/virtue_shop_provider.dart';
 import '../../../../shared/widgets/ad_banner.dart';
+import '../../../../shared/widgets/tutorial_overlay.dart';
 import '../../../../shared/services/stamp_sheet_service.dart';
 import '../../../../shared/services/virtue_shop_service.dart';
 
@@ -61,6 +63,17 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
   bool _routeListenerAttached = false;
   GoRouterDelegate? _routerDelegate;
   String _lastFlowDebugSignature = '';
+  String _lastTutorialDebugSignature = '';
+  bool _phase3Initialized = false;
+  bool _phase3Navigating = false;
+  final GlobalKey _tutorialOverlayStackKey = GlobalKey();
+  final GlobalKey _initialSheetSelectButtonKey = GlobalKey();
+  final GlobalKey _sheetLongPressTargetKey = GlobalKey();
+  final GlobalKey _catalogActionKey = GlobalKey();
+  final GlobalKey _collectionActionKey = GlobalKey();
+  final GlobalKey _undoActionKey = GlobalKey();
+  Rect? _tutorialSpotlightRect;
+  TutorialPhase3Step? _lastTutorialStep;
 
   void _debugStampFlow(String event, [Map<String, Object?> extra = const {}]) {
     final buffer = StringBuffer('[STAMP_FLOW] $event');
@@ -69,6 +82,120 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
       buffer.write(extra.entries.map((e) => '${e.key}=${e.value}').join(', '));
     }
     debugPrint(buffer.toString());
+  }
+
+  void _debugPhase3(String event, [Map<String, Object?> extra = const {}]) {
+    final buffer = StringBuffer('[TUTORIAL_PHASE3] $event');
+    if (extra.isNotEmpty) {
+      buffer.write(' ');
+      buffer.write(extra.entries.map((e) => '${e.key}=${e.value}').join(', '));
+    }
+    debugPrint(buffer.toString());
+  }
+
+  bool _isRectNearlyEqual(Rect? a, Rect? b, {double tolerance = 0.5}) {
+    if (a == null || b == null) return a == b;
+    return (a.left - b.left).abs() <= tolerance &&
+        (a.top - b.top).abs() <= tolerance &&
+        (a.width - b.width).abs() <= tolerance &&
+        (a.height - b.height).abs() <= tolerance;
+  }
+
+  Future<Rect?> _resolveRectInOverlayCoords(GlobalKey targetKey) async {
+    final targetGlobalRect = await resolveRectWithRetry(targetKey);
+    if (targetGlobalRect == null) return null;
+    final overlayBox =
+        _tutorialOverlayStackKey.currentContext?.findRenderObject() as RenderBox?;
+    if (overlayBox == null || !overlayBox.hasSize) return null;
+    final overlayGlobalOffset = overlayBox.localToGlobal(Offset.zero);
+    return targetGlobalRect.shift(
+      Offset(-overlayGlobalOffset.dx, -overlayGlobalOffset.dy),
+    );
+  }
+
+  Future<void> _resolveSpotlightForStep(
+    TutorialPhase3Step step, {
+    bool needsInitialSheetSelection = false,
+  }) async {
+    GlobalKey? targetKey;
+    switch (step) {
+      case TutorialPhase3Step.overview:
+        targetKey = needsInitialSheetSelection
+            ? _initialSheetSelectButtonKey
+            : null;
+        break;
+      case TutorialPhase3Step.longPressSheet:
+        targetKey = _sheetLongPressTargetKey;
+        break;
+      case TutorialPhase3Step.catalog:
+        targetKey = _catalogActionKey;
+        break;
+      case TutorialPhase3Step.collection:
+        targetKey = _collectionActionKey;
+        break;
+      case TutorialPhase3Step.undo:
+        targetKey = _undoActionKey;
+        break;
+      case TutorialPhase3Step.inactive:
+        targetKey = null;
+        break;
+    }
+    if (targetKey == null) {
+      if (_tutorialSpotlightRect != null && mounted) {
+        setState(() => _tutorialSpotlightRect = null);
+      }
+      return;
+    }
+    final rect = await _resolveRectInOverlayCoords(targetKey);
+    if (!mounted) return;
+    if (_isRectNearlyEqual(rect, _tutorialSpotlightRect)) return;
+    setState(() => _tutorialSpotlightRect = rect);
+  }
+
+  Future<void> _openCatalogDuringTutorial() async {
+    if (_phase3Navigating || !mounted) return;
+    if (ref.read(tutorialPhase3Provider) != TutorialPhase3Step.catalog) return;
+    _phase3Navigating = true;
+    if (mounted) setState(() {});
+    try {
+      await context.push('/stamps/catalog');
+      if (!mounted) return;
+      if (ref.read(tutorialPhase3Provider) == TutorialPhase3Step.catalog) {
+        await ref.read(tutorialPhase3Provider.notifier).advance();
+      }
+      final currentStep = ref.read(tutorialPhase3Provider);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _resolveSpotlightForStep(currentStep);
+      });
+    } finally {
+      _phase3Navigating = false;
+      if (mounted) setState(() {});
+    }
+  }
+
+  Future<void> _openCollectionDuringTutorial() async {
+    if (_phase3Navigating || !mounted) return;
+    if (ref.read(tutorialPhase3Provider) != TutorialPhase3Step.collection) {
+      return;
+    }
+    _phase3Navigating = true;
+    if (mounted) setState(() {});
+    try {
+      await context.push('/stamps/archives');
+      if (!mounted) return;
+      if (ref.read(tutorialPhase3Provider) == TutorialPhase3Step.collection) {
+        await ref.read(tutorialPhase3Provider.notifier).advance();
+      }
+      final currentStep = ref.read(tutorialPhase3Provider);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _resolveSpotlightForStep(currentStep);
+      });
+    } finally {
+      _phase3Navigating = false;
+      if (mounted) setState(() {});
+    }
   }
 
   @override
@@ -185,17 +312,25 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
     );
   }
 
-  StampSheetDefinition _resolveSelectedSheet(
+  StampSheetDefinition? _resolveSelectedSheet(
     List<StampSheetDefinition> sheets,
     _RuntimeState state,
     UserModel user,
   ) {
-    state.selectedSheetId ??= user.activeStampSheetId ?? sheets.first.id;
+    final before = state.selectedSheetId;
+    state.selectedSheetId ??= user.activeStampSheetId;
+    if (before != state.selectedSheetId) {
+      _debugPhase3('resolve_selected_sheet', {
+        'user': user.uid,
+        'before': before,
+        'active': user.activeStampSheetId,
+        'after': state.selectedSheetId,
+      });
+    }
     for (final sheet in sheets) {
       if (sheet.id == state.selectedSheetId) return sheet;
     }
-    state.selectedSheetId = sheets.first.id;
-    return sheets.first;
+    return null;
   }
 
   Map<String, String> _serverBySlot(
@@ -397,11 +532,23 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                                 });
                                 final state = _runtime(user.uid);
                                 try {
+                                  _debugPhase3('catalog_select_start', {
+                                    'user': user.uid,
+                                    'sheet': sheet.id,
+                                    'pendingNext': state.pendingNextSheetFrom,
+                                    'selected': state.selectedSheetId,
+                                  });
                                   if (state.pendingNextSheetFrom != null) {
                                     await _chooseNextSheet(sheet, user);
                                   } else {
                                     await _selectFirstSheet(sheet, user);
                                   }
+                                  _debugPhase3('catalog_select_done', {
+                                    'user': user.uid,
+                                    'sheet': sheet.id,
+                                    'pendingNext': state.pendingNextSheetFrom,
+                                    'selected': state.selectedSheetId,
+                                  });
                                   if (context.mounted) Navigator.of(context).pop();
                                 } catch (_) {
                                   _toast(AppMessages.error.general, error: true);
@@ -550,6 +697,12 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
       return;
     }
     final state = _runtime(user.uid);
+    _debugPhase3('select_first_sheet_start', {
+      'user': user.uid,
+      'sheet': sheet.id,
+      'activeBefore': user.activeStampSheetId,
+      'stateBefore': state.selectedSheetId,
+    });
     state.selectedSheetId = sheet.id;
     state.localBySlot.clear();
     state.isDirty = true;
@@ -558,6 +711,14 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
     state.awaitingBySlot.clear();
     await _sheetService.setActiveSheet(sheet.id);
     await _setFirstSheetRequired(user.uid, false);
+    if (ref.read(tutorialPhase3Provider) == TutorialPhase3Step.overview) {
+      await ref.read(tutorialPhase3Provider.notifier).advance();
+    }
+    _debugPhase3('select_first_sheet_done', {
+      'user': user.uid,
+      'sheet': sheet.id,
+      'stateAfter': state.selectedSheetId,
+    });
     _scheduleFlush();
   }
 
@@ -594,6 +755,12 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
     if (_isShowingSelectDialog) return;
     _isShowingSelectDialog = true;
     _debugStampFlow('show_selection_dialog', {'first': first});
+    _debugPhase3('show_selection_dialog', {
+      'user': user.uid,
+      'first': first,
+      'active': user.activeStampSheetId,
+      'tutorialStep': ref.read(tutorialPhase3Provider).name,
+    });
     await showDialog<void>(
       context: context,
       barrierDismissible: true,
@@ -626,9 +793,20 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
               final firstRequired = await _isFirstSheetRequired(user.uid);
               final needsFirst =
                   first &&
+                  !(state.selectedSheetId?.isNotEmpty ?? false) &&
                   (latestUser.activeStampSheetId == null || firstRequired) &&
                   state.pendingNextSheetFrom == null;
               final needsNext = !first && state.pendingNextSheetFrom != null;
+              _debugPhase3('selection_dialog_post_catalog', {
+                'user': user.uid,
+                'first': first,
+                'activeLatest': latestUser.activeStampSheetId,
+                'firstRequired': firstRequired,
+                'pendingNext': state.pendingNextSheetFrom,
+                'stateSelected': state.selectedSheetId,
+                'needsFirst': needsFirst,
+                'needsNext': needsNext,
+              });
               if (needsFirst || needsNext) {
                 await _showSelectionDialog(
                   user: latestUser,
@@ -649,11 +827,33 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider).valueOrNull;
+    final tutorialStep = ref.watch(tutorialPhase3Provider);
     if (user == null) {
       return Scaffold(
         appBar: AppBar(title: Text(AppMessages.stamp.title)),
         body: Center(child: Text(AppMessages.error.loginRequired)),
       );
+    }
+
+    if (!_phase3Initialized) {
+      _phase3Initialized = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref.read(tutorialPhase3Provider.notifier).restoreOrStart(user);
+      });
+    }
+    if (_lastTutorialStep != tutorialStep) {
+      _lastTutorialStep = tutorialStep;
+      if (tutorialStep != TutorialPhase3Step.longPressSheet && _showStampBar) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || !_showStampBar) return;
+          setState(() => _showStampBar = false);
+        });
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _resolveSpotlightForStep(tutorialStep);
+      });
     }
 
     final primaryColor = user.headerPrimaryColor != null
@@ -674,9 +874,13 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
       stops: const [0.0, 0.5, 1.0],
     );
     final topInset = MediaQuery.paddingOf(context).top;
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
     final appBarReservedHeight = topInset + kToolbarHeight + (isSubscriber ? 0 : 58);
+    final tutorialBottomExtension = kBottomNavigationBarHeight + bottomInset;
+    final tutorialBubbleBottomOffset = bottomInset + 16 + tutorialBottomExtension;
 
     return Scaffold(
+      extendBody: true,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -694,12 +898,30 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
               ),
         actions: [
           IconButton(
-            onPressed: () => context.push('/stamps/catalog'),
+            key: _catalogActionKey,
+            onPressed: () {
+              if (tutorialStep == TutorialPhase3Step.inactive) {
+                context.push('/stamps/catalog');
+                return;
+              }
+              if (tutorialStep == TutorialPhase3Step.catalog) {
+                unawaited(_openCatalogDuringTutorial());
+              }
+            },
             icon: const Icon(Icons.palette_outlined),
             tooltip: AppMessages.stamp.designCatalogTitle,
           ),
           IconButton(
-            onPressed: () => context.push('/stamps/archives'),
+            key: _collectionActionKey,
+            onPressed: () {
+              if (tutorialStep == TutorialPhase3Step.inactive) {
+                context.push('/stamps/archives');
+                return;
+              }
+              if (tutorialStep == TutorialPhase3Step.collection) {
+                unawaited(_openCollectionDuringTutorial());
+              }
+            },
             icon: const Icon(Icons.inventory_2_outlined),
             tooltip: AppMessages.stamp.archiveTitle,
           ),
@@ -736,7 +958,34 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                         const <int, List<StampSheetPlacement>>{};
                     final state = _runtime(user.uid);
                     final selected = _resolveSelectedSheet(sheets, state, user);
-                    final serverBySlot = _serverBySlot(pageMap, selected.id);
+                    final needsInitialSheetSelection =
+                        selected == null && state.pendingNextSheetFrom == null;
+                    final tutorialSig =
+                        'u=${user.uid}|a=${user.activeStampSheetId}|s=${state.selectedSheetId}|t=${tutorialStep.name}|p=${state.pendingNextSheetFrom}|n=$_phase3Navigating';
+                    if (_lastTutorialDebugSignature != tutorialSig) {
+                      _lastTutorialDebugSignature = tutorialSig;
+                      _debugPhase3('build_state', {
+                        'user': user.uid,
+                        'active': user.activeStampSheetId,
+                        'selected': state.selectedSheetId,
+                        'tutorialStep': tutorialStep.name,
+                        'pendingNext': state.pendingNextSheetFrom,
+                        'navigating': _phase3Navigating,
+                      });
+                    }
+                    if (tutorialStep == TutorialPhase3Step.overview &&
+                        needsInitialSheetSelection) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!mounted) return;
+                        _resolveSpotlightForStep(
+                          tutorialStep,
+                          needsInitialSheetSelection: true,
+                        );
+                      });
+                    }
+                    final serverBySlot = selected == null
+                        ? const <String, String>{}
+                        : _serverBySlot(pageMap, selected.id);
                     if (!state.initialized) {
                       state.initialized = true;
                       state.localCredits = user.thanksStampCredits;
@@ -758,16 +1007,15 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                         final firstRequired = await _isFirstSheetRequired(
                           user.uid,
                         );
+                        _debugPhase3('initial_selection_check', {
+                          'user': user.uid,
+                          'active': user.activeStampSheetId,
+                          'firstRequired': firstRequired,
+                          'pendingNext': state.pendingNextSheetFrom,
+                          'selected': state.selectedSheetId,
+                        });
                         if (!mounted) return;
-                        if ((user.activeStampSheetId == null ||
-                                firstRequired) &&
-                            state.pendingNextSheetFrom == null) {
-                          await _showSelectionDialog(
-                            user: user,
-                            sheets: sheets,
-                            first: true,
-                          );
-                        } else if (state.pendingNextSheetFrom != null) {
+                        if (state.pendingNextSheetFrom != null) {
                           await _showSelectionDialog(
                             user: user,
                             sheets: sheets,
@@ -779,6 +1027,7 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                         !state.isSending &&
                         hasPlacementData) {
                       final awaitingCurrentSheet =
+                          selected != null &&
                           state.awaitingServerEcho &&
                           state.awaitingSheetId == selected.id;
                       final echoMatched =
@@ -800,12 +1049,108 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                       }
                     }
 
+                    if (selected == null) {
+                      return Stack(
+                        key: _tutorialOverlayStackKey,
+                        clipBehavior: Clip.none,
+                        children: [
+                          Center(
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(maxWidth: 420),
+                                child: Card(
+                                  elevation: 2,
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(20),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          AppMessages.stamp.chooseFirstSheetTitle,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleLarge,
+                                        ),
+                                        const SizedBox(height: 10),
+                                        Text(
+                                          '最初にスタンプシートを1つ選ぼう。\n'
+                                          'シートはスタンプが埋まるまで変更できないよ。',
+                                          textAlign: TextAlign.center,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium,
+                                        ),
+                                        const SizedBox(height: 16),
+                                        FilledButton(
+                                          key: _initialSheetSelectButtonKey,
+                                          onPressed: () async {
+                                            await _openCatalog(
+                                              user: user,
+                                              sheets: sheets,
+                                            );
+                                          },
+                                          child: Text(AppMessages.stamp.designSelect),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (!_phase3Navigating &&
+                              tutorialStep == TutorialPhase3Step.overview &&
+                              _tutorialSpotlightRect != null)
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              top: -appBarReservedHeight,
+                              bottom: -tutorialBottomExtension,
+                              child: TutorialOverlay(
+                                message:
+                                    'まずはここをタップして最初のシートを選ぼう。\n'
+                                    'シートはスタンプが埋まるまで変更できないよ。',
+                                spotlightRect: _tutorialSpotlightRect!.shift(
+                                  Offset(0, appBarReservedHeight),
+                                ),
+                                passThroughSpotlight: true,
+                                bubbleBottomOffset: tutorialBubbleBottomOffset,
+                                onMaskTap: () {},
+                                onSpotlightTap: () async {
+                                  await _openCatalog(
+                                    user: user,
+                                    sheets: sheets,
+                                  );
+                                },
+                              ),
+                            ),
+                        ],
+                      );
+                    }
+
                     final layout = layouts[selected.id]!;
                     final hasPendingFromState =
                         state.pendingNextSheetFrom != null;
                     final canUndo =
                         !hasPendingFromState &&
                         _latestFilledSlotId(layout, state.localBySlot) != null;
+                    Future<void> handleUndo() async {
+                      final slotId = _latestFilledSlotId(layout, state.localBySlot);
+                      if (slotId == null) return;
+                      setState(() {
+                        state.localBySlot.remove(slotId);
+                        state.localCredits += 1;
+                        state.isDirty = true;
+                        state.mutationSeq += 1;
+                      });
+                      _scheduleFlush();
+                      if (tutorialStep == TutorialPhase3Step.undo) {
+                        await ref
+                            .read(tutorialPhase3Provider.notifier)
+                            .markCompleted();
+                      }
+                    }
                     if (hasPendingFromState && _showStampBar) {
                       WidgetsBinding.instance.addPostFrameCallback((_) {
                         if (mounted) {
@@ -828,6 +1173,8 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                     }
 
                     return Stack(
+                      key: _tutorialOverlayStackKey,
+                      clipBehavior: Clip.none,
                       children: [
                         Column(
                           children: [
@@ -854,21 +1201,14 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                                     ),
                                   ),
                                   IconButton(
-                                    onPressed: canUndo
-                                        ? () {
-                                            final slotId = _latestFilledSlotId(
-                                              layout,
-                                              state.localBySlot,
-                                            );
-                                            if (slotId == null) return;
-                                            setState(() {
-                                              state.localBySlot.remove(slotId);
-                                              state.localCredits += 1;
-                                              state.isDirty = true;
-                                              state.mutationSeq += 1;
-                                            });
-                                            _scheduleFlush();
-                                          }
+                                    key: _undoActionKey,
+                                    onPressed:
+                                        (tutorialStep ==
+                                                    TutorialPhase3Step.inactive ||
+                                                tutorialStep ==
+                                                    TutorialPhase3Step.undo) &&
+                                            canUndo
+                                        ? () => unawaited(handleUndo())
                                         : null,
                                     icon: const Icon(Icons.undo, size: 18),
                                     tooltip: AppMessages.stamp.undoAction,
@@ -888,6 +1228,7 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                                   sheetAssetPath: selected.assetPath,
                                   layout: layout,
                                   bySlot: state.localBySlot,
+                                  tutorialTargetKey: _sheetLongPressTargetKey,
                                   onLongPress: () {
                                     if (state.pendingNextSheetFrom != null) {
                                       _toast(
@@ -970,6 +1311,12 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                                 state.mutationSeq += 1;
                               });
                               _scheduleFlush();
+                              if (tutorialStep ==
+                                  TutorialPhase3Step.longPressSheet) {
+                                await ref
+                                    .read(tutorialPhase3Provider.notifier)
+                                    .advance();
+                              }
                               if (state.localBySlot.length >=
                                       layout.slots.length &&
                                   state.pendingNextSheetFrom == null) {
@@ -1035,6 +1382,100 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                                 : const SizedBox.shrink(),
                           ),
                         ),
+                        if (!_phase3Navigating &&
+                            tutorialStep == TutorialPhase3Step.overview)
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            top: -appBarReservedHeight,
+                            bottom: -tutorialBottomExtension,
+                            child: TutorialOverlay(
+                              message: AppMessages.tutorial.stampOverview,
+                              onMaskTap: () async {
+                                await ref
+                                    .read(tutorialPhase3Provider.notifier)
+                                    .advance();
+                              },
+                              bubbleBottomOffset: tutorialBubbleBottomOffset,
+                            ),
+                          ),
+                        if (!_phase3Navigating &&
+                            tutorialStep == TutorialPhase3Step.longPressSheet &&
+                            !_showStampBar &&
+                            _tutorialSpotlightRect != null)
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            top: -appBarReservedHeight,
+                            bottom: -tutorialBottomExtension,
+                            child: TutorialOverlay(
+                              message: AppMessages.tutorial.stampLongPressSheet,
+                              spotlightRect: _tutorialSpotlightRect!.shift(
+                                Offset(0, appBarReservedHeight),
+                              ),
+                              passThroughSpotlight: true,
+                              bubbleBottomOffset: tutorialBubbleBottomOffset,
+                              onMaskTap: () {},
+                            ),
+                          ),
+                        if (!_phase3Navigating &&
+                            tutorialStep == TutorialPhase3Step.catalog &&
+                            _tutorialSpotlightRect != null)
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            top: -appBarReservedHeight,
+                            bottom: -tutorialBottomExtension,
+                            child: TutorialOverlay(
+                              message: AppMessages.tutorial.stampCatalogGuide,
+                              spotlightRect: _tutorialSpotlightRect!.shift(
+                                Offset(0, appBarReservedHeight),
+                              ),
+                              bubbleBottomOffset: tutorialBubbleBottomOffset,
+                              onMaskTap: () {},
+                              onSpotlightTap: () {
+                                unawaited(_openCatalogDuringTutorial());
+                              },
+                            ),
+                          ),
+                        if (!_phase3Navigating &&
+                            tutorialStep == TutorialPhase3Step.collection &&
+                            _tutorialSpotlightRect != null)
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            top: -appBarReservedHeight,
+                            bottom: -tutorialBottomExtension,
+                            child: TutorialOverlay(
+                              message: AppMessages.tutorial.stampCollectionGuide,
+                              spotlightRect: _tutorialSpotlightRect!.shift(
+                                Offset(0, appBarReservedHeight),
+                              ),
+                              bubbleBottomOffset: tutorialBubbleBottomOffset,
+                              onMaskTap: () {},
+                              onSpotlightTap: () {
+                                unawaited(_openCollectionDuringTutorial());
+                              },
+                            ),
+                          ),
+                        if (!_phase3Navigating &&
+                            tutorialStep == TutorialPhase3Step.undo &&
+                            _tutorialSpotlightRect != null)
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            top: -appBarReservedHeight,
+                            bottom: -tutorialBottomExtension,
+                            child: TutorialOverlay(
+                              message: AppMessages.tutorial.stampUndoGuide,
+                              spotlightRect: _tutorialSpotlightRect!.shift(
+                                Offset(0, appBarReservedHeight),
+                              ),
+                              passThroughSpotlight: true,
+                              bubbleBottomOffset: tutorialBubbleBottomOffset,
+                              onMaskTap: () {},
+                            ),
+                          ),
                       ],
                     );
                   },
@@ -1054,12 +1495,14 @@ class _SheetCanvas extends StatelessWidget {
   final StampSheetLayout layout;
   final Map<String, String> bySlot;
   final VoidCallback? onLongPress;
+  final Key? tutorialTargetKey;
 
   const _SheetCanvas({
     required this.sheetAssetPath,
     required this.layout,
     required this.bySlot,
     this.onLongPress,
+    this.tutorialTargetKey,
   });
 
   ReactionType? _reactionById(String id) {
@@ -1110,6 +1553,7 @@ class _SheetCanvas extends StatelessWidget {
               width: sheetW,
               height: sheetH,
               child: GestureDetector(
+                key: tutorialTargetKey,
                 onLongPress: onLongPress,
                 child: Container(
                   decoration: BoxDecoration(
