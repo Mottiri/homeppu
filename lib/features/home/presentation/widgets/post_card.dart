@@ -37,6 +37,7 @@ class PostCard extends ConsumerStatefulWidget {
   final bool isCircleOwner; // サークルオーナーかどうか
   final Function(bool)? onPinToggle; // ピン留めトグルコールバック
   final bool isDetailView; // 詳細画面表示モード（タップで遷移しない）
+  final bool longPressOnlyMode; // チュートリアル用: タップ操作を無効化
 
   const PostCard({
     super.key,
@@ -45,6 +46,7 @@ class PostCard extends ConsumerStatefulWidget {
     this.isCircleOwner = false,
     this.onPinToggle,
     this.isDetailView = false,
+    this.longPressOnlyMode = false,
   });
 
   @override
@@ -413,16 +415,19 @@ class _PostCardState extends ConsumerState<PostCard> {
             ),
           ),
           // カードコンテンツ
-          InkWell(
-            onTap: widget.isDetailView
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: (widget.isDetailView || widget.longPressOnlyMode)
                 ? null
                 : () => context.push('/post/${post.id}'),
             onLongPress: () {
               // 長押しでリアクションオーバーレイ表示
               _showReactionOverlay();
             },
-            borderRadius: BorderRadius.circular(20),
-            child: Padding(
+            child: IgnorePointer(
+              // longPressOnlyMode ではカード内部のタップ系操作を無効化
+              ignoring: widget.longPressOnlyMode,
+              child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -612,6 +617,7 @@ class _PostCardState extends ConsumerState<PostCard> {
                 ],
               ),
             ),
+          ),
           ),
         ],
       ),

@@ -65,6 +65,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         tutorialStep == TutorialPhase1Step.homeOverview;
     final isTutorialHomeLongPress =
         tutorialStep == TutorialPhase1Step.homeLongPress;
+    final isHomeTutorialActive =
+        isTutorialHomeOverview || isTutorialHomeLongPress;
     final refreshKey = ref.watch(timelineRefreshProvider);
     ref.listen<int>(homeScrollToTopProvider, (previous, next) {
       if (_scrollController.hasClients) {
@@ -105,6 +107,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           children: [
             SafeArea(
               child: NestedScrollView(
+                physics: isTutorialHomeLongPress
+                    ? const NeverScrollableScrollPhysics()
+                    : null,
                 controller: _scrollController,
                 headerSliverBuilder: (context, innerBoxIsScrolled) {
                   return [
@@ -120,6 +125,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 },
                 body: TabBarView(
                   controller: _tabController,
+                  physics: isHomeTutorialActive
+                      ? const NeverScrollableScrollPhysics()
+                      : null,
                   children: [
                     _TimelineTab(
                       isFollowingOnly: false,
@@ -683,8 +691,9 @@ class _PostsListState extends ConsumerState<_PostsList> {
   @override
   Widget build(BuildContext context) {
     final tutorialStep = ref.watch(tutorialPhase1Provider);
-    final shouldReportFirstCardRect =
+    final isTutorialHomeLongPress =
         tutorialStep == TutorialPhase1Step.homeLongPress;
+    final shouldReportFirstCardRect = isTutorialHomeLongPress;
     if (widget.onFirstPostCardRectChanged != null) {
       if (!shouldReportFirstCardRect || _posts.isEmpty) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -779,66 +788,74 @@ class _PostsListState extends ConsumerState<_PostsList> {
           isLoadingMore: _isLoadingMore,
           hasMore: _hasMore,
           onLoadMore: _loadMorePosts,
-          child: RefreshIndicator(
-            onRefresh: _refreshPosts,
-            color: AppColors.primary,
-            child: Builder(
-              builder: (context) {
-                final contentCount =
-                    _posts.length + _nativeAdCountForPosts(_posts.length);
-                final totalCount = contentCount + (_isLoadingMore ? 1 : 0);
-                return NotificationListener<ScrollNotification>(
-                  onNotification: _handleScrollNotification,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.only(bottom: 120),
-                    itemCount: totalCount,
-                    itemBuilder: (context, index) {
-                      if (_isLoadingMore && index == contentCount) {
-
-                        return const Padding(
-                          padding: EdgeInsets.all(16),
-                          child: Center(
-                            child: CircularProgressIndicator(
-                              color: AppColors.primary,
-                            ),
+          child: Builder(
+            builder: (context) {
+              final contentCount =
+                  _posts.length + _nativeAdCountForPosts(_posts.length);
+              final totalCount = contentCount + (_isLoadingMore ? 1 : 0);
+              final list = NotificationListener<ScrollNotification>(
+                onNotification: _handleScrollNotification,
+                child: ListView.builder(
+                  physics: isTutorialHomeLongPress
+                      ? const NeverScrollableScrollPhysics()
+                      : null,
+                  padding: const EdgeInsets.only(bottom: 120),
+                  itemCount: totalCount,
+                  itemBuilder: (context, index) {
+                    if (_isLoadingMore && index == contentCount) {
+                      return const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            color: AppColors.primary,
                           ),
-                        );
-                      }
-
-                      if (_isNativeAdIndex(index)) {
-                        return NativeFeedAdCard(
-                          key: ValueKey('native_ad_slot_$index'),
-                        );
-                      }
-
-                      final postIndex = _postIndexFromDisplayIndex(index);
-                      final post = _posts[postIndex];
-                      final postCard = PostCard(
-                        key: postIndex == 0
-                            ? _firstPostCardKey
-                            : ValueKey(post.id),
-                        post: post,
-                        onDeleted: () {
-
-                          setState(() {
-                            _posts.removeAt(postIndex);
-                          });
-                        },
+                        ),
                       );
-                      if (postIndex == 0 && shouldReportFirstCardRect) {
-                        return _LongPressProbe(
-                          onLongPress: () => ref
-                              .read(tutorialPhase1Provider.notifier)
-                              .markCompleted(),
-                          child: postCard,
-                        );
-                      }
-                      return postCard;
-                    },
-                  ),
-                );
-              },
-            ),
+                    }
+
+                    if (_isNativeAdIndex(index)) {
+                      return NativeFeedAdCard(
+                        key: ValueKey('native_ad_slot_$index'),
+                      );
+                    }
+
+                    final postIndex = _postIndexFromDisplayIndex(index);
+                    final post = _posts[postIndex];
+                    final isTutorialTargetCard =
+                        postIndex == 0 && shouldReportFirstCardRect;
+                    final postCard = PostCard(
+                      key: postIndex == 0
+                          ? _firstPostCardKey
+                          : ValueKey(post.id),
+                      post: post,
+                      longPressOnlyMode: isTutorialTargetCard,
+                      onDeleted: () {
+                        setState(() {
+                          _posts.removeAt(postIndex);
+                        });
+                      },
+                    );
+                    if (isTutorialTargetCard) {
+                      return _LongPressProbe(
+                        onLongPress: () => ref
+                            .read(tutorialPhase1Provider.notifier)
+                            .markCompleted(),
+                        child: postCard,
+                      );
+                    }
+                    return postCard;
+                  },
+                ),
+              );
+
+              if (isTutorialHomeLongPress) return list;
+
+              return RefreshIndicator(
+                onRefresh: _refreshPosts,
+                color: AppColors.primary,
+                child: list,
+              );
+            },
           ),
         ),
         Positioned(
@@ -913,11 +930,16 @@ class _LongPressProbe extends StatefulWidget {
 
 class _LongPressProbeState extends State<_LongPressProbe> {
   static const _longPressDuration = Duration(milliseconds: 500);
+  static const double _cancelDistance = 12;
   Timer? _timer;
   bool _fired = false;
+  Offset? _startGlobalPosition;
+  int? _activePointer;
 
   void _onPointerDown(PointerDownEvent event) {
     _fired = false;
+    _activePointer = event.pointer;
+    _startGlobalPosition = event.position;
     _timer?.cancel();
     _timer = Timer(_longPressDuration, () {
       if (!mounted || _fired) return;
@@ -926,9 +948,24 @@ class _LongPressProbeState extends State<_LongPressProbe> {
     });
   }
 
+  void _onPointerMove(PointerMoveEvent event) {
+    if (_activePointer != event.pointer) return;
+    final start = _startGlobalPosition;
+    if (start == null) return;
+    final movedDistance = (event.position - start).distance;
+    if (movedDistance > _cancelDistance) {
+      _onPointerEnd(event);
+    }
+  }
+
   void _onPointerEnd([PointerEvent? event]) {
+    if (event != null && _activePointer != null && event.pointer != _activePointer) {
+      return;
+    }
     _timer?.cancel();
     _timer = null;
+    _activePointer = null;
+    _startGlobalPosition = null;
   }
 
   @override
@@ -942,6 +979,7 @@ class _LongPressProbeState extends State<_LongPressProbe> {
     return Listener(
       behavior: HitTestBehavior.translucent,
       onPointerDown: _onPointerDown,
+      onPointerMove: _onPointerMove,
       onPointerUp: _onPointerEnd,
       onPointerCancel: _onPointerEnd,
       child: widget.child,
