@@ -694,9 +694,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (_isCompletingPhase1Tutorial) return;
     setState(() => _isCompletingPhase1Tutorial = true);
     try {
-      await ref
-          .read(tutorialPhase1Provider.notifier)
-          .complete(_tutorialSelectedMode.value);
+      final user = ref.read(currentUserProvider).valueOrNull;
+      if (user != null) {
+        final authService = ref.read(authServiceProvider);
+        await authService.updateUserProfile(
+          uid: user.uid,
+          postMode: _tutorialSelectedMode.value,
+        );
+      }
+      await ref.read(tutorialPhase1Provider.notifier).advance();
       if (!mounted) return;
       context.go('/home');
     } catch (_) {

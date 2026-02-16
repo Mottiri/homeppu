@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -13,14 +14,14 @@ import '../../../../shared/repositories/notification_repository.dart';
 import '../../../../shared/providers/public_user_provider.dart';
 import '../../../../shared/widgets/ad_banner.dart';
 import '../../../../shared/widgets/native_feed_ad_card.dart';
+import '../../../../shared/providers/tutorial_phase1_provider.dart';
+import '../../../../shared/widgets/tutorial_overlay.dart';
 import '../widgets/post_card.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../shared/widgets/infinite_scroll_listener.dart';
 
-/// タイムラインリフレッシュ用のProvider（投稿作成後にインクリメント）
 final timelineRefreshProvider = StateProvider<int>((ref) => 0);
 
-/// ホーム画面のスクロールトップを要求するProvider
 final homeScrollToTopProvider = StateProvider<int>((ref) => 0);
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -34,6 +35,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final ScrollController _scrollController = ScrollController();
+  final GlobalKey _tutorialOverlayStackKey = GlobalKey();
+  Rect? _firstPostCardRect;
+
+  void _onFirstPostCardRectChanged(Rect? rect) {
+    if (!mounted) return;
+    if (_firstPostCardRect == rect) return;
+    setState(() => _firstPostCardRect = rect);
+  }
 
   @override
   void initState() {
@@ -51,9 +60,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   @override
   Widget build(BuildContext context) {
     final currentUser = ref.watch(currentUserProvider);
-    final refreshKey = ref.watch(timelineRefreshProvider); // リフレッシュキーを取得
-
-    // ホームボタンタップでスクロールトップを監視
+    final tutorialStep = ref.watch(tutorialPhase1Provider);
+    final isTutorialHomeOverview =
+        tutorialStep == TutorialPhase1Step.homeOverview;
+    final isTutorialHomeLongPress =
+        tutorialStep == TutorialPhase1Step.homeLongPress;
+    final refreshKey = ref.watch(timelineRefreshProvider);
     ref.listen<int>(homeScrollToTopProvider, (previous, next) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
@@ -63,8 +75,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         );
       }
     });
-
-    // ユーザーのヘッダー色を取得（設定されていればその色、なければデフォルト）
     final user = currentUser.valueOrNull;
     final isSubscriber = user?.isSubscriber ?? false;
     final primaryColor = user?.headerPrimaryColor != null
@@ -73,15 +83,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final secondaryColor = user?.headerSecondaryColor != null
         ? Color(user!.headerSecondaryColor!)
         : AppColors.secondary;
-
-    // ユーザーの色でグラデーションを作成（パステルカラー）
     final userGradient = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
       colors: [
         primaryColor.withValues(alpha: 0.25),
         secondaryColor.withValues(alpha: 0.15),
-        const Color(0xFFFDF8F3), // warmGradientの上部色
+        const Color(0xFFFDF8F3),
       ],
       stops: const [0.0, 0.5, 1.0],
     );
@@ -89,42 +97,65 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
-          // ユーザーのヘッダー色に基づいたグラデーション背景
+
           gradient: userGradient,
         ),
-        child: SafeArea(
-          child: NestedScrollView(
-            controller: _scrollController,
-            headerSliverBuilder: (context, innerBoxIsScrolled) {
-              return [
-                SliverPersistentHeader(
-                  pinned: true,
-                  delegate: _TimelineHeaderDelegate(
-                    isSubscriber: isSubscriber,
-                    currentUserAsync: currentUser,
-                    tabController: _tabController,
-                  ),
+        child: Stack(
+          key: _tutorialOverlayStackKey,
+          children: [
+            SafeArea(
+              child: NestedScrollView(
+                controller: _scrollController,
+                headerSliverBuilder: (context, innerBoxIsScrolled) {
+                  return [
+                    SliverPersistentHeader(
+                      pinned: true,
+                      delegate: _TimelineHeaderDelegate(
+                        isSubscriber: isSubscriber,
+                        currentUserAsync: currentUser,
+                        tabController: _tabController,
+                      ),
+                    ),
+                  ];
+                },
+                body: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _TimelineTab(
+                      isFollowingOnly: false,
+                      currentUser: currentUser.valueOrNull,
+                      refreshKey: refreshKey,
+                      onFirstPostCardRectChanged: _onFirstPostCardRectChanged,
+                      tutorialOverlayAncestorKey: _tutorialOverlayStackKey,
+                    ),
+                    _TimelineTab(
+                      isFollowingOnly: true,
+                      currentUser: currentUser.valueOrNull,
+                      refreshKey: refreshKey,
+                      onFirstPostCardRectChanged: _onFirstPostCardRectChanged,
+                      tutorialOverlayAncestorKey: _tutorialOverlayStackKey,
+                    ),
+                  ],
                 ),
-              ];
-            },
-            body: TabBarView(
-              controller: _tabController,
-              children: [
-                // おすすめタブ（全体のタイムライン）
-                _TimelineTab(
-                  isFollowingOnly: false,
-                  currentUser: currentUser.valueOrNull,
-                  refreshKey: refreshKey,
-                ),
-                // フォロー中タブ
-                _TimelineTab(
-                  isFollowingOnly: true,
-                  currentUser: currentUser.valueOrNull,
-                  refreshKey: refreshKey,
-                ),
-              ],
+              ),
             ),
-          ),
+            if (isTutorialHomeOverview)
+              TutorialOverlay(
+                message: AppMessages.tutorial.homeOverview,
+                onMaskTap: () =>
+                    ref.read(tutorialPhase1Provider.notifier).advance(),
+                characterAssetPath: 'assets/onbord/onbord_01.png',
+                bubbleBottomOffset: MediaQuery.of(context).padding.bottom + 64,
+              ),
+            if (isTutorialHomeLongPress)
+              TutorialOverlay(
+                message: AppMessages.tutorial.homeLongPress,
+                spotlightRect: _firstPostCardRect,
+                passThroughSpotlight: true,
+                characterAssetPath: 'assets/onbord/onbord_01.png',
+                bubbleBottomOffset: MediaQuery.of(context).padding.bottom + 64,
+              ),
+          ],
         ),
       ),
     );
@@ -341,23 +372,26 @@ class _LogoAndNotificationRow extends StatelessWidget {
   }
 }
 
-/// タイムラインタブ
 class _TimelineTab extends StatelessWidget {
   final bool isFollowingOnly;
   final UserModel? currentUser;
   final int refreshKey;
+  final ValueChanged<Rect?>? onFirstPostCardRectChanged;
+  final GlobalKey? tutorialOverlayAncestorKey;
 
   const _TimelineTab({
     required this.isFollowingOnly,
     required this.currentUser,
     this.refreshKey = 0,
+    this.onFirstPostCardRectChanged,
+    this.tutorialOverlayAncestorKey,
   });
 
   String? get currentUserId => currentUser?.uid;
 
   @override
   Widget build(BuildContext context) {
-    // フォロー中タブの場合、フォローしているユーザーのIDを取得する必要がある
+
     if (isFollowingOnly && currentUser != null) {
       return StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance
@@ -388,12 +422,12 @@ class _TimelineTab extends StatelessWidget {
             isAIViewer: currentUser!.isAI,
             currentUserId: currentUserId,
             refreshKey: refreshKey,
+            onFirstPostCardRectChanged: onFirstPostCardRectChanged,
+            tutorialOverlayAncestorKey: tutorialOverlayAncestorKey,
           );
         },
       );
     }
-
-    // おすすめタブ（全体）- サークル投稿を除外
     return _PostsList(
       query: FirebaseFirestore.instance
           .collection('posts')
@@ -404,22 +438,27 @@ class _TimelineTab extends StatelessWidget {
       isAIViewer: currentUser?.isAI ?? false,
       currentUserId: currentUserId,
       refreshKey: refreshKey,
+      onFirstPostCardRectChanged: onFirstPostCardRectChanged,
+      tutorialOverlayAncestorKey: tutorialOverlayAncestorKey,
     );
   }
 }
 
-/// 投稿リスト（プル更新方式 + 無限スクロール）
 class _PostsList extends ConsumerStatefulWidget {
   final Query query;
   final bool isAIViewer;
   final String? currentUserId;
-  final int refreshKey; // リフレッシュ用のキー
+  final int refreshKey;
+  final ValueChanged<Rect?>? onFirstPostCardRectChanged;
+  final GlobalKey? tutorialOverlayAncestorKey;
 
   const _PostsList({
     required this.query,
     this.isAIViewer = false,
     this.currentUserId,
     this.refreshKey = 0,
+    this.onFirstPostCardRectChanged,
+    this.tutorialOverlayAncestorKey,
   });
 
   @override
@@ -440,8 +479,10 @@ class _PostsListState extends ConsumerState<_PostsList> {
   bool _hasError = false;
   bool _showScrollToTopFab = false;
   double _fabScrollAccumulator = 0;
-  int _fabScrollDirection = 0; // 1: down, -1: up
+  int _fabScrollDirection = 0;
   ProviderSubscription<int>? _homeScrollTopSubscription;
+  final GlobalKey _firstPostCardKey = GlobalKey();
+  Rect? _lastReportedFirstPostRect;
 
   int _nativeAdCountForPosts(int postsCount) => postsCount ~/ _nativeAdInterval;
 
@@ -474,14 +515,17 @@ class _PostsListState extends ConsumerState<_PostsList> {
   @override
   void didUpdateWidget(_PostsList oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // クエリが変わった場合、またはrefreshKeyが変わった場合は再読み込み
+
     if (widget.query != oldWidget.query ||
         widget.refreshKey != oldWidget.refreshKey) {
       _loadPosts();
     }
+    if (widget.onFirstPostCardRectChanged == null &&
+        oldWidget.onFirstPostCardRectChanged != null) {
+      _lastReportedFirstPostRect = null;
+    }
   }
 
-  /// 初回読み込み & プルダウン時の読み込み
   Future<void> _loadPosts({bool invalidateAvatarCache = false}) async {
     setState(() {
       _isLoading = true;
@@ -497,7 +541,7 @@ class _PostsListState extends ConsumerState<_PostsList> {
           .where((post) => post.circleId == null || post.circleId!.isEmpty)
           .toList();
 
-      // AIモードのフィルタリング
+
       if (!widget.isAIViewer) {
         posts = posts
             .where(
@@ -528,10 +572,7 @@ class _PostsListState extends ConsumerState<_PostsList> {
       });
     }
   }
-
-  /// 追加読み込み（無限スクロール）
   Future<void> _refreshPosts() => _loadPosts(invalidateAvatarCache: true);
-
   Future<void> _loadMorePosts() async {
     if (!_hasMore || _isLoadingMore || _lastDocument == null) return;
 
@@ -548,7 +589,7 @@ class _PostsListState extends ConsumerState<_PostsList> {
           .where((post) => post.circleId == null || post.circleId!.isEmpty)
           .toList();
 
-      // AIモードのフィルタリング
+
       if (!widget.isAIViewer) {
         newPosts = newPosts
             .where(
@@ -641,6 +682,34 @@ class _PostsListState extends ConsumerState<_PostsList> {
 
   @override
   Widget build(BuildContext context) {
+    final tutorialStep = ref.watch(tutorialPhase1Provider);
+    final shouldReportFirstCardRect =
+        tutorialStep == TutorialPhase1Step.homeLongPress;
+    if (widget.onFirstPostCardRectChanged != null) {
+      if (!shouldReportFirstCardRect || _posts.isEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          if (_lastReportedFirstPostRect != null) {
+            _lastReportedFirstPostRect = null;
+            widget.onFirstPostCardRectChanged!(null);
+          }
+        });
+      } else {
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (!mounted) return;
+          final rect = await resolveRectWithRetry(
+            _firstPostCardKey,
+            ancestorKey: widget.tutorialOverlayAncestorKey,
+          );
+          if (!mounted) return;
+          if (_lastReportedFirstPostRect != rect) {
+            _lastReportedFirstPostRect = rect;
+            widget.onFirstPostCardRectChanged!(rect);
+          }
+        });
+      }
+    }
+
     if (_isLoading) {
       return Center(
         child: Column(
@@ -659,7 +728,7 @@ class _PostsListState extends ConsumerState<_PostsList> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('😢', style: TextStyle(fontSize: 48)),
+            const Text('??', style: TextStyle(fontSize: 64)),
             const SizedBox(height: 16),
             Text(AppMessages.error.general, textAlign: TextAlign.center),
             const SizedBox(height: 16),
@@ -683,7 +752,7 @@ class _PostsListState extends ConsumerState<_PostsList> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text('✨', style: TextStyle(fontSize: 64)),
+            const Text('??', style: TextStyle(fontSize: 64)),
                   const SizedBox(height: 16),
                   Text(
                     AppMessages.home.emptyPostsTitle,
@@ -725,7 +794,7 @@ class _PostsListState extends ConsumerState<_PostsList> {
                     itemCount: totalCount,
                     itemBuilder: (context, index) {
                       if (_isLoadingMore && index == contentCount) {
-                        // ローディングインジケーター
+
                         return const Padding(
                           padding: EdgeInsets.all(16),
                           child: Center(
@@ -744,16 +813,27 @@ class _PostsListState extends ConsumerState<_PostsList> {
 
                       final postIndex = _postIndexFromDisplayIndex(index);
                       final post = _posts[postIndex];
-                      return PostCard(
-                        key: ValueKey(post.id),
+                      final postCard = PostCard(
+                        key: postIndex == 0
+                            ? _firstPostCardKey
+                            : ValueKey(post.id),
                         post: post,
                         onDeleted: () {
-                          // 自分の投稿を削除した場合、ローカルリストから即座に削除
+
                           setState(() {
                             _posts.removeAt(postIndex);
                           });
                         },
                       );
+                      if (postIndex == 0 && shouldReportFirstCardRect) {
+                        return _LongPressProbe(
+                          onLongPress: () => ref
+                              .read(tutorialPhase1Provider.notifier)
+                              .markCompleted(),
+                          child: postCard,
+                        );
+                      }
+                      return postCard;
                     },
                   ),
                 );
@@ -790,7 +870,6 @@ class _PostsListState extends ConsumerState<_PostsList> {
   }
 }
 
-/// フォロー中が空の状態
 class _EmptyFollowingState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -800,7 +879,7 @@ class _EmptyFollowingState extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('👥', style: TextStyle(fontSize: 64)),
+            const Text('??', style: TextStyle(fontSize: 64)),
             const SizedBox(height: 16),
             Text(
               AppMessages.home.emptyFollowingTitle,
@@ -821,3 +900,52 @@ class _EmptyFollowingState extends StatelessWidget {
     );
   }
 }
+
+class _LongPressProbe extends StatefulWidget {
+  const _LongPressProbe({required this.child, required this.onLongPress});
+
+  final Widget child;
+  final VoidCallback onLongPress;
+
+  @override
+  State<_LongPressProbe> createState() => _LongPressProbeState();
+}
+
+class _LongPressProbeState extends State<_LongPressProbe> {
+  static const _longPressDuration = Duration(milliseconds: 500);
+  Timer? _timer;
+  bool _fired = false;
+
+  void _onPointerDown(PointerDownEvent event) {
+    _fired = false;
+    _timer?.cancel();
+    _timer = Timer(_longPressDuration, () {
+      if (!mounted || _fired) return;
+      _fired = true;
+      widget.onLongPress();
+    });
+  }
+
+  void _onPointerEnd([PointerEvent? event]) {
+    _timer?.cancel();
+    _timer = null;
+  }
+
+  @override
+  void dispose() {
+    _onPointerEnd();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: _onPointerDown,
+      onPointerUp: _onPointerEnd,
+      onPointerCancel: _onPointerEnd,
+      child: widget.child,
+    );
+  }
+}
+

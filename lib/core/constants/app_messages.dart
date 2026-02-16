@@ -419,9 +419,14 @@ class _TutorialMessages {
   String get explainHuman => '人間だけが見れるモードだよ\n本物のリアクションだけがほしい人向け！';
 
   // Step 6: 完了
-  String get complete => 'これで公開範囲の説明はおしまい！\nモードを選んでから始めてね🎉';
+  String get complete =>
+      'これで公開範囲の説明はおしまい！\n希望のモードをタップするとアプリを開始できるよ🎉\nあとからいつでも設定は変えられるから安心してね！';
   String get completeAction => 'わかった！';
   String get selectModeRequired => 'モードを1つ選んでね';
+
+  // Home explanation
+  String get homeOverview => 'ここはホーム画面だよ\nみんなの投稿がここに表示されるよ';
+  String get homeLongPress => 'カード長押しでリアクションスタンプが押せるよ';
 
   // 共通
   String get nextAction => '次へ';

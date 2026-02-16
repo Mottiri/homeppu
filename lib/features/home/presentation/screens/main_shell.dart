@@ -312,7 +312,11 @@ class _MainShellState extends ConsumerState<MainShell>
             tutorialStep == TutorialPhase1Step.explainHuman ||
             tutorialStep == TutorialPhase1Step.finished) &&
         location != '/settings';
-    if (shouldForceProfile || shouldForceSettings) {
+    final shouldForceHome =
+        (tutorialStep == TutorialPhase1Step.homeOverview ||
+            tutorialStep == TutorialPhase1Step.homeLongPress) &&
+        !location.startsWith('/home');
+    if (shouldForceProfile || shouldForceSettings || shouldForceHome) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         final latestStep = ref.read(tutorialPhase1Provider);
@@ -328,6 +332,12 @@ class _MainShellState extends ConsumerState<MainShell>
                 latestStep == TutorialPhase1Step.finished) &&
             GoRouterState.of(context).matchedLocation != '/settings') {
           context.go('/settings');
+          return;
+        }
+        if ((latestStep == TutorialPhase1Step.homeOverview ||
+                latestStep == TutorialPhase1Step.homeLongPress) &&
+            !GoRouterState.of(context).matchedLocation.startsWith('/home')) {
+          context.go('/home');
         }
       });
     }

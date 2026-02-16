@@ -17,6 +17,7 @@ class TutorialOverlay extends StatelessWidget {
     this.characterAssetPath = 'assets/onbord/onbord_01.png',
     this.bubbleBottomOffset,
     this.circularSpotlight = false,
+    this.passThroughSpotlight = false,
     this.pulseMinScale = 0.94,
     this.pulseMaxScale = 1.06,
   });
@@ -31,6 +32,7 @@ class TutorialOverlay extends StatelessWidget {
   final String characterAssetPath;
   final double? bubbleBottomOffset;
   final bool circularSpotlight;
+  final bool passThroughSpotlight;
   final double pulseMinScale;
   final double pulseMaxScale;
 
@@ -80,16 +82,76 @@ class TutorialOverlay extends StatelessWidget {
       ];
     }
 
+    final baseHoleRect = spotlightRect!.inflate(_spotlightPadding);
+
+    if (passThroughSpotlight) {
+      return [
+        Positioned.fill(
+          child: IgnorePointer(
+            child: _AnimatedMaskWithHole(
+              baseHoleRect: baseHoleRect,
+              circular: circularSpotlight,
+              maskColor: maskColor,
+              minScale: pulseMinScale,
+              maxScale: pulseMaxScale,
+            ),
+          ),
+        ),
+        ..._buildPassThroughMaskLayers(baseHoleRect, maskColor),
+      ];
+    }
+
     return [
       Positioned.fill(
         child: _AnimatedMaskWithHole(
-          baseHoleRect: spotlightRect!.inflate(_spotlightPadding),
+          baseHoleRect: baseHoleRect,
           circular: circularSpotlight,
           maskColor: maskColor,
           minScale: pulseMinScale,
           maxScale: pulseMaxScale,
           onTap: onMaskTap,
         ),
+      ),
+    ];
+  }
+
+  List<Widget> _buildPassThroughMaskLayers(Rect holeRect, Color maskColor) {
+    Widget tappableMask({required Widget child}) {
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onMaskTap ?? () {},
+        child: child,
+      );
+    }
+
+    return [
+      Positioned(
+        left: 0,
+        right: 0,
+        top: 0,
+        height: holeRect.top.clamp(0, double.infinity).toDouble(),
+        child: tappableMask(child: ColoredBox(color: maskColor)),
+      ),
+      Positioned(
+        left: 0,
+        right: 0,
+        top: holeRect.bottom,
+        bottom: 0,
+        child: tappableMask(child: ColoredBox(color: maskColor)),
+      ),
+      Positioned(
+        left: 0,
+        top: holeRect.top,
+        width: holeRect.left.clamp(0, double.infinity).toDouble(),
+        height: holeRect.height,
+        child: tappableMask(child: ColoredBox(color: maskColor)),
+      ),
+      Positioned(
+        left: holeRect.right,
+        right: 0,
+        top: holeRect.top,
+        height: holeRect.height,
+        child: tappableMask(child: ColoredBox(color: maskColor)),
       ),
     ];
   }

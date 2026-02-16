@@ -17,6 +17,8 @@ enum TutorialPhase1Step {
   explainMix,
   explainHuman,
   finished,
+  homeOverview,
+  homeLongPress,
 }
 
 extension TutorialPhase1StepExt on TutorialPhase1Step {
@@ -75,6 +77,21 @@ class TutorialPhase1Notifier extends StateNotifier<TutorialPhase1Step> {
       },
     );
 
+    state = TutorialPhase1Step.inactive;
+  }
+
+  Future<void> markCompleted() async {
+    final user = _ref.read(currentUserProvider).valueOrNull;
+    if (user == null) return;
+
+    final authService = _ref.read(authServiceProvider);
+    await authService.updateUserProfile(
+      uid: user.uid,
+      extraUpdates: {
+        'tutorialPhase1Completed': true,
+        'tutorialPhase1Step': null,
+      },
+    );
     state = TutorialPhase1Step.inactive;
   }
 
