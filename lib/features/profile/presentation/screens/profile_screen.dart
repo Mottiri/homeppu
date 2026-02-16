@@ -23,6 +23,8 @@ import '../widgets/profile_posts_list.dart';
 import '../widgets/profile_stats.dart';
 import '../../../../shared/widgets/infinite_scroll_listener.dart';
 import '../../../../shared/widgets/load_more_footer.dart';
+import '../../../../shared/providers/tutorial_phase1_provider.dart';
+import '../../../../shared/widgets/tutorial_overlay.dart';
 
 /// プロフィール画面のスクロールトップを要求するProvider
 final profileScrollToTopProvider = StateProvider<int>((ref) => 0);
@@ -57,6 +59,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   double _fabScrollAccumulator = 0;
   int _fabScrollDirection = 0; // 1: down, -1: up
   bool _isVirtueLoading = false;
+  final GlobalKey _tutorialOverlayStackKey = GlobalKey();
+  final GlobalKey _settingsIconKey = GlobalKey();
+  Rect? _settingsIconRect;
 
   // ヘッダー画像とカラーパレット
   late int _headerImageIndex;
@@ -89,20 +94,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     _isAdminViewer = ref.read(isAdminProvider).valueOrNull ?? false;
     _generateHeaderAndColors();
     _loadUser(forceAdmin: _isAdminViewer);
-    _adminSubscription = ref.listenManual<AsyncValue<bool>>(
-      isAdminProvider,
-      (previous, next) {
-        final isAdmin = next.valueOrNull ?? false;
-        if (_isAdminViewer != isAdmin) {
-          _isAdminViewer = isAdmin;
-          final currentUser = ref.read(currentUserProvider).valueOrNull;
-          final isOwn = widget.userId == null || widget.userId == currentUser?.uid;
-          if (!isOwn) {
-            _loadUser(forceAdmin: isAdmin);
-          }
+    _adminSubscription = ref.listenManual<AsyncValue<bool>>(isAdminProvider, (
+      previous,
+      next,
+    ) {
+      final isAdmin = next.valueOrNull ?? false;
+      if (_isAdminViewer != isAdmin) {
+        _isAdminViewer = isAdmin;
+        final currentUser = ref.read(currentUserProvider).valueOrNull;
+        final isOwn =
+            widget.userId == null || widget.userId == currentUser?.uid;
+        if (!isOwn) {
+          _loadUser(forceAdmin: isAdmin);
         }
-      },
-    );
+      }
+    });
     _profileScrollTopSubscription = ref.listenManual<int>(
       profileScrollToTopProvider,
       (previous, next) => _scrollToTop(),
@@ -188,8 +194,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           _fabScrollAccumulator = 0;
         }
         _fabScrollAccumulator += delta.abs();
-        if (_showScrollToTopFab &&
-            _fabScrollAccumulator >= _fabHideThreshold) {
+        if (_showScrollToTopFab && _fabScrollAccumulator >= _fabHideThreshold) {
           _fabScrollAccumulator = 0;
           setState(() => _showScrollToTopFab = false);
         }
@@ -257,7 +262,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   Future<void> _loadUser({bool? forceAdmin}) async {
     final currentUser = ref.read(currentUserProvider).valueOrNull;
-    final isAdmin = forceAdmin ?? (ref.read(isAdminProvider).valueOrNull ?? false);
+    final isAdmin =
+        forceAdmin ?? (ref.read(isAdminProvider).valueOrNull ?? false);
     final collectionName = isAdmin ? 'users' : 'publicUsers';
 
     debugPrint('ProfileScreen: Loading user with userId: ${widget.userId}');
@@ -388,9 +394,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       child: Scaffold(
         body: Container(
           decoration: const BoxDecoration(gradient: AppColors.warmGradient),
-          child: Center(
-            child: Text(AppMessages.error.general),
-          ),
+          child: Center(child: Text(AppMessages.error.general)),
         ),
       ),
     );
@@ -418,10 +422,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         adminAction = const AdminMenuIcon();
       } else if (!_isOwnProfile) {
         adminAction = IconButton(
-          icon: const Icon(
-            Icons.admin_panel_settings,
-            color: Colors.white,
-          ),
+          icon: const Icon(Icons.admin_panel_settings, color: Colors.white),
           onPressed: () => _showUserAdminMenu(context, user),
           tooltip: '管理者メニュー',
           style: IconButton.styleFrom(
@@ -438,6 +439,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           decoration: const BoxDecoration(gradient: AppColors.warmGradient),
           child: SafeArea(
             child: Stack(
+              key: _tutorialOverlayStackKey,
               children: [
                 InfiniteScrollListener(
                   isLoadingMore:
@@ -451,106 +453,128 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     child: CustomScrollView(
                       controller: _scrollController,
                       slivers: [
-                // ヘッダー画像 + アバター + 名前
-                ProfileHeader(
-                  user: user,
-                  isOwnProfile: _isOwnProfile,
-                  fallbackHeaderImage: _headerImages[_headerImageIndex],
-                  primaryAccent: _primaryAccent,
-                  secondaryAccent: _secondaryAccent,
-                  onBack: _isOwnProfile ? null : () => context.pop(),
-                  onOpenSettings:
-                      _isOwnProfile ? () => context.push('/settings') : null,
-                  adminAction: adminAction,
-                ),
+                        // ヘッダー画像 + アバター + 名前
+                        ProfileHeader(
+                          user: user,
+                          isOwnProfile: _isOwnProfile,
+                          fallbackHeaderImage: _headerImages[_headerImageIndex],
+                          primaryAccent: _primaryAccent,
+                          secondaryAccent: _secondaryAccent,
+                          onBack: _isOwnProfile ? null : () => context.pop(),
+                          onOpenSettings: _isOwnProfile
+                              ? () {
+                                  // チュートリアル Step 1: 設定画面へ遷移して次のステップへ
+                                  final step = ref.read(tutorialPhase1Provider);
+                                  if (step ==
+                                      TutorialPhase1Step.profileSettings) {
+                                    ref
+                                        .read(tutorialPhase1Provider.notifier)
+                                        .advance();
+                                  }
+                                  context.push('/settings');
+                                }
+                              : null,
+                          settingsIconKey: _isOwnProfile
+                              ? _settingsIconKey
+                              : null,
+                          adminAction: adminAction,
+                        ),
 
-                // 統計情報（パステルカラー背景）
-                ProfileStats(
-                  totalPosts: user.totalPosts,
-                  totalPraises: user.totalPraises,
-                  virtue: user.virtue,
-                  primaryAccent: _primaryAccent,
-                  secondaryAccent: _secondaryAccent,
-                  isVirtueLoading: _isVirtueLoading,
-                  onVirtueTap: _isOwnProfile
-                      ? () {
-                          _openVirtueDialog();
-                        }
-                      : null,
-                ),
+                        // 統計情報（パステルカラー背景）
+                        ProfileStats(
+                          totalPosts: user.totalPosts,
+                          totalPraises: user.totalPraises,
+                          virtue: user.virtue,
+                          primaryAccent: _primaryAccent,
+                          secondaryAccent: _secondaryAccent,
+                          isVirtueLoading: _isVirtueLoading,
+                          onVirtueTap: _isOwnProfile
+                              ? () {
+                                  _openVirtueDialog();
+                                }
+                              : null,
+                        ),
 
-                // フォローボタン（ヘッダーカラー）+ メッセージボタン
-                if (!_isOwnProfile)
-                  ProfileActions(
-                    isFollowing: _isFollowing,
-                    isFollowLoading: _isFollowLoading,
-                    primaryAccent: _primaryAccent,
-                    secondaryAccent: _secondaryAccent,
-                    onToggleFollow: _toggleFollow,
-                    onMessage: () {},
-                  ),
+                        // フォローボタン（ヘッダーカラー）+ メッセージボタン
+                        if (!_isOwnProfile)
+                          ProfileActions(
+                            isFollowing: _isFollowing,
+                            isFollowLoading: _isFollowLoading,
+                            primaryAccent: _primaryAccent,
+                            secondaryAccent: _secondaryAccent,
+                            onToggleFollow: _toggleFollow,
+                            onMessage: () {},
+                          ),
 
-                // 管理者のみ: 累計被通報回数
-                ProfileAdminReportBadge(
-                  isAdmin: isAdmin,
-                  reportCount: user.reportCount,
-                ),
+                        // 管理者のみ: 累計被通報回数
+                        ProfileAdminReportBadge(
+                          isAdmin: isAdmin,
+                          reportCount: user.reportCount,
+                        ),
 
-                // BAN状態の警告
-                ProfileBanWarning(
-                  showWarning: showBanWarning,
-                  showContactButton: _isOwnProfile,
-                  onContact: () => context.push('/ban-appeal'),
-                ),
+                        // BAN状態の警告
+                        ProfileBanWarning(
+                          showWarning: showBanWarning,
+                          showContactButton: _isOwnProfile,
+                          onContact: () => context.push('/ban-appeal'),
+                        ),
 
-                const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                        const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
-                // フォロー中（自分のプロフィールのみ）
-                // 実際のfollowingリストの長さを使用（followingCountとの不整合を防ぐ）
-                if (_isOwnProfile && user.following.isNotEmpty)
-                  ProfileMenu(followingIds: user.following),
+                        // フォロー中（自分のプロフィールのみ）
+                        // 実際のfollowingリストの長さを使用（followingCountとの不整合を防ぐ）
+                        if (_isOwnProfile && user.following.isNotEmpty)
+                          ProfileMenu(followingIds: user.following),
 
-                // 過去の投稿
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Text(
-                      '${user.displayName}さんの投稿',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
+                        // 過去の投稿
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: Text(
+                              '${user.displayName}さんの投稿',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
 
-                const SliverToBoxAdapter(child: SizedBox(height: 12)),
+                        const SliverToBoxAdapter(child: SizedBox(height: 12)),
 
-                // 投稿一覧
-                ProfilePostsList(
-                  key: _userPostsListKey,
-                  userId: user.uid,
-                  isMyProfile: _isOwnProfile,
-                  viewerIsAI:
-                      ref.watch(currentUserProvider).valueOrNull?.isAI ?? false,
-                  accentColor: _primaryAccent,
-                  onLoadComplete: _handlePostsListUpdated,
-                ),
+                        // 投稿一覧
+                        ProfilePostsList(
+                          key: _userPostsListKey,
+                          userId: user.uid,
+                          isMyProfile: _isOwnProfile,
+                          viewerIsAI:
+                              ref
+                                  .watch(currentUserProvider)
+                                  .valueOrNull
+                                  ?.isAI ??
+                              false,
+                          accentColor: _primaryAccent,
+                          onLoadComplete: _handlePostsListUpdated,
+                        ),
 
-                // LoadMoreFooter（ショートリスト用手動フォールバック）
-                SliverToBoxAdapter(
-                  child: LoadMoreFooter(
-                    hasMore: _userPostsListKey.currentState?.hasMore ?? false,
-                    isLoadingMore:
-                        _userPostsListKey.currentState?.isLoadingMore ?? false,
-                    isInitialLoadComplete: true,
-                    canLoadMore:
-                        _userPostsListKey.currentState?.canLoadMore ?? false,
-                    isScrollable: _isScrollable,
-                    onLoadMore: () {
-                      _userPostsListKey.currentState?.loadMoreCurrentTab();
-                    },
-                  ),
-                ),
+                        // LoadMoreFooter（ショートリスト用手動フォールバック）
+                        SliverToBoxAdapter(
+                          child: LoadMoreFooter(
+                            hasMore:
+                                _userPostsListKey.currentState?.hasMore ??
+                                false,
+                            isLoadingMore:
+                                _userPostsListKey.currentState?.isLoadingMore ??
+                                false,
+                            isInitialLoadComplete: true,
+                            canLoadMore:
+                                _userPostsListKey.currentState?.canLoadMore ??
+                                false,
+                            isScrollable: _isScrollable,
+                            onLoadMore: () {
+                              _userPostsListKey.currentState
+                                  ?.loadMoreCurrentTab();
+                            },
+                          ),
+                        ),
 
                         const SliverToBoxAdapter(child: SizedBox(height: 100)),
                       ],
@@ -581,6 +605,33 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       ),
                     ),
                   ),
+                ),
+                // チュートリアル Step 1: 設定アイコンをスポットライト
+                Builder(
+                  builder: (context) {
+                    final step = ref.watch(tutorialPhase1Provider);
+                    if (step != TutorialPhase1Step.profileSettings) {
+                      return const SizedBox.shrink();
+                    }
+                    // Rect 取得を非同期で行い、stateに反映
+                    if (_settingsIconRect == null) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) async {
+                        if (!mounted) return;
+                        final rect = await resolveRectWithRetry(
+                          _settingsIconKey,
+                          ancestorKey: _tutorialOverlayStackKey,
+                        );
+                        if (mounted && rect != null) {
+                          setState(() => _settingsIconRect = rect);
+                        }
+                      });
+                    }
+                    return TutorialOverlay(
+                      message: AppMessages.tutorial.tapSettings,
+                      spotlightRect: _settingsIconRect,
+                      circularSpotlight: true,
+                    );
+                  },
                 ),
               ],
             ),
@@ -776,4 +827,3 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 }
-

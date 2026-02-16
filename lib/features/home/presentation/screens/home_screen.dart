@@ -148,7 +148,9 @@ class _TimelineHeaderDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   double get maxExtent =>
-      _logoSectionHeight + (isSubscriber ? 0 : _adSectionHeight) + _tabSectionHeight;
+      _logoSectionHeight +
+      (isSubscriber ? 0 : _adSectionHeight) +
+      _tabSectionHeight;
 
   @override
   double get minExtent => isSubscriber ? 0 : _adSectionHeight;
@@ -174,7 +176,9 @@ class _TimelineHeaderDelegate extends SliverPersistentHeaderDelegate {
               _HeaderSection(
                 height: _logoSectionHeight,
                 factor: logoFactor,
-                child: _LogoAndNotificationRow(currentUserAsync: currentUserAsync),
+                child: _LogoAndNotificationRow(
+                  currentUserAsync: currentUserAsync,
+                ),
               ),
               if (!isSubscriber)
                 const _HeaderSection(
@@ -267,14 +271,8 @@ class _LogoAndNotificationRow extends StatelessWidget {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            Image.asset(
-                  'assets/icons/logo.png',
-                  width: 72,
-                  height: 72,
-                )
-                .animate(
-                  onPlay: (controller) => controller.repeat(),
-                )
+            Image.asset('assets/icons/logo.png', width: 72, height: 72)
+                .animate(onPlay: (controller) => controller.repeat())
                 .shimmer(
                   duration: 3000.ms,
                   color: AppColors.primary.withValues(alpha: 0.1),
@@ -374,9 +372,7 @@ class _TimelineTab extends StatelessWidget {
           }
 
           final userData = userSnapshot.data?.data() as Map<String, dynamic>?;
-          final followingIds = List<String>.from(
-            userData?['following'] ?? [],
-          );
+          final followingIds = List<String>.from(userData?['following'] ?? []);
 
           if (followingIds.isEmpty) {
             return _EmptyFollowingState();
@@ -625,8 +621,7 @@ class _PostsListState extends ConsumerState<_PostsList> {
           _fabScrollAccumulator = 0;
         }
         _fabScrollAccumulator += delta.abs();
-        if (_showScrollToTopFab &&
-            _fabScrollAccumulator >= _fabHideThreshold) {
+        if (_showScrollToTopFab && _fabScrollAccumulator >= _fabHideThreshold) {
           _fabScrollAccumulator = 0;
           setState(() => _showScrollToTopFab = false);
         }
@@ -666,10 +661,7 @@ class _PostsListState extends ConsumerState<_PostsList> {
           children: [
             const Text('😢', style: TextStyle(fontSize: 48)),
             const SizedBox(height: 16),
-            Text(
-              AppMessages.error.general,
-              textAlign: TextAlign.center,
-            ),
+            Text(AppMessages.error.general, textAlign: TextAlign.center),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _loadPosts,

@@ -24,6 +24,8 @@ import '../../../../shared/services/inquiry_service.dart';
 import '../../../../shared/services/nsfw_detector_service.dart';
 import '../../../../shared/services/color_extraction_service.dart';
 import '../../../../shared/services/image_moderation_service.dart';
+import '../../../../shared/providers/tutorial_phase1_provider.dart';
+import '../../../../shared/widgets/tutorial_overlay.dart';
 import 'name_edit_screen.dart';
 
 /// 公開範囲モード
@@ -58,6 +60,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  final ScrollController _settingsScrollController = ScrollController();
   final _bioController = TextEditingController();
   int _selectedAvatarIndex = 0;
   AvatarParts? _avatarParts;
@@ -69,6 +72,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _hasChanges = false;
   bool _isUploadingHeader = false;
   bool _isUploadingProfileImage = false;
+  bool _isCompletingPhase1Tutorial = false;
+  bool _didAutoScrollToPrivacy = false;
+  bool _didAutoAdvanceFromSettingsScroll = false;
+  int _privacyCardResolveRetryCount = 0;
+  TutorialPhase1Step? _lastTutorialStep;
+  PrivacyMode _tutorialSelectedMode = PrivacyMode.ai;
+  final GlobalKey _tutorialOverlayStackKey = GlobalKey();
+  final GlobalKey _privacyCardKey = GlobalKey();
+  Rect? _privacyCardRect;
 
   @override
   void initState() {
@@ -86,6 +98,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       _profileVisualMode = _parseProfileVisualMode(user.profileVisualMode);
       _profileImageUrl = user.profileImageUrl;
       _profileImageFile = null;
+      _tutorialSelectedMode = PrivacyMode.values.firstWhere(
+        (m) => m.value == user.postMode,
+        orElse: () => PrivacyMode.ai,
+      );
     }
   }
 
@@ -102,6 +118,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   void dispose() {
+    _settingsScrollController.dispose();
     _bioController.dispose();
     super.dispose();
   }
@@ -182,12 +199,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ref.invalidate(currentUserProvider);
 
       if (mounted) {
-        SnackBarHelper.showSuccess(context, AppMessages.profile.headerChangeSuccess);
+        SnackBarHelper.showSuccess(
+          context,
+          AppMessages.profile.headerChangeSuccess,
+        );
       }
     } catch (e) {
       debugPrint('Error uploading header image: $e');
       if (mounted) {
-        SnackBarHelper.showError(context, AppMessages.profile.headerChangeFailed);
+        SnackBarHelper.showError(
+          context,
+          AppMessages.profile.headerChangeFailed,
+        );
       }
     } finally {
       if (mounted) {
@@ -241,12 +264,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ref.invalidate(currentUserProvider);
 
       if (mounted) {
-        SnackBarHelper.showSuccess(context, AppMessages.profile.headerResetSuccess);
+        SnackBarHelper.showSuccess(
+          context,
+          AppMessages.profile.headerResetSuccess,
+        );
       }
     } catch (e) {
       debugPrint('Error resetting header image: $e');
       if (mounted) {
-        SnackBarHelper.showError(context, AppMessages.profile.headerResetFailed);
+        SnackBarHelper.showError(
+          context,
+          AppMessages.profile.headerResetFailed,
+        );
       }
     } finally {
       if (mounted) {
@@ -309,7 +338,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ref.invalidate(currentUserProvider);
 
       if (mounted) {
-        SnackBarHelper.showSuccess(context, AppMessages.profile.headerChangeSuccess);
+        SnackBarHelper.showSuccess(
+          context,
+          AppMessages.profile.headerChangeSuccess,
+        );
       }
     } catch (e) {
       debugPrint('Error selecting default header: $e');
@@ -406,7 +438,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               )
                             : Text(
                                 unlockActionLabel ??
-                                    AppMessages.profile.profileImageUnlockAction,
+                                    AppMessages
+                                        .profile
+                                        .profileImageUnlockAction,
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
@@ -651,17 +685,122 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  Future<void> _completePhase1Tutorial() async {
+    if (_isCompletingPhase1Tutorial) return;
+    setState(() => _isCompletingPhase1Tutorial = true);
+    try {
+      await ref
+          .read(tutorialPhase1Provider.notifier)
+          .complete(_tutorialSelectedMode.value);
+      if (!mounted) return;
+      context.go('/home');
+    } catch (_) {
+      if (mounted) {
+        SnackBarHelper.showError(context, AppMessages.error.general);
+        setState(() => _isCompletingPhase1Tutorial = false);
+      }
+    }
+  }
+
+  void _maybeAutoScrollToPrivacyCard() {
+    if (_didAutoScrollToPrivacy) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || _didAutoScrollToPrivacy) return;
+      final targetContext = _privacyCardKey.currentContext;
+      if (targetContext == null) {
+        if (_privacyCardResolveRetryCount < 12) {
+          _privacyCardResolveRetryCount++;
+          await Future.delayed(const Duration(milliseconds: 120));
+          if (mounted) setState(() {});
+        }
+        return;
+      }
+      _didAutoScrollToPrivacy = true;
+      await Scrollable.ensureVisible(
+        targetContext,
+        duration: const Duration(milliseconds: 380),
+        curve: Curves.easeOutCubic,
+        alignment: 0.08,
+      );
+      final rect = await resolveRectWithRetry(
+        _privacyCardKey,
+        ancestorKey: _tutorialOverlayStackKey,
+      );
+      if (mounted && rect != null) {
+        setState(() => _privacyCardRect = rect);
+      }
+      if (mounted) {
+        setState(() {});
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final tutorialStep = ref.watch(tutorialPhase1Provider);
+    if (_lastTutorialStep != tutorialStep) {
+      _lastTutorialStep = tutorialStep;
+      if (tutorialStep == TutorialPhase1Step.settingsScroll) {
+        _didAutoScrollToPrivacy = false;
+        _didAutoAdvanceFromSettingsScroll = false;
+        _privacyCardResolveRetryCount = 0;
+        _privacyCardRect = null;
+      }
+    }
+    final isPhase1Tutorial =
+        tutorialStep != TutorialPhase1Step.inactive &&
+        tutorialStep != TutorialPhase1Step.homeWelcome &&
+        tutorialStep != TutorialPhase1Step.profileSettings;
+    if (isPhase1Tutorial) {
+      _maybeAutoScrollToPrivacyCard();
+    }
+    if (tutorialStep == TutorialPhase1Step.settingsScroll &&
+        _didAutoScrollToPrivacy &&
+        !_didAutoAdvanceFromSettingsScroll) {
+      _didAutoAdvanceFromSettingsScroll = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await Future.delayed(const Duration(milliseconds: 1500));
+        if (!mounted) return;
+        if (ref.read(tutorialPhase1Provider) == TutorialPhase1Step.settingsScroll) {
+          await ref.read(tutorialPhase1Provider.notifier).advance();
+        }
+      });
+    }
+
+    // チュートリアルステップに合うメッセージ
+    String? tutorialMessage;
+    switch (tutorialStep) {
+      case TutorialPhase1Step.settingsScroll:
+        tutorialMessage = AppMessages.tutorial.scrollToPrivacy;
+        break;
+      case TutorialPhase1Step.explainAI:
+        tutorialMessage = AppMessages.tutorial.explainAI;
+        break;
+      case TutorialPhase1Step.explainMix:
+        tutorialMessage = AppMessages.tutorial.explainMix;
+        break;
+      case TutorialPhase1Step.explainHuman:
+        tutorialMessage = AppMessages.tutorial.explainHuman;
+        break;
+      case TutorialPhase1Step.finished:
+        tutorialMessage = AppMessages.tutorial.complete;
+        break;
+      default:
+        break;
+    }
+
+    final page = Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          onPressed: () => context.pop(),
-          icon: const Icon(Icons.arrow_back_rounded),
-        ),
+        automaticallyImplyLeading: !isPhase1Tutorial,
+        leading: isPhase1Tutorial
+            ? null
+            : IconButton(
+                onPressed: () => context.pop(),
+                icon: const Icon(Icons.arrow_back_rounded),
+              ),
         title: Text(AppMessages.profile.settingsTitle),
         actions: [
-          if (_hasChanges)
+          if (_hasChanges && !isPhase1Tutorial)
             TextButton(
               onPressed: _isLoading ? null : _saveChanges,
               child: _isLoading
@@ -679,830 +818,943 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ),
       body: Container(
         decoration: const BoxDecoration(gradient: AppColors.warmGradient),
-        child: ListView(
-          padding: const EdgeInsets.all(16),
+        child: Stack(
+          key: _tutorialOverlayStackKey,
           children: [
-            // プロフィール編集
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      AppMessages.profile.profileEditTitle,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 20),
-
-                    Text(
-                      AppMessages.profile.profileVisualLabel,
-                      style: Theme.of(context).textTheme.labelLarge,
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
+            ListView(
+              controller: _settingsScrollController,
+              padding: const EdgeInsets.all(16),
+              children: [
+                // プロフィール編集
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: _ProfileVisualModeButton(
-                            label: AppMessages.auth.registerIconTab,
-                            icon: Icons.emoji_emotions_outlined,
-                            isSelected:
-                                _profileVisualMode == ProfileVisualMode.icon,
-                            onTap: () => _onProfileVisualModeSelected(
-                              ProfileVisualMode.icon,
-                            ),
-                          ),
+                        Text(
+                          AppMessages.profile.profileEditTitle,
+                          style: Theme.of(context).textTheme.titleMedium,
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: _ProfileVisualModeButton(
-                            label: AppMessages.auth.registerAvatarTab,
-                            icon: Icons.face_retouching_natural_outlined,
-                            isSelected:
-                                _profileVisualMode == ProfileVisualMode.avatar,
-                            onTap: () => _onProfileVisualModeSelected(
-                              ProfileVisualMode.avatar,
-                            ),
-                          ),
+                        const SizedBox(height: 20),
+
+                        Text(
+                          AppMessages.profile.profileVisualLabel,
+                          style: Theme.of(context).textTheme.labelLarge,
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: _ProfileVisualModeButton(
-                            label: AppMessages.profile.profileImageModeLabel,
-                            icon: Icons.image_outlined,
-                            isSelected:
-                                _profileVisualMode == ProfileVisualMode.image,
-                            isLocked:
-                                !(ref.watch(currentUserProvider).valueOrNull
-                                        ?.isSubscriber ??
-                                    false),
-                            onTap: () => _onProfileVisualModeSelected(
-                              ProfileVisualMode.image,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    if (_profileVisualMode == ProfileVisualMode.icon)
-                      Center(
-                        child: AvatarSelector(
-                          selectedIndex: _selectedAvatarIndex,
-                          onSelected: (index) {
-                            setState(() {
-                              _selectedAvatarIndex = index;
-                              _hasChanges = true;
-                            });
-                          },
-                          size: 96,
-                        ),
-                      )
-                    else if (_profileVisualMode == ProfileVisualMode.avatar)
-                      Center(
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(20),
-                          onTap: () async {
-                            final result = await context.push<AvatarParts>(
-                              '/avatar-edit',
-                              extra: _avatarParts ?? AvatarAssets.defaultParts(),
-                            );
-                            if (!mounted || result == null) return;
-                            setState(() {
-                              _avatarParts = result;
-                              _avatarPartsDirty = true;
-                              _hasChanges = true;
-                            });
-                          },
-                          child: Column(
-                            children: [
-                              Stack(
-                                children: [
-                                  AvatarPartsWidget(
-                                    parts:
-                                        _avatarParts ??
-                                        AvatarAssets.defaultParts(),
-                                    size: 96,
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  Positioned(
-                                    right: 0,
-                                    bottom: 0,
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: const BoxDecoration(
-                                        color: AppColors.primary,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Icon(
-                                        Icons.edit,
-                                        size: 14,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                AppMessages.profile.tapToEditAvatar,
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(color: AppColors.textSecondary),
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
-                    else
-                      Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
+                        const SizedBox(height: 8),
+                        Row(
                           children: [
-                            GestureDetector(
-                              onTap: _pickProfileImage,
-                              child: Container(
-                                width: 120,
-                                height: 120,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color: AppColors.primary.withValues(alpha: 0.4),
-                                  ),
-                                  color: AppColors.primaryLight.withValues(
-                                    alpha: 0.2,
-                                  ),
-                                ),
-                                clipBehavior: Clip.antiAlias,
-                                child: _profileImageFile != null
-                                    ? Image.file(
-                                        _profileImageFile!,
-                                        fit: BoxFit.cover,
-                                      )
-                                    : (_profileImageUrl != null &&
-                                              _profileImageUrl!.isNotEmpty)
-                                    ? Image.network(
-                                        _profileImageUrl!,
-                                        fit: BoxFit.cover,
-                                        errorBuilder:
-                                            (context, error, stackTrace) =>
-                                                const Icon(
-                                          Icons.person,
-                                          color: AppColors.primary,
-                                          size: 42,
-                                        ),
-                                      )
-                                    : const Icon(
-                                        Icons.add_photo_alternate_outlined,
-                                        color: AppColors.primary,
-                                        size: 42,
-                                      ),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              AppMessages.profile.tapToChangeImage,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(color: AppColors.textSecondary),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                    const SizedBox(height: 24),
-
-                    // ヘッダー画像
-                    Text(
-                      AppMessages.profile.headerImageLabel,
-                      style: Theme.of(context).textTheme.labelLarge,
-                    ),
-                    const SizedBox(height: 8),
-                    Consumer(
-                      builder: (context, ref, _) {
-                        final user = ref.watch(currentUserProvider).valueOrNull;
-                        final hasCustomHeader = user?.headerImageUrl != null;
-                        final isSubscriber = user?.isSubscriber ?? false;
-
-                        return Column(
-                          children: [
-                            // プレビュー（カスタム画像の場合は×ボタン付き）
-                            Stack(
-                              children: [
-                                Container(
-                                  height: 100,
-                                  width: double.infinity,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .outline
-                                          .withValues(alpha: 0.3),
-                                    ),
-                                  ),
-                                  clipBehavior: Clip.antiAlias,
-                                  child: hasCustomHeader
-                                      ? Image.network(
-                                          user!.headerImageUrl!,
-                                          fit: BoxFit.cover,
-                                          errorBuilder:
-                                              (context, error, stackTrace) =>
-                                              Container(
-                                                color: AppColors.primaryLight,
-                                                child: const Center(
-                                                  child: Icon(
-                                                    Icons.image,
-                                                    size: 40,
-                                                    color: AppColors.primary,
-                                                  ),
-                                                ),
-                                              ),
-                                        )
-                                      : Container(
-                                          color: AppColors.primaryLight
-                                              .withValues(alpha: 0.3),
-                                          child: Center(
-                                            child: Text(
-                                              AppMessages.profile.defaultHeaderLabel,
-                                              style: TextStyle(
-                                                color: AppColors.textSecondary,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                ),
-                                // カスタム画像の場合は×ボタン表示
-                                if (hasCustomHeader)
-                                  Positioned(
-                                    top: 4,
-                                    right: 4,
-                                    child: GestureDetector(
-                                      onTap: _isUploadingHeader
-                                          ? null
-                                          : _resetHeaderImage,
-                                      child: Container(
-                                        padding: const EdgeInsets.all(4),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black.withValues(
-                                            alpha: 0.6,
-                                          ),
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: const Icon(
-                                          Icons.close,
-                                          color: Colors.white,
-                                          size: 16,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            // 変更ボタンのみ
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton.icon(
-                                onPressed: _isUploadingHeader
-                                    ? null
-                                    : (isSubscriber
-                                          ? _changeHeaderImage
-                                          : () =>
-                                                _showProfileImageSubscriptionDialog(
-                                                  unlockActionLabel: AppMessages
-                                                      .profile
-                                                      .profileHeaderUnlockAction,
-                                                )),
-                                icon: _isUploadingHeader
-                                    ? const SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : Icon(
-                                        isSubscriber
-                                            ? Icons.image
-                                            : Icons.lock_outline,
-                                      ),
-                                label: Text(
-                                  _isUploadingHeader
-                                      ? AppMessages.profile.processing
-                                      : AppMessages.profile.changeImage,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            // デフォルト画像から選択
-                            Text(
-                              AppMessages.profile.selectFromDefault,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(color: AppColors.textSecondary),
-                            ),
-                            const SizedBox(height: 8),
-                            SizedBox(
-                              height: 60,
-                              child: ListView.builder(
-                                scrollDirection: Axis.horizontal,
-                                itemCount: _defaultHeaderImages.length,
-                                itemBuilder: (context, index) {
-                                  final isSelected =
-                                      !hasCustomHeader &&
-                                      (user?.headerImageIndex ?? 0) == index;
-                                  return Padding(
-                                    padding: EdgeInsets.only(
-                                      right:
-                                          index <
-                                              _defaultHeaderImages.length - 1
-                                          ? 8
-                                          : 0,
-                                    ),
-                                    child: GestureDetector(
-                                      onTap: () => _selectDefaultHeader(index),
-                                      child: Container(
-                                        width: 100,
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                          border: isSelected
-                                              ? Border.all(
-                                                  color: AppColors.primary,
-                                                  width: 2,
-                                                )
-                                              : null,
-                                        ),
-                                        clipBehavior: Clip.antiAlias,
-                                        child: Stack(
-                                          fit: StackFit.expand,
-                                          children: [
-                                            Image.asset(
-                                              _defaultHeaderImages[index],
-                                              fit: BoxFit.cover,
-                                            ),
-                                            if (isSelected)
-                                              Container(
-                                                color: AppColors.primary
-                                                    .withValues(alpha: 0.3),
-                                                child: const Icon(
-                                                  Icons.check_circle,
-                                                  color: Colors.white,
-                                                  size: 24,
-                                                ),
-                                              ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // 表示名（名前パーツ方式）
-                    Text(
-                      AppMessages.profile.nameLabel,
-                      style: Theme.of(context).textTheme.labelLarge,
-                    ),
-                    const SizedBox(height: 8),
-                    Consumer(
-                      builder: (context, ref, _) {
-                        final currentUser = ref
-                            .watch(currentUserProvider)
-                            .valueOrNull;
-                        return InkWell(
-                          onTap: () async {
-                            final result = await Navigator.of(context)
-                                .push<bool>(
-                                  MaterialPageRoute(
-                                    builder: (_) => const NameEditScreen(),
-                                  ),
-                                );
-                            if (result == true) {
-                              // 名前が変更された場合、ユーザー情報を再取得
-                              ref.invalidate(currentUserProvider);
-                            }
-                          },
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.outline.withValues(alpha: 0.3),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        currentUser?.displayName ??
-                                            AppMessages.profile.tapToSetName,
-                                        style: const TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        AppMessages.profile.tapToChangeName,
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey[600],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Icon(
-                                  Icons.chevron_right,
-                                  color: Colors.grey[600],
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // 自己紹介
-                    Text(
-                      AppMessages.profile.bioLabel,
-                      style: Theme.of(context).textTheme.labelLarge,
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _bioController,
-                      maxLength: AppConstants.maxBioLength,
-                      maxLines: 3,
-                      decoration: InputDecoration(
-                        hintText: AppMessages.profile.bioHint,
-                      ),
-                      onChanged: (_) => setState(() => _hasChanges = true),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            
-            // ?????
-            Card(
-              child: ListTile(
-                leading: const Icon(
-                  Icons.workspace_premium,
-                  color: AppColors.accent,
-                ),
-                title: Text(AppMessages.profile.premiumTitle),
-                subtitle: Text(AppMessages.profile.premiumSubtitle),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => context.push('/premium'),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-// 通知設定
-            Card(
-              child: ExpansionTile(
-                leading: const Icon(Icons.notifications_outlined),
-                title: Text(AppMessages.profile.notificationSettingsTitle),
-                subtitle: Consumer(
-                  builder: (context, ref, _) {
-                    final user = ref.watch(currentUserProvider).valueOrNull;
-                    final enabledCount =
-                        (user?.notificationSettings.values
-                            .where((e) => e)
-                            .length ??
-                        0);
-                    return Text(
-                      enabledCount == 0
-                          ? AppMessages.profile.allOff
-                          : AppMessages.profile.customizing,
-                    );
-                  },
-                ),
-                children: [
-                  Consumer(
-                    builder: (context, ref, _) {
-                      final user = ref.watch(currentUserProvider).valueOrNull;
-                      if (user == null) return const SizedBox.shrink();
-
-                      return Column(
-                        children: [
-                          SwitchListTile(
-                            title: Text(AppMessages.profile.commentNotificationTitle),
-                            subtitle: Text(AppMessages.profile.commentNotificationSubtitle),
-                            secondary: const Icon(Icons.chat_bubble_outline),
-                            value:
-                                user.notificationSettings['comments'] ?? true,
-                            onChanged: (value) async {
-                              final authService = ref.read(authServiceProvider);
-                              final newSettings = Map<String, bool>.from(
-                                user.notificationSettings,
-                              );
-                              newSettings['comments'] = value;
-
-                              await authService.updateUserProfile(
-                                uid: user.uid,
-                                notificationSettings: newSettings,
-                              );
-                            },
-                          ),
-                          const Divider(height: 1),
-                          SwitchListTile(
-                            title: Text(AppMessages.profile.reactionNotificationTitle),
-                            subtitle: Text(AppMessages.profile.reactionNotificationSubtitle),
-                            secondary: const Icon(Icons.favorite_border),
-                            value:
-                                user.notificationSettings['reactions'] ?? true,
-                            onChanged: (value) async {
-                              final authService = ref.read(authServiceProvider);
-                              final newSettings = Map<String, bool>.from(
-                                user.notificationSettings,
-                              );
-                              newSettings['reactions'] = value;
-
-                              await authService.updateUserProfile(
-                                uid: user.uid,
-                                notificationSettings: newSettings,
-                              );
-                            },
-                          ),
-                          const SizedBox(height: 8),
-                        ],
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // 公開範囲設定
-            Card(
-              child: ExpansionTile(
-                leading: const Icon(Icons.visibility_outlined),
-                title: Text(AppMessages.profile.privacyTitle),
-                subtitle: Consumer(
-                  builder: (context, ref, _) {
-                    final user = ref.watch(currentUserProvider).valueOrNull;
-                    final currentMode = PrivacyMode.values.firstWhere(
-                      (m) => m.value == user?.postMode,
-                      orElse: () => PrivacyMode.ai,
-                    );
-                    return Text(
-                      AppMessages.profile.privacyCurrent(currentMode.label),
-                    );
-                  },
-                ),
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryLight.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.info_outline,
-                            size: 18,
-                            color: AppColors.primary,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              AppMessages.profile.privacyInfo,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    child: Consumer(
-                      builder: (context, ref, _) {
-                        final user = ref.watch(currentUserProvider).valueOrNull;
-                        if (user == null) return const SizedBox.shrink();
-
-                        return Column(
-                          children: PrivacyMode.values.map((mode) {
-                            final isSelected = user.postMode == mode.value;
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: _PrivacyOption(
-                                mode: mode,
-                                isSelected: isSelected,
-                                onTap: () async {
-                                  if (isSelected) return;
-
-                                  // 確認ダイアログ
-                                  final confirmed =
-                                      await DialogHelper.showConfirmDialog(
-                                        context: context,
-                                        title: AppMessages.profile
-                                            .privacyChangeTitle(mode.label),
-                                        message: AppMessages.profile
-                                            .privacyChangeMessage(mode.label),
-                                        confirmText:
-                                            AppMessages.profile.privacyChangeConfirm,
-                                      );
-
-                                  if (confirmed == true) {
-                                    final authService = ref.read(
-                                      authServiceProvider,
-                                    );
-                                    await authService.updateUserProfile(
-                                      uid: user.uid,
-                                      postMode: mode.value,
-                                    );
-                                    if (context.mounted) {
-                                      SnackBarHelper.showSuccess(
-                                        context,
-                                        AppMessages.profile.privacyChanged(mode.label),
-                                      );
-                                    }
-                                  }
-                                },
-                              ),
-                            );
-                          }).toList(),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // サポート
-            Card(
-              child: Column(
-                children: [
-                  ListTile(
-                    leading: const Icon(
-                      Icons.mail_outline,
-                      color: AppColors.primary,
-                    ),
-                    title: Text(AppMessages.profile.inquiryTitle),
-                    subtitle: Text(AppMessages.profile.inquirySubtitle),
-                    trailing: StreamBuilder<int>(
-                      stream: InquiryService().getUnreadCount(),
-                      builder: (context, snapshot) {
-                        final count = snapshot.data ?? 0;
-                        if (count == 0) {
-                          return const Icon(Icons.chevron_right);
-                        }
-                        return Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.error,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                '$count',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
+                            Expanded(
+                              child: _ProfileVisualModeButton(
+                                label: AppMessages.auth.registerIconTab,
+                                icon: Icons.emoji_emotions_outlined,
+                                isSelected:
+                                    _profileVisualMode ==
+                                    ProfileVisualMode.icon,
+                                onTap: () => _onProfileVisualModeSelected(
+                                  ProfileVisualMode.icon,
                                 ),
                               ),
                             ),
                             const SizedBox(width: 8),
-                            const Icon(Icons.chevron_right),
+                            Expanded(
+                              child: _ProfileVisualModeButton(
+                                label: AppMessages.auth.registerAvatarTab,
+                                icon: Icons.face_retouching_natural_outlined,
+                                isSelected:
+                                    _profileVisualMode ==
+                                    ProfileVisualMode.avatar,
+                                onTap: () => _onProfileVisualModeSelected(
+                                  ProfileVisualMode.avatar,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _ProfileVisualModeButton(
+                                label:
+                                    AppMessages.profile.profileImageModeLabel,
+                                icon: Icons.image_outlined,
+                                isSelected:
+                                    _profileVisualMode ==
+                                    ProfileVisualMode.image,
+                                isLocked:
+                                    !(ref
+                                            .watch(currentUserProvider)
+                                            .valueOrNull
+                                            ?.isSubscriber ??
+                                        false),
+                                onTap: () => _onProfileVisualModeSelected(
+                                  ProfileVisualMode.image,
+                                ),
+                              ),
+                            ),
                           ],
+                        ),
+                        const SizedBox(height: 16),
+                        if (_profileVisualMode == ProfileVisualMode.icon)
+                          Center(
+                            child: AvatarSelector(
+                              selectedIndex: _selectedAvatarIndex,
+                              onSelected: (index) {
+                                setState(() {
+                                  _selectedAvatarIndex = index;
+                                  _hasChanges = true;
+                                });
+                              },
+                              size: 96,
+                            ),
+                          )
+                        else if (_profileVisualMode == ProfileVisualMode.avatar)
+                          Center(
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(20),
+                              onTap: () async {
+                                final result = await context.push<AvatarParts>(
+                                  '/avatar-edit',
+                                  extra:
+                                      _avatarParts ??
+                                      AvatarAssets.defaultParts(),
+                                );
+                                if (!mounted || result == null) return;
+                                setState(() {
+                                  _avatarParts = result;
+                                  _avatarPartsDirty = true;
+                                  _hasChanges = true;
+                                });
+                              },
+                              child: Column(
+                                children: [
+                                  Stack(
+                                    children: [
+                                      AvatarPartsWidget(
+                                        parts:
+                                            _avatarParts ??
+                                            AvatarAssets.defaultParts(),
+                                        size: 96,
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      Positioned(
+                                        right: 0,
+                                        bottom: 0,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: const BoxDecoration(
+                                            color: AppColors.primary,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(
+                                            Icons.edit,
+                                            size: 14,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    AppMessages.profile.tapToEditAvatar,
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: AppColors.textSecondary,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        else
+                          Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                GestureDetector(
+                                  onTap: _pickProfileImage,
+                                  child: Container(
+                                    width: 120,
+                                    height: 120,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                        color: AppColors.primary.withValues(
+                                          alpha: 0.4,
+                                        ),
+                                      ),
+                                      color: AppColors.primaryLight.withValues(
+                                        alpha: 0.2,
+                                      ),
+                                    ),
+                                    clipBehavior: Clip.antiAlias,
+                                    child: _profileImageFile != null
+                                        ? Image.file(
+                                            _profileImageFile!,
+                                            fit: BoxFit.cover,
+                                          )
+                                        : (_profileImageUrl != null &&
+                                              _profileImageUrl!.isNotEmpty)
+                                        ? Image.network(
+                                            _profileImageUrl!,
+                                            fit: BoxFit.cover,
+                                            errorBuilder:
+                                                (context, error, stackTrace) =>
+                                                    const Icon(
+                                                      Icons.person,
+                                                      color: AppColors.primary,
+                                                      size: 42,
+                                                    ),
+                                          )
+                                        : const Icon(
+                                            Icons.add_photo_alternate_outlined,
+                                            color: AppColors.primary,
+                                            size: 42,
+                                          ),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  AppMessages.profile.tapToChangeImage,
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: AppColors.textSecondary,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                        const SizedBox(height: 24),
+
+                        // ヘッダー画像
+                        Text(
+                          AppMessages.profile.headerImageLabel,
+                          style: Theme.of(context).textTheme.labelLarge,
+                        ),
+                        const SizedBox(height: 8),
+                        Consumer(
+                          builder: (context, ref, _) {
+                            final user = ref
+                                .watch(currentUserProvider)
+                                .valueOrNull;
+                            final hasCustomHeader =
+                                user?.headerImageUrl != null;
+                            final isSubscriber = user?.isSubscriber ?? false;
+
+                            return Column(
+                              children: [
+                                // プレビュー（カスタム画像の場合は×ボタン付き）
+                                Stack(
+                                  children: [
+                                    Container(
+                                      height: 100,
+                                      width: double.infinity,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .outline
+                                              .withValues(alpha: 0.3),
+                                        ),
+                                      ),
+                                      clipBehavior: Clip.antiAlias,
+                                      child: hasCustomHeader
+                                          ? Image.network(
+                                              user!.headerImageUrl!,
+                                              fit: BoxFit.cover,
+                                              errorBuilder:
+                                                  (
+                                                    context,
+                                                    error,
+                                                    stackTrace,
+                                                  ) => Container(
+                                                    color:
+                                                        AppColors.primaryLight,
+                                                    child: const Center(
+                                                      child: Icon(
+                                                        Icons.image,
+                                                        size: 40,
+                                                        color:
+                                                            AppColors.primary,
+                                                      ),
+                                                    ),
+                                                  ),
+                                            )
+                                          : Container(
+                                              color: AppColors.primaryLight
+                                                  .withValues(alpha: 0.3),
+                                              child: Center(
+                                                child: Text(
+                                                  AppMessages
+                                                      .profile
+                                                      .defaultHeaderLabel,
+                                                  style: TextStyle(
+                                                    color:
+                                                        AppColors.textSecondary,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                    ),
+                                    // カスタム画像の場合は×ボタン表示
+                                    if (hasCustomHeader)
+                                      Positioned(
+                                        top: 4,
+                                        right: 4,
+                                        child: GestureDetector(
+                                          onTap: _isUploadingHeader
+                                              ? null
+                                              : _resetHeaderImage,
+                                          child: Container(
+                                            padding: const EdgeInsets.all(4),
+                                            decoration: BoxDecoration(
+                                              color: Colors.black.withValues(
+                                                alpha: 0.6,
+                                              ),
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: const Icon(
+                                              Icons.close,
+                                              color: Colors.white,
+                                              size: 16,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                // 変更ボタンのみ
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: OutlinedButton.icon(
+                                    onPressed: _isUploadingHeader
+                                        ? null
+                                        : (isSubscriber
+                                              ? _changeHeaderImage
+                                              : () => _showProfileImageSubscriptionDialog(
+                                                  unlockActionLabel: AppMessages
+                                                      .profile
+                                                      .profileHeaderUnlockAction,
+                                                )),
+                                    icon: _isUploadingHeader
+                                        ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : Icon(
+                                            isSubscriber
+                                                ? Icons.image
+                                                : Icons.lock_outline,
+                                          ),
+                                    label: Text(
+                                      _isUploadingHeader
+                                          ? AppMessages.profile.processing
+                                          : AppMessages.profile.changeImage,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                // デフォルト画像から選択
+                                Text(
+                                  AppMessages.profile.selectFromDefault,
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: AppColors.textSecondary,
+                                      ),
+                                ),
+                                const SizedBox(height: 8),
+                                SizedBox(
+                                  height: 60,
+                                  child: ListView.builder(
+                                    scrollDirection: Axis.horizontal,
+                                    itemCount: _defaultHeaderImages.length,
+                                    itemBuilder: (context, index) {
+                                      final isSelected =
+                                          !hasCustomHeader &&
+                                          (user?.headerImageIndex ?? 0) ==
+                                              index;
+                                      return Padding(
+                                        padding: EdgeInsets.only(
+                                          right:
+                                              index <
+                                                  _defaultHeaderImages.length -
+                                                      1
+                                              ? 8
+                                              : 0,
+                                        ),
+                                        child: GestureDetector(
+                                          onTap: () =>
+                                              _selectDefaultHeader(index),
+                                          child: Container(
+                                            width: 100,
+                                            decoration: BoxDecoration(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              border: isSelected
+                                                  ? Border.all(
+                                                      color: AppColors.primary,
+                                                      width: 2,
+                                                    )
+                                                  : null,
+                                            ),
+                                            clipBehavior: Clip.antiAlias,
+                                            child: Stack(
+                                              fit: StackFit.expand,
+                                              children: [
+                                                Image.asset(
+                                                  _defaultHeaderImages[index],
+                                                  fit: BoxFit.cover,
+                                                ),
+                                                if (isSelected)
+                                                  Container(
+                                                    color: AppColors.primary
+                                                        .withValues(alpha: 0.3),
+                                                    child: const Icon(
+                                                      Icons.check_circle,
+                                                      color: Colors.white,
+                                                      size: 24,
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // 表示名（名前パーツ方式）
+                        Text(
+                          AppMessages.profile.nameLabel,
+                          style: Theme.of(context).textTheme.labelLarge,
+                        ),
+                        const SizedBox(height: 8),
+                        Consumer(
+                          builder: (context, ref, _) {
+                            final currentUser = ref
+                                .watch(currentUserProvider)
+                                .valueOrNull;
+                            return InkWell(
+                              onTap: () async {
+                                final result = await Navigator.of(context)
+                                    .push<bool>(
+                                      MaterialPageRoute(
+                                        builder: (_) => const NameEditScreen(),
+                                      ),
+                                    );
+                                if (result == true) {
+                                  // 名前が変更された場合、ユーザー情報を再取得
+                                  ref.invalidate(currentUserProvider);
+                                }
+                              },
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: Theme.of(context).colorScheme.outline
+                                        .withValues(alpha: 0.3),
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            currentUser?.displayName ??
+                                                AppMessages
+                                                    .profile
+                                                    .tapToSetName,
+                                            style: const TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            AppMessages.profile.tapToChangeName,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Icon(
+                                      Icons.chevron_right,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // 自己紹介
+                        Text(
+                          AppMessages.profile.bioLabel,
+                          style: Theme.of(context).textTheme.labelLarge,
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _bioController,
+                          maxLength: AppConstants.maxBioLength,
+                          maxLines: 3,
+                          decoration: InputDecoration(
+                            hintText: AppMessages.profile.bioHint,
+                          ),
+                          onChanged: (_) => setState(() => _hasChanges = true),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // ?????
+                Card(
+                  child: ListTile(
+                    leading: const Icon(
+                      Icons.workspace_premium,
+                      color: AppColors.accent,
+                    ),
+                    title: Text(AppMessages.profile.premiumTitle),
+                    subtitle: Text(AppMessages.profile.premiumSubtitle),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push('/premium'),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // 通知設定
+                Card(
+                  child: ExpansionTile(
+                    leading: const Icon(Icons.notifications_outlined),
+                    title: Text(AppMessages.profile.notificationSettingsTitle),
+                    subtitle: Consumer(
+                      builder: (context, ref, _) {
+                        final user = ref.watch(currentUserProvider).valueOrNull;
+                        final enabledCount =
+                            (user?.notificationSettings.values
+                                .where((e) => e)
+                                .length ??
+                            0);
+                        return Text(
+                          enabledCount == 0
+                              ? AppMessages.profile.allOff
+                              : AppMessages.profile.customizing,
                         );
                       },
                     ),
-                    onTap: () => context.push('/inquiry'),
-                  ),
-                ],
-              ),
-            ),
+                    children: [
+                      Consumer(
+                        builder: (context, ref, _) {
+                          final user = ref
+                              .watch(currentUserProvider)
+                              .valueOrNull;
+                          if (user == null) return const SizedBox.shrink();
 
-            const SizedBox(height: 16),
+                          return Column(
+                            children: [
+                              SwitchListTile(
+                                title: Text(
+                                  AppMessages.profile.commentNotificationTitle,
+                                ),
+                                subtitle: Text(
+                                  AppMessages
+                                      .profile
+                                      .commentNotificationSubtitle,
+                                ),
+                                secondary: const Icon(
+                                  Icons.chat_bubble_outline,
+                                ),
+                                value:
+                                    user.notificationSettings['comments'] ??
+                                    true,
+                                onChanged: (value) async {
+                                  final authService = ref.read(
+                                    authServiceProvider,
+                                  );
+                                  final newSettings = Map<String, bool>.from(
+                                    user.notificationSettings,
+                                  );
+                                  newSettings['comments'] = value;
 
-            // アプリ情報
-            Card(
-              child: Column(
-                children: [
-                  ListTile(
-                    leading: const Icon(Icons.info_outline),
-                    title: Text(AppMessages.profile.aboutTitle),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      showAboutDialog(
-                        context: context,
-                        applicationName: AppConstants.appName,
-                        applicationVersion: '1.0.0',
-                        children: [
-                          const SizedBox(height: 16),
-                          Text(
-                            AppConstants.appDescription,
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.help_outline),
-                    title: Text(AppMessages.profile.helpTitle),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      // TODO: ヘルプ画面
-                    },
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.description_outlined),
-                    title: Text(AppMessages.profile.termsTitle),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      // TODO: 利用規約画面
-                    },
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.privacy_tip_outlined),
-                    title: Text(AppMessages.profile.privacyPolicyTitle),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      // TODO: プライバシーポリシー画面
-                    },
-                  ),
-                ],
-              ),
-            ),
+                                  await authService.updateUserProfile(
+                                    uid: user.uid,
+                                    notificationSettings: newSettings,
+                                  );
+                                },
+                              ),
+                              const Divider(height: 1),
+                              SwitchListTile(
+                                title: Text(
+                                  AppMessages.profile.reactionNotificationTitle,
+                                ),
+                                subtitle: Text(
+                                  AppMessages
+                                      .profile
+                                      .reactionNotificationSubtitle,
+                                ),
+                                secondary: const Icon(Icons.favorite_border),
+                                value:
+                                    user.notificationSettings['reactions'] ??
+                                    true,
+                                onChanged: (value) async {
+                                  final authService = ref.read(
+                                    authServiceProvider,
+                                  );
+                                  final newSettings = Map<String, bool>.from(
+                                    user.notificationSettings,
+                                  );
+                                  newSettings['reactions'] = value;
 
-            const SizedBox(height: 16),
-
-            // ログアウト
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.logout, color: AppColors.error),
-                title: Text(
-                  AppMessages.profile.logoutTitle,
-                  style: const TextStyle(color: AppColors.error),
+                                  await authService.updateUserProfile(
+                                    uid: user.uid,
+                                    notificationSettings: newSettings,
+                                  );
+                                },
+                              ),
+                              const SizedBox(height: 8),
+                            ],
+                          );
+                        },
+                      ),
+                    ],
+                  ),
                 ),
-                onTap: _logout,
-              ),
+
+                const SizedBox(height: 16),
+
+                // 公開範囲設定
+                Card(
+                  key: _privacyCardKey,
+                  child: ExpansionTile(
+                    initiallyExpanded: isPhase1Tutorial,
+                    enabled: !isPhase1Tutorial,
+                    leading: const Icon(Icons.visibility_outlined),
+                    title: Text(AppMessages.profile.privacyTitle),
+                    subtitle: Consumer(
+                      builder: (context, ref, _) {
+                        final user = ref.watch(currentUserProvider).valueOrNull;
+                        final currentValue = isPhase1Tutorial
+                            ? _tutorialSelectedMode.value
+                            : (user?.postMode ?? PrivacyMode.ai.value);
+                        final currentMode = PrivacyMode.values.firstWhere(
+                          (m) => m.value == currentValue,
+                          orElse: () => PrivacyMode.ai,
+                        );
+                        return Text(
+                          AppMessages.profile.privacyCurrent(currentMode.label),
+                        );
+                      },
+                    ),
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryLight.withValues(
+                              alpha: 0.3,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.info_outline,
+                                size: 18,
+                                color: AppColors.primary,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  AppMessages.profile.privacyInfo,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        child: Consumer(
+                          builder: (context, ref, _) {
+                            final user = ref
+                                .watch(currentUserProvider)
+                                .valueOrNull;
+                            if (user == null) return const SizedBox.shrink();
+
+                            return Column(
+                              children: PrivacyMode.values.map((mode) {
+                                final isSelected = isPhase1Tutorial
+                                    ? _tutorialSelectedMode == mode
+                                    : user.postMode == mode.value;
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: _PrivacyOption(
+                                    mode: mode,
+                                    isSelected: isSelected,
+                                    onTap: () async {
+                                      if (isSelected) return;
+                                      if (isPhase1Tutorial) {
+                                        setState(
+                                          () => _tutorialSelectedMode = mode,
+                                        );
+                                        final notifier = ref.read(
+                                          tutorialPhase1Provider.notifier,
+                                        );
+                                        final currentStep = ref.read(
+                                          tutorialPhase1Provider,
+                                        );
+                                        final shouldAdvance =
+                                            (currentStep ==
+                                                    TutorialPhase1Step.explainAI &&
+                                                mode == PrivacyMode.ai) ||
+                                            (currentStep ==
+                                                    TutorialPhase1Step.explainMix &&
+                                                mode == PrivacyMode.mix) ||
+                                            (currentStep ==
+                                                    TutorialPhase1Step.explainHuman &&
+                                                mode == PrivacyMode.human);
+                                        if (shouldAdvance) {
+                                          await notifier.advance();
+                                        }
+                                        return;
+                                      }
+
+                                      // 確認ダイアログ
+                                      final confirmed =
+                                          await DialogHelper.showConfirmDialog(
+                                            context: context,
+                                            title: AppMessages.profile
+                                                .privacyChangeTitle(mode.label),
+                                            message: AppMessages.profile
+                                                .privacyChangeMessage(
+                                                  mode.label,
+                                                ),
+                                            confirmText: AppMessages
+                                                .profile
+                                                .privacyChangeConfirm,
+                                          );
+
+                                      if (confirmed == true) {
+                                        final authService = ref.read(
+                                          authServiceProvider,
+                                        );
+                                        await authService.updateUserProfile(
+                                          uid: user.uid,
+                                          postMode: mode.value,
+                                        );
+                                        if (context.mounted) {
+                                          SnackBarHelper.showSuccess(
+                                            context,
+                                            AppMessages.profile.privacyChanged(
+                                              mode.label,
+                                            ),
+                                          );
+                                        }
+                                      }
+                                    },
+                                  ),
+                                );
+                              }).toList(),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // サポート
+                Card(
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: const Icon(
+                          Icons.mail_outline,
+                          color: AppColors.primary,
+                        ),
+                        title: Text(AppMessages.profile.inquiryTitle),
+                        subtitle: Text(AppMessages.profile.inquirySubtitle),
+                        trailing: StreamBuilder<int>(
+                          stream: InquiryService().getUnreadCount(),
+                          builder: (context, snapshot) {
+                            final count = snapshot.data ?? 0;
+                            if (count == 0) {
+                              return const Icon(Icons.chevron_right);
+                            }
+                            return Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.error,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    '$count',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const Icon(Icons.chevron_right),
+                              ],
+                            );
+                          },
+                        ),
+                        onTap: () => context.push('/inquiry'),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // アプリ情報
+                Card(
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.info_outline),
+                        title: Text(AppMessages.profile.aboutTitle),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          showAboutDialog(
+                            context: context,
+                            applicationName: AppConstants.appName,
+                            applicationVersion: '1.0.0',
+                            children: [
+                              const SizedBox(height: 16),
+                              Text(
+                                AppConstants.appDescription,
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.help_outline),
+                        title: Text(AppMessages.profile.helpTitle),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          // TODO: ヘルプ画面
+                        },
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.description_outlined),
+                        title: Text(AppMessages.profile.termsTitle),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          // TODO: 利用規約画面
+                        },
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.privacy_tip_outlined),
+                        title: Text(AppMessages.profile.privacyPolicyTitle),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          // TODO: プライバシーポリシー画面
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // ログアウト
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.logout, color: AppColors.error),
+                    title: Text(
+                      AppMessages.profile.logoutTitle,
+                      style: const TextStyle(color: AppColors.error),
+                    ),
+                    onTap: _logout,
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                const SizedBox(height: 32),
+
+                // バージョン情報
+                Center(
+                  child: Text(
+                    'Version 1.0.0',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+
+                const SizedBox(height: 100),
+              ],
             ),
-
-            const SizedBox(height: 16),
-
-            const SizedBox(height: 32),
-
-            // バージョン情報
-            Center(
-              child: Text(
-                'Version 1.0.0',
-                style: Theme.of(context).textTheme.bodySmall,
+            // チュートリアルオーバーレイ（Step 2-6）
+            if (isPhase1Tutorial && tutorialMessage != null)
+              TutorialOverlay(
+                message: tutorialMessage,
+                spotlightRect: _privacyCardRect,
+                actionLabel: tutorialStep == TutorialPhase1Step.finished
+                    ? AppMessages.tutorial.phase1Confirm
+                    : null,
+                onAction: tutorialStep == TutorialPhase1Step.finished
+                    ? _completePhase1Tutorial
+                    : () => ref.read(tutorialPhase1Provider.notifier).advance(),
+                isActionEnabled: !_isCompletingPhase1Tutorial,
               ),
-            ),
-
-            const SizedBox(height: 100),
           ],
         ),
       ),
     );
+    if (!isPhase1Tutorial) return page;
+    return PopScope(canPop: false, child: page);
   }
 }
 

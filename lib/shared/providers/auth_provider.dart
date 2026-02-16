@@ -144,6 +144,7 @@ class AuthService {
           virtue: AppConstants.virtueInitial,
           namePrefix: namePrefix,
           nameSuffix: nameSuffix,
+          tutorialPhase1Completed: false,
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );

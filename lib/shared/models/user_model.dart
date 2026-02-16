@@ -28,10 +28,7 @@ class RewardedReactionUnlock {
   }
 
   Map<String, dynamic> toMap() {
-    return {
-      'remaining': remaining,
-      'expiresAt': Timestamp.fromDate(expiresAt),
-    };
+    return {'remaining': remaining, 'expiresAt': Timestamp.fromDate(expiresAt)};
   }
 }
 
@@ -70,7 +67,8 @@ class UserModel {
   final String? activeStampSheetId; // 現在使用中のスタンプシートID
   final int thanksStampCredits; // お礼スタンプの保有数
   final int stampSheetVersion; // スタンプシート同期バージョン
-  final Map<String, RewardedReactionUnlock> rewardedReactionUnlocks; // 広告で一時解放されたリアクション
+  final Map<String, RewardedReactionUnlock>
+  rewardedReactionUnlocks; // 広告で一時解放されたリアクション
   final bool isSubscriber; // サブスク加入状態
   final DateTime? lastNameChangeAt; // 最後に名前を変更した日時
   final String? fcmToken; // プッシュ通知用トークン
@@ -82,6 +80,8 @@ class UserModel {
   final String profileVisualMode; // 'icon' | 'avatar' | 'image'
   final String? profileImageUrl; // プロフィール画像URL
   final String? profileImageStoragePath; // プロフィール画像Storageパス
+  final bool tutorialPhase1Completed; // 初回チュートリアルPhase1完了
+  final String? tutorialPhase1Step; // チュートリアル進行ステップ（中断復帰用）
 
   UserModel({
     required this.uid,
@@ -129,6 +129,8 @@ class UserModel {
     this.profileVisualMode = 'icon',
     this.profileImageUrl,
     this.profileImageStoragePath,
+    this.tutorialPhase1Completed = true,
+    this.tutorialPhase1Step,
   });
 
   factory UserModel.fromFirestore(DocumentSnapshot doc) {
@@ -170,12 +172,11 @@ class UserModel {
       namePrefix: data['namePrefix'],
       nameSuffix: data['nameSuffix'],
       unlockedNameParts: List<String>.from(data['unlockedNameParts'] ?? []),
-      unlockedReactionStamps:
-          List<String>.from(data['unlockedReactionStamps'] ?? []),
-      unlockedAvatarParts:
-          List<String>.from(data['unlockedAvatarParts'] ?? []),
-      unlockedStampSheets:
-          List<String>.from(data['unlockedStampSheets'] ?? []),
+      unlockedReactionStamps: List<String>.from(
+        data['unlockedReactionStamps'] ?? [],
+      ),
+      unlockedAvatarParts: List<String>.from(data['unlockedAvatarParts'] ?? []),
+      unlockedStampSheets: List<String>.from(data['unlockedStampSheets'] ?? []),
       activeStampSheetId: data['activeStampSheetId'],
       thanksStampCredits: data['thanksStampCredits'] ?? 0,
       stampSheetVersion: data['stampSheetVersion'] ?? 0,
@@ -196,6 +197,8 @@ class UserModel {
       profileVisualMode: data['profileVisualMode'] ?? 'icon',
       profileImageUrl: data['profileImageUrl'],
       profileImageStoragePath: data['profileImageStoragePath'],
+      tutorialPhase1Completed: data['tutorialPhase1Completed'] ?? false,
+      tutorialPhase1Step: data['tutorialPhase1Step'],
     );
   }
 
@@ -251,6 +254,8 @@ class UserModel {
       if (profileImageUrl != null) 'profileImageUrl': profileImageUrl,
       if (profileImageStoragePath != null)
         'profileImageStoragePath': profileImageStoragePath,
+      'tutorialPhase1Completed': tutorialPhase1Completed,
+      if (tutorialPhase1Step != null) 'tutorialPhase1Step': tutorialPhase1Step,
     };
   }
 
@@ -299,6 +304,8 @@ class UserModel {
     String? profileVisualMode,
     String? profileImageUrl,
     String? profileImageStoragePath,
+    bool? tutorialPhase1Completed,
+    String? tutorialPhase1Step,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -350,6 +357,9 @@ class UserModel {
       profileImageUrl: profileImageUrl ?? this.profileImageUrl,
       profileImageStoragePath:
           profileImageStoragePath ?? this.profileImageStoragePath,
+      tutorialPhase1Completed:
+          tutorialPhase1Completed ?? this.tutorialPhase1Completed,
+      tutorialPhase1Step: tutorialPhase1Step ?? this.tutorialPhase1Step,
     );
   }
 }

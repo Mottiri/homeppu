@@ -377,8 +377,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
-
-],
+    ],
     errorBuilder: (context, state) => Scaffold(
       body: Center(
         child: Column(
@@ -406,4 +405,3 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ),
   );
 });
-

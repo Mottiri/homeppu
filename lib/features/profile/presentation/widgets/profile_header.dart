@@ -12,6 +12,7 @@ class ProfileHeader extends StatelessWidget {
   final Color secondaryAccent;
   final VoidCallback? onBack;
   final VoidCallback? onOpenSettings;
+  final GlobalKey? settingsIconKey;
   final Widget? adminAction;
 
   const ProfileHeader({
@@ -23,6 +24,7 @@ class ProfileHeader extends StatelessWidget {
     required this.secondaryAccent,
     this.onBack,
     this.onOpenSettings,
+    this.settingsIconKey,
     this.adminAction,
   });
 
@@ -46,14 +48,11 @@ class ProfileHeader extends StatelessWidget {
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) =>
                               Image.asset(
-                            fallbackHeaderImage,
-                            fit: BoxFit.cover,
-                          ),
+                                fallbackHeaderImage,
+                                fit: BoxFit.cover,
+                              ),
                         )
-                      : Image.asset(
-                          fallbackHeaderImage,
-                          fit: BoxFit.cover,
-                        ),
+                      : Image.asset(fallbackHeaderImage, fit: BoxFit.cover),
                 ),
               ),
               Positioned(
@@ -77,10 +76,7 @@ class ProfileHeader extends StatelessWidget {
                   left: 8,
                   child: IconButton(
                     onPressed: onBack,
-                    icon: const Icon(
-                      Icons.arrow_back,
-                      color: Colors.white,
-                    ),
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
                     style: IconButton.styleFrom(
                       backgroundColor: Colors.black26,
                     ),
@@ -94,6 +90,7 @@ class ProfileHeader extends StatelessWidget {
                     if (adminAction != null) adminAction!,
                     if (isOwnProfile && onOpenSettings != null)
                       IconButton(
+                        key: settingsIconKey,
                         onPressed: onOpenSettings,
                         icon: const Icon(
                           Icons.settings_outlined,
@@ -136,12 +133,10 @@ class ProfileHeader extends StatelessWidget {
                       ),
                       child: AvatarWidget(
                         avatarIndex: user.avatarIndex,
-                        avatarParts:
-                            user.profileVisualMode == 'avatar'
+                        avatarParts: user.profileVisualMode == 'avatar'
                             ? user.avatarParts
                             : null,
-                        imageUrl:
-                            user.profileVisualMode == 'image'
+                        imageUrl: user.profileVisualMode == 'image'
                             ? user.profileImageUrl
                             : null,
                         size: 100,
@@ -159,10 +154,9 @@ class ProfileHeader extends StatelessWidget {
               children: [
                 Text(
                   user.displayName,
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineSmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 if (user.bio != null && user.bio!.isNotEmpty)
@@ -170,10 +164,9 @@ class ProfileHeader extends StatelessWidget {
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
                       user.bio!,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(color: AppColors.textSecondary),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                   ),

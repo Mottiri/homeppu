@@ -37,6 +37,9 @@ class AppMessages {
   // ===== オンボーディング関連 =====
   static const onboarding = _OnboardingMessages();
 
+  // ===== チュートリアル関連 =====
+  static const tutorial = _TutorialMessages();
+
   // ===== 認証関連 =====
   static const auth = _AuthMessages();
 
@@ -391,6 +394,39 @@ class _OnboardingMessages {
   String get page2Description => 'ほめっぷではあなたの投稿に\nAIや仲間から温かい言葉が届くよ';
   String get page3Title => 'おうちのような安心感';
   String get page3Description => 'あなたのHomeのようなアプリ\nほめっぷを楽しんでね';
+}
+
+class _TutorialMessages {
+  const _TutorialMessages();
+
+  // Step 0: ホーム画面
+  String get welcomeHome =>
+      'ほめっぷへ来てくれてありがとう！\nまずは公開範囲を設定しよう🌟\n下の「マイページ」をタップしてね';
+
+  // Step 1: マイページ（設定アイコン）
+  String get tapSettings => '次は右上の設定アイコン⚙️をタップしてね';
+
+  // Step 2: 設定画面（公開範囲カードへスクロール）
+  String get scrollToPrivacy => 'ここが「公開範囲」の設定だよ！\nどのモードで投稿するか選べるよ';
+
+  // Step 3: AIモード説明
+  String get explainAI => 'AIだけが見れるモードだよ\n人間には見えないから安心して投稿できる！';
+
+  // Step 4: ミックスモード説明
+  String get explainMix => 'AIも人間も両方見れるモードだよ\n色んな人からリアクションがもらえる！';
+
+  // Step 5: 人間モード説明
+  String get explainHuman => '人間だけが見れるモードだよ\n本物のリアクションだけがほしい人向け！';
+
+  // Step 6: 完了
+  String get complete => 'これで公開範囲の説明はおしまい！\nモードを選んでから始めてね🎉';
+  String get completeAction => 'わかった！';
+  String get selectModeRequired => 'モードを1つ選んでね';
+
+  // 共通
+  String get nextAction => '次へ';
+
+  String get phase1Confirm => 'この設定で始める';
 }
 
 /// 通知関連メッセージ
