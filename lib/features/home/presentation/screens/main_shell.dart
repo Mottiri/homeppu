@@ -282,6 +282,7 @@ class _MainShellState extends ConsumerState<MainShell>
     final isSubscriber = currentUser?.isSubscriber ?? false;
     final isCircleTrialSession = ref.watch(circleTrialSessionProvider);
     final tutorialStep = ref.watch(tutorialPhase1Provider);
+    final location = GoRouterState.of(context).matchedLocation;
 
     // チュートリアル復元/開始（main_shell が中央管理）
     if (currentUser != null && !_tutorialInitialized) {
@@ -298,6 +299,37 @@ class _MainShellState extends ConsumerState<MainShell>
         _resolveMyPageNavRect();
       }
       _resolveBottomNavHeight();
+    }
+
+    // チュートリアル中は、必要な画面へ強制遷移して詰み経路を防ぐ。
+    final shouldForceProfile =
+        tutorialStep == TutorialPhase1Step.profileSettings &&
+        !location.startsWith('/profile');
+    final shouldForceSettings =
+        (tutorialStep == TutorialPhase1Step.settingsScroll ||
+            tutorialStep == TutorialPhase1Step.explainAI ||
+            tutorialStep == TutorialPhase1Step.explainMix ||
+            tutorialStep == TutorialPhase1Step.explainHuman ||
+            tutorialStep == TutorialPhase1Step.finished) &&
+        location != '/settings';
+    if (shouldForceProfile || shouldForceSettings) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final latestStep = ref.read(tutorialPhase1Provider);
+        if (latestStep == TutorialPhase1Step.profileSettings &&
+            !GoRouterState.of(context).matchedLocation.startsWith('/profile')) {
+          context.go('/profile');
+          return;
+        }
+        if ((latestStep == TutorialPhase1Step.settingsScroll ||
+                latestStep == TutorialPhase1Step.explainAI ||
+                latestStep == TutorialPhase1Step.explainMix ||
+                latestStep == TutorialPhase1Step.explainHuman ||
+                latestStep == TutorialPhase1Step.finished) &&
+            GoRouterState.of(context).matchedLocation != '/settings') {
+          context.go('/settings');
+        }
+      });
     }
 
     if (currentUser?.banStatus == 'permanent') {

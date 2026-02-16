@@ -1619,18 +1619,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     mode: mode,
                                     isSelected: isSelected,
                                     onTap: () async {
-                                      if (isSelected) return;
                                       if (isPhase1Tutorial) {
                                         final step = ref.read(tutorialPhase1Provider);
                                         if (step != TutorialPhase1Step.finished) {
                                           return;
                                         }
-                                        setState(
-                                          () => _tutorialSelectedMode = mode,
-                                        );
+                                        if (!isSelected) {
+                                          setState(
+                                            () => _tutorialSelectedMode = mode,
+                                          );
+                                        }
                                         await _completePhase1Tutorial();
                                         return;
                                       }
+                                      if (isSelected) return;
 
                                       // 確認ダイアログ
                                       final confirmed =
