@@ -297,12 +297,35 @@ class _ReactionBackgroundState extends State<ReactionBackground>
                   .clamp(0.0, 1.0),
             );
 
-            return Transform.rotate(
+            final isEpic = iconData.type.rarity == ReactionRarity.epic;
+            final stampWidget = Transform.rotate(
               angle: angle,
               child: Transform.scale(
                 scale: scale,
-                child: _wrapGlow(stamp, iconData.type),
+                child: isEpic
+                    ? Opacity(opacity: 0.78, child: stamp)
+                    : _wrapGlow(stamp, iconData.type),
               ),
+            );
+
+            if (!isEpic) {
+              return stampWidget;
+            }
+
+            final sparkleOpacity = (animatedOpacity * 0.95).clamp(0.0, 1.0);
+            return Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                stampWidget,
+                ..._buildEpicSparkles(
+                  t: controller.value,
+                  size: size,
+                  opacity: sparkleOpacity,
+                  color: iconData.type.rarityColor,
+                  seed: iconData.seed,
+                ),
+              ],
             );
           },
         ),
@@ -324,6 +347,143 @@ class _ReactionBackgroundState extends State<ReactionBackground>
         ),
       ),
     );
+  }
+
+  List<Widget> _buildEpicSparkles({
+    required double t,
+    required double size,
+    required double opacity,
+    required Color color,
+    required int seed,
+  }) {
+    const sparkleCount = 20;
+    final widgets = <Widget>[];
+    final progress = Curves.easeOut.transform(t.clamp(0.0, 1.0));
+    final fade = (1.0 - progress).clamp(0.0, 1.0);
+    final baseHsl = HSLColor.fromColor(color);
+    final palette = <Color>[
+      color,
+      baseHsl.withHue((baseHsl.hue + 28) % 360).toColor(),
+      baseHsl.withHue((baseHsl.hue + 62) % 360).toColor(),
+      baseHsl.withHue((baseHsl.hue + 118) % 360).toColor(),
+      baseHsl.withHue((baseHsl.hue + 182) % 360).toColor(),
+      baseHsl.withHue((baseHsl.hue + 246) % 360).toColor(),
+      baseHsl.withHue((baseHsl.hue + 300) % 360).toColor(),
+      Colors.amber,
+    ];
+
+    for (var i = 0; i < sparkleCount; i++) {
+      final seedOffset = ((seed >> (i % 8)) & 0xFF) / 255.0;
+      final angle = (2 * pi / sparkleCount) * i + seedOffset * 0.9;
+      final radiusScale = 0.12 + (i % 4) * 0.11;
+      final radius = size * (radiusScale + 0.8 * progress);
+      final twinkle = 0.65 + 0.35 * sin((progress * 9.0) + (i * 0.9));
+      final particleOpacity = (opacity * 1.45 * fade * twinkle).clamp(0.0, 1.0);
+      final iconSize = size *
+          (0.26 + ((i + 1) % 3) * 0.1) *
+          (0.85 + 0.15 * twinkle);
+      final baseParticleColor = palette[i % palette.length];
+      final iconColor = Color.lerp(baseParticleColor, Colors.white, 0.35)!;
+
+      widgets.add(
+        Transform.translate(
+          offset: Offset(cos(angle) * radius, sin(angle) * radius),
+          child: Opacity(
+            opacity: particleOpacity,
+            child: Transform.scale(
+              scale: 0.55 + 0.85 * progress,
+              child: Icon(
+                i.isEven ? Icons.auto_awesome_rounded : Icons.star_rounded,
+                size: iconSize,
+                color: iconColor.withValues(alpha: 0.98),
+                shadows: [
+                  Shadow(
+                    color: baseParticleColor.withValues(alpha: 0.95),
+                    blurRadius: 14,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // Secondary small sparkle layer for a denser, flashier burst.
+      widgets.add(
+        Transform.translate(
+          offset: Offset(cos(angle) * radius * 0.68, sin(angle) * radius * 0.68),
+          child: Opacity(
+            opacity: (particleOpacity * 0.85).clamp(0.0, 1.0),
+            child: Icon(
+              Icons.star_rounded,
+              size: iconSize * 0.6,
+              color: Colors.white.withValues(alpha: 0.92),
+              shadows: [
+                Shadow(
+                  color: baseParticleColor.withValues(alpha: 0.9),
+                  blurRadius: 12,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Quick flash ring near the start for stronger "pop" feeling.
+    final ringOpacity = (opacity * (1.0 - (progress * 1.4))).clamp(0.0, 0.85);
+    if (ringOpacity > 0.01) {
+      widgets.add(
+        Opacity(
+          opacity: ringOpacity,
+          child: Container(
+            width: size * (0.35 + progress * 1.15),
+            height: size * (0.35 + progress * 1.15),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.95),
+                width: 2.8,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.75),
+                  blurRadius: 20,
+                  spreadRadius: 2.5,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Central burst flash to make the tap feel more impactful.
+    final burstOpacity = (opacity * (1.0 - (progress * 2.1))).clamp(0.0, 0.9);
+    if (burstOpacity > 0.01) {
+      widgets.add(
+        Opacity(
+          opacity: burstOpacity,
+          child: Container(
+            width: size * (0.24 + progress * 0.7),
+            height: size * (0.24 + progress * 0.7),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  Colors.white.withValues(alpha: 0.98),
+                  color.withValues(alpha: 0.78),
+                  color.withValues(alpha: 0.0),
+                ],
+                stops: const [0.0, 0.42, 1.0],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return widgets;
   }
 }
 
