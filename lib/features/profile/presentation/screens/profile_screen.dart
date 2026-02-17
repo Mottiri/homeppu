@@ -24,6 +24,7 @@ import '../widgets/profile_stats.dart';
 import '../../../../shared/widgets/infinite_scroll_listener.dart';
 import '../../../../shared/widgets/load_more_footer.dart';
 import '../../../../shared/providers/tutorial_phase1_provider.dart';
+import '../../../../shared/providers/tutorial_phase6_provider.dart';
 import '../../../../shared/widgets/tutorial_overlay.dart';
 
 /// プロフィール画面のスクロールトップを要求するProvider
@@ -62,6 +63,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   final GlobalKey _tutorialOverlayStackKey = GlobalKey();
   final GlobalKey _settingsIconKey = GlobalKey();
   Rect? _settingsIconRect;
+  bool _phase6Initialized = false;
+  final GlobalKey _virtueStatKey = GlobalKey();
+  final GlobalKey _favoritesTabKey = GlobalKey();
+  Rect? _phase6SpotlightRect;
 
   // ヘッダー画像とカラーパレット
   late int _headerImageIndex;
@@ -415,6 +420,46 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
 
     final isAdmin = ref.watch(isAdminProvider).valueOrNull ?? false;
+    final phase1Step = ref.watch(tutorialPhase1Provider);
+    final phase6Step = ref.watch(tutorialPhase6Provider);
+    final canRunPhase6 =
+        _isOwnProfile &&
+        user.tutorialPhase1Completed &&
+        phase1Step == TutorialPhase1Step.inactive;
+    final isPhase6Active = canRunPhase6 && phase6Step != TutorialPhase6Step.inactive;
+    final phase6OverviewBubbleBottomOffset =
+        MediaQuery.of(context).padding.bottom - 8;
+    final phase6VirtueBubbleBottomOffset =
+        MediaQuery.of(context).padding.bottom - 12;
+    final phase6FavoritesBubbleBottomOffset =
+        MediaQuery.of(context).padding.bottom - 20;
+
+    if (canRunPhase6 && !_phase6Initialized) {
+      _phase6Initialized = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref.read(tutorialPhase6Provider.notifier).restoreOrStart(user);
+      });
+    }
+
+    if (canRunPhase6 &&
+        (phase6Step == TutorialPhase6Step.virtueGuide ||
+            phase6Step == TutorialPhase6Step.favoritesGuide)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        final targetKey = phase6Step == TutorialPhase6Step.virtueGuide
+            ? _virtueStatKey
+            : _favoritesTabKey;
+        final rect = await resolveRectWithRetry(
+          targetKey,
+          ancestorKey: _tutorialOverlayStackKey,
+        );
+        if (!mounted) return;
+        if (rect != _phase6SpotlightRect) {
+          setState(() => _phase6SpotlightRect = rect);
+        }
+      });
+    }
     final showBanWarning = user.isBanned && (_isOwnProfile || isAdmin);
     Widget? adminAction;
     if (isAdmin) {
@@ -493,6 +538,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                   _openVirtueDialog();
                                 }
                               : null,
+                          virtueStatKey:
+                              _isOwnProfile ? _virtueStatKey : null,
                         ),
 
                         // フォローボタン（ヘッダーカラー）+ メッセージボタン
@@ -553,6 +600,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               false,
                           accentColor: _primaryAccent,
                           onLoadComplete: _handlePostsListUpdated,
+                          favoritesTabKey:
+                              _isOwnProfile ? _favoritesTabKey : null,
                         ),
 
                         // LoadMoreFooter（ショートリスト用手動フォールバック）
@@ -606,6 +655,57 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     ),
                   ),
                 ),
+                if (isPhase6Active &&
+                    phase6Step == TutorialPhase6Step.profileOverview)
+                  Positioned.fill(
+                    child: TutorialOverlay(
+                      message: AppMessages.tutorial.profileOverviewGuide,
+                      onMaskTap: () =>
+                          ref.read(tutorialPhase6Provider.notifier).advance(),
+                      characterAssetPath: 'assets/onbord/onbord_01.png',
+                      bubbleBottomOffset: phase6OverviewBubbleBottomOffset,
+                    ),
+                  ),
+                if (isPhase6Active &&
+                    phase6Step == TutorialPhase6Step.virtueGuide)
+                  Positioned.fill(
+                    child: TutorialOverlay(
+                      message: AppMessages.tutorial.profileVirtueGuide,
+                      spotlightRect: _phase6SpotlightRect,
+                      onSpotlightTap: () async {
+                        await ref.read(tutorialPhase6Provider.notifier).advance();
+                        if (!mounted) return;
+                        await _openVirtueDialog();
+                      },
+                      onMaskTap: () => ref
+                          .read(tutorialPhase6Provider.notifier)
+                          .advance(),
+                      characterAssetPath: 'assets/onbord/onbord_01.png',
+                      bubbleBottomOffset: phase6VirtueBubbleBottomOffset,
+                    ),
+                  ),
+                if (isPhase6Active &&
+                    phase6Step == TutorialPhase6Step.favoritesGuide)
+                  Positioned.fill(
+                    child: TutorialOverlay(
+                      message: AppMessages.tutorial.profileFavoritesGuide,
+                      spotlightRect: _phase6SpotlightRect,
+                      onSpotlightTap: () async {
+                        _userPostsListKey.currentState?.selectTab(2);
+                        await ref
+                            .read(tutorialPhase6Provider.notifier)
+                            .markCompleted();
+                      },
+                      onMaskTap: () async {
+                        _userPostsListKey.currentState?.selectTab(2);
+                        await ref
+                            .read(tutorialPhase6Provider.notifier)
+                            .markCompleted();
+                      },
+                      characterAssetPath: 'assets/onbord/onbord_01.png',
+                      bubbleBottomOffset: phase6FavoritesBubbleBottomOffset,
+                    ),
+                  ),
                 // チュートリアル Step 1: 設定アイコンをスポットライト
                 Builder(
                   builder: (context) {

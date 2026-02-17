@@ -439,8 +439,14 @@ class _TutorialMessages {
   // Circle tutorial (Phase 5)
   String get circleOverviewGuide =>
       'ここがサークル画面だよ！\n興味のあるサークルを探したり、参加中サークルを確認できるよ😊';
-  String get circleFabGuide =>
-      '下の真ん中ボタンからサークルを作成できるよ！\n気の合う仲間のサークルを作ってみよう✨';
+  String get circleFabGuide => '下の真ん中ボタンからサークルを作成できるよ！\n気の合う仲間のサークルを作ってみよう✨';
+
+  // Profile tutorial (Phase 6)
+  String get profileOverviewGuide => 'ここがマイページだよ！\n自分の活動や投稿をまとめて確認できるよ😊';
+  String get profileVirtueGuide =>
+      'ここが徳ポイントだよ！\nタップすると履歴も確認できるから、どんな行動で増減したか見てみよう✨\n徳ポイントはアイテムの購入などに使えるよ！🎉';
+  String get profileFavoritesGuide =>
+      'ここがお気に入りタブだよ！\n過去の投稿をお気に入り登録すると、登録した投稿をまとめて見返せるよ⭐';
 
   // Post detail explanation (Phase 2)
   String get postDetailOverview => 'ここは投稿詳細画面だよ！\nあなたの投稿についたコメントを確認できるよ😊';

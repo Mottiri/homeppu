@@ -11,6 +11,7 @@ import '../../../../shared/providers/circle_trial_provider.dart';
 import '../../../../shared/providers/tutorial_phase1_provider.dart';
 import '../../../../shared/providers/tutorial_phase3_provider.dart';
 import '../../../../shared/providers/tutorial_phase5_provider.dart';
+import '../../../../shared/providers/tutorial_phase6_provider.dart';
 import '../../../../shared/widgets/tutorial_overlay.dart';
 import '../../../../shared/services/circle_service.dart';
 import '../../../circle/presentation/screens/circles_screen.dart';
@@ -332,6 +333,7 @@ class _MainShellState extends ConsumerState<MainShell>
     final tutorialStep = ref.watch(tutorialPhase1Provider);
     final tutorialPhase3Step = ref.watch(tutorialPhase3Provider);
     final tutorialPhase5Step = ref.watch(tutorialPhase5Provider);
+    final tutorialPhase6Step = ref.watch(tutorialPhase6Provider);
     final location = GoRouterState.of(context).matchedLocation;
 
     // チュートリアル初期化（main_shell で一度だけ）
@@ -473,6 +475,9 @@ class _MainShellState extends ConsumerState<MainShell>
     final isCircleTutorialActive =
         location.startsWith('/circles') &&
         tutorialPhase5Step != TutorialPhase5Step.inactive;
+    final isProfileTutorialActive =
+        location.startsWith('/profile') &&
+        tutorialPhase6Step != TutorialPhase6Step.inactive;
 
     final page = Scaffold(
       resizeToAvoidBottomInset: false,
@@ -569,7 +574,8 @@ class _MainShellState extends ConsumerState<MainShell>
                             ignoring:
                                 isTutorialActive ||
                                 isStampTutorialActive ||
-                                isCircleTutorialActive,
+                                isCircleTutorialActive ||
+                                isProfileTutorialActive,
                             child: _NavItem(
                               key: _homeNavKey,
                               icon: Icons.home_outlined,
@@ -591,7 +597,8 @@ class _MainShellState extends ConsumerState<MainShell>
                             ignoring:
                                 isTutorialActive ||
                                 isStampTutorialActive ||
-                                isCircleTutorialActive,
+                                isCircleTutorialActive ||
+                                isProfileTutorialActive,
                             child: _NavItem(
                               key: _circleNavKey,
                               icon: Icons.groups_outlined,
@@ -633,7 +640,8 @@ class _MainShellState extends ConsumerState<MainShell>
                             ignoring:
                                 isTutorialActive ||
                                 isStampTutorialActive ||
-                                isCircleTutorialActive,
+                                isCircleTutorialActive ||
+                                isProfileTutorialActive,
                             child: GestureDetector(
                               key: _postNavKey,
                               onTap: () =>
@@ -711,7 +719,8 @@ class _MainShellState extends ConsumerState<MainShell>
                             ignoring:
                                 isTutorialActive ||
                                 isStampTutorialActive ||
-                                isCircleTutorialActive,
+                                isCircleTutorialActive ||
+                                isProfileTutorialActive,
                             child: _NavItem(
                               key: _stampNavKey,
                               icon: Icons.collections_bookmark_outlined,
@@ -723,7 +732,9 @@ class _MainShellState extends ConsumerState<MainShell>
                           ),
                           IgnorePointer(
                             ignoring:
-                                isStampTutorialActive || isCircleTutorialActive,
+                                isStampTutorialActive ||
+                                isCircleTutorialActive ||
+                                isProfileTutorialActive,
                             child: _NavItem(
                               key: _myPageNavKey,
                               icon: Icons.person_outline,

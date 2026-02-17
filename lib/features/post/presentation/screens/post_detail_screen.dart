@@ -436,9 +436,9 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                       final isTutorialTarget = hasTutorialTarget &&
                                           index == tutorialTargetIndex;
                                       return _CommentTile(
-                                        key: isTutorialTarget
-                                            ? ValueKey('${comment.id}_tutorial')
-                                            : ValueKey(comment.id),
+                                        // Keep a stable key so long-press flow is not disposed
+                                        // when tutorial state switches to inactive.
+                                        key: ValueKey(comment.id),
                                         comment: comment,
                                         postOwnerId: post.userId,
                                         disableTapActions: isTutorialTarget,
@@ -822,12 +822,14 @@ class _CommentTileState extends State<_CommentTile> {
             child: GestureDetector(
               onLongPress: canThanks && !_isSubmitting
                   ? () async {
-                      // Tutorial completion is based on long-press action itself.
+                      // 先にボトムシートを開いて通常フローを開始し、
+                      // その直後にチュートリアルを完了する。
+                      final thanksFlow = handleThanksTap();
                       final onThanksCompleted = widget.onThanksCompleted;
                       if (onThanksCompleted != null) {
                         unawaited(onThanksCompleted());
                       }
-                      await handleThanksTap();
+                      await thanksFlow;
                     }
                   : null,
               child: Container(

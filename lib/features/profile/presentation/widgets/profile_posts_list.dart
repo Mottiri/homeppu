@@ -14,6 +14,7 @@ class ProfilePostsList extends StatefulWidget {
 
   /// 親から渡されるコールバック: ロード完了時に呼び出し
   final VoidCallback? onLoadComplete;
+  final Key? favoritesTabKey;
 
   const ProfilePostsList({
     super.key,
@@ -22,6 +23,7 @@ class ProfilePostsList extends StatefulWidget {
     this.viewerIsAI = false,
     this.accentColor = AppColors.primary,
     this.onLoadComplete,
+    this.favoritesTabKey,
   });
 
   @override
@@ -96,6 +98,12 @@ class ProfilePostsListState extends State<ProfilePostsList>
         _loadMorePosts();
       }
     }
+  }
+
+  /// 親から参照可能: タブを選択
+  void selectTab(int index) {
+    if (index < 0 || index >= _tabController.length) return;
+    _tabController.animateTo(index);
   }
 
   @override
@@ -362,10 +370,16 @@ class ProfilePostsListState extends State<ProfilePostsList>
                 fontSize: 13,
               ),
               dividerColor: Colors.transparent,
-              tabs: const [
-                Tab(child: Icon(Icons.home_outlined, size: 20)),
-                Tab(child: Icon(Icons.people_outline, size: 20)),
-                Tab(child: Icon(Icons.star_outline, size: 20)),
+              tabs: [
+                const Tab(child: Icon(Icons.home_outlined, size: 20)),
+                const Tab(child: Icon(Icons.people_outline, size: 20)),
+                Tab(
+                  child: Icon(
+                    Icons.star_outline,
+                    key: widget.favoritesTabKey,
+                    size: 20,
+                  ),
+                ),
               ],
             ),
           ),

@@ -10,6 +10,7 @@ class ProfileStats extends StatelessWidget {
   final Color secondaryAccent;
   final bool isVirtueLoading;
   final VoidCallback? onVirtueTap;
+  final Key? virtueStatKey;
 
   const ProfileStats({
     super.key,
@@ -20,6 +21,7 @@ class ProfileStats extends StatelessWidget {
     required this.secondaryAccent,
     this.isVirtueLoading = false,
     this.onVirtueTap,
+    this.virtueStatKey,
   });
 
   @override
@@ -67,6 +69,7 @@ class ProfileStats extends StatelessWidget {
                     value: '$virtue',
                     isLoading: isVirtueLoading,
                     onTap: onVirtueTap,
+                    wrapperKey: virtueStatKey,
                   ),
                 ),
               ],
@@ -82,6 +85,7 @@ class ProfileStats extends StatelessWidget {
     required String value,
     bool isLoading = false,
     VoidCallback? onTap,
+    Key? wrapperKey,
   }) {
     final content = Column(
       mainAxisSize: MainAxisSize.min,
@@ -114,6 +118,7 @@ class ProfileStats extends StatelessWidget {
     if (onTap == null) return content;
 
     return GestureDetector(
+      key: wrapperKey,
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: content,
