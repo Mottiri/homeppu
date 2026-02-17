@@ -363,6 +363,7 @@ class _CircleMessages {
   String get trialBannerTitle => '初回サークル体験中';
   String get trialBannerDescription =>
       'この体験では閲覧のみ可能です（作成・参加はできません）。画面遷移またはアプリ終了で体験は終了し、再度閲覧できません。';
+  String get trialChecking => 'サークル機能の利用可否を確認中...';
 }
 
 /// ホーム関連メッセージ

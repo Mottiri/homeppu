@@ -39,6 +39,7 @@ class _MainShellState extends ConsumerState<MainShell>
   static const double _hideThreshold = 24;
   static const double _showThreshold = 72;
   bool _isEndingCircleTrial = false;
+  bool _isStartingCircleTrial = false;
   final GlobalKey _tutorialRootStackKey = GlobalKey();
   final GlobalKey _bottomNavContainerKey = GlobalKey();
   final GlobalKey _homeNavKey = GlobalKey();
@@ -214,6 +215,8 @@ class _MainShellState extends ConsumerState<MainShell>
   }
 
   Future<void> _startCircleTrialAndOpen() async {
+    if (_isStartingCircleTrial) return;
+    setState(() => _isStartingCircleTrial = true);
     try {
       final allowed = await ref
           .read(circleServiceProvider)
@@ -228,6 +231,10 @@ class _MainShellState extends ConsumerState<MainShell>
     } catch (_) {
       if (!mounted) return;
       await _showCircleSubscriptionDialog(context);
+    } finally {
+      if (mounted) {
+        setState(() => _isStartingCircleTrial = false);
+      }
     }
   }
 
@@ -572,6 +579,7 @@ class _MainShellState extends ConsumerState<MainShell>
                         children: [
                           IgnorePointer(
                             ignoring:
+                                _isStartingCircleTrial ||
                                 isTutorialActive ||
                                 isStampTutorialActive ||
                                 isCircleTutorialActive ||
@@ -607,9 +615,11 @@ class _MainShellState extends ConsumerState<MainShell>
                               isActive:
                                   currentIndex == 1 &&
                                   (isSubscriber || isCircleTrialSession),
+                              isLoading: _isStartingCircleTrial,
                               showLockBadge:
                                   !isSubscriber && !isCircleTrialSession,
                               onTap: () async {
+                                if (_isStartingCircleTrial) return;
                                 if (!isSubscriber) {
                                   if (isCircleTrialSession) {
                                     if (currentIndex == 1) {
@@ -776,6 +786,51 @@ class _MainShellState extends ConsumerState<MainShell>
       key: _tutorialRootStackKey,
       children: [
         page,
+        if (_isStartingCircleTrial)
+          Positioned.fill(
+            child: AbsorbPointer(
+              absorbing: true,
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.35),
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 16,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.12),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.2,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          AppMessages.circle.trialChecking,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
         if (tutorialStep == TutorialPhase1Step.homeWelcome)
           Positioned.fill(
             child: TutorialOverlay(
@@ -841,8 +896,9 @@ class _NavItem extends StatelessWidget {
   final IconData activeIcon;
   final String label;
   final bool isActive;
+  final bool isLoading;
   final bool showLockBadge;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   const _NavItem({
     super.key,
@@ -850,6 +906,7 @@ class _NavItem extends StatelessWidget {
     required this.activeIcon,
     required this.label,
     required this.isActive,
+    this.isLoading = false,
     this.showLockBadge = false,
     required this.onTap,
   });
@@ -870,8 +927,19 @@ class _NavItem extends StatelessWidget {
                 Icon(
                   isActive ? activeIcon : icon,
                   color: isActive ? AppColors.primary : AppColors.textHint,
-                  size: 26,
+                  size: isLoading ? 0 : 26,
                 ),
+                if (isLoading)
+                  SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        isActive ? AppColors.primary : AppColors.textHint,
+                      ),
+                    ),
+                  ),
                 if (showLockBadge)
                   Positioned(
                     right: -6,
