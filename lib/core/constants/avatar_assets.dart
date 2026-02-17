@@ -4,7 +4,7 @@ class AvatarAssets {
   static const String baseId = 'base_01';
   static const String basePath = 'assets/avatars/base/base_01.png';
 
-  static const List<String> hairIds = ['hair_01', 'hair_02', 'hair_03', 'hair_04'];
+  static const List<String> hairIds = ['hair_01', 'hair_02', 'hair_03', 'hair_04', 'hair_05'];
   static const List<String> eyesIds = ['eyes_01', 'eyes_02', 'eyes_03', 'eyes_04', 'eyes_05'];
   static const List<String> mouthIds = ['mouth_01', 'mouth_02', 'mouth_03', 'mouth_04', 'mouth_05'];
   static const List<String> eyebrowsIds = ['eyebrows_01', 'eyebrows_02', 'eyebrows_03', 'eyebrows_04', 'eyebrows_05', 'eyebrows_06'];
@@ -14,6 +14,7 @@ class AvatarAssets {
     'hair_02': 'common',
     'hair_03': 'epic',
     'hair_04': 'rare',
+    'hair_05': 'common',
     // eyebrows
     'eyebrows_01': 'common',
     'eyebrows_02': 'common',
@@ -40,6 +41,7 @@ class AvatarAssets {
     'hair_02': 'hair_02',
     'hair_03': 'hair_03',
     'hair_04': 'hair_04',
+    'hair_05': 'hair_05_common',
     // eyebrows
     'eyebrows_01': 'eyebrows_01',
     'eyebrows_02': 'eyebrows_02',

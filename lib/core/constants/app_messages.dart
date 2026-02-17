@@ -392,7 +392,7 @@ class _OnboardingMessages {
   String get alreadyHaveAccount => 'すでにアカウントをお持ちの方';
 
   String get page1Title => 'ようこそ、ほめっぷへ';
-  String get page1Description => 'ほめっぷに来てくれてありがとう！\n私は座敷童のちゃむちゃんです';
+  String get page1Description => 'ほめっぷに来てくれてありがとう！\n私はほめっぷに住む座敷童のちゃむちゃんです！';
   String get page2Title => 'たくさん褒められよう';
   String get page2Description => 'ほめっぷではあなたの投稿に\nAIや仲間から温かい言葉が届くよ';
   String get page3Title => 'おうちのような安心感';
@@ -566,6 +566,7 @@ class _AuthMessages {
   String get verifyStep1 => '1. お使いのメールアプリを開く';
   String get verifyStep2 => '2. ほめっぷ運営からのメールを確認';
   String get verifyStep3 => '3. メール内のURLをタップして\n認証を完了してください';
+  String get verifySpamHint => '※メールが届かない場合は、迷惑メールフォルダも確認してね';
   String verifyResendCountdown(int seconds) => '再送まであと$seconds秒';
   String get verifyResendReady => '再送できます';
   String get verifyResendAction => '再送する';
@@ -700,6 +701,19 @@ class _ProfileMessages {
   String get helpTitle => 'ヘルプ';
   String get termsTitle => '利用規約';
   String get privacyPolicyTitle => 'プライバシーポリシー';
+  String get aboutVersion => 'バージョン 1.0.0';
+  String get aboutTagline => '世界一やさしいSNS';
+  String get aboutDescription => 'ほめっぷは、ほめられる体験を通じて自己肯定感を育てるSNSです。';
+  String get aboutFeaturesTitle => '主な機能';
+  String get aboutFeaturePost => '・公開範囲を選んで安心して投稿';
+  String get aboutFeatureStamp => '・スタンプとリアクションで気持ちを伝える';
+  String get aboutFeatureAvatar => '・名前パーツとアバターで自分らしさを表現';
+  String get aboutFeatureSubscription => '・プレミアム加入でEpicアイテム解放';
+  String get aboutContactTitle => 'お問い合わせ';
+  String get aboutContactBody => '不具合報告・ご要望は設定の「問い合わせ・要望」から送信できます。';
+  String get aboutCopyright => 'Copyright (c) 2026 Mitsuhiro Hayakawa.';
+  String get legalLoading => '読み込み中...';
+  String get legalLoadFailed => 'ドキュメントを読み込めませんでした';
   String get logoutTitle => 'ログアウト';
   String get headerResetTitle => 'ヘッダー画像をリセット';
   String get headerResetMessage => 'ヘッダー画像をデフォルトに戻しますか？';

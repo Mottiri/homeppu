@@ -70,7 +70,7 @@ class ProfileHeader extends StatelessWidget {
                   ),
                 ),
               ),
-              if (!isOwnProfile && onBack != null)
+              if (onBack != null)
                 Positioned(
                   top: 8,
                   left: 8,

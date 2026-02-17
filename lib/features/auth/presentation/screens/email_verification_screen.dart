@@ -353,6 +353,14 @@ class _EmailVerificationScreenState
           _buildStepRow(AppMessages.auth.verifyStep2, 2),
           const SizedBox(height: 12),
           _buildStepRow(AppMessages.auth.verifyStep3, 3, isHighlight: true),
+          const SizedBox(height: 12),
+          Text(
+            AppMessages.auth.verifySpamHint,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );

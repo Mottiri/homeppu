@@ -1747,47 +1747,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         leading: const Icon(Icons.info_outline),
                         title: Text(AppMessages.profile.aboutTitle),
                         trailing: const Icon(Icons.chevron_right),
-                        onTap: () {
-                          showAboutDialog(
-                            context: context,
-                            applicationName: AppConstants.appName,
-                            applicationVersion: '1.0.0',
-                            children: [
-                              const SizedBox(height: 16),
-                              Text(
-                                AppConstants.appDescription,
-                                style: Theme.of(context).textTheme.bodyMedium,
-                              ),
-                            ],
-                          );
-                        },
+                        onTap: () => context.push('/about'),
                       ),
                       const Divider(height: 1),
                       ListTile(
                         leading: const Icon(Icons.help_outline),
                         title: Text(AppMessages.profile.helpTitle),
                         trailing: const Icon(Icons.chevron_right),
-                        onTap: () {
-                          // TODO: ヘルプ画面
-                        },
+                        onTap: () => context.push('/help'),
                       ),
                       const Divider(height: 1),
                       ListTile(
                         leading: const Icon(Icons.description_outlined),
                         title: Text(AppMessages.profile.termsTitle),
                         trailing: const Icon(Icons.chevron_right),
-                        onTap: () {
-                          // TODO: 利用規約画面
-                        },
+                        onTap: () => context.push('/terms'),
                       ),
                       const Divider(height: 1),
                       ListTile(
                         leading: const Icon(Icons.privacy_tip_outlined),
                         title: Text(AppMessages.profile.privacyPolicyTitle),
                         trailing: const Icon(Icons.chevron_right),
-                        onTap: () {
-                          // TODO: プライバシーポリシー画面
-                        },
+                        onTap: () => context.push('/privacy'),
                       ),
                     ],
                   ),
@@ -1814,7 +1795,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 // バージョン情報
                 Center(
                   child: Text(
-                    'Version 1.0.0',
+                    AppMessages.profile.aboutVersion,
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),

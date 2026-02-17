@@ -505,7 +505,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           fallbackHeaderImage: _headerImages[_headerImageIndex],
                           primaryAccent: _primaryAccent,
                           secondaryAccent: _secondaryAccent,
-                          onBack: _isOwnProfile ? null : () => context.pop(),
+                          onBack: _isOwnProfile
+                              ? () => context.go('/home')
+                              : () => context.pop(),
                           onOpenSettings: _isOwnProfile
                               ? () {
                                   // チュートリアル Step 1: 設定画面へ遷移して次のステップへ
@@ -729,9 +731,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       message: AppMessages.tutorial.tapSettings,
                       spotlightRect: _settingsIconRect,
                       onSpotlightTap: () async {
-                        if (!mounted) return;
                         await ref.read(tutorialPhase1Provider.notifier).advance();
-                        if (!mounted) return;
+                        if (!context.mounted) return;
                         context.push('/settings');
                       },
                       circularSpotlight: true,

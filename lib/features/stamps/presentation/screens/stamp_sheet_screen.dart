@@ -561,8 +561,9 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                                       'pendingNext': state.pendingNextSheetFrom,
                                       'selected': state.selectedSheetId,
                                     });
-                                    if (context.mounted)
+                                    if (context.mounted) {
                                       Navigator.of(context).pop();
+                                    }
                                   } catch (_) {
                                     _toast(
                                       AppMessages.error.general,
@@ -1995,9 +1996,10 @@ class _JellySquishStampAnimState extends State<_JellySquishStampAnim>
       builder: (context, child) {
         return Opacity(
           opacity: _opacity.value,
-          child: Transform(
+          child: Transform.scale(
             alignment: Alignment.center,
-            transform: Matrix4.identity()..scale(_scaleX.value, _scaleY.value),
+            scaleX: _scaleX.value,
+            scaleY: _scaleY.value,
             child: child,
           ),
         );
@@ -2156,10 +2158,10 @@ class _JellySparkleStampAnimState extends State<_JellySparkleStampAnim>
             // Jelly squish stamp body.
             Opacity(
               opacity: _opacity.value,
-              child: Transform(
+              child: Transform.scale(
                 alignment: Alignment.center,
-                transform: Matrix4.identity()
-                  ..scale(_scaleX.value, _scaleY.value),
+                scaleX: _scaleX.value,
+                scaleY: _scaleY.value,
                 child: child,
               ),
             ),

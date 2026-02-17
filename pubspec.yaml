@@ -58,6 +58,7 @@ dependencies:
   purchases_flutter: ^9.11.0
   url_launcher: ^6.3.0
   google_mobile_ads: ^5.1.0
+  flutter_markdown: ^0.7.7+1
 
 
 dev_dependencies:
@@ -106,5 +107,8 @@ flutter:
     - assets/stamp_sheets/
     - assets/stamp_sheets/layouts/
     - assets/onbord/
+    - docs/HELP.md
+    - docs/TERMS_OF_SERVICE.md
+    - docs/PRIVACY_POLICY.md
   
   # フォントはGoogle Fontsパッケージで動的に読み込み

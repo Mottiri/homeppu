@@ -10,6 +10,7 @@ const SUBSCRIPTION_FALLBACK_DOC_ID = "subscriptionFallback";
 const DEFAULT_SUBSCRIPTION_FALLBACK = {
   namePrefix: "prefix_01",
   nameSuffix: "suffix_01",
+  stampSheetId: "spring",
   avatarParts: {
     hairId: "hair_01",
     eyesId: "eyes_01",
@@ -63,6 +64,7 @@ async function loadSubscriptionFallback(): Promise<SubscriptionFallbackConfig> {
   return {
     namePrefix: toStringOrNull(data.namePrefix) ?? DEFAULT_SUBSCRIPTION_FALLBACK.namePrefix,
     nameSuffix: toStringOrNull(data.nameSuffix) ?? DEFAULT_SUBSCRIPTION_FALLBACK.nameSuffix,
+    stampSheetId: toStringOrNull(data.stampSheetId) ?? DEFAULT_SUBSCRIPTION_FALLBACK.stampSheetId,
     avatarParts: {
       hairId:
         toStringOrNull(avatarParts.hairId) ?? DEFAULT_SUBSCRIPTION_FALLBACK.avatarParts.hairId,
@@ -75,6 +77,69 @@ async function loadSubscriptionFallback(): Promise<SubscriptionFallbackConfig> {
         DEFAULT_SUBSCRIPTION_FALLBACK.avatarParts.eyebrowsId,
     },
   };
+}
+
+function parseStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+}
+
+function normalizeRarity(value: unknown): "common" | "rare" | "epic" {
+  if (value === "rare" || value === "epic") return value;
+  return "common";
+}
+
+function isStampSheetUsableForNonSubscriber(
+  sheetId: string,
+  rarityById: Map<string, "common" | "rare" | "epic">,
+  unlocked: Set<string>
+): boolean {
+  const rarity = rarityById.get(sheetId);
+  if (!rarity) return false;
+  if (rarity === "common") return true;
+  if (rarity === "rare") return unlocked.has(`sheet_${sheetId}`);
+  return false;
+}
+
+async function resolveStampSheetFallbackId(
+  preferredSheetId: string,
+  unlockedSheetKeys: Set<string>
+): Promise<string | null> {
+  const catalogDoc = await db.collection(COLLECTIONS.SETTINGS).doc("stampSheetCatalog").get();
+  if (!catalogDoc.exists) {
+    return preferredSheetId || "default";
+  }
+
+  const sheetsRaw = catalogDoc.data()?.sheets;
+  const sheets = Array.isArray(sheetsRaw) ? sheetsRaw : [];
+  const rarityById = new Map<string, "common" | "rare" | "epic">();
+  const activeSheetIds: string[] = [];
+
+  for (const raw of sheets) {
+    if (!raw || typeof raw !== "object") continue;
+    const map = raw as Record<string, unknown>;
+    if (map.isActive === false) continue;
+    const id = toStringOrNull(map.id);
+    if (!id) continue;
+    rarityById.set(id, normalizeRarity(map.rarity));
+    activeSheetIds.push(id);
+  }
+
+  const candidates = [preferredSheetId, "default"];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    if (isStampSheetUsableForNonSubscriber(candidate, rarityById, unlockedSheetKeys)) {
+      return candidate;
+    }
+  }
+
+  for (const sheetId of activeSheetIds) {
+    if (isStampSheetUsableForNonSubscriber(sheetId, rarityById, unlockedSheetKeys)) {
+      return sheetId;
+    }
+  }
+
+  return null;
 }
 
 function buildNamePartIdCandidates(partId: string): string[] {
@@ -127,10 +192,14 @@ async function getNamePartText(partId: string | null): Promise<string | null> {
 
 async function applySubscriptionFallbackIfNeeded(
   userId: string,
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
+  options?: {
+    forceStampSheetFallback?: boolean;
+  }
 ): Promise<boolean> {
   const namePrefix = toStringOrNull(data.namePrefix);
   const nameSuffix = toStringOrNull(data.nameSuffix);
+  const activeStampSheetId = toStringOrNull(data.activeStampSheetId);
   const avatarParts = (data.avatarParts ?? {}) as Record<string, unknown>;
 
   const [prefixRarity, suffixRarity] = await Promise.all([
@@ -140,6 +209,7 @@ async function applySubscriptionFallbackIfNeeded(
 
   const fallback = await loadSubscriptionFallback();
   const updates: Record<string, unknown> = {};
+  const forceStampSheetFallback = options?.forceStampSheetFallback === true;
 
   if (prefixRarity === "epic") {
     updates.namePrefix = fallback.namePrefix;
@@ -176,6 +246,34 @@ async function applySubscriptionFallbackIfNeeded(
     updates.avatarParts = { ...currentAvatarParts, ...avatarUpdates };
   }
 
+  if (forceStampSheetFallback) {
+    const unlockedSheetKeys = new Set(parseStringArray(data.unlockedStampSheets));
+    const fallbackSheetId = await resolveStampSheetFallbackId(
+      fallback.stampSheetId,
+      unlockedSheetKeys
+    );
+    if (fallbackSheetId && fallbackSheetId !== activeStampSheetId) {
+      updates.activeStampSheetId = fallbackSheetId;
+
+      // サブスク解除による強制切替で旧シートが見えなくなるため、
+      // 旧アクティブシートに押されていたスタンプ分のクレジットを返却する。
+      if (activeStampSheetId) {
+        const oldSheetStampSnap = await db
+          .collection(COLLECTIONS.USERS)
+          .doc(userId)
+          .collection("stampSheet")
+          .where("sheetId", "==", activeStampSheetId)
+          .get();
+
+        const refundCount = oldSheetStampSnap.size;
+        if (refundCount > 0) {
+          updates.thanksStampCredits = FieldValue.increment(refundCount);
+          updates.stampSheetVersion = FieldValue.increment(1);
+        }
+      }
+    }
+  }
+
   if (Object.keys(updates).length === 0) {
     return false;
   }
@@ -192,8 +290,25 @@ async function applySubscriptionFallbackIfNeeded(
     }
   }
 
+  const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
   updates.updatedAt = FieldValue.serverTimestamp();
-  await db.collection(COLLECTIONS.USERS).doc(userId).update(updates);
+  await userRef.update(updates);
+
+  // 返却対象がある場合は旧シートの押印データを削除して二重取得を防ぐ
+  // （解除後に再加入しても同じ押印でクレジットを重複取得させない）
+  if (Object.prototype.hasOwnProperty.call(updates, "thanksStampCredits") && activeStampSheetId) {
+    const oldSheetStampSnap = await userRef
+      .collection("stampSheet")
+      .where("sheetId", "==", activeStampSheetId)
+      .get();
+    if (!oldSheetStampSnap.empty) {
+      const batch = db.batch();
+      for (const doc of oldSheetStampSnap.docs) {
+        batch.delete(doc.ref);
+      }
+      await batch.commit();
+    }
+  }
   return true;
 }
 
@@ -282,12 +397,15 @@ export const onUserUpdated = onDocumentUpdated(
     const beforeData = beforeSnap.data() as Record<string, unknown>;
 
     const isSubscriber = afterData.isSubscriber === true;
+    const wasSubscriber = beforeData.isSubscriber === true;
 
     let publicSource = afterData;
     let requiresRefresh = false;
 
     if (!isSubscriber) {
-      const appliedSubscriptionFallback = await applySubscriptionFallbackIfNeeded(userId, afterData);
+      const appliedSubscriptionFallback = await applySubscriptionFallbackIfNeeded(userId, afterData, {
+        forceStampSheetFallback: wasSubscriber && !isSubscriber,
+      });
       const appliedProfileImageFallback = await applyProfileImageSubscriptionFallbackIfNeeded(
         userId,
         beforeData,

@@ -13,6 +13,8 @@ import '../../features/post/presentation/screens/post_detail_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart';
 import '../../features/profile/presentation/screens/settings_screen.dart';
 import '../../features/profile/presentation/screens/avatar_edit_screen.dart';
+import '../../features/profile/presentation/screens/about_app_screen.dart';
+import '../../features/profile/presentation/screens/legal_document_screen.dart';
 import '../../features/profile/presentation/screens/subscription_screen.dart';
 import '../../features/circle/presentation/screens/circles_screen.dart';
 import '../../features/circle/presentation/screens/circle_detail_screen.dart';
@@ -249,6 +251,35 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/settings',
         name: 'settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/about',
+        name: 'about',
+        builder: (context, state) => const AboutAppScreen(),
+      ),
+      GoRoute(
+        path: '/help',
+        name: 'help',
+        builder: (context, state) => LegalDocumentScreen(
+          title: AppMessages.profile.helpTitle,
+          assetPath: 'docs/HELP.md',
+        ),
+      ),
+      GoRoute(
+        path: '/terms',
+        name: 'terms',
+        builder: (context, state) => LegalDocumentScreen(
+          title: AppMessages.profile.termsTitle,
+          assetPath: 'docs/TERMS_OF_SERVICE.md',
+        ),
+      ),
+      GoRoute(
+        path: '/privacy',
+        name: 'privacy',
+        builder: (context, state) => LegalDocumentScreen(
+          title: AppMessages.profile.privacyPolicyTitle,
+          assetPath: 'docs/PRIVACY_POLICY.md',
+        ),
       ),
       GoRoute(
         path: '/premium',
