@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -31,6 +33,9 @@ class _ReactionButtonState extends ConsumerState<ReactionButton>
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
   bool _isReacted = false;
+  bool _showSparkle = false;
+
+  bool get _isEpic => widget.type.rarity == ReactionRarity.epic;
 
   @override
   void initState() {
@@ -87,7 +92,10 @@ class _ReactionButtonState extends ConsumerState<ReactionButton>
     }
 
     // リアクション追加：アニメーション付き
-    setState(() => _isReacted = true);
+    setState(() {
+      _isReacted = true;
+      if (_isEpic) _showSparkle = true;
+    });
 
     // アニメーション開始
     _controller.reset();
@@ -95,6 +103,10 @@ class _ReactionButtonState extends ConsumerState<ReactionButton>
 
     // アニメーション完了を待つ（500ms）
     await Future.delayed(const Duration(milliseconds: 500));
+
+    if (_isEpic && mounted) {
+      setState(() => _showSparkle = false);
+    }
 
     // 親にリアクション追加を通知（シートは閉じない）
     widget.onReactionAdded?.call(widget.type.value);
@@ -136,41 +148,109 @@ class _ReactionButtonState extends ConsumerState<ReactionButton>
         builder: (context, child) {
           return Transform.scale(
             scale: _isReacted ? _scaleAnimation.value : 1.0,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: _isReacted
-                    ? color.withValues(alpha: 0.2)
-                    : AppColors.surfaceVariant,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: _isReacted
-                      ? color.withValues(alpha: 0.5)
-                      : Colors.transparent,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _ReactionIcon(type: widget.type),
-                  /* カウントは表示しない（背景に表示するため）
-                  if (widget.count > 0 || _isReacted) ...[
-                    const SizedBox(width: 4),
-                    Text(
-                      '${widget.count + (_isReacted ? 1 : 0)}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: _isReacted ? color : AppColors.textSecondary,
-                      ),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _isReacted
+                        ? color.withValues(alpha: 0.2)
+                        : AppColors.surfaceVariant,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: _isReacted
+                          ? color.withValues(alpha: 0.5)
+                          : Colors.transparent,
                     ),
-                  ],
-                  */
-                ],
-              ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [_ReactionIcon(type: widget.type)],
+                  ),
+                ),
+                // Epicのみスパークル
+                if (_showSparkle)
+                  Positioned.fill(
+                    child: _EpicSparkleOverlay(controller: _controller),
+                  ),
+              ],
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+/// Epic リアクション専用のスパークルオーバーレイ
+class _EpicSparkleOverlay extends StatelessWidget {
+  final AnimationController controller;
+
+  const _EpicSparkleOverlay({required this.controller});
+
+  static const _count = 8;
+  static const _angles = [0.0, 0.79, 1.57, 2.36, 3.14, 3.93, 4.71, 5.50];
+  static const _icons = ['✦', '♡', '✧', '⋆', '✦', '♡', '✧', '⋆'];
+  static const _colors = [
+    Color(0xFFFF6B9D), // pink
+    Color(0xFFFFD93D), // gold
+    Color(0xFFFF8C42), // coral
+    Color(0xFF6EC6FF), // cyan
+    Color(0xFFC77DFF), // purple
+    Color(0xFFA8E063), // lime
+    Color(0xFFFF6B9D), // pink
+    Color(0xFFFFD93D), // gold
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        // Particles appear from 15% to 85% of the animation.
+        final raw = ((controller.value - 0.15) / 0.70).clamp(0.0, 1.0);
+        final t = Curves.easeOut.transform(raw);
+        if (t <= 0) return const SizedBox();
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [for (var i = 0; i < _count; i++) _buildParticle(i, t)],
+        );
+      },
+    );
+  }
+
+  Widget _buildParticle(int index, double t) {
+    final angle = _angles[index];
+    final distance = 12.0 + (t * 24.0);
+    final dx = distance * math.cos(angle);
+    final dy = distance * math.sin(angle);
+    final opacity = (1.0 - t).clamp(0.0, 1.0);
+    final size = 8.0 + (1 - t) * 4.0;
+    return Positioned.fill(
+      child: Center(
+        child: Transform.translate(
+          offset: Offset(dx, dy),
+          child: Opacity(
+            opacity: opacity,
+            child: Text(
+              _icons[index],
+              style: TextStyle(
+                fontSize: size,
+                color: _colors[index],
+                shadows: [
+                  Shadow(
+                    color: _colors[index].withValues(alpha: 0.6),
+                    blurRadius: 4,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
