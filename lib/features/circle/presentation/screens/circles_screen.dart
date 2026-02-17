@@ -11,8 +11,10 @@ import '../../../../shared/models/circle_model.dart';
 import '../../../../shared/services/circle_service.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/providers/circle_trial_provider.dart';
+import '../../../../shared/providers/tutorial_phase5_provider.dart';
 import '../../../../shared/widgets/infinite_scroll_listener.dart';
 import '../../../../shared/widgets/load_more_footer.dart';
+import '../../../../shared/widgets/tutorial_overlay.dart';
 
 /// サークル画面のスクロールトップを要求するProvider
 final circleScrollToTopProvider = StateProvider<int>((ref) => 0);
@@ -51,6 +53,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   // 並び順・フィルター用の状態
   _SortOption _selectedSort = _SortOption.newest;
   final Set<_FilterOption> _selectedFilters = {};
+  bool _phase5Initialized = false;
 
   @override
   void initState() {
@@ -273,6 +276,15 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     final isCircleTrialSession = ref.watch(circleTrialSessionProvider);
     final isSearchMode =
         _searchController.text.isNotEmpty || _isSearching;
+    final tutorialPhase5Step = ref.watch(tutorialPhase5Provider);
+
+    if (currentUser != null && !_phase5Initialized) {
+      _phase5Initialized = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref.read(tutorialPhase5Provider.notifier).restoreOrStart(currentUser);
+      });
+    }
 
     // サークルボタンタップでスクロールトップを監視
     ref.listen<int>(circleScrollToTopProvider, (previous, next) {
@@ -557,6 +569,17 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
                   ),
                 ),
               ),
+              if (tutorialPhase5Step == TutorialPhase5Step.circleOverview)
+                Positioned.fill(
+                  child: TutorialOverlay(
+                    message: AppMessages.tutorial.circleOverviewGuide,
+                    onMaskTap: () =>
+                        ref.read(tutorialPhase5Provider.notifier).advance(),
+                    characterAssetPath: 'assets/onbord/onbord_01.png',
+                    bubbleBottomOffset:
+                        MediaQuery.of(context).padding.bottom + 96,
+                  ),
+                ),
             ],
           ),
         ),

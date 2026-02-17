@@ -436,6 +436,12 @@ class _TutorialMessages {
   String get bottomNavStampGuide => 'ここがスタンプ画面だよ！\n返信コメントでいいねをもらうとスタンプを押せるよ🎉';
   String get bottomNavMyPageGuide => 'ここがマイページだよ！\nプロフィール編集や設定はここからできるよ';
 
+  // Circle tutorial (Phase 5)
+  String get circleOverviewGuide =>
+      'ここがサークル画面だよ！\n興味のあるサークルを探したり、参加中サークルを確認できるよ😊';
+  String get circleFabGuide =>
+      '下の真ん中ボタンからサークルを作成できるよ！\n気の合う仲間のサークルを作ってみよう✨';
+
   // Post detail explanation (Phase 2)
   String get postDetailOverview => 'ここは投稿詳細画面だよ！\nあなたの投稿についたコメントを確認できるよ😊';
   String get postDetailLongPressComment =>

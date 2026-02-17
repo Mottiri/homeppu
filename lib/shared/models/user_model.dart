@@ -86,6 +86,8 @@ class UserModel {
   final String? tutorialPhase2Step; // チュートリアル進行ステップ（中断復帰用）
   final bool tutorialPhase3Completed; // 初回チュートリアルPhase3完了
   final String? tutorialPhase3Step; // チュートリアル進行ステップ（中断復帰用）
+  final bool tutorialPhase5Completed; // 初回チュートリアルPhase5完了
+  final String? tutorialPhase5Step; // チュートリアル進行ステップ（中断復帰用）
 
   UserModel({
     required this.uid,
@@ -139,6 +141,8 @@ class UserModel {
     this.tutorialPhase2Step,
     this.tutorialPhase3Completed = false,
     this.tutorialPhase3Step,
+    this.tutorialPhase5Completed = false,
+    this.tutorialPhase5Step,
   });
 
   factory UserModel.fromFirestore(DocumentSnapshot doc) {
@@ -211,6 +215,8 @@ class UserModel {
       tutorialPhase2Step: data['tutorialPhase2Step'],
       tutorialPhase3Completed: data['tutorialPhase3Completed'] ?? false,
       tutorialPhase3Step: data['tutorialPhase3Step'],
+      tutorialPhase5Completed: data['tutorialPhase5Completed'] ?? false,
+      tutorialPhase5Step: data['tutorialPhase5Step'],
     );
   }
 
@@ -272,6 +278,8 @@ class UserModel {
       if (tutorialPhase2Step != null) 'tutorialPhase2Step': tutorialPhase2Step,
       'tutorialPhase3Completed': tutorialPhase3Completed,
       if (tutorialPhase3Step != null) 'tutorialPhase3Step': tutorialPhase3Step,
+      'tutorialPhase5Completed': tutorialPhase5Completed,
+      if (tutorialPhase5Step != null) 'tutorialPhase5Step': tutorialPhase5Step,
     };
   }
 
@@ -326,6 +334,8 @@ class UserModel {
     String? tutorialPhase2Step,
     bool? tutorialPhase3Completed,
     String? tutorialPhase3Step,
+    bool? tutorialPhase5Completed,
+    String? tutorialPhase5Step,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -386,6 +396,9 @@ class UserModel {
       tutorialPhase3Completed:
           tutorialPhase3Completed ?? this.tutorialPhase3Completed,
       tutorialPhase3Step: tutorialPhase3Step ?? this.tutorialPhase3Step,
+      tutorialPhase5Completed:
+          tutorialPhase5Completed ?? this.tutorialPhase5Completed,
+      tutorialPhase5Step: tutorialPhase5Step ?? this.tutorialPhase5Step,
     );
   }
 }

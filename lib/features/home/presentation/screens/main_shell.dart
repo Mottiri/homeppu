@@ -10,6 +10,7 @@ import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/providers/circle_trial_provider.dart';
 import '../../../../shared/providers/tutorial_phase1_provider.dart';
 import '../../../../shared/providers/tutorial_phase3_provider.dart';
+import '../../../../shared/providers/tutorial_phase5_provider.dart';
 import '../../../../shared/widgets/tutorial_overlay.dart';
 import '../../../../shared/services/circle_service.dart';
 import '../../../circle/presentation/screens/circles_screen.dart';
@@ -330,6 +331,7 @@ class _MainShellState extends ConsumerState<MainShell>
     final isCircleTrialSession = ref.watch(circleTrialSessionProvider);
     final tutorialStep = ref.watch(tutorialPhase1Provider);
     final tutorialPhase3Step = ref.watch(tutorialPhase3Provider);
+    final tutorialPhase5Step = ref.watch(tutorialPhase5Provider);
     final location = GoRouterState.of(context).matchedLocation;
 
     // チュートリアル初期化（main_shell で一度だけ）
@@ -404,6 +406,21 @@ class _MainShellState extends ConsumerState<MainShell>
         }
       });
     }
+    if (tutorialPhase5Step == TutorialPhase5Step.circleFabGuide &&
+        location.startsWith('/circles')) {
+      _resolveBottomNavHeight();
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        final rect = await resolveRectWithRetry(
+          _postNavKey,
+          ancestorKey: _tutorialRootStackKey,
+        );
+        if (!mounted) return;
+        if (!_isRectNearlyEqual(rect, _tutorialSpotlightRect)) {
+          setState(() => _tutorialSpotlightRect = rect);
+        }
+      });
+    }
 
     if (currentUser?.banStatus == 'permanent') {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -453,6 +470,9 @@ class _MainShellState extends ConsumerState<MainShell>
     final isStampTutorialActive =
         location.startsWith('/stamps') &&
         tutorialPhase3Step != TutorialPhase3Step.inactive;
+    final isCircleTutorialActive =
+        location.startsWith('/circles') &&
+        tutorialPhase5Step != TutorialPhase5Step.inactive;
 
     final page = Scaffold(
       resizeToAvoidBottomInset: false,
@@ -546,7 +566,10 @@ class _MainShellState extends ConsumerState<MainShell>
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
                           IgnorePointer(
-                            ignoring: isTutorialActive || isStampTutorialActive,
+                            ignoring:
+                                isTutorialActive ||
+                                isStampTutorialActive ||
+                                isCircleTutorialActive,
                             child: _NavItem(
                               key: _homeNavKey,
                               icon: Icons.home_outlined,
@@ -565,7 +588,10 @@ class _MainShellState extends ConsumerState<MainShell>
                             ),
                           ),
                           IgnorePointer(
-                            ignoring: isTutorialActive || isStampTutorialActive,
+                            ignoring:
+                                isTutorialActive ||
+                                isStampTutorialActive ||
+                                isCircleTutorialActive,
                             child: _NavItem(
                               key: _circleNavKey,
                               icon: Icons.groups_outlined,
@@ -604,7 +630,10 @@ class _MainShellState extends ConsumerState<MainShell>
                             ),
                           ),
                           IgnorePointer(
-                            ignoring: isTutorialActive || isStampTutorialActive,
+                            ignoring:
+                                isTutorialActive ||
+                                isStampTutorialActive ||
+                                isCircleTutorialActive,
                             child: GestureDetector(
                               key: _postNavKey,
                               onTap: () =>
@@ -679,7 +708,10 @@ class _MainShellState extends ConsumerState<MainShell>
                             ),
                           ),
                           IgnorePointer(
-                            ignoring: isTutorialActive || isStampTutorialActive,
+                            ignoring:
+                                isTutorialActive ||
+                                isStampTutorialActive ||
+                                isCircleTutorialActive,
                             child: _NavItem(
                               key: _stampNavKey,
                               icon: Icons.collections_bookmark_outlined,
@@ -690,7 +722,8 @@ class _MainShellState extends ConsumerState<MainShell>
                             ),
                           ),
                           IgnorePointer(
-                            ignoring: isStampTutorialActive,
+                            ignoring:
+                                isStampTutorialActive || isCircleTutorialActive,
                             child: _NavItem(
                               key: _myPageNavKey,
                               icon: Icons.person_outline,
@@ -763,6 +796,23 @@ class _MainShellState extends ConsumerState<MainShell>
                   await notifier.advance();
                 }
               },
+              characterAssetPath: 'assets/onbord/onbord_01.png',
+              bubbleBottomOffset:
+                  MediaQuery.of(context).padding.bottom +
+                  _measuredBottomNavHeight +
+                  16,
+            ),
+          ),
+        if (location.startsWith('/circles') &&
+            tutorialPhase5Step == TutorialPhase5Step.circleFabGuide)
+          Positioned.fill(
+            child: TutorialOverlay(
+              message: AppMessages.tutorial.circleFabGuide,
+              spotlightRect: _tutorialSpotlightRect,
+              onSpotlightTap: () => ref
+                  .read(tutorialPhase5Provider.notifier)
+                  .markCompleted(),
+              onMaskTap: () {},
               characterAssetPath: 'assets/onbord/onbord_01.png',
               bubbleBottomOffset:
                   MediaQuery.of(context).padding.bottom +
