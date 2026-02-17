@@ -119,6 +119,7 @@ class AuthService {
     required String displayName,
     int avatarIndex = 0,
     AvatarParts? avatarParts,
+    String profileVisualMode = 'icon',
     String? namePrefix,
     String? nameSuffix,
   }) async {
@@ -142,6 +143,7 @@ class AuthService {
           displayName: displayName,
           avatarIndex: avatarIndex,
           avatarParts: avatarParts,
+          profileVisualMode: profileVisualMode,
           virtue: AppConstants.virtueInitial,
           thanksStampCredits: 1,
           namePrefix: namePrefix,

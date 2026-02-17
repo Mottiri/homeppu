@@ -76,6 +76,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         displayName: _displayName,
         avatarIndex: _selectedAvatarIndex,
         avatarParts: _useAvatarParts ? _selectedAvatarParts : null,
+        profileVisualMode: _useAvatarParts ? 'avatar' : 'icon',
         namePrefix: _selectedPrefix.id,
         nameSuffix: _selectedSuffix.id,
       );
