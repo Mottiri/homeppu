@@ -550,7 +550,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             primaryAccent: _primaryAccent,
                             secondaryAccent: _secondaryAccent,
                             onToggleFollow: _toggleFollow,
-                            onMessage: () {},
                           ),
 
                         // 管理者のみ: 累計被通報回数

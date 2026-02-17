@@ -8,7 +8,6 @@ class ProfileActions extends StatelessWidget {
   final Color primaryAccent;
   final Color secondaryAccent;
   final VoidCallback onToggleFollow;
-  final VoidCallback onMessage;
 
   const ProfileActions({
     super.key,
@@ -17,7 +16,6 @@ class ProfileActions extends StatelessWidget {
     required this.primaryAccent,
     required this.secondaryAccent,
     required this.onToggleFollow,
-    required this.onMessage,
   });
 
   @override
@@ -69,25 +67,6 @@ class ProfileActions extends StatelessWidget {
                           ),
                         ),
                 ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [primaryAccent, secondaryAccent],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(28),
-              ),
-              child: IconButton(
-                onPressed: onMessage,
-                icon: const Icon(
-                  Icons.mail_outline,
-                  color: Colors.white,
-                ),
-                padding: const EdgeInsets.all(12),
               ),
             ),
           ],
