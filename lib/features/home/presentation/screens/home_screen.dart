@@ -829,6 +829,16 @@ class _PostsListState extends ConsumerState<_PostsList> {
                           : ValueKey(post.id),
                       post: post,
                       longPressOnlyMode: isTutorialTargetCard,
+                      onReactionOverlayClosed: isTutorialTargetCard
+                          ? () {
+                              final step = ref.read(tutorialPhase1Provider);
+                              if (step == TutorialPhase1Step.homeLongPress) {
+                                ref
+                                    .read(tutorialPhase1Provider.notifier)
+                                    .markHomeLongPressCompleted();
+                              }
+                            }
+                          : null,
                       onDeleted: () {
                         setState(() {
                           _posts.removeAt(postIndex);
@@ -837,9 +847,7 @@ class _PostsListState extends ConsumerState<_PostsList> {
                     );
                     if (isTutorialTargetCard) {
                       return _LongPressProbe(
-                        onLongPress: () => ref
-                            .read(tutorialPhase1Provider.notifier)
-                            .markCompleted(),
+                        onLongPress: () {},
                         child: postCard,
                       );
                     }

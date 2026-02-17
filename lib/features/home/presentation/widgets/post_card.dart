@@ -34,6 +34,7 @@ import 'reaction_background.dart';
 class PostCard extends ConsumerStatefulWidget {
   final PostModel post;
   final VoidCallback? onDeleted;
+  final VoidCallback? onReactionOverlayClosed;
   final bool isCircleOwner; // サークルオーナーかどうか
   final Function(bool)? onPinToggle; // ピン留めトグルコールバック
   final bool isDetailView; // 詳細画面表示モード（タップで遷移しない）
@@ -43,6 +44,7 @@ class PostCard extends ConsumerStatefulWidget {
     super.key,
     required this.post,
     this.onDeleted,
+    this.onReactionOverlayClosed,
     this.isCircleOwner = false,
     this.onPinToggle,
     this.isDetailView = false,
@@ -199,7 +201,7 @@ class _PostCardState extends ConsumerState<PostCard> {
     bool hasSyncedUnlocks = false;
     bool isSyncingUnlocks = false;
 
-    showDialog(
+    await showDialog(
       context: context,
       barrierColor: Colors.black.withValues(alpha: 0.6), // 暗い背景
       barrierDismissible: true, // 背景タップで閉じる
@@ -340,6 +342,7 @@ class _PostCardState extends ConsumerState<PostCard> {
         );
       },
     );
+    widget.onReactionOverlayClosed?.call();
   }
 
   /// リアクションをサーバーに送信

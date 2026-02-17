@@ -1,4 +1,4 @@
-// ignore_for_file: use_build_context_synchronously
+﻿// ignore_for_file: use_build_context_synchronously
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -39,6 +39,10 @@ class _MainShellState extends ConsumerState<MainShell>
   bool _isEndingCircleTrial = false;
   final GlobalKey _tutorialRootStackKey = GlobalKey();
   final GlobalKey _bottomNavContainerKey = GlobalKey();
+  final GlobalKey _homeNavKey = GlobalKey();
+  final GlobalKey _circleNavKey = GlobalKey();
+  final GlobalKey _postNavKey = GlobalKey();
+  final GlobalKey _stampNavKey = GlobalKey();
   final GlobalKey _myPageNavKey = GlobalKey();
   Rect? _tutorialSpotlightRect;
   bool _tutorialInitialized = false;
@@ -250,7 +254,7 @@ class _MainShellState extends ConsumerState<MainShell>
     });
   }
 
-  /// チュートリアル Step 0: マイページNavItemのRect取得
+  /// チュートリアル Step 0: マイページ NavItem の位置を取得
   void _resolveMyPageNavRect() {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
@@ -277,6 +281,48 @@ class _MainShellState extends ConsumerState<MainShell>
     });
   }
 
+  bool _isBottomNavGuideStep(TutorialPhase1Step step) {
+    return step == TutorialPhase1Step.bottomNavHome ||
+        step == TutorialPhase1Step.bottomNavCircle ||
+        step == TutorialPhase1Step.bottomNavPost ||
+        step == TutorialPhase1Step.bottomNavStamps ||
+        step == TutorialPhase1Step.bottomNavMyPage;
+  }
+
+  GlobalKey _targetNavKeyForStep(TutorialPhase1Step step) {
+    switch (step) {
+      case TutorialPhase1Step.bottomNavHome:
+        return _homeNavKey;
+      case TutorialPhase1Step.bottomNavCircle:
+        return _circleNavKey;
+      case TutorialPhase1Step.bottomNavPost:
+        return _postNavKey;
+      case TutorialPhase1Step.bottomNavStamps:
+        return _stampNavKey;
+      case TutorialPhase1Step.bottomNavMyPage:
+        return _myPageNavKey;
+      default:
+        return _homeNavKey;
+    }
+  }
+
+  String _bottomNavGuideMessage(TutorialPhase1Step step) {
+    switch (step) {
+      case TutorialPhase1Step.bottomNavHome:
+        return AppMessages.tutorial.bottomNavHomeGuide;
+      case TutorialPhase1Step.bottomNavCircle:
+        return AppMessages.tutorial.bottomNavCircleGuide;
+      case TutorialPhase1Step.bottomNavPost:
+        return AppMessages.tutorial.bottomNavPostGuide;
+      case TutorialPhase1Step.bottomNavStamps:
+        return AppMessages.tutorial.bottomNavStampGuide;
+      case TutorialPhase1Step.bottomNavMyPage:
+        return AppMessages.tutorial.bottomNavMyPageGuide;
+      default:
+        return '';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUser = ref.watch(currentUserProvider).valueOrNull;
@@ -286,7 +332,7 @@ class _MainShellState extends ConsumerState<MainShell>
     final tutorialPhase3Step = ref.watch(tutorialPhase3Provider);
     final location = GoRouterState.of(context).matchedLocation;
 
-    // チュートリアル復元/開始（main_shell が中央管理）
+    // チュートリアル初期化（main_shell で一度だけ）
     if (currentUser != null && !_tutorialInitialized) {
       _tutorialInitialized = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -295,15 +341,28 @@ class _MainShellState extends ConsumerState<MainShell>
       });
     }
 
-    // Step 0 のスポットライト Rect 取得
+    // Step 0
     if (tutorialStep == TutorialPhase1Step.homeWelcome) {
       if (_tutorialSpotlightRect == null) {
         _resolveMyPageNavRect();
       }
       _resolveBottomNavHeight();
     }
-
-    // チュートリアル中は、必要な画面へ強制遷移して詰み経路を防ぐ。
+    if (_isBottomNavGuideStep(tutorialStep)) {
+      _resolveBottomNavHeight();
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        final rect = await resolveRectWithRetry(
+          _targetNavKeyForStep(tutorialStep),
+          ancestorKey: _tutorialRootStackKey,
+        );
+        if (!mounted) return;
+        if (!_isRectNearlyEqual(rect, _tutorialSpotlightRect)) {
+          setState(() => _tutorialSpotlightRect = rect);
+        }
+      });
+    }
+    // チュートリアル中は、必要な画面へ強制遷移して進行を維持する
     final shouldForceProfile =
         tutorialStep == TutorialPhase1Step.profileSettings &&
         !location.startsWith('/profile');
@@ -316,7 +375,8 @@ class _MainShellState extends ConsumerState<MainShell>
         location != '/settings';
     final shouldForceHome =
         (tutorialStep == TutorialPhase1Step.homeOverview ||
-            tutorialStep == TutorialPhase1Step.homeLongPress) &&
+            tutorialStep == TutorialPhase1Step.homeLongPress ||
+            _isBottomNavGuideStep(tutorialStep)) &&
         !location.startsWith('/home');
     if (shouldForceProfile || shouldForceSettings || shouldForceHome) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -337,7 +397,8 @@ class _MainShellState extends ConsumerState<MainShell>
           return;
         }
         if ((latestStep == TutorialPhase1Step.homeOverview ||
-                latestStep == TutorialPhase1Step.homeLongPress) &&
+                latestStep == TutorialPhase1Step.homeLongPress ||
+                _isBottomNavGuideStep(latestStep)) &&
             !GoRouterState.of(context).matchedLocation.startsWith('/home')) {
           context.go('/home');
         }
@@ -487,9 +548,10 @@ class _MainShellState extends ConsumerState<MainShell>
                           IgnorePointer(
                             ignoring: isTutorialActive || isStampTutorialActive,
                             child: _NavItem(
+                              key: _homeNavKey,
                               icon: Icons.home_outlined,
                               activeIcon: Icons.home_rounded,
-                              label: 'ホーム',
+                              label: AppMessages.home.navLabel,
                               isActive: currentIndex == 0,
                               onTap: () {
                                 if (currentIndex == 0) {
@@ -505,9 +567,10 @@ class _MainShellState extends ConsumerState<MainShell>
                           IgnorePointer(
                             ignoring: isTutorialActive || isStampTutorialActive,
                             child: _NavItem(
+                              key: _circleNavKey,
                               icon: Icons.groups_outlined,
                               activeIcon: Icons.groups_rounded,
-                              label: 'サークル',
+                              label: AppMessages.circle.navLabel,
                               isActive:
                                   currentIndex == 1 &&
                                   (isSubscriber || isCircleTrialSession),
@@ -543,6 +606,7 @@ class _MainShellState extends ConsumerState<MainShell>
                           IgnorePointer(
                             ignoring: isTutorialActive || isStampTutorialActive,
                             child: GestureDetector(
+                              key: _postNavKey,
                               onTap: () =>
                                   _handleCenterButtonTap(context, currentIndex),
                               child: AnimatedBuilder(
@@ -617,6 +681,7 @@ class _MainShellState extends ConsumerState<MainShell>
                           IgnorePointer(
                             ignoring: isTutorialActive || isStampTutorialActive,
                             child: _NavItem(
+                              key: _stampNavKey,
                               icon: Icons.collections_bookmark_outlined,
                               activeIcon: Icons.collections_bookmark_rounded,
                               label: AppMessages.stamp.navLabel,
@@ -630,10 +695,10 @@ class _MainShellState extends ConsumerState<MainShell>
                               key: _myPageNavKey,
                               icon: Icons.person_outline,
                               activeIcon: Icons.person_rounded,
-                              label: 'マイページ',
+                              label: AppMessages.profile.navLabel,
                               isActive: currentIndex == 3,
                               onTap: () {
-                                // チュートリアル Step 0: マイページへ遷移して次のステップへ
+                                // チュートリアル Step 0: マイページへ遷移して次へ
                                 if (tutorialStep ==
                                     TutorialPhase1Step.homeWelcome) {
                                   context.go('/profile');
@@ -678,11 +743,31 @@ class _MainShellState extends ConsumerState<MainShell>
                 ref.read(tutorialPhase1Provider.notifier).advance();
               },
               circularSpotlight: false,
-              // ボトムナビ実測高さの上に配置（端末差分を吸収）
+              // ボトムナビ直上に吹き出しを配置（端末差分を吸収）
               bubbleBottomOffset:
                   MediaQuery.of(context).padding.bottom +
                   _measuredBottomNavHeight +
                   12,
+            ),
+          ),
+        if (_isBottomNavGuideStep(tutorialStep))
+          Positioned.fill(
+            child: TutorialOverlay(
+              message: _bottomNavGuideMessage(tutorialStep),
+              spotlightRect: _tutorialSpotlightRect,
+              onMaskTap: () async {
+                final notifier = ref.read(tutorialPhase1Provider.notifier);
+                if (tutorialStep == TutorialPhase1Step.bottomNavMyPage) {
+                  await notifier.markCompleted();
+                } else {
+                  await notifier.advance();
+                }
+              },
+              characterAssetPath: 'assets/onbord/onbord_01.png',
+              bubbleBottomOffset:
+                  MediaQuery.of(context).padding.bottom +
+                  _measuredBottomNavHeight +
+                  16,
             ),
           ),
       ],
@@ -760,3 +845,4 @@ class _NavItem extends StatelessWidget {
     );
   }
 }
+

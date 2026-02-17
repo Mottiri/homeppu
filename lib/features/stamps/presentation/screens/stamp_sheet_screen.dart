@@ -1074,8 +1074,9 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                                         ),
                                         const SizedBox(height: 10),
                                         Text(
-                                          '最初にスタンプシートを1つ選ぼう。\n'
-                                          'シートはスタンプが埋まるまで変更できないよ。',
+                                          AppMessages
+                                              .tutorial
+                                              .stampInitialSheetSelection,
                                           textAlign: TextAlign.center,
                                           style: Theme.of(context)
                                               .textTheme
@@ -1108,9 +1109,9 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                               top: -appBarReservedHeight,
                               bottom: -tutorialBottomExtension,
                               child: TutorialOverlay(
-                                message:
-                                    'まずはここをタップして最初のシートを選ぼう。\n'
-                                    'シートはスタンプが埋まるまで変更できないよ。',
+                                message: AppMessages
+                                    .tutorial
+                                    .stampInitialSheetSelectionGuide,
                                 spotlightRect: _tutorialSpotlightRect!.shift(
                                   Offset(0, appBarReservedHeight),
                                 ),

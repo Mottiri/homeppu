@@ -189,15 +189,7 @@ class _CoachBubble extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  message,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w400,
-                    height: 1.5,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
+                _StyledTutorialMessage(message: message),
                 if (actionLabel != null) ...[
                   const SizedBox(height: 12),
                   SizedBox(
@@ -222,6 +214,63 @@ class _CoachBubble extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+class _StyledTutorialMessage extends StatelessWidget {
+  const _StyledTutorialMessage({required this.message});
+
+  final String message;
+
+  static final RegExp _tokenPattern = RegExp(
+    r'(\[\[danger:[^\]]+\]\]|\*\*[^*]+\*\*)',
+    multiLine: true,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    const baseStyle = TextStyle(
+      fontSize: 14,
+      fontWeight: FontWeight.w400,
+      height: 1.5,
+      color: AppColors.textPrimary,
+    );
+    final spans = <TextSpan>[];
+    int cursor = 0;
+    for (final match in _tokenPattern.allMatches(message)) {
+      if (match.start > cursor) {
+        spans.add(TextSpan(text: message.substring(cursor, match.start)));
+      }
+      final token = match.group(0)!;
+      if (token.startsWith('[[danger:') && token.endsWith(']]')) {
+        final content = token.substring(9, token.length - 2);
+        spans.add(
+          TextSpan(
+            text: content,
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              color: AppColors.error,
+            ),
+          ),
+        );
+      } else if (token.startsWith('**') && token.endsWith('**')) {
+        final content = token.substring(2, token.length - 2);
+        spans.add(
+          TextSpan(
+            text: content,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        );
+      } else {
+        spans.add(TextSpan(text: token));
+      }
+      cursor = match.end;
+    }
+    if (cursor < message.length) {
+      spans.add(TextSpan(text: message.substring(cursor)));
+    }
+
+    return Text.rich(TextSpan(style: baseStyle, children: spans));
   }
 }
 

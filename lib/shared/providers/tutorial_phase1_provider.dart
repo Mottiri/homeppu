@@ -19,6 +19,11 @@ enum TutorialPhase1Step {
   finished,
   homeOverview,
   homeLongPress,
+  bottomNavHome,
+  bottomNavCircle,
+  bottomNavPost,
+  bottomNavStamps,
+  bottomNavMyPage,
 }
 
 extension TutorialPhase1StepExt on TutorialPhase1Step {
@@ -93,6 +98,12 @@ class TutorialPhase1Notifier extends StateNotifier<TutorialPhase1Step> {
       },
     );
     state = TutorialPhase1Step.inactive;
+  }
+
+  Future<void> markHomeLongPressCompleted() async {
+    final next = TutorialPhase1Step.bottomNavHome;
+    state = next;
+    await _persistStep(next);
   }
 
   Future<void> _persistStep(TutorialPhase1Step step) async {

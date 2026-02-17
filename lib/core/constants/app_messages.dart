@@ -264,6 +264,7 @@ class _EmptyMessages {
 class _CircleMessages {
   const _CircleMessages();
 
+  String get navLabel => 'サークル';
   String get joinRequestTitle => '参加申請';
   String get joinRequestMessage => 'このサークルは招待制です。\nオーナーに参加申請を送信しますか？';
   String get joinRequestConfirm => '申請する';
@@ -368,6 +369,7 @@ class _CircleMessages {
 class _HomeMessages {
   const _HomeMessages();
 
+  String get navLabel => 'ホーム';
   String get tabRecommended => 'おすすめ';
   String get tabFollowing => 'フォロー中';
   String get nativeAdLabel => '広告';
@@ -401,7 +403,7 @@ class _TutorialMessages {
 
   // Step 0: ホーム画面
   String get welcomeHome =>
-      'ほめっぷへ来てくれてありがとう！\nまずは公開範囲を設定しよう🌟\n下の「マイページ」をタップしてね';
+      '**ほめっぷへ来てくれてありがとう！**\nまずは公開範囲を設定しよう🌟\n下の「マイページ」をタップしてね';
 
   // Step 1: マイページ（設定アイコン）
   String get tapSettings => '次は右上の設定アイコン⚙️をタップしてね';
@@ -410,38 +412,45 @@ class _TutorialMessages {
   String get scrollToPrivacy => 'ここが「公開範囲」の設定だよ！\nまずはここをタップして開いてみてね';
 
   // Step 3: AIモード説明
-  String get explainAI => 'AIだけが見れるモードだよ\n人間には見えないから安心して投稿できる！';
+  String get explainAI => 'AIだけが見れるモードだよ!\n人間には見えないから安心して投稿できる！AIからの返信はくるよ😊';
 
   // Step 4: ミックスモード説明
-  String get explainMix => 'AIも人間も両方見れるモードだよ\n色んな人からリアクションがもらえる！';
+  String get explainMix => 'AIも人間も両方見れるモードだよ！\n色んな人からリアクションがもらえる💕';
 
   // Step 5: 人間モード説明
-  String get explainHuman => '人間だけが見れるモードだよ\n本物のリアクションだけがほしい人向け！';
+  String get explainHuman => '人間だけが見れるモードだよ！\n投稿に慣れたらこのモードに挑戦しよう！';
 
   // Step 6: 完了
   String get complete =>
-      'これで公開範囲の説明はおしまい！\n希望のモードをタップするとアプリを開始できるよ🎉\nあとからいつでも設定は変えられるから安心してね！';
+      'これで公開範囲の説明はおしまい！\n画面操作出来るようになったら、希望のモードをタップしてね🎉\n**あとからいつでも設定は変えられるから安心してね！**';
   String get completeAction => 'わかった！';
   String get selectModeRequired => 'モードを1つ選んでね';
 
   // Home explanation
-  String get homeOverview => 'ここはホーム画面だよ\nみんなの投稿がここに表示されるよ';
-  String get homeLongPress => 'カード長押しでリアクションスタンプが押せるよ';
+  String get homeOverview => 'ここはホーム画面だよ！\nみんなの投稿がここに表示されるよ😊';
+  String get homeLongPress => 'カード長押しでリアクションスタンプが押せるよ！かわいいスタンプをいっぱい押そう🎉';
+  String get bottomNavHomeGuide => 'ここがホーム画面だよ！\n投稿だけでなく通知の確認もここからできるよ🔔';
+  String get bottomNavCircleGuide =>
+      'ここがサークル機能だよ！\n**この機能はサブスク限定だよ**\n1回だけ見れるけど、**他の画面に行っちゃうと体験は終了**して、[[danger:サークル画面を開けなくなっちゃうから注意してね！]]';
+  String get bottomNavPostGuide => '真ん中のボタンから投稿を作成できるよ！\n今日の気持ちや出来事を投稿してみよう💕';
+  String get bottomNavStampGuide => 'ここがスタンプ画面だよ！\n返信コメントでいいねをもらうとスタンプを押せるよ🎉';
+  String get bottomNavMyPageGuide => 'ここがマイページだよ！\nプロフィール編集や設定はここからできるよ';
 
   // Post detail explanation (Phase 2)
-  String get postDetailOverview =>
-      'ここは投稿詳細画面だよ\nあなたの投稿についたコメントを確認できるよ';
+  String get postDetailOverview => 'ここは投稿詳細画面だよ！\nあなたの投稿についたコメントを確認できるよ😊';
   String get postDetailLongPressComment =>
-      '他の人のコメントを長押しすると\n投稿主として「いいね」を返せるよ';
+      '他の人のコメントを長押しすると\n投稿主として「いいね！」を返せるよ❤\nいいコメントがあったらいいね！してあげてね😊';
 
   // Stamp sheet explanation (Phase 3)
-  String get stampOverview =>
-      'ここはスタンプ画面だよ\n返信コメントでいいねをもらうと、ここでスタンプを押せるよ';
-  String get stampLongPressSheet => 'まずはシートを長押しして\nスタンプバーを開いてみよう';
-  String get stampCatalogGuide =>
-      'ここからスタンプシート一覧を開けるよ\n購入できるデザインもあるよ';
-  String get stampCollectionGuide => 'ここはコレクション（アーカイブ）だよ\n過去シートを確認できるよ';
-  String get stampUndoGuide => 'ここから最新のスタンプを取り消せるよ';
+  String get stampOverview => 'ここはスタンプ画面だよ！\n返信コメントでいいね！をもらうと、ここでスタンプを押せるよ🎉';
+  String get stampInitialSheetSelection =>
+      '最初にスタンプシートを1つ選ぼう！\nシートはスタンプが埋まるまで変更できないよ。';
+  String get stampInitialSheetSelectionGuide =>
+      'まずはここをタップして最初のシートを選ぼう！\n[[danger:シートはスタンプが埋まるまで変更できないよ。]]';
+  String get stampLongPressSheet => 'まずはシートを長押しして\nスタンプバーを開いてみよう！';
+  String get stampCatalogGuide => 'ここからスタンプシート一覧を開けるよ！\n購入できるデザインもあるよ😊';
+  String get stampCollectionGuide => 'ここはコレクションだよ！\n過去スタンプで埋めたシートを確認できるよ！';
+  String get stampUndoGuide => 'ここから最新のスタンプを取り消せるよ！';
 
   // 共通
   String get nextAction => '次へ';
@@ -611,6 +620,7 @@ class _AdminMessages {
 class _ProfileMessages {
   const _ProfileMessages();
 
+  String get navLabel => 'マイページ';
   // 設定画面
   String get settingsTitle => '設定';
   String get premiumTitle => 'プレミアム';
