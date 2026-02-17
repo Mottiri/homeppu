@@ -412,7 +412,7 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen>
 
               // AIモード
               _buildSection(
-                title: 'AI参加モード',
+                title: 'サークルモード',
                 subtitle: _getAIModeDescription(),
                 child: SegmentedButton<CircleAIMode>(
                   segments: const [
@@ -560,11 +560,11 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen>
   String _getAIModeDescription() {
     switch (_aiMode) {
       case CircleAIMode.aiOnly:
-        return 'あなた専用のAIパートナーたちがサポートします';
+        return 'あなた専用のAIパートナーたちがサポートします。\n人には公開されません。';
       case CircleAIMode.mix:
-        return '人間とAIが協力して目標を目指します';
+        return '人とAIが一緒に活動します。';
       case CircleAIMode.humanOnly:
-        return '人間同士で励まし合います';
+        return '人同士で活動します。AIは参加しません。';
     }
   }
 
