@@ -113,7 +113,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   Future<void> _openAvatarEdit() async {
     final result = await context.push<AvatarParts>(
       '/avatar-edit',
-      extra: _selectedAvatarParts,
+      extra: <String, dynamic>{
+        'parts': _selectedAvatarParts,
+        'allowedRarities': const <String>['common'],
+      },
     );
     if (!mounted || result == null) return;
     setState(() => _selectedAvatarParts = result);

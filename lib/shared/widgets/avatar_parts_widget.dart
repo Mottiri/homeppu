@@ -15,6 +15,7 @@ class AvatarPartsWidget extends StatelessWidget {
   static const Map<String, double> _mouthScaleOverrides = {
     'mouth_03': 0.23,
     'mouth_06': 0.3,
+    'mouth_07': 0.3,
   };
   static const Map<String, Offset> _mouthOffsetOverrides = {
     'mouth_03': Offset(0, 1),
@@ -24,11 +25,24 @@ class AvatarPartsWidget extends StatelessWidget {
   static const double _eyebrowsScale = 0.52;
   static const Map<String, double> _eyebrowsScaleOverrides = {
     'eyebrows_04': 0.46,
+    'eyebrows_07': 0.46,
+    'eyebrows_08': 0.46,
+    'eyebrows_11': 0.46,
+    'eyebrows_12': 0.46,
+    'eyebrows_13': 0.46,
+    'eyebrows_16': 0.46,
+    'eyebrows_17': 0.46,
+    'eyebrows_19': 0.46,
+    'eyebrows_20': 0.46,
   };
   static const Offset _eyebrowsOffset = Offset(0, -9);
   static const Map<String, Offset> _eyebrowsOffsetOverrides = {
     'eyebrows_04': Offset(0, -1),
     'eyebrows_02': Offset(0, -2),
+    'eyebrows_03': Offset(0, -2),
+    'eyebrows_09': Offset(0, -2),
+    'eyebrows_17': Offset(0, -2),
+    'eyebrows_20': Offset(0, -3),
   };
   static const Offset _eyesOffset = Offset(0, -2);
   static const Map<String, Offset> _eyesOffsetOverrides = {

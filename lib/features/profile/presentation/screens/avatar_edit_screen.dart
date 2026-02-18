@@ -20,10 +20,12 @@ enum _AvatarPartCategory { hair, eyebrows, eyes, mouth }
 
 class AvatarEditScreen extends ConsumerStatefulWidget {
   final AvatarParts initialParts;
+  final Set<String>? allowedRarities;
 
   const AvatarEditScreen({
     super.key,
     required this.initialParts,
+    this.allowedRarities,
   });
 
   @override
@@ -40,20 +42,33 @@ class _AvatarEditScreenState extends ConsumerState<AvatarEditScreen> {
   @override
   void initState() {
     super.initState();
-    _parts = widget.initialParts;
+    _parts = _normalizePartsForAllowedRarities(widget.initialParts);
   }
 
   List<String> get _currentIds {
+    List<String> ids;
     switch (_category) {
       case _AvatarPartCategory.hair:
-        return AvatarAssets.hairIds;
+        ids = AvatarAssets.hairIds;
+        break;
       case _AvatarPartCategory.eyebrows:
-        return AvatarAssets.eyebrowsIds;
+        ids = AvatarAssets.eyebrowsIds;
+        break;
       case _AvatarPartCategory.eyes:
-        return AvatarAssets.eyesIds;
+        ids = AvatarAssets.eyesIds;
+        break;
       case _AvatarPartCategory.mouth:
-        return AvatarAssets.mouthIds;
+        ids = AvatarAssets.mouthIds;
+        break;
     }
+    if (widget.allowedRarities == null || widget.allowedRarities!.isEmpty) {
+      return _groupIdsByRarity(ids);
+    }
+    final filteredIds =
+        ids
+            .where((id) => widget.allowedRarities!.contains(_rarityForId(id)))
+            .toList();
+    return _groupIdsByRarity(filteredIds);
   }
 
   String get _selectedId {
@@ -112,6 +127,59 @@ class _AvatarEditScreenState extends ConsumerState<AvatarEditScreen> {
     return AvatarAssets.partRarity[id] ?? 'common';
   }
 
+  List<String> _groupIdsByRarity(List<String> ids) {
+    final common = <String>[];
+    final rare = <String>[];
+    final epic = <String>[];
+    final others = <String>[];
+
+    for (final id in ids) {
+      switch (_rarityForId(id)) {
+        case 'common':
+          common.add(id);
+          break;
+        case 'rare':
+          rare.add(id);
+          break;
+        case 'epic':
+          epic.add(id);
+          break;
+        default:
+          others.add(id);
+      }
+    }
+
+    return [...common, ...rare, ...epic, ...others];
+  }
+
+  AvatarParts _normalizePartsForAllowedRarities(AvatarParts parts) {
+    if (widget.allowedRarities == null || widget.allowedRarities!.isEmpty) {
+      return parts;
+    }
+
+    String normalize({required String currentId, required List<String> ids}) {
+      if (widget.allowedRarities!.contains(_rarityForId(currentId))) {
+        return currentId;
+      }
+      for (final id in ids) {
+        if (widget.allowedRarities!.contains(_rarityForId(id))) {
+          return id;
+        }
+      }
+      return currentId;
+    }
+
+    return parts.copyWith(
+      hairId: normalize(currentId: parts.hairId, ids: AvatarAssets.hairIds),
+      eyebrowsId: normalize(
+        currentId: parts.eyebrowsId,
+        ids: AvatarAssets.eyebrowsIds,
+      ),
+      eyesId: normalize(currentId: parts.eyesId, ids: AvatarAssets.eyesIds),
+      mouthId: normalize(currentId: parts.mouthId, ids: AvatarAssets.mouthIds),
+    );
+  }
+
   String _assetPathForPartId(String id) {
     if (AvatarAssets.hairIds.contains(id)) {
       return AvatarAssets.hairPath(id);
@@ -147,10 +215,7 @@ class _AvatarEditScreenState extends ConsumerState<AvatarEditScreen> {
     return isSelected ? AppColors.primary : AppColors.surfaceVariant;
   }
 
-  void _onLockedPartTap({
-    required String id,
-    required String rarity,
-  }) {
+  void _onLockedPartTap({required String id, required String rarity}) {
     if (_isOpeningLockedDialog) return;
     _isOpeningLockedDialog = true;
     _showLockedDialog(id: id, rarity: rarity).whenComplete(() {
@@ -178,7 +243,9 @@ class _AvatarEditScreenState extends ConsumerState<AvatarEditScreen> {
       return cost;
     }
 
-    final cachedCost = parseCost(ref.read(virtueShopConfigProvider).valueOrNull);
+    final cachedCost = parseCost(
+      ref.read(virtueShopConfigProvider).valueOrNull,
+    );
     if (cachedCost != null) {
       // Use cached value for fast UX and refresh in background to reduce staleness.
       unawaited(_refreshVirtueConfigInBackground());
@@ -207,14 +274,20 @@ class _AvatarEditScreenState extends ConsumerState<AvatarEditScreen> {
   Future<int?> _loadCurrentVirtue() async {
     final currentUser = ref.read(currentUserProvider).valueOrNull;
     if (currentUser != null) {
-      debugPrint('[AvatarVirtueDialog] Using currentUserProvider virtue=${currentUser.virtue}');
+      debugPrint(
+        '[AvatarVirtueDialog] Using currentUserProvider virtue=${currentUser.virtue}',
+      );
       return currentUser.virtue;
     }
 
-    debugPrint('[AvatarVirtueDialog] currentUser unavailable. Fetching callable virtue status');
+    debugPrint(
+      '[AvatarVirtueDialog] currentUser unavailable. Fetching callable virtue status',
+    );
     try {
       final virtueStatus = await ref.refresh(virtueStatusProvider.future);
-      debugPrint('[AvatarVirtueDialog] Fetched callable virtue=${virtueStatus.virtue}');
+      debugPrint(
+        '[AvatarVirtueDialog] Fetched callable virtue=${virtueStatus.virtue}',
+      );
       return virtueStatus.virtue;
     } catch (e) {
       debugPrint('[AvatarVirtueDialog] Fetch virtue status failed: $e');
@@ -231,10 +304,7 @@ class _AvatarEditScreenState extends ConsumerState<AvatarEditScreen> {
       final cost = await _loadAvatarPartCost(rarity);
       if (!mounted) return;
       if (cost == null || cost <= 0) {
-        SnackBarHelper.showError(
-          context,
-          AppMessages.error.loadFailed('価格情報'),
-        );
+        SnackBarHelper.showError(context, AppMessages.error.loadFailed('価格情報'));
         return;
       }
 
@@ -277,7 +347,9 @@ class _AvatarEditScreenState extends ConsumerState<AvatarEditScreen> {
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.rarityRare.withValues(alpha: 0.3),
+                              color: AppColors.rarityRare.withValues(
+                                alpha: 0.3,
+                              ),
                               blurRadius: 16,
                               spreadRadius: 4,
                             ),
@@ -462,7 +534,9 @@ class _AvatarEditScreenState extends ConsumerState<AvatarEditScreen> {
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.rarityEpic.withValues(alpha: 0.3),
+                              color: AppColors.rarityEpic.withValues(
+                                alpha: 0.3,
+                              ),
                               blurRadius: 16,
                               spreadRadius: 4,
                             ),
@@ -543,7 +617,10 @@ class _AvatarEditScreenState extends ConsumerState<AvatarEditScreen> {
       ref.invalidate(virtueStatusProvider);
       ref.invalidate(virtueHistoryProvider);
       if (mounted) {
-        SnackBarHelper.showSuccess(context, AppMessages.success.purchaseCompleted);
+        SnackBarHelper.showSuccess(
+          context,
+          AppMessages.success.purchaseCompleted,
+        );
       }
       return true;
     } on FirebaseFunctionsException catch (e) {
@@ -678,11 +755,17 @@ class _AvatarEditScreenState extends ConsumerState<AvatarEditScreen> {
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    AvatarPartsWidget(
-                      parts: _withPart(id),
-                      size: 72,
-                      backgroundColor: Colors.transparent,
-                      borderRadius: BorderRadius.circular(14),
+                    Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Image.asset(
+                        _assetPathForPartId(id),
+                        width: 56,
+                        height: 56,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) {
+                          return const SizedBox(width: 56, height: 56);
+                        },
+                      ),
                     ),
                     if (isLocked)
                       Positioned(
@@ -786,9 +869,7 @@ class _AvatarPremiumOptionCard extends StatelessWidget {
         child: Ink(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: AppColors.praise.withValues(alpha: 0.35),
-            ),
+            border: Border.all(color: AppColors.praise.withValues(alpha: 0.35)),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,

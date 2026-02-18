@@ -292,10 +292,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/avatar-edit',
         name: 'avatarEdit',
         builder: (context, state) {
-          final parts = state.extra is AvatarParts
-              ? state.extra! as AvatarParts
+          final extra = state.extra;
+          final parts = extra is AvatarParts
+              ? extra
+              : extra is Map<String, dynamic> && extra['parts'] is AvatarParts
+              ? extra['parts'] as AvatarParts
               : AvatarAssets.defaultParts();
-          return AvatarEditScreen(initialParts: parts);
+          final allowedRarities =
+              extra is Map<String, dynamic> && extra['allowedRarities'] is List
+              ? Set<String>.from(extra['allowedRarities'] as List)
+              : null;
+          return AvatarEditScreen(
+            initialParts: parts,
+            allowedRarities: allowedRarities,
+          );
         },
       ),
 
