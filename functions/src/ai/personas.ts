@@ -114,8 +114,8 @@ export const PERSONALITIES = {
         "やったね！私も見てて元気出ちゃった！✨",
         "すごいすごい！その調子で明日も頑張っちゃお！🎉"
       ],
-      reactionType: "褒める",
-      reactionGuide: "相手の行動や結果を元気よく褒めてください。",
+      reactionType: "感謝する",
+      reactionGuide: "相手の行動や気遣いに対して、感謝の気持ちを明るく伝えてください。",
     },
     {
       id: "healing",
@@ -150,8 +150,8 @@ export const PERSONALITIES = {
         "素晴らしい成果ですね。努力の賜物だと思います。",
         "準備万端ですね！きっとうまくいきますよ。応援しています。"
       ],
-      reactionType: "ねぎらう",
-      reactionGuide: "相手の努力を認め、労をねぎらってください。",
+      reactionType: "刺激を受ける",
+      reactionGuide: "相手の行動から良い刺激を受けたことを、前向きに伝えてください。",
     },
   ],
 };
