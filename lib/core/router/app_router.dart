@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -74,6 +74,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           location.startsWith('/register') ||
           location.startsWith('/onboarding');
       final isVerifyRoute = location.startsWith('/email-verify');
+      final isAvatarEditRoute = location.startsWith('/avatar-edit');
 
       if (!isLoggedIn) {
         debugPrint(
@@ -83,7 +84,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           debugPrint('[ROUTER] 竊・Redirecting to /register');
           return '/register';
         }
-        if (!isPublicAuthRoute) {
+        if (!(isPublicAuthRoute || isAvatarEditRoute)) {
           debugPrint('[ROUTER] 竊・Redirecting to /onboarding');
           return '/onboarding';
         }
@@ -437,4 +438,3 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ),
   );
 });
-

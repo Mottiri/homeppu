@@ -8,7 +8,7 @@ import '../../../../core/constants/app_messages.dart';
 import '../../../../core/constants/name_parts_catalog.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/models/avatar_parts_model.dart';
-import '../../../../shared/widgets/avatar_parts_selector.dart';
+import '../../../../shared/widgets/avatar_parts_widget.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
 import '../../../../shared/models/name_part_model.dart';
 import '../widgets/auth_text_field.dart';
@@ -110,6 +110,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   String? get _emailErrorMessage => _hasEmailError ? _errorMessage : null;
 
+  Future<void> _openAvatarEdit() async {
+    final result = await context.push<AvatarParts>(
+      '/avatar-edit',
+      extra: _selectedAvatarParts,
+    );
+    if (!mounted || result == null) return;
+    setState(() => _selectedAvatarParts = result);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -173,12 +182,46 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   ),
                   const SizedBox(height: 20),
                   if (_useAvatarParts)
-                    AvatarPartsSelector(
-                      parts: _selectedAvatarParts,
-                      onChanged: (parts) {
-                        setState(() => _selectedAvatarParts = parts);
-                      },
-                      allowedRarities: const {'common'},
+                    Center(
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: _openAvatarEdit,
+                        child: Column(
+                          children: [
+                            Stack(
+                              children: [
+                                AvatarPartsWidget(
+                                  parts: _selectedAvatarParts,
+                                  size: 96,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                Positioned(
+                                  right: 0,
+                                  bottom: 0,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: const BoxDecoration(
+                                      color: AppColors.primary,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.edit,
+                                      size: 14,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              AppMessages.profile.tapToEditAvatar,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
                     )
                   else
                     Center(
