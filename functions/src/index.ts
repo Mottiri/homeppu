@@ -45,6 +45,7 @@ export {
     getFollowStatus,
     getVirtueHistory,
     getVirtueStatus,
+    checkPasswordResetTarget,
 } from "./callable/users";
 export { getVirtueShopConfig, purchaseVirtueItem } from "./callable/virtue_shop";
 export {

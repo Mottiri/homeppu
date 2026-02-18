@@ -3,7 +3,7 @@
  * index.ts から分離
  */
 
-import { AIPersona, AGE_GROUPS } from "../personas";
+import { AIPersona } from "../personas";
 import { getSystemPrompt } from "./comment";
 
 /**
@@ -14,7 +14,7 @@ export function getPostGenerationPrompt(
     hours: number
 ): string {
     return `
-${getSystemPrompt(persona, "みんな")}
+${getSystemPrompt(persona)}
 
 【指示】
 あなたは「ホームップ」というSNSのユーザー「${persona.name}」です。

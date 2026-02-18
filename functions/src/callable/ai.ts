@@ -3,8 +3,7 @@
  * Phase 5: index.ts から分離
  */
 
-import * as admin from "firebase-admin";
-import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onCall } from "firebase-functions/v2/https";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { scheduleHttpTask } from "../helpers/cloud-tasks";
 
@@ -18,7 +17,7 @@ import {
     AGE_GROUPS,
 } from "../ai/personas";
 import { getBioGenerationPrompt } from "../ai/prompts/bio-generation";
-import { AUTH_ERRORS, SUCCESS_MESSAGES } from "../config/messages";
+import { SUCCESS_MESSAGES } from "../config/messages";
 
 /**
  * Gemini APIを使ってキャラクターに合ったbioを生成

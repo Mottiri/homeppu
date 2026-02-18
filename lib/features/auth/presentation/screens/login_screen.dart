@@ -1,14 +1,14 @@
+﻿import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_messages.dart';
+import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../widgets/auth_text_field.dart';
 
-/// ログイン画面
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -44,7 +44,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
-      // ログイン成功 → ルーターがリダイレクト
     } catch (e) {
       setState(() {
         _errorMessage = _getErrorMessage(e.toString());
@@ -61,12 +60,110 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         error.contains('wrong-password') ||
         error.contains('invalid-credential')) {
       return AppMessages.auth.loginEmailOrPasswordInvalid;
-    } else if (error.contains('invalid-email')) {
+    }
+    if (error.contains('invalid-email')) {
       return AppMessages.auth.loginInvalidEmail;
-    } else if (error.contains('too-many-requests')) {
+    }
+    if (error.contains('too-many-requests')) {
       return AppMessages.auth.loginTooManyRequests;
     }
     return AppMessages.error.general;
+  }
+
+  bool _isValidEmail(String value) {
+    final emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+    return emailRegex.hasMatch(value);
+  }
+
+  String _getResetErrorMessage(Object error) {
+    if (error is FirebaseAuthException) {
+      switch (error.code) {
+        case 'invalid-email':
+          return AppMessages.auth.passwordResetInvalidEmail;
+        case 'user-not-found':
+          return AppMessages.auth.passwordResetUserNotFound;
+        case 'too-many-requests':
+          return AppMessages.auth.loginTooManyRequests;
+      }
+    }
+    return AppMessages.error.general;
+  }
+
+  Future<void> _showPasswordResetDialog() async {
+    final formKey = GlobalKey<FormState>();
+    final resetEmailController = TextEditingController(
+      text: _emailController.text.trim(),
+    );
+
+    final email = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(AppMessages.auth.passwordResetTitle),
+          content: Form(
+            key: formKey,
+            child: TextFormField(
+              controller: resetEmailController,
+              keyboardType: TextInputType.emailAddress,
+              decoration: InputDecoration(
+                labelText: AppMessages.auth.passwordResetEmailLabel,
+                hintText: AppMessages.auth.passwordResetEmailHint,
+                errorMaxLines: 2,
+              ),
+              validator: (value) {
+                final trimmed = value?.trim() ?? '';
+                if (trimmed.isEmpty) {
+                  return AppMessages.auth.passwordResetEmailRequired;
+                }
+                if (!_isValidEmail(trimmed)) {
+                  return AppMessages.auth.passwordResetInvalidEmail;
+                }
+                return null;
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(AppMessages.label.cancel),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (!formKey.currentState!.validate()) return;
+                Navigator.of(dialogContext).pop(resetEmailController.text.trim());
+              },
+              child: Text(AppMessages.auth.passwordResetSend),
+            ),
+          ],
+        );
+      },
+    );
+
+    // Dispose after dialog widgets are fully removed to avoid framework assert.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      resetEmailController.dispose();
+    });
+
+    if (!mounted || email == null) return;
+
+    try {
+      final authService = ref.read(authServiceProvider);
+      final exists = await authService.checkPasswordResetTarget(email);
+      if (!exists) {
+        if (!mounted) return;
+        SnackBarHelper.showError(
+          context,
+          AppMessages.auth.passwordResetUserNotFound,
+        );
+        return;
+      }
+      await authService.sendPasswordResetEmail(email);
+      if (!mounted) return;
+      SnackBarHelper.showSuccess(context, AppMessages.auth.passwordResetSent);
+    } catch (e) {
+      if (!mounted) return;
+      SnackBarHelper.showError(context, _getResetErrorMessage(e));
+    }
   }
 
   @override
@@ -78,219 +175,121 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           decoration: const BoxDecoration(gradient: AppColors.warmGradient),
           child: SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
               child: Form(
                 key: _formKey,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                  const SizedBox(height: 40),
-
-                  // ロゴ・タイトル - ステージ化されたアニメーション
-                  const Center(
-                    child: Text('🌸', style: TextStyle(fontSize: 64)),
-                  )
-                      .animate()
-                      .fadeIn(duration: 600.ms, curve: Curves.easeOut)
-                      .scale(
-                        begin: const Offset(0.8, 0.8),
-                        end: const Offset(1.0, 1.0),
-                        duration: 600.ms,
-                        curve: Curves.elasticOut,
-                      )
-                      .then()
-                      .shimmer(
-                        duration: 1500.ms,
-                        color: AppColors.primary.withValues(alpha: 0.3),
-                      ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'おかえりなさい！',
-                    style: Theme.of(context).textTheme.displaySmall,
-                    textAlign: TextAlign.center,
-                  )
-                      .animate()
-                      .fadeIn(delay: 200.ms, duration: 500.ms)
-                      .slideY(
-                        begin: 0.3,
-                        end: 0,
-                        delay: 200.ms,
-                        duration: 500.ms,
-                        curve: Curves.easeOut,
-                      ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'また会えてうれしいな☺️',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: AppColors.textSecondary,
+                    const SizedBox(height: 40),
+                    const Center(
+                      child: Text('🌸', style: TextStyle(fontSize: 64)),
                     ),
-                    textAlign: TextAlign.center,
-                  )
-                      .animate()
-                      .fadeIn(delay: 400.ms, duration: 500.ms)
-                      .slideY(
-                        begin: 0.3,
-                        end: 0,
-                        delay: 400.ms,
-                        duration: 500.ms,
-                        curve: Curves.easeOut,
+                    const SizedBox(height: 16),
+                    Text(
+                      AppMessages.auth.loginTitle,
+                      style: Theme.of(context).textTheme.displaySmall,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      AppMessages.auth.loginSubtitle,
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: AppColors.textSecondary,
                       ),
-
-                  const SizedBox(height: 48),
-
-                  // エラーメッセージ
-                  if (_errorMessage != null) ...[
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppColors.error.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.info_outline,
-                            color: AppColors.error,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              _errorMessage!,
-                              style: const TextStyle(color: AppColors.error),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 48),
+                    if (_errorMessage != null) ...[
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppColors.error.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.info_outline, color: AppColors.error),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                _errorMessage!,
+                                style: const TextStyle(color: AppColors.error),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+                    AuthTextField(
+                      controller: _emailController,
+                      label: AppMessages.auth.loginEmailLabel,
+                      hint: AppMessages.auth.loginEmailHint,
+                      keyboardType: TextInputType.emailAddress,
+                      prefixIcon: Icons.email_outlined,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return AppMessages.auth.loginEmailRequired;
+                        }
+                        if (!_isValidEmail(value.trim())) {
+                          return AppMessages.auth.loginInvalidEmail;
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    AuthTextField(
+                      controller: _passwordController,
+                      label: AppMessages.auth.loginPasswordLabel,
+                      hint: AppMessages.auth.loginPasswordHint,
+                      isPassword: true,
+                      prefixIcon: Icons.lock_outline,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return AppMessages.auth.loginPasswordRequired;
+                        }
+                        return null;
+                      },
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: _showPasswordResetDialog,
+                        child: Text(AppMessages.auth.loginForgotPassword),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 56,
+                      child: ElevatedButton(
+                        onPressed: _isLoading ? null : _login,
+                        child: _isLoading
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text(AppMessages.auth.loginSubmit),
                       ),
                     ),
                     const SizedBox(height: 24),
-                  ],
-
-                  // 入力フォーム - スライドインアニメーション
-                  AuthTextField(
-                    controller: _emailController,
-                    label: 'メールアドレス',
-                    hint: 'example@email.com',
-                    keyboardType: TextInputType.emailAddress,
-                    prefixIcon: Icons.email_outlined,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'メールアドレスを入力してね';
-                      }
-                      if (!value.contains('@')) {
-                        return '正しいメールアドレスを入力してね';
-                      }
-                      return null;
-                    },
-                  )
-                      .animate()
-                      .fadeIn(delay: 600.ms, duration: 400.ms)
-                      .slideX(
-                        begin: -0.2,
-                        end: 0,
-                        delay: 600.ms,
-                        duration: 400.ms,
-                        curve: Curves.easeOut,
-                      ),
-                  const SizedBox(height: 16),
-
-                  AuthTextField(
-                    controller: _passwordController,
-                    label: 'パスワード',
-                    hint: 'パスワードを入力',
-                    isPassword: true,
-                    prefixIcon: Icons.lock_outline,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'パスワードを入力してね';
-                      }
-                      return null;
-                    },
-                  )
-                      .animate()
-                      .fadeIn(delay: 700.ms, duration: 400.ms)
-                      .slideX(
-                        begin: -0.2,
-                        end: 0,
-                        delay: 700.ms,
-                        duration: 400.ms,
-                        curve: Curves.easeOut,
-                      ),
-
-                  // パスワード忘れ
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () {
-                        // TODO: パスワードリセット画面
-                      },
-                      child: const Text('パスワードを忘れた？'),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          AppMessages.auth.loginNoAccount,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                        TextButton(
+                          onPressed: () => context.go('/register'),
+                          child: Text(AppMessages.auth.loginCreateAccount),
+                        ),
+                      ],
                     ),
-                  )
-                      .animate()
-                      .fadeIn(delay: 750.ms, duration: 400.ms)
-                      .slideX(
-                        begin: 0.2,
-                        end: 0,
-                        delay: 750.ms,
-                        duration: 400.ms,
-                        curve: Curves.easeOut,
-                      ),
-
-                  const SizedBox(height: 8),
-
-                  // ログインボタン - スケールアニメーション
-                  SizedBox(
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _login,
-                      child: _isLoading
-                          ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Text('ログイン'),
-                    ),
-                  )
-                      .animate()
-                      .fadeIn(delay: 800.ms, duration: 400.ms)
-                      .scale(
-                        begin: const Offset(0.9, 0.9),
-                        end: const Offset(1.0, 1.0),
-                        delay: 800.ms,
-                        duration: 400.ms,
-                        curve: Curves.easeOut,
-                      ),
-
-                  const SizedBox(height: 24),
-
-                  // 新規登録リンク
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'はじめてですか？',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      TextButton(
-                        onPressed: () => context.go('/register'),
-                        child: const Text('新規登録'),
-                      ),
-                    ],
-                  )
-                      .animate()
-                      .fadeIn(delay: 900.ms, duration: 400.ms)
-                      .slideY(
-                        begin: 0.2,
-                        end: 0,
-                        delay: 900.ms,
-                        duration: 400.ms,
-                        curve: Curves.easeOut,
-                      ),
-                  const SizedBox(height: 8),
                   ],
                 ),
               ),

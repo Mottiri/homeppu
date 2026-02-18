@@ -10,7 +10,7 @@ import { db } from "../helpers/firebase";
 import { requireAuth } from "../helpers/auth";
 import { VIRTUE_CONFIG } from "../helpers/virtue";
 import { LOCATION } from "../config/constants";
-import { AUTH_ERRORS, RESOURCE_ERRORS, VALIDATION_ERRORS } from "../config/messages";
+import { RESOURCE_ERRORS, VALIDATION_ERRORS, SYSTEM_ERRORS } from "../config/messages";
 
 /**
  * ユーザーをフォローする
@@ -168,5 +168,31 @@ export const getVirtueStatus = onCall(
             warningThreshold: VIRTUE_CONFIG.warningThreshold,
             maxVirtue: VIRTUE_CONFIG.initial,
         };
+    }
+);
+
+/**
+ * パスワードリセット対象メールの存在確認
+ * Note: 仕様上、メール列挙リスクがあるため App Check を必須化する。
+ */
+export const checkPasswordResetTarget = onCall(
+  { region: LOCATION, enforceAppCheck: true },
+  async (request) => {
+        const email = (request.data?.email as string | undefined ?? "").trim();
+        if (!email) {
+            throw new HttpsError("invalid-argument", VALIDATION_ERRORS.MISSING_REQUIRED);
+        }
+
+        try {
+            await admin.auth().getUserByEmail(email);
+            return { exists: true };
+        } catch (error) {
+            const code = (error as { code?: string })?.code;
+            if (code === "auth/user-not-found") {
+                return { exists: false };
+            }
+            console.error("checkPasswordResetTarget failed:", error);
+            throw new HttpsError("internal", SYSTEM_ERRORS.PROCESSING_ERROR);
+        }
     }
 );

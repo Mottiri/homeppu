@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/avatar_assets.dart';
@@ -20,8 +20,6 @@ class AvatarPartsWidget extends StatelessWidget {
     'mouth_03': Offset(0, 1),
     'mouth_06': Offset(0, 3),
   };
-  //いったん髪と輪郭を同一で作成するためBaseは廃止
-  //static const double _baseScale = 1.08;
   static const double _hairScale = 1.45;
   static const double _eyebrowsScale = 0.52;
   static const Map<String, double> _eyebrowsScaleOverrides = {

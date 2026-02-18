@@ -47,6 +47,7 @@ class _AuthTextFieldState extends State<AuthTextField> {
           validator: widget.validator,
           decoration: InputDecoration(
             hintText: widget.hint,
+            errorMaxLines: 2,
             prefixIcon: widget.prefixIcon != null
                 ? Icon(
                     widget.prefixIcon,

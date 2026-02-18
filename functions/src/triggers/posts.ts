@@ -162,7 +162,7 @@ export const onPostCreated = onDocumentCreated(
             console.log(`Using ${selectedPersonas.length} general AIs for comments`);
         }
 
-        let totalComments = 0;
+        let _totalComments = 0;
 
         // 投稿者の名前を取得
         const posterName = postData.userDisplayName || "投稿者";
@@ -216,7 +216,7 @@ export const onPostCreated = onDocumentCreated(
                 });
 
                 console.log(`Task enqueued for ${persona.name}: delay=${delayMinutes}m, time=${scheduleTime.toISOString()}`);
-                totalComments++;
+                _totalComments++;
             } catch (error) {
                 console.error(`Error enqueuing task for ${persona.name}:`, error);
             }

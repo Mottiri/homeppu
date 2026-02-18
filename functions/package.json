@@ -2,7 +2,7 @@
   "name": "homeppu-functions",
   "description": "ほめっぷ Cloud Functions",
   "scripts": {
-    "lint": "eslint --ext .js,.ts .",
+    "lint": "eslint --ext .ts src",
     "build": "tsc",
     "build:watch": "tsc --watch",
     "serve": "npm run build && firebase emulators:start --only functions",

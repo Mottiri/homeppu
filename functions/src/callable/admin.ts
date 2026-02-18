@@ -91,7 +91,7 @@ export const deleteAllAIUsers = functionsV1.region(LOCATION).runWith({
     timeoutSeconds: 540,
     memory: "1GB",
     enforceAppCheck: true,
-}).https.onCall(async (data, context) => {
+}).https.onCall(async (_data, context) => {
     if (!context.auth) {
         throw new functionsV1.https.HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
     }

@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -109,8 +110,10 @@ final isAdminProvider = StreamProvider<bool>((ref) {
 class AuthService {
   final FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
+  final FirebaseFunctions _functions;
 
-  AuthService(this._auth, this._firestore);
+  AuthService(this._auth, this._firestore)
+      : _functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
 
   /// メールでサインアップ
   Future<UserModel?> signUpWithEmail({
@@ -238,6 +241,14 @@ class AuthService {
   /// パスワードリセット
   Future<void> sendPasswordResetEmail(String email) async {
     await _auth.sendPasswordResetEmail(email: email);
+  }
+
+  /// パスワードリセット対象のアカウント存在確認
+  Future<bool> checkPasswordResetTarget(String email) async {
+    final callable = _functions.httpsCallable('checkPasswordResetTarget');
+    final result = await callable.call(<String, dynamic>{'email': email.trim()});
+    final data = Map<String, dynamic>.from(result.data as Map);
+    return data['exists'] == true;
   }
 
   /// ユーザー情報の更新

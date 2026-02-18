@@ -9,8 +9,7 @@ import { AIPersona, AGE_GROUPS } from "../personas";
  * システムプロンプトを生成
  */
 export function getSystemPrompt(
-    persona: AIPersona,
-    posterName: string
+    persona: AIPersona
 ): string {
     const genderStr = persona.gender === "male" ? "男性" : "女性";
     const ageStr = AGE_GROUPS[persona.ageGroup].name;

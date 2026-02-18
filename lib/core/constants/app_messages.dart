@@ -528,6 +528,26 @@ class _AuthMessages {
   String get loginWrongPassword => 'パスワードが違うみたい🔐';
   String get loginInvalidEmail => 'メールアドレスの形式を確認してね📧';
   String get loginTooManyRequests => 'ちょっと休憩してからまた試してね⏰';
+  String get loginTitle => 'おかえりなさい';
+  String get loginSubtitle => 'また会えてうれしいな✨';
+  String get loginEmailLabel => 'メールアドレス';
+  String get loginEmailHint => 'example@email.com';
+  String get loginEmailRequired => 'メールアドレスを入力してね';
+  String get loginPasswordLabel => 'パスワード';
+  String get loginPasswordHint => 'パスワードを入力';
+  String get loginPasswordRequired => 'パスワードを入力してね';
+  String get loginSubmit => 'ログイン';
+  String get loginNoAccount => 'はじめてですか？';
+  String get loginCreateAccount => '新規登録';
+  String get loginForgotPassword => 'パスワードを忘れた？';
+  String get passwordResetTitle => 'パスワードをリセット';
+  String get passwordResetEmailLabel => 'メールアドレス';
+  String get passwordResetEmailHint => 'example@email.com';
+  String get passwordResetEmailRequired => 'メールアドレスを入力してね';
+  String get passwordResetInvalidEmail => '正しいメールアドレスを入力してね';
+  String get passwordResetUserNotFound => 'このメールアドレスは登録されていないみたい🔍';
+  String get passwordResetSend => '送信する';
+  String get passwordResetSent => 'パスワードリセットメールを送信したよ📩';
 
   // 登録
   String get registerEmailAlreadyInUse => 'このメールアドレスはすでに使われているみたい📧';

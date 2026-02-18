@@ -1,4 +1,5 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -60,7 +61,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
   return GoRouter(
     initialLocation: '/home',
-    debugLogDiagnostics: true,
+    debugLogDiagnostics: kDebugMode,
     refreshListenable: authNotifier,
     redirect: (context, state) {
       final currentUser = ref.read(firebaseAuthProvider).currentUser;
@@ -414,7 +415,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('剥', style: TextStyle(fontSize: 64)),
+            const Icon(Icons.search_off_rounded, size: 64),
             const SizedBox(height: 16),
             Text(
               AppMessages.error.notFoundTitle,
@@ -436,3 +437,4 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ),
   );
 });
+

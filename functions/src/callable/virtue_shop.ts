@@ -11,8 +11,6 @@ import { requireAuth } from "../helpers/auth";
 import { COLLECTIONS } from "../config/collections";
 import { LOCATION } from "../config/constants";
 
-type VirtueItemType = "name_part" | "reaction_stamp" | "avatar_part" | "stamp_sheet";
-
 type VirtueShopConfig = {
     namePartCostsByRarity: Record<string, number>;
     avatarPartCostsByRarity: Record<string, number>;

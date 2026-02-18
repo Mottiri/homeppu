@@ -282,7 +282,7 @@ ${existingComments.join("\n")}
             }
         } else {
             // 一般投稿: 新しいプロンプト構造を使用
-            const basePrompt = getSystemPrompt(persona, userDisplayName);
+            const basePrompt = getSystemPrompt(persona);
             const mediaNote = mediaDescriptions && mediaDescriptions.length > 0
                 ? "\n\n# Additional Context (メディア情報)\n添付されたメディア（画像・動画）の内容も考慮して、具体的に褒めてください。"
                 : "";
