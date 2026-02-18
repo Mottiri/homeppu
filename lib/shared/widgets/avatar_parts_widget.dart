@@ -30,6 +30,7 @@ class AvatarPartsWidget extends StatelessWidget {
   static const Offset _eyebrowsOffset = Offset(0, -9);
   static const Map<String, Offset> _eyebrowsOffsetOverrides = {
     'eyebrows_04': Offset(0, -1),
+    'eyebrows_02': Offset(0, -2),
   };
   static const Offset _eyesOffset = Offset(0, -2);
   static const Map<String, Offset> _eyesOffsetOverrides = {
