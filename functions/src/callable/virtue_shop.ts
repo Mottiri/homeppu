@@ -29,6 +29,7 @@ const AVATAR_PART_RARITY: Record<string, string> = {
     hair_03: "epic",
     hair_04: "rare",
     hair_05: "common",
+    hair_06: "common",
     // eyebrows
     eyebrows_01: "common",
     eyebrows_02: "common",
@@ -42,12 +43,18 @@ const AVATAR_PART_RARITY: Record<string, string> = {
     eyes_03: "epic",
     eyes_04: "rare",
     eyes_05: "rare",
+    eyes_06: "common",
+    eyes_07: "common",
+    eyes_08: "common",
+    eyes_09: "common",
+    eyes_10: "common",
     // mouth
     mouth_01: "common",
     mouth_02: "common",
     mouth_03: "epic",
     mouth_04: "rare",
     mouth_05: "rare",
+    mouth_06: "common",
 };
 
 function toNumberMap(value: unknown): Record<string, number> {

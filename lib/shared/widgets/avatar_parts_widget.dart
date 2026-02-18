@@ -12,9 +12,13 @@ class AvatarPartsWidget extends StatelessWidget {
   static const double _eyesScale = 0.5;
   static const Map<String, double> _eyesScaleOverrides = {'eyes_03': 0.47};
   static const double _mouthScale = 0.6;
-  static const Map<String, double> _mouthScaleOverrides = {'mouth_03': 0.3};
+  static const Map<String, double> _mouthScaleOverrides = {
+    'mouth_03': 0.23,
+    'mouth_06': 0.3,
+  };
   static const Map<String, Offset> _mouthOffsetOverrides = {
     'mouth_03': Offset(0, 1),
+    'mouth_06': Offset(0, 3),
   };
   //いったん髪と輪郭を同一で作成するためBaseは廃止
   //static const double _baseScale = 1.08;
