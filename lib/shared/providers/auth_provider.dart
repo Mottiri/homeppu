@@ -154,6 +154,7 @@ class AuthService {
           tutorialPhase1Completed: false,
           tutorialPhase2Completed: false,
           tutorialPhase3Completed: false,
+          tutorialPhase4Completed: false,
           tutorialPhase5Completed: false,
           tutorialPhase6Completed: false,
           createdAt: DateTime.now(),

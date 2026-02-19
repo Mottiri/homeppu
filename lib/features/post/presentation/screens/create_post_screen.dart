@@ -11,11 +11,13 @@ import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/models/post_model.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/providers/moderation_provider.dart';
+import '../../../../shared/providers/tutorial_phase4_provider.dart';
 import '../../../../shared/services/media_service.dart';
 import '../../../../shared/services/moderation_service.dart';
 import '../../../../shared/services/nsfw_detector_service.dart';
 import '../../../../shared/services/interstitial_ad_service.dart';
 import '../../../../shared/services/post_ad_policy_service.dart';
+import '../../../../shared/widgets/tutorial_overlay.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
 import '../../../../shared/widgets/report_dialog.dart';
 import '../../../../shared/widgets/ad_banner.dart';
@@ -34,9 +36,13 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   final _contentController = TextEditingController();
   final _mediaService = MediaService();
   final _postAdPolicyService = PostAdPolicyService();
+  final GlobalKey _tutorialOverlayStackKey = GlobalKey();
+  final GlobalKey _postButtonKey = GlobalKey();
   bool _isLoading = false;
   bool _isUploading = false;
   double _uploadProgress = 0;
+  bool _phase4Initialized = false;
+  Rect? _phase4SpotlightRect;
 
   // 選択されたメディア
   final List<_SelectedMedia> _selectedMedia = [];
@@ -51,6 +57,20 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   void dispose() {
     _contentController.dispose();
     super.dispose();
+  }
+
+  void _resolvePhase4SpotlightRect() {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final rect = await resolveRectWithRetry(
+        _postButtonKey,
+        ancestorKey: _tutorialOverlayStackKey,
+      );
+      if (!mounted || rect == null) return;
+      if (_phase4SpotlightRect != rect) {
+        setState(() => _phase4SpotlightRect = rect);
+      }
+    });
   }
 
   Widget _buildNoticeItem(BuildContext context, String text) {
@@ -542,6 +562,24 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider).valueOrNull;
+    final tutorialPhase4Step = ref.watch(tutorialPhase4Provider);
+    final shouldRunPhase4 = widget.circleId == null && user != null;
+    final isPhase4Active =
+        shouldRunPhase4 &&
+        tutorialPhase4Step != TutorialPhase4Step.inactive;
+
+    if (shouldRunPhase4 && !_phase4Initialized) {
+      _phase4Initialized = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || user == null) return;
+        ref.read(tutorialPhase4Provider.notifier).restoreOrStart(user);
+      });
+    }
+
+    if (isPhase4Active) {
+      _resolvePhase4SpotlightRect();
+    }
+
     final remainingChars =
         AppConstants.maxPostLength - _contentController.text.length;
 
@@ -569,228 +607,261 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       body: Container(
         decoration: BoxDecoration(gradient: userGradient),
         child: SafeArea(
-          child: Column(
+          child: Stack(
+            key: _tutorialOverlayStackKey,
             children: [
-              // ヘッダー（閉じるボタン + タイトル + 投稿ボタン）
-              Padding(
-                padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-                child: Row(
-                  children: [
-                    IconButton(
-                      onPressed: () => context.pop(),
-                      icon: const Icon(Icons.close_rounded),
-                    ),
-                    const Spacer(),
-                    Text(
-                      widget.circleId != null ? 'サークルに投稿' : '新しい投稿',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const Spacer(),
-                    ElevatedButton(
-                      onPressed:
-                          (_contentController.text.trim().isEmpty &&
-                                  _selectedMedia.isEmpty) ||
-                              _isLoading
-                          ? null
-                          : _createPost,
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                      ),
-                      child: _isLoading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Text('投稿する'),
-                    ),
-                  ],
-                ),
-              ),
-              const AdBanner(padding: EdgeInsets.fromLTRB(16, 8, 16, 0)),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // ユーザー情報
-                      if (user != null)
-                        Row(
-                          children: [
-                            AvatarWidget(
-                              avatarIndex: user.avatarIndex,
-                              avatarParts: user.profileVisualMode == 'avatar'
-                                  ? user.avatarParts
-                                  : null,
-                              imageUrl: user.profileVisualMode == 'image'
-                                  ? user.profileImageUrl
-                                  : null,
-                              size: 48,
-                            ),
-                            const SizedBox(width: 12),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  user.displayName,
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.titleMedium,
-                                ),
-                                if (widget.circleId != null)
-                                  Text(
-                                    'サークルへの投稿',
-                                    style: Theme.of(context).textTheme.bodySmall
-                                        ?.copyWith(
-                                          color: AppColors.primary,
-                                          fontWeight: FontWeight.bold,
-                                        ),
+              Column(
+                children: [
+                  // ヘッダー（閉じるボタン + タイトル + 投稿ボタン）
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          onPressed: () => context.pop(),
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                        const Spacer(),
+                        Text(
+                          widget.circleId != null ? 'サークルに投稿' : '新しい投稿',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const Spacer(),
+                        ElevatedButton(
+                          key: _postButtonKey,
+                          onPressed:
+                              (_contentController.text.trim().isEmpty &&
+                                      _selectedMedia.isEmpty) ||
+                                  _isLoading
+                              ? null
+                              : _createPost,
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                          ),
+                          child: _isLoading
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
                                   ),
+                                )
+                              : const Text('投稿する'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const AdBanner(padding: EdgeInsets.fromLTRB(16, 8, 16, 0)),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // ユーザー情報
+                          if (user != null)
+                            Row(
+                              children: [
+                                AvatarWidget(
+                                  avatarIndex: user.avatarIndex,
+                                  avatarParts: user.profileVisualMode == 'avatar'
+                                      ? user.avatarParts
+                                      : null,
+                                  imageUrl: user.profileVisualMode == 'image'
+                                      ? user.profileImageUrl
+                                      : null,
+                                  size: 48,
+                                ),
+                                const SizedBox(width: 12),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      user.displayName,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleMedium,
+                                    ),
+                                    if (widget.circleId != null)
+                                      Text(
+                                        'サークルへの投稿',
+                                        style: Theme.of(context).textTheme.bodySmall
+                                            ?.copyWith(
+                                              color: AppColors.primary,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                      ),
+                                  ],
+                                ),
                               ],
                             ),
-                          ],
-                        ),
 
-                      const SizedBox(height: 20),
+                          const SizedBox(height: 20),
 
-                      // 投稿入力
-                      TextField(
-                        controller: _contentController,
-                        autofocus: true, // 画面表示時に自動フォーカス
-                        maxLines: null,
-                        minLines: 6,
-                        maxLength: AppConstants.maxPostLength,
-                        decoration: const InputDecoration(
-                          hintText: '今日あったこと、がんばったこと、\n何でも投稿してみよう✨',
-                          border: InputBorder.none,
-                          fillColor: Colors.transparent,
-                          counterText: '',
-                        ),
-                        style: Theme.of(
-                          context,
-                        ).textTheme.bodyLarge?.copyWith(height: 1.6),
-                        onChanged: (value) => setState(() {}),
-                      ),
-
-                      // アップロード進捗
-                      if (_isUploading) ...[
-                        const SizedBox(height: 16),
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12),
+                          // 投稿入力
+                          TextField(
+                            controller: _contentController,
+                            autofocus: true, // 画面表示時に自動フォーカス
+                            maxLines: null,
+                            minLines: 6,
+                            maxLength: AppConstants.maxPostLength,
+                            decoration: const InputDecoration(
+                              hintText: '今日あったこと、がんばったこと、\n何でも投稿してみよう✨',
+                              border: InputBorder.none,
+                              fillColor: Colors.transparent,
+                              counterText: '',
+                            ),
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodyLarge?.copyWith(height: 1.6),
+                            onChanged: (value) => setState(() {}),
                           ),
-                          child: Column(
-                            children: [
-                              Row(
+
+                          // アップロード進捗
+                          if (_isUploading) ...[
+                            const SizedBox(height: 16),
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Column(
                                 children: [
-                                  const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: AppColors.primary,
-                                    ),
+                                  Row(
+                                    children: [
+                                      const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        'アップロード中... ${(_uploadProgress * 100).toInt()}%',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(width: 12),
-                                  Text(
-                                    'アップロード中... ${(_uploadProgress * 100).toInt()}%',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w500,
+                                  const SizedBox(height: 8),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: LinearProgressIndicator(
+                                      value: _uploadProgress,
+                                      backgroundColor: Colors.white,
+                                      color: AppColors.primary,
                                     ),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 8),
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(4),
-                                child: LinearProgressIndicator(
-                                  value: _uploadProgress,
-                                  backgroundColor: Colors.white,
-                                  color: AppColors.primary,
-                                ),
+                            ),
+                          ],
+
+                          // 選択されたメディアのプレビュー
+                          if (_selectedMedia.isNotEmpty) ...[
+                            const SizedBox(height: 16),
+                            SizedBox(
+                              height: 120,
+                              child: ListView.builder(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: _selectedMedia.length,
+                                itemBuilder: (context, index) {
+                                  final media = _selectedMedia[index];
+                                  return _MediaPreview(
+                                    media: media,
+                                    onRemove: () => _removeMedia(index),
+                                  );
+                                },
                               ),
-                            ],
-                          ),
-                        ),
-                      ],
-
-                      // 選択されたメディアのプレビュー
-                      if (_selectedMedia.isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        SizedBox(
-                          height: 120,
-                          child: ListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: _selectedMedia.length,
-                            itemBuilder: (context, index) {
-                              final media = _selectedMedia[index];
-                              return _MediaPreview(
-                                media: media,
-                                onRemove: () => _removeMedia(index),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-
-              // ボトムバー
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, -2),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
-                  ],
-                ),
-                child: SafeArea(
-                  child: Row(
-                    children: [
-                      // メディア追加ボタン
-                      IconButton(
-                        onPressed: _isLoading ? null : _showMediaPicker,
-                        icon: Badge(
-                          isLabelVisible: _selectedMedia.isNotEmpty,
-                          label: Text('${_selectedMedia.length}'),
-                          child: const Icon(Icons.add_photo_alternate_outlined),
+                  ),
+
+                  // ボトムバー
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, -2),
                         ),
-                        color: _selectedMedia.isNotEmpty
-                            ? AppColors.primary
-                            : AppColors.textSecondary,
+                      ],
+                    ),
+                    child: SafeArea(
+                      child: Row(
+                        children: [
+                          // メディア追加ボタン
+                          IconButton(
+                            onPressed: _isLoading ? null : _showMediaPicker,
+                            icon: Badge(
+                              isLabelVisible: _selectedMedia.isNotEmpty,
+                              label: Text('${_selectedMedia.length}'),
+                              child: const Icon(Icons.add_photo_alternate_outlined),
+                            ),
+                            color: _selectedMedia.isNotEmpty
+                                ? AppColors.primary
+                                : AppColors.textSecondary,
+                          ),
+                          const Spacer(),
+                          // 文字数
+                          Text(
+                            '$remainingChars',
+                            style: TextStyle(
+                              color: remainingChars < 50
+                                  ? AppColors.warning
+                                  : AppColors.textHint,
+                              fontWeight: remainingChars < 50
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ],
                       ),
-                      const Spacer(),
-                      // 文字数
-                      Text(
-                        '$remainingChars',
-                        style: TextStyle(
-                          color: remainingChars < 50
-                              ? AppColors.warning
-                              : AppColors.textHint,
-                          fontWeight: remainingChars < 50
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        ),
-                      ),
-                    ],
+                    ),
+                  ),
+                ],
+              ),
+              if (isPhase4Active)
+                Positioned.fill(
+                  child: TutorialOverlay(
+                    message: switch (tutorialPhase4Step) {
+                      TutorialPhase4Step.postButtonGuide =>
+                        AppMessages.tutorial.postCreateStep1,
+                      TutorialPhase4Step.moderationDelayGuide =>
+                        AppMessages.tutorial.postCreateStep2,
+                      TutorialPhase4Step.aiMisjudgeGuide =>
+                        AppMessages.tutorial.postCreateStep3,
+                      TutorialPhase4Step.inactive => '',
+                    },
+                    spotlightRect: _phase4SpotlightRect,
+                    actionLabel:
+                        tutorialPhase4Step == TutorialPhase4Step.aiMisjudgeGuide
+                        ? AppMessages.label.ok
+                        : AppMessages.tutorial.nextAction,
+                    onAction: () async {
+                      final notifier = ref.read(tutorialPhase4Provider.notifier);
+                      if (tutorialPhase4Step == TutorialPhase4Step.aiMisjudgeGuide) {
+                        await notifier.markCompleted();
+                      } else {
+                        await notifier.advance();
+                      }
+                    },
                   ),
                 ),
-              ),
             ],
           ),
         ),

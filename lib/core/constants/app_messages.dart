@@ -454,6 +454,13 @@ class _TutorialMessages {
   String get postDetailLongPressComment =>
       '他の人のコメントを長押しすると\n投稿主として「いいね！」を返せるよ❤\nいいコメントがあったらいいね！してあげてね😊';
 
+  // Create post explanation (Phase 4)
+  String get postCreateStep1 => '投稿したい内容の入力が終わったら\n「投稿する」ボタンから投稿できるよ！';
+  String get postCreateStep2 =>
+      '**投稿内容はシステムとAIの審査が入る**から、\n実際に[[danger:投稿されるまで少し時間がかかる]]ことがあるよ。ごめんね！';
+  String get postCreateStep3 =>
+      '**AI審査はたまに間違えちゃうこともあるよ！**\n問題ない内容でもブロックされる場合は、言い方を変えてみてね😊';
+
   // Stamp sheet explanation (Phase 3)
   String get stampOverview => 'ここはスタンプ画面だよ！\n返信コメントでいいね！をもらうと、ここでスタンプを押せるよ🎉';
   String get stampInitialSheetSelection =>

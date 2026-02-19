@@ -86,6 +86,8 @@ class UserModel {
   final String? tutorialPhase2Step; // チュートリアル進行ステップ（中断復帰用）
   final bool tutorialPhase3Completed; // 初回チュートリアルPhase3完了
   final String? tutorialPhase3Step; // チュートリアル進行ステップ（中断復帰用）
+  final bool tutorialPhase4Completed; // 初回チュートリアルPhase4完了
+  final String? tutorialPhase4Step; // チュートリアル進行ステップ（中断復帰用）
   final bool tutorialPhase5Completed; // 初回チュートリアルPhase5完了
   final String? tutorialPhase5Step; // チュートリアル進行ステップ（中断復帰用）
   final bool tutorialPhase6Completed; // 初回チュートリアルPhase6完了
@@ -143,6 +145,8 @@ class UserModel {
     this.tutorialPhase2Step,
     this.tutorialPhase3Completed = false,
     this.tutorialPhase3Step,
+    this.tutorialPhase4Completed = false,
+    this.tutorialPhase4Step,
     this.tutorialPhase5Completed = false,
     this.tutorialPhase5Step,
     this.tutorialPhase6Completed = false,
@@ -219,6 +223,8 @@ class UserModel {
       tutorialPhase2Step: data['tutorialPhase2Step'],
       tutorialPhase3Completed: data['tutorialPhase3Completed'] ?? false,
       tutorialPhase3Step: data['tutorialPhase3Step'],
+      tutorialPhase4Completed: data['tutorialPhase4Completed'] ?? false,
+      tutorialPhase4Step: data['tutorialPhase4Step'],
       tutorialPhase5Completed: data['tutorialPhase5Completed'] ?? false,
       tutorialPhase5Step: data['tutorialPhase5Step'],
       tutorialPhase6Completed: data['tutorialPhase6Completed'] ?? false,
@@ -284,6 +290,8 @@ class UserModel {
       if (tutorialPhase2Step != null) 'tutorialPhase2Step': tutorialPhase2Step,
       'tutorialPhase3Completed': tutorialPhase3Completed,
       if (tutorialPhase3Step != null) 'tutorialPhase3Step': tutorialPhase3Step,
+      'tutorialPhase4Completed': tutorialPhase4Completed,
+      if (tutorialPhase4Step != null) 'tutorialPhase4Step': tutorialPhase4Step,
       'tutorialPhase5Completed': tutorialPhase5Completed,
       if (tutorialPhase5Step != null) 'tutorialPhase5Step': tutorialPhase5Step,
       'tutorialPhase6Completed': tutorialPhase6Completed,
@@ -342,6 +350,8 @@ class UserModel {
     String? tutorialPhase2Step,
     bool? tutorialPhase3Completed,
     String? tutorialPhase3Step,
+    bool? tutorialPhase4Completed,
+    String? tutorialPhase4Step,
     bool? tutorialPhase5Completed,
     String? tutorialPhase5Step,
     bool? tutorialPhase6Completed,
@@ -406,6 +416,9 @@ class UserModel {
       tutorialPhase3Completed:
           tutorialPhase3Completed ?? this.tutorialPhase3Completed,
       tutorialPhase3Step: tutorialPhase3Step ?? this.tutorialPhase3Step,
+      tutorialPhase4Completed:
+          tutorialPhase4Completed ?? this.tutorialPhase4Completed,
+      tutorialPhase4Step: tutorialPhase4Step ?? this.tutorialPhase4Step,
       tutorialPhase5Completed:
           tutorialPhase5Completed ?? this.tutorialPhase5Completed,
       tutorialPhase5Step: tutorialPhase5Step ?? this.tutorialPhase5Step,
