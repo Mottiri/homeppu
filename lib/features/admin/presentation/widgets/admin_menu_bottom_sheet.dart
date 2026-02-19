@@ -7,6 +7,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_messages.dart';
 import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/providers/ai_provider.dart';
+import '../../../../shared/providers/ui_overlay_provider.dart';
 
 /// 管理者用ボトムシート
 class AdminMenuBottomSheet extends ConsumerStatefulWidget {
@@ -14,12 +15,17 @@ class AdminMenuBottomSheet extends ConsumerStatefulWidget {
 
   /// ボトムシートを表示
   static Future<void> show(BuildContext context) {
+    final container = ProviderScope.containerOf(context, listen: false);
+    container.read(mainShellBottomNavHiddenProvider.notifier).state = true;
+
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => const AdminMenuBottomSheet(),
-    );
+    ).whenComplete(() {
+      container.read(mainShellBottomNavHiddenProvider.notifier).state = false;
+    });
   }
 
   @override

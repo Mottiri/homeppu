@@ -12,6 +12,7 @@ import '../../../../shared/providers/tutorial_phase1_provider.dart';
 import '../../../../shared/providers/tutorial_phase3_provider.dart';
 import '../../../../shared/providers/tutorial_phase5_provider.dart';
 import '../../../../shared/providers/tutorial_phase6_provider.dart';
+import '../../../../shared/providers/ui_overlay_provider.dart';
 import '../../../../shared/widgets/tutorial_overlay.dart';
 import '../../../../shared/services/circle_service.dart';
 import '../../../circle/presentation/screens/circles_screen.dart';
@@ -341,6 +342,7 @@ class _MainShellState extends ConsumerState<MainShell>
     final tutorialPhase3Step = ref.watch(tutorialPhase3Provider);
     final tutorialPhase5Step = ref.watch(tutorialPhase5Provider);
     final tutorialPhase6Step = ref.watch(tutorialPhase6Provider);
+    final forceHideBottomNav = ref.watch(mainShellBottomNavHiddenProvider);
     final location = GoRouterState.of(context).matchedLocation;
 
     // チュートリアル初期化（main_shell で一度だけ）
@@ -543,16 +545,18 @@ class _MainShellState extends ConsumerState<MainShell>
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOutCubic,
           alignment: Alignment.bottomCenter,
-          heightFactor: _isBottomNavVisible ? 1 : 0,
+          heightFactor: (_isBottomNavVisible && !forceHideBottomNav) ? 1 : 0,
           child: AnimatedSlide(
             duration: const Duration(milliseconds: 220),
             curve: Curves.easeOutCubic,
-            offset: _isBottomNavVisible ? Offset.zero : const Offset(0, 1.0),
+            offset: (_isBottomNavVisible && !forceHideBottomNav)
+                ? Offset.zero
+                : const Offset(0, 1.0),
             child: AnimatedOpacity(
               duration: const Duration(milliseconds: 180),
-              opacity: _isBottomNavVisible ? 1 : 0,
+              opacity: (_isBottomNavVisible && !forceHideBottomNav) ? 1 : 0,
               child: IgnorePointer(
-                ignoring: !_isBottomNavVisible,
+                ignoring: !_isBottomNavVisible || forceHideBottomNav,
                 child: Container(
                   key: _bottomNavContainerKey,
                   decoration: BoxDecoration(

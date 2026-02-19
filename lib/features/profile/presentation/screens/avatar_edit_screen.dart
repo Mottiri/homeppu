@@ -755,17 +755,23 @@ class _AvatarEditScreenState extends ConsumerState<AvatarEditScreen> {
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Image.asset(
-                        _assetPathForPartId(id),
-                        width: 56,
-                        height: 56,
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) {
-                          return const SizedBox(width: 56, height: 56);
-                        },
-                      ),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final iconSize =
+                            (constraints.biggest.shortestSide * 0.62).clamp(
+                              48.0,
+                              180.0,
+                            );
+                        return Image.asset(
+                          _assetPathForPartId(id),
+                          width: iconSize,
+                          height: iconSize,
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) {
+                            return SizedBox(width: iconSize, height: iconSize);
+                          },
+                        );
+                      },
                     ),
                     if (isLocked)
                       Positioned(
@@ -796,16 +802,19 @@ class _AvatarEditScreenState extends ConsumerState<AvatarEditScreen> {
   }
 
   Widget _buildCategoryColumn() {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(borderRadius: BorderRadius.circular(18)),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: _AvatarPartCategory.values.map((category) {
-          final isSelected = category == _category;
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: GestureDetector(
+    return SizedBox(
+      width: 80,
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(18)),
+        child: ListView.separated(
+          itemCount: _AvatarPartCategory.values.length,
+          padding: EdgeInsets.zero,
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          itemBuilder: (context, index) {
+            final category = _AvatarPartCategory.values[index];
+            final isSelected = category == _category;
+            return GestureDetector(
               onTap: () => setState(() => _category = category),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
@@ -842,9 +851,9 @@ class _AvatarEditScreenState extends ConsumerState<AvatarEditScreen> {
                   ],
                 ),
               ),
-            ),
-          );
-        }).toList(),
+            );
+          },
+        ),
       ),
     );
   }

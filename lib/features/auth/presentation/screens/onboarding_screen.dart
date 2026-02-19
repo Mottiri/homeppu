@@ -46,6 +46,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final compactLayout = screenHeight < 700;
+
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(gradient: AppColors.warmGradient),
@@ -56,7 +59,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               Align(
                 alignment: Alignment.topRight,
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.fromLTRB(16, compactLayout ? 8 : 16, 16, compactLayout ? 4 : 16),
                   child: TextButton(
                     onPressed: () => context.go('/login'),
                     child: Text(AppMessages.onboarding.skip),
@@ -80,7 +83,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
               // インジケーター
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 24),
+                padding: EdgeInsets.symmetric(vertical: compactLayout ? 12 : 24),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: List.generate(
@@ -103,7 +106,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
               // ボタン
               Padding(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 48),
+                padding: EdgeInsets.fromLTRB(24, 0, 24, compactLayout ? 20 : 48),
                 child: Column(
                   children: [
                     SizedBox(
@@ -165,12 +168,16 @@ class _OnboardingPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
+        final compactPage = constraints.maxHeight < 420;
         final imageSize = (constraints.maxHeight * 0.36).clamp(120.0, 220.0);
-        final gapLarge = (constraints.maxHeight * 0.08).clamp(20.0, 48.0);
-        final gapSmall = (constraints.maxHeight * 0.03).clamp(8.0, 16.0);
+        final gapLarge = (constraints.maxHeight * 0.08).clamp(16.0, 48.0);
+        final gapSmall = (constraints.maxHeight * 0.03).clamp(6.0, 16.0);
 
         return Padding(
-          padding: const EdgeInsets.all(32),
+          padding: EdgeInsets.symmetric(
+            horizontal: 32,
+            vertical: compactPage ? 16 : 32,
+          ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [

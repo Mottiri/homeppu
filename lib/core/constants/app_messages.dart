@@ -392,11 +392,11 @@ class _OnboardingMessages {
   String get alreadyHaveAccount => 'すでにアカウントをお持ちの方';
 
   String get page1Title => 'ようこそ、ほめっぷへ';
-  String get page1Description => 'ほめっぷに来てくれてありがとう！\n私はほめっぷに住む座敷童のちゃむちゃんです！';
+  String get page1Description => 'ほめっぷに来てくれてありがとう！\nほめっぷは世界一優しいSNSを目指しているよ！';
   String get page2Title => 'たくさん褒められよう';
-  String get page2Description => 'ほめっぷではあなたの投稿に\nAIや仲間から温かい言葉が届くよ';
-  String get page3Title => 'おうちのような安心感';
-  String get page3Description => 'あなたのHomeのようなアプリ\nほめっぷを楽しんでね';
+  String get page2Description => 'ほめっぷではあなたの投稿に\nAIや仲間から温かい言葉が届くよ😊';
+  String get page3Title => 'あなたの安心できる場所';
+  String get page3Description => 'ほめっぷでは発言内容をAIが審査しているから\n安心して使ってね！';
 }
 
 class _TutorialMessages {
