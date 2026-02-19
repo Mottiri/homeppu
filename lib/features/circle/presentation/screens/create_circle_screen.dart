@@ -445,9 +445,21 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen>
                   style: ButtonStyle(
                     backgroundColor: WidgetStateProperty.resolveWith((states) {
                       if (states.contains(WidgetState.selected)) {
-                        return AppColors.primary.withValues(alpha: 0.1);
+                        return AppColors.primary.withValues(alpha: 0.2);
                       }
                       return Colors.white;
+                    }),
+                    foregroundColor: WidgetStateProperty.resolveWith((states) {
+                      if (states.contains(WidgetState.selected)) {
+                        return AppColors.primaryDark;
+                      }
+                      return AppColors.textPrimary;
+                    }),
+                    iconColor: WidgetStateProperty.resolveWith((states) {
+                      if (states.contains(WidgetState.selected)) {
+                        return AppColors.primaryDark;
+                      }
+                      return AppColors.textPrimary;
                     }),
                   ),
                 ),
