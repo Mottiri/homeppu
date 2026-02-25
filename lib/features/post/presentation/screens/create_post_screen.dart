@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -21,6 +22,7 @@ import '../../../../shared/widgets/tutorial_overlay.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
 import '../../../../shared/widgets/report_dialog.dart';
 import '../../../../shared/widgets/ad_banner.dart';
+import '../widgets/waiting_character_overlay.dart';
 
 /// 投稿作成画面
 class CreatePostScreen extends ConsumerStatefulWidget {
@@ -36,6 +38,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   final _contentController = TextEditingController();
   final _mediaService = MediaService();
   final _postAdPolicyService = PostAdPolicyService();
+  final ValueNotifier<bool> _waitingCharacterVisible = ValueNotifier<bool>(
+    false,
+  );
   final GlobalKey _tutorialOverlayStackKey = GlobalKey();
   final GlobalKey _postButtonKey = GlobalKey();
   bool _isLoading = false;
@@ -55,8 +60,18 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
   @override
   void dispose() {
+    _waitingCharacterVisible.dispose();
     _contentController.dispose();
     super.dispose();
+  }
+
+  void _startWaitingCharacter() {
+    FocusScope.of(context).unfocus();
+    _waitingCharacterVisible.value = true;
+  }
+
+  void _stopWaitingCharacter() {
+    _waitingCharacterVisible.value = false;
   }
 
   void _resolvePhase4SpotlightRect() {
@@ -410,11 +425,20 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   }
 
   Future<void> _createPost() async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+
     final content = _contentController.text.trim();
-    if (content.isEmpty && _selectedMedia.isEmpty) return;
+    if (content.isEmpty && _selectedMedia.isEmpty) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
 
     final user = ref.read(currentUserProvider).valueOrNull;
-    if (user == null) return;
+    if (user == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
 
     if (kDebugMode) {
       final debugState = await _postAdPolicyService.debugState(user.uid);
@@ -435,8 +459,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     if (kDebugMode) {
       debugPrint('[PostAd] shouldTryPostAd=$shouldTryPostAd');
     }
-
-    setState(() => _isLoading = true);
+    if (!shouldTryPostAd) {
+      _startWaitingCharacter();
+    }
 
     ModerationException? moderationError;
     String? generalErrorMessage;
@@ -529,6 +554,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       _isLoading = false;
       _isUploading = false;
     });
+    _stopWaitingCharacter();
 
     if (postCreated) {
       SnackBarHelper.showSuccess(context, AppMessages.success.postCreated);
@@ -565,8 +591,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     final tutorialPhase4Step = ref.watch(tutorialPhase4Provider);
     final shouldRunPhase4 = widget.circleId == null && user != null;
     final isPhase4Active =
-        shouldRunPhase4 &&
-        tutorialPhase4Step != TutorialPhase4Step.inactive;
+        shouldRunPhase4 && tutorialPhase4Step != TutorialPhase4Step.inactive;
 
     if (shouldRunPhase4 && !_phase4Initialized) {
       _phase4Initialized = true;
@@ -656,7 +681,17 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                       ],
                     ),
                   ),
-                  const AdBanner(padding: EdgeInsets.fromLTRB(16, 8, 16, 0)),
+                  ValueListenableBuilder<bool>(
+                    valueListenable: _waitingCharacterVisible,
+                    builder: (context, waitingVisible, _) {
+                      if (_isLoading || waitingVisible) {
+                        return const SizedBox.shrink();
+                      }
+                      return const AdBanner(
+                        padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+                      );
+                    },
+                  ),
                   Expanded(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.all(20),
@@ -669,7 +704,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                               children: [
                                 AvatarWidget(
                                   avatarIndex: user.avatarIndex,
-                                  avatarParts: user.profileVisualMode == 'avatar'
+                                  avatarParts:
+                                      user.profileVisualMode == 'avatar'
                                       ? user.avatarParts
                                       : null,
                                   imageUrl: user.profileVisualMode == 'image'
@@ -690,7 +726,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                                     if (widget.circleId != null)
                                       Text(
                                         'サークルへの投稿',
-                                        style: Theme.of(context).textTheme.bodySmall
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
                                             ?.copyWith(
                                               color: AppColors.primary,
                                               fontWeight: FontWeight.bold,
@@ -811,7 +849,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                             icon: Badge(
                               isLabelVisible: _selectedMedia.isNotEmpty,
                               label: Text('${_selectedMedia.length}'),
-                              child: const Icon(Icons.add_photo_alternate_outlined),
+                              child: const Icon(
+                                Icons.add_photo_alternate_outlined,
+                              ),
                             ),
                             color: _selectedMedia.isNotEmpty
                                 ? AppColors.primary
@@ -854,8 +894,11 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                         ? AppMessages.label.ok
                         : AppMessages.tutorial.nextAction,
                     onAction: () async {
-                      final notifier = ref.read(tutorialPhase4Provider.notifier);
-                      if (tutorialPhase4Step == TutorialPhase4Step.aiMisjudgeGuide) {
+                      final notifier = ref.read(
+                        tutorialPhase4Provider.notifier,
+                      );
+                      if (tutorialPhase4Step ==
+                          TutorialPhase4Step.aiMisjudgeGuide) {
                         await notifier.markCompleted();
                       } else {
                         await notifier.advance();
@@ -863,6 +906,14 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                     },
                   ),
                 ),
+              ValueListenableBuilder<bool>(
+                valueListenable: _waitingCharacterVisible,
+                builder: (context, visible, child) {
+                  if (!visible) return const SizedBox.shrink();
+                  return child!;
+                },
+                child: const Positioned.fill(child: WaitingCharacterOverlay()),
+              ),
             ],
           ),
         ),
@@ -871,7 +922,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   }
 }
 
-/// 選択されたメディア
 class _SelectedMedia {
   final String path;
   final MediaType type;
