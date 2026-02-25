@@ -26,6 +26,7 @@ import {
 import { getTextModerationPrompt } from "../ai/prompts/moderation";
 import { ModerationResult } from "../types";
 import { getVirtuePolicy, grantVirtue, VIRTUE_ROUTE_KEYS } from "../helpers/virtue-policy";
+import { logAIUsage } from "../helpers/ai-usage";
 
 const EPIC_REACTIONS = new Set(["rainbow", "hundred"]);
 const EPIC_STAMP_SHEET_REACTIONS = new Set(["rainbow", "hundred", "confetti"]);
@@ -293,6 +294,10 @@ async function moderateText(
     try {
         const result = await model.generateContent(prompt);
         const responseText = result.response.text();
+        logAIUsage("comment_text_moderation", result.response, {
+            hasPostContext: Boolean(postContent),
+            textLength: text.length,
+        });
         // JSONブロックを取り出す
         const jsonMatch = responseText.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {

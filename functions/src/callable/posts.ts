@@ -13,6 +13,7 @@ import { geminiApiKey } from "../config/secrets";
 import { isAdmin, getAdminUids } from "../helpers/admin";
 import { ModerationResult, MediaItem } from "../types";
 import { moderateMedia } from "../helpers/moderation";
+import { logAIUsage } from "../helpers/ai-usage";
 import { NG_WORDS } from "../helpers/virtue";
 import { getVirtuePolicy, grantVirtue, VIRTUE_ROUTE_KEYS } from "../helpers/virtue-policy";
 import { LOCATION, AI_MODELS } from "../config/constants";
@@ -213,6 +214,10 @@ ${content}
                 const result = await model.generateContent(textPrompt);
                 const responseText = result.response.text().trim();
                 rawResponseText = responseText;
+                logAIUsage("post_text_moderation", result.response, {
+                    userId,
+                    hasContent: Boolean(content),
+                });
                 console.log("STEP 5: Got Gemini response, length:", responseText.length);
 
                 // JSONを抽出

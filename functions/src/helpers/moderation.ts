@@ -10,6 +10,7 @@ import * as path from "path";
 import { GoogleGenerativeAI, Part } from "@google/generative-ai";
 import { GoogleAIFileManager } from "@google/generative-ai/server";
 import { MediaModerationResult, MediaItem } from "../types";
+import { logAIUsage } from "./ai-usage";
 import {
     IMAGE_MODERATION_PROMPT,
     VIDEO_MODERATION_PROMPT,
@@ -68,6 +69,9 @@ export async function moderateImage(
 
         const result = await model.generateContent([prompt, imagePart]);
         const responseText = result.response.text().trim();
+        logAIUsage("media_moderation_image", result.response, {
+            mimeType,
+        });
         console.log(`moderateImage: Raw response: ${responseText.substring(0, 200)}`);
 
         let jsonText = responseText;
@@ -144,6 +148,9 @@ export async function moderateVideo(
 
         const result = await model.generateContent([prompt, videoPart]);
         const responseText = result.response.text().trim();
+        logAIUsage("media_moderation_video", result.response, {
+            mimeType: file.mimeType ?? mimeType,
+        });
 
         let jsonText = responseText;
         const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);

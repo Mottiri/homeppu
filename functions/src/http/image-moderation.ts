@@ -12,6 +12,7 @@ import { IMAGE_MODERATION_CALLABLE_PROMPT } from "../ai/prompts/moderation";
 import { MediaModerationResult } from "../types";
 import { requireAuth } from "../helpers/auth";
 import { ErrorMessages } from "../helpers/errors";
+import { logAIUsage } from "../helpers/ai-usage";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_MIME_TYPES = new Set([
@@ -105,6 +106,10 @@ export const moderateImageCallable = onCall(
 
             const result = await model.generateContent([prompt, imagePart]);
             const responseText = result.response.text().trim();
+            logAIUsage("image_moderation_callable", result.response, {
+                mimeType,
+                estimatedBytes,
+            });
             logModeration("ai_raw_response", {
                 preview: responseText.slice(0, 300),
             });

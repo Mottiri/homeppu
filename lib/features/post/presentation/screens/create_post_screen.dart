@@ -570,9 +570,10 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
     if (shouldRunPhase4 && !_phase4Initialized) {
       _phase4Initialized = true;
+      final currentUser = user;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || user == null) return;
-        ref.read(tutorialPhase4Provider.notifier).restoreOrStart(user);
+        if (!mounted) return;
+        ref.read(tutorialPhase4Provider.notifier).restoreOrStart(currentUser);
       });
     }
 

@@ -9,6 +9,7 @@ import * as path from "path";
 import { GoogleGenerativeAI, Part } from "@google/generative-ai";
 import { GoogleAIFileManager } from "@google/generative-ai/server";
 import { MediaItem } from "../types";
+import { logAIUsage } from "./ai-usage";
 import { downloadFile } from "./moderation";
 import {
     IMAGE_ANALYSIS_PROMPT,
@@ -38,6 +39,9 @@ export async function analyzeImageForComment(
 
         const result = await model.generateContent([prompt, imagePart]);
         const description = result.response.text()?.trim();
+        logAIUsage("media_analysis_image", result.response, {
+            mimeType,
+        });
 
         console.log("Image analysis result:", description);
         return description || null;
@@ -93,6 +97,9 @@ export async function analyzeVideoForComment(
 
         const result = await model.generateContent([prompt, videoPart]);
         const description = result.response.text()?.trim();
+        logAIUsage("media_analysis_video", result.response, {
+            mimeType: file.mimeType ?? mimeType,
+        });
 
         // アップロードしたファイルを削除
         try {
