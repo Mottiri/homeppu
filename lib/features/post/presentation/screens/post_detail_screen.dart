@@ -46,6 +46,10 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
   Rect? _tutorialCommentRect;
   bool _phase2TutorialInitialized = false;
   TutorialPhase2Step? _lastLoggedPhase2Step;
+  bool _didAutoScrollToComment = false;
+  int _commentScrollRetryCount = 0;
+  String? _tutorialTargetCommentId;
+  bool _tutorialScrollFallback = false;
   bool? _lastLoggedPhase2OverlayVisible;
   bool? _lastLoggedHasTutorialTarget;
   int? _lastLoggedCommentCount;
@@ -160,6 +164,54 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     setState(() => _tutorialCommentRect = rect);
   }
 
+  void _maybeAutoScrollToComment() {
+    if (_didAutoScrollToComment) return;
+    debugPrint(
+      '[TUTORIAL_PHASE2] schedule auto-scroll '
+      'didAuto=$_didAutoScrollToComment retry=$_commentScrollRetryCount',
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || _didAutoScrollToComment) return;
+      final targetContext = _tutorialTargetCommentKey.currentContext;
+      if (targetContext == null) {
+        debugPrint(
+          '[TUTORIAL_PHASE2] target context not ready '
+          'retry=$_commentScrollRetryCount/12',
+        );
+        if (_commentScrollRetryCount < 12) {
+          _commentScrollRetryCount++;
+          await Future.delayed(const Duration(milliseconds: 120));
+          if (mounted) setState(() {});
+        } else {
+          debugPrint(
+            '[TUTORIAL_PHASE2] fallback activated: retry limit reached',
+          );
+          if (mounted) {
+            setState(() {
+              _tutorialScrollFallback = true;
+              _didAutoScrollToComment = true;
+            });
+          }
+        }
+        return;
+      }
+      debugPrint('[TUTORIAL_PHASE2] target context resolved');
+      _didAutoScrollToComment = true;
+      await Scrollable.ensureVisible(
+        targetContext,
+        duration: const Duration(milliseconds: 380),
+        curve: Curves.easeOutCubic,
+        alignment: 0.08,
+      );
+      if (!mounted) return;
+      debugPrint('[TUTORIAL_PHASE2] ensureVisible done');
+      await _resolveTutorialCommentRect();
+      if (mounted) {
+        setState(() {});
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     timeago.setLocaleMessages('ja', timeago.JaMessages());
@@ -172,6 +224,13 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         '[TUTORIAL_PHASE2] step changed: $_lastLoggedPhase2Step -> $tutorialStep',
       );
       _lastLoggedPhase2Step = tutorialStep;
+      // g) ステップ変更時のリセット
+      if (tutorialStep != TutorialPhase2Step.commentLongPress) {
+        _didAutoScrollToComment = false;
+        _commentScrollRetryCount = 0;
+        _tutorialTargetCommentId = null;
+        _tutorialScrollFallback = false;
+      }
     }
     final isSubscriber = currentUser?.isSubscriber ?? false;
     final isAdmin = ref.watch(isAdminProvider).valueOrNull ?? false;
@@ -300,8 +359,9 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                       clipBehavior: Clip.none,
                       children: [
                         CustomScrollView(
-                          physics: tutorialStep ==
-                                  TutorialPhase2Step.commentLongPress
+                          physics: (tutorialStep ==
+                                      TutorialPhase2Step.commentLongPress &&
+                                  !_tutorialScrollFallback)
                               ? const NeverScrollableScrollPhysics()
                               : null,
                           slivers: [
@@ -387,14 +447,69 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                   );
                                 }
 
-                                final tutorialTargetIndex =
-                                    tutorialStep ==
-                                                TutorialPhase2Step.commentLongPress &&
-                                            isOwnPost
-                                        ? comments.indexWhere(
-                                            (c) => c.userId != post.userId,
-                                          )
-                                        : -1;
+                                // b) ターゲットコメントIDの固定
+                                final isCommentLongPress = tutorialStep ==
+                                        TutorialPhase2Step.commentLongPress &&
+                                    isOwnPost;
+
+                                // ターゲットID消失時の再選定
+                                if (isCommentLongPress &&
+                                    _tutorialTargetCommentId != null) {
+                                  final idStillExists = comments.any(
+                                    (c) => c.id == _tutorialTargetCommentId,
+                                  );
+                                  if (!idStillExists) {
+                                    debugPrint(
+                                      '[TUTORIAL_PHASE2] target ID '
+                                      '$_tutorialTargetCommentId disappeared, '
+                                      're-selecting',
+                                    );
+                                    final replacement = comments
+                                        .cast<CommentModel?>()
+                                        .firstWhere(
+                                          (c) => c!.userId != post.userId,
+                                          orElse: () => null,
+                                        );
+                                    _tutorialTargetCommentId =
+                                        replacement?.id;
+                                    _didAutoScrollToComment = false;
+                                    _commentScrollRetryCount = 0;
+                                    _tutorialCommentRect = null;
+                                    _tutorialScrollFallback = false;
+                                    debugPrint(
+                                      '[TUTORIAL_PHASE2] re-selected target: '
+                                      '$_tutorialTargetCommentId',
+                                    );
+                                  }
+                                }
+
+                                // 初回ターゲット検出時にIDを固定
+                                if (isCommentLongPress &&
+                                    _tutorialTargetCommentId == null) {
+                                  final firstNonOwner = comments
+                                      .cast<CommentModel?>()
+                                      .firstWhere(
+                                        (c) => c!.userId != post.userId,
+                                        orElse: () => null,
+                                      );
+                                  if (firstNonOwner != null) {
+                                    _tutorialTargetCommentId =
+                                        firstNonOwner.id;
+                                    debugPrint(
+                                      '[TUTORIAL_PHASE2] fixed target ID: '
+                                      '$_tutorialTargetCommentId',
+                                    );
+                                  }
+                                }
+
+                                final tutorialTargetIndex = isCommentLongPress &&
+                                        _tutorialTargetCommentId != null
+                                    ? comments.indexWhere(
+                                        (c) =>
+                                            c.id ==
+                                            _tutorialTargetCommentId,
+                                      )
+                                    : -1;
                                 final hasTutorialTarget = tutorialTargetIndex >= 0;
                                 final commentCount = comments.length;
                                 if (_lastLoggedCommentCount != commentCount ||
@@ -404,6 +519,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                     '[TUTORIAL_PHASE2] comments=$commentCount '
                                     'hasTarget=$hasTutorialTarget '
                                     'targetIndex=$tutorialTargetIndex '
+                                    'targetId=$_tutorialTargetCommentId '
                                     'step=$tutorialStep '
                                     'isOwnPost=$isOwnPost',
                                   );
@@ -412,15 +528,22 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                       hasTutorialTarget;
                                 }
 
-                                if (tutorialStep ==
-                                        TutorialPhase2Step.commentLongPress &&
+                                // e) 処理順序の制御: 自動スクロール → rect解決を統合
+                                // フォールバック時はrect解決・overlay表示をスキップ
+                                if (isCommentLongPress &&
                                     hasTutorialTarget &&
-                                    _tutorialCommentRect == null) {
-                                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                                    _resolveTutorialCommentRect();
-                                  });
-                                } else if (!(tutorialStep ==
-                                            TutorialPhase2Step.commentLongPress &&
+                                    !_tutorialScrollFallback) {
+                                  if (!_didAutoScrollToComment) {
+                                    // Phase 1: スクロール → rect解決
+                                    _maybeAutoScrollToComment();
+                                  } else if (_tutorialCommentRect == null) {
+                                    // Phase 2: スクロール済み、rect再解決
+                                    WidgetsBinding.instance
+                                        .addPostFrameCallback((_) {
+                                      _resolveTutorialCommentRect();
+                                    });
+                                  }
+                                } else if (!(isCommentLongPress &&
                                         hasTutorialTarget) &&
                                     _tutorialCommentRect != null) {
                                   WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -429,35 +552,98 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                   });
                                 }
 
+                                // c) eager build閾値チェック
+                                final useEagerBuild = isCommentLongPress &&
+                                    hasTutorialTarget &&
+                                    commentCount <= 200;
+
+                                // c) コメント200件超の場合はeager buildせずフォールバック
+                                if (isCommentLongPress &&
+                                    hasTutorialTarget &&
+                                    commentCount > 200 &&
+                                    !_tutorialScrollFallback) {
+                                  debugPrint(
+                                    '[TUTORIAL_PHASE2] fallback activated: '
+                                    'comments=$commentCount > 200',
+                                  );
+                                  WidgetsBinding.instance
+                                      .addPostFrameCallback((_) {
+                                    if (!mounted) return;
+                                    setState(() {
+                                      _tutorialScrollFallback = true;
+                                      _didAutoScrollToComment = true;
+                                    });
+                                  });
+                                }
+
+                                // コメントタイルビルダー
+                                Widget buildCommentTile(
+                                  CommentModel comment,
+                                  bool isTutorialTarget,
+                                ) {
+                                  // f) フォールバック時は全非オーナーコメントに
+                                  //    onThanksCompletedを付与
+                                  final isNonOwnerComment =
+                                      comment.userId != post.userId;
+                                  final shouldAttachCallback =
+                                      isCommentLongPress &&
+                                          (isTutorialTarget ||
+                                              (_tutorialScrollFallback &&
+                                                  isNonOwnerComment));
+                                  return _CommentTile(
+                                    // Keep a stable key so long-press flow
+                                    // is not disposed when tutorial state
+                                    // switches to inactive.
+                                    key: ValueKey(comment.id),
+                                    comment: comment,
+                                    postOwnerId: post.userId,
+                                    disableTapActions: isTutorialTarget &&
+                                        !_tutorialScrollFallback,
+                                    spotlightCardKey: isTutorialTarget &&
+                                            !_tutorialScrollFallback
+                                        ? _tutorialTargetCommentKey
+                                        : null,
+                                    onThanksCompleted: shouldAttachCallback
+                                        ? () async {
+                                            await ref
+                                                .read(
+                                                  tutorialPhase2Provider
+                                                      .notifier,
+                                                )
+                                                .markCompleted();
+                                          }
+                                        : null,
+                                  );
+                                }
+
+                                // c) eager build切り替え
+                                if (useEagerBuild) {
+                                  return SliverToBoxAdapter(
+                                    child: Column(
+                                      children: [
+                                        for (int i = 0;
+                                            i < comments.length;
+                                            i++)
+                                          buildCommentTile(
+                                            comments[i],
+                                            hasTutorialTarget &&
+                                                i == tutorialTargetIndex,
+                                          ),
+                                      ],
+                                    ),
+                                  );
+                                }
+
                                 return SliverList(
                                   delegate: SliverChildBuilderDelegate(
                                     (context, index) {
                                       final comment = comments[index];
-                                      final isTutorialTarget = hasTutorialTarget &&
-                                          index == tutorialTargetIndex;
-                                      return _CommentTile(
-                                        // Keep a stable key so long-press flow is not disposed
-                                        // when tutorial state switches to inactive.
-                                        key: ValueKey(comment.id),
-                                        comment: comment,
-                                        postOwnerId: post.userId,
-                                        disableTapActions: isTutorialTarget,
-                                        spotlightCardKey: isTutorialTarget
-                                            ? _tutorialTargetCommentKey
-                                            : null,
-                                        onThanksCompleted: isTutorialTarget &&
-                                                tutorialStep ==
-                                                    TutorialPhase2Step
-                                                        .commentLongPress
-                                            ? () async {
-                                                await ref
-                                                    .read(
-                                                      tutorialPhase2Provider
-                                                          .notifier,
-                                                    )
-                                                    .markCompleted();
-                                              }
-                                            : null,
+                                      final isTutorialTarget =
+                                          hasTutorialTarget &&
+                                              index == tutorialTargetIndex;
+                                      return buildCommentTile(
+                                        comment,
+                                        isTutorialTarget,
                                       );
                                     },
                                     childCount: comments.length,
