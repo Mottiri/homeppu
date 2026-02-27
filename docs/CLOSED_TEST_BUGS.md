@@ -10,19 +10,6 @@ This document tracks bugs found during closed testing.
 
 ## Open
 
-### CT-003: Spreadsheet ID validation/update issue
-
-**Report Date**: 2026-02-21
-**Priority**: High
-**Category**: Settings / Environment
-
-**Issue**:
-Spreadsheet ID check/update behavior is unstable.
-
-**Tasks**:
-- [ ] Verify current Spreadsheet ID
-- [ ] Update to correct Spreadsheet ID
-
 ### CT-004: Tutorial spotlight position offset
 
 **Report Date**: 2026-02-21
@@ -100,6 +87,19 @@ All copyright notations should be switched to "ほめっぷ".
 - [ ] サーバー側のバリデーションを500→200に更新
 - [ ] ユーザー向けの表示テキスト（カウンター等）を更新
 
+### CT-009: プロフィール編集画面のアイコン設定時の文言修正
+
+**Report Date**: 2026-02-27
+**Priority**: Low
+**Screen**: Profile Edit / Icon Setting
+
+**Issue**:
+アイコン設定時に「アバターを選んでね」と表示されているが、ユーザーが選ぶのはアイコンであるため「アイコンを選んでね」に修正する。
+
+**Tasks**:
+- [ ] 該当の文言箇所を特定する
+- [ ] 「アバターを選んでね」→「アイコンを選んでね」に変更
+
 ---
 
 ## In Progress
@@ -143,6 +143,27 @@ Long post content expands card too much and comment area is not reachable as exp
 
 **Resolution**:
 実機再確認の結果、スクロール自体は正常に動作していた。以前の報告時はCT-001のチュートリアル制御（NeverScrollableScrollPhysics）の影響でスクロール不可だった可能性が高い。CT-001修正後は長文投稿カードが画面を占有していてもスクロールでコメントに到達可能。文字数上限の引き下げ（CT-008）で投稿カードの占有問題自体も軽減される見込み。
+
+### CT-003: Spreadsheet ID validation/update issue
+
+**Report Date**: 2026-02-21
+**Resolved Date**: 2026-02-27
+**Priority**: High
+**Category**: Settings / Environment
+
+**Issue**:
+Spreadsheet ID check/update behavior is unstable.
+
+**Resolution**:
+- [x] スプレッドシートIDをFirestore Config化（`settings/spreadsheet.inquirySpreadsheetId`）
+- [x] Firestore未設定時は `constants.ts` のフォールバック値を使用
+- [x] 運用時はFirebaseコンソールからデプロイ不要で切替可能
+
+**Fix**: `getSpreadsheetId()` 関数を追加し、Firestore `settings/spreadsheet` ドキュメントからIDを動的に取得。フォールバック付きで安全に移行可能。
+
+**Related Files**:
+- `functions/src/helpers/spreadsheet.ts`
+- `docs/design_ct003_spreadsheet_config.md`
 
 ---
 

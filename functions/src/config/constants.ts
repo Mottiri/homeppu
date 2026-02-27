@@ -3,7 +3,7 @@ export const PROJECT_ID = "positive-sns";
 export const LOCATION = "asia-northeast1";
 export const QUEUE_NAME = "generateAIComment";
 
-// Google Sheets 設定
+// Google Sheets 設定（フォールバック値。Firestore settings/spreadsheet が優先される）
 export const SPREADSHEET_ID = "1XsgrEmsdIkc5Cd_y8sIkBXFImshHPbqqxwJu9wWv4BY";
 
 // Cloud Tasks で使用する関数名定数
