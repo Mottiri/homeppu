@@ -4,23 +4,11 @@ This document tracks bugs found during closed testing.
 
 **Test Period**: 2026-02
 **Last Updated**: 2026-02-27
+**Note**: CT numbers are permanent identifiers. Closed items retain their original CT number.
 
 ---
 
 ## Open
-
-### CT-002: Long post card occupies screen and hides comments
-
-**Report Date**: 2026-02-20
-**Priority**: High
-**Screen**: Post Detail
-
-**Issue**:
-Long post content expands card too much and comment area is not reachable as expected.
-
-**Tasks**:
-- [ ] Add max height handling and internal scroll behavior
-- [ ] Consider collapsed/expanded post content behavior
 
 ### CT-003: Spreadsheet ID validation/update issue
 
@@ -142,6 +130,19 @@ When post content is long or media is attached, the target like button can be ou
 **Related Files**:
 - `lib/features/post/presentation/screens/post_detail_screen.dart`
 - `docs/design_ct001_tutorial_autoscroll.md`
+
+### CT-002: Long post card occupies screen and hides comments
+
+**Report Date**: 2026-02-20
+**Resolved Date**: 2026-02-27
+**Priority**: High
+**Screen**: Post Detail
+
+**Issue**:
+Long post content expands card too much and comment area is not reachable as expected.
+
+**Resolution**:
+実機再確認の結果、スクロール自体は正常に動作していた。以前の報告時はCT-001のチュートリアル制御（NeverScrollableScrollPhysics）の影響でスクロール不可だった可能性が高い。CT-001修正後は長文投稿カードが画面を占有していてもスクロールでコメントに到達可能。文字数上限の引き下げ（CT-008）で投稿カードの占有問題自体も軽減される見込み。
 
 ---
 
