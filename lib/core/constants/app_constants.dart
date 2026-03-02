@@ -49,7 +49,7 @@ class AppConstants {
   static const int aiMaxDelay = 10800000; // 最大3時間
 
   // バリデーション
-  static const int maxPostLength = 500;
+  static const int maxPostLength = 200;
   static const int maxCommentLength = 200;
   static const int maxDisplayNameLength = 20;
   static const int maxBioLength = 100;

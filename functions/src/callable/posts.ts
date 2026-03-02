@@ -127,6 +127,11 @@ export const createPostWithModeration = onCall(
         const shouldGrantVirtue = grantVirtueFlag !== false;
         console.log(`User: ${userId}, Content: ${content?.substring(0, 30)}...`);
 
+        // 投稿文字数の上限チェック（Unicodeコードポイント数で判定、絵文字を考慮し余裕を持たせる）
+        if (typeof content === "string" && [...content].length > 220) {
+            throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
+        }
+
         // 動画メディアの拒否（動画添付は廃止済み）
         if (Array.isArray(mediaItems) && mediaItems.some((item: { type?: string; mimeType?: string }) =>
             item.type === "video" || (typeof item.mimeType === "string" && item.mimeType.startsWith("video/"))

@@ -832,10 +832,10 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                           Text(
                             '$remainingChars',
                             style: TextStyle(
-                              color: remainingChars < 50
+                              color: remainingChars < 20
                                   ? AppColors.warning
                                   : AppColors.textHint,
-                              fontWeight: remainingChars < 50
+                              fontWeight: remainingChars < 20
                                   ? FontWeight.bold
                                   : FontWeight.normal,
                             ),
