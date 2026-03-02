@@ -320,15 +320,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                   _takePhoto();
                 },
               ),
-              _MediaPickerOption(
-                icon: Icons.videocam,
-                label: '動画を選択',
-                color: Colors.orange,
-                onTap: () {
-                  Navigator.pop(context);
-                  _pickVideo();
-                },
-              ),
             ],
           ),
         ),
@@ -377,27 +368,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       }
     } catch (e) {
       _showError('撮影に失敗しました');
-    }
-  }
-
-  /// 動画を選択
-  Future<void> _pickVideo() async {
-    try {
-      final video = await _mediaService.pickVideo();
-      if (video != null) {
-        // NSFWチェック（サムネイル抽出して検出）
-        final nsfwService = NsfwDetectorService.instance;
-        await nsfwService.initialize();
-
-        final error = await nsfwService.checkVideo(video.path);
-        if (error != null) {
-          _showError(error);
-          return;
-        }
-        _addMedia(video.path, MediaType.video);
-      }
-    } catch (e) {
-      _showError('動画の選択に失敗しました');
     }
   }
 

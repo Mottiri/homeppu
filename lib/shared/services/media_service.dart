@@ -4,9 +4,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as path;
-import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
-import 'package:video_thumbnail/video_thumbnail.dart';
 
 import '../models/post_model.dart';
 
@@ -16,7 +14,6 @@ class MediaService {
   final Uuid _uuid = const Uuid();
 
   static const int maxImageSize = 5 * 1024 * 1024;
-  static const int maxVideoSize = 30 * 1024 * 1024;
   static const int maxMediaCount = 4;
 
   static const List<String> allowedImageExtensions = [
@@ -25,13 +22,6 @@ class MediaService {
     'png',
     'gif',
     'webp',
-  ];
-
-  static const List<String> allowedVideoExtensions = [
-    'mp4',
-    'mov',
-    'avi',
-    'mkv',
   ];
 
   Future<List<XFile>> pickImages({int maxCount = 4}) async {
@@ -52,20 +42,6 @@ class MediaService {
     );
   }
 
-  Future<XFile?> pickVideo() async {
-    return _imagePicker.pickVideo(
-      source: ImageSource.gallery,
-      maxDuration: const Duration(minutes: 3),
-    );
-  }
-
-  Future<XFile?> recordVideo() async {
-    return _imagePicker.pickVideo(
-      source: ImageSource.camera,
-      maxDuration: const Duration(minutes: 1),
-    );
-  }
-
   Future<MediaItem> uploadFile({
     required String filePath,
     required String userId,
@@ -76,14 +52,13 @@ class MediaService {
     final file = File(filePath);
     final fileSize = await file.length();
 
-    final maxSize = type == MediaType.video ? maxVideoSize : maxImageSize;
-    if (fileSize > maxSize) {
-      throw Exception('File is too large (max ${maxSize ~/ (1024 * 1024)}MB)');
+    if (fileSize > maxImageSize) {
+      throw Exception('File is too large (max ${maxImageSize ~/ (1024 * 1024)}MB)');
     }
 
     final extension = path.extension(filePath).toLowerCase();
     final uniqueFileName = '${_uuid.v4()}$extension';
-    final storagePath = 'posts/$userId/${type.name}s/$uniqueFileName';
+    final storagePath = 'posts/$userId/images/$uniqueFileName';
 
     final ref = _storage.ref().child(storagePath);
     final uploadTask = ref.putFile(
@@ -107,71 +82,13 @@ class MediaService {
     final snapshot = await uploadTask;
     final downloadUrl = await snapshot.ref.getDownloadURL();
 
-    String? thumbnailUrl;
-    if (type == MediaType.video) {
-      thumbnailUrl = await _generateAndUploadThumbnail(
-        videoPath: filePath,
-        userId: userId,
-      );
-    }
-
     return MediaItem(
       url: downloadUrl,
       type: type,
       fileName: fileName ?? path.basename(filePath),
       mimeType: _getMimeType(extension),
       fileSize: fileSize,
-      thumbnailUrl: thumbnailUrl,
     );
-  }
-
-  Future<String?> _generateAndUploadThumbnail({
-    required String videoPath,
-    required String userId,
-  }) async {
-    try {
-      final tempDir = await getTemporaryDirectory();
-      final thumbnailPath = await VideoThumbnail.thumbnailFile(
-        video: videoPath,
-        thumbnailPath: tempDir.path,
-        imageFormat: ImageFormat.JPEG,
-        maxHeight: 800,
-        quality: 90,
-      );
-
-      if (thumbnailPath == null) return null;
-
-      final thumbnailFile = File(thumbnailPath);
-      if (!await thumbnailFile.exists()) return null;
-
-      final thumbnailFileName = '${_uuid.v4()}_thumb.jpg';
-      final thumbnailStoragePath = 'posts/$userId/thumbnails/$thumbnailFileName';
-
-      final ref = _storage.ref().child(thumbnailStoragePath);
-      final uploadTask = ref.putFile(
-        thumbnailFile,
-        SettableMetadata(
-          contentType: 'image/jpeg',
-          customMetadata: {
-            'type': 'video_thumbnail',
-            'uploadedAt': DateTime.now().millisecondsSinceEpoch.toString(),
-          },
-        ),
-      );
-
-      final snapshot = await uploadTask;
-      final thumbnailUrl = await snapshot.ref.getDownloadURL();
-
-      try {
-        await thumbnailFile.delete();
-      } catch (_) {}
-
-      return thumbnailUrl;
-    } catch (e, stackTrace) {
-      debugPrint('MediaService thumbnail generation failed: $e');
-      debugPrint('$stackTrace');
-      return null;
-    }
   }
 
   Future<List<MediaItem>> uploadMultiple({
@@ -279,14 +196,6 @@ class MediaService {
         return 'image/gif';
       case 'webp':
         return 'image/webp';
-      case 'mp4':
-        return 'video/mp4';
-      case 'mov':
-        return 'video/quicktime';
-      case 'avi':
-        return 'video/x-msvideo';
-      case 'mkv':
-        return 'video/x-matroska';
       case 'pdf':
         return 'application/pdf';
       case 'doc':
@@ -307,10 +216,6 @@ class MediaService {
   }
 
   MediaType getMediaType(String filePath) {
-    final ext = path.extension(filePath).toLowerCase().replaceAll('.', '');
-    if (allowedVideoExtensions.contains(ext)) {
-      return MediaType.video;
-    }
     return MediaType.image;
   }
 }

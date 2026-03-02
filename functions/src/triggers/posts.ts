@@ -72,7 +72,7 @@ export const onPostCreated = onDocumentCreated(
         if (mediaItems && mediaItems.length > 0) {
             console.log(`Analyzing ${mediaItems.length} media items for AI comment...`);
             try {
-                mediaDescriptions = await analyzeMediaForComment(apiKey, model, mediaItems);
+                mediaDescriptions = await analyzeMediaForComment(model, mediaItems);
                 console.log(`Media analysis complete: ${mediaDescriptions.length} descriptions`);
             } catch (error) {
                 console.error("Media analysis failed:", error);

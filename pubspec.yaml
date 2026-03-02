@@ -44,13 +44,10 @@ dependencies:
   google_generative_ai: ^0.4.7
   cloud_functions: ^5.6.2
   file_picker: ^10.3.7
-  video_player: ^2.9.3
-  chewie: ^1.10.0
   firebase_messaging: ^15.2.10
   flutter_local_notifications: ^19.5.0
   image_cropper: ^11.0.0
   nsfw_detector_flutter: ^1.0.5
-  video_thumbnail: ^0.5.6
   path: ^1.9.0
   path_provider: ^2.1.5
   confetti: ^0.8.0

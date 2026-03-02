@@ -23,25 +23,6 @@ JSON形式のみで回答:
 `;
 
 /**
- * 動画モデレーション用プロンプト
- */
-export const VIDEO_MODERATION_PROMPT = `
-この動画がSNSへの投稿として適切かどうか判定してください。
-
-【ブロック対象（isInappropriate: true）】
-- adult: 成人向けコンテンツ、露出の多い映像、性的な内容
-- violence: 暴力的な映像、血液、怪我、残虐な内容
-- hate: ヘイトシンボル、差別的な内容
-- dangerous: 違法行為、麻薬、薬
-
-上記に該当しない場合は isInappropriate: false としてください。
-
-【回答形式】
-必ず以下のJSON形式のみで回答してください：
-{"isInappropriate": true/false, "category": "adult"|"violence"|"hate"|"dangerous"|"none", "confidence": 0-1, "reason": "判定理由"}
-`;
-
-/**
  * 画像モデレーション用プロンプト（Callable用も共通利用）
  */
 export const IMAGE_MODERATION_CALLABLE_PROMPT = IMAGE_MODERATION_PROMPT;

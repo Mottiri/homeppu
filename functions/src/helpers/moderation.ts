@@ -4,16 +4,11 @@
  */
 
 import * as https from "https";
-import * as fs from "fs";
-import * as os from "os";
-import * as path from "path";
 import { GoogleGenerativeAI, Part } from "@google/generative-ai";
-import { GoogleAIFileManager } from "@google/generative-ai/server";
 import { MediaModerationResult, MediaItem } from "../types";
 import { logAIUsage } from "./ai-usage";
 import {
     IMAGE_MODERATION_PROMPT,
-    VIDEO_MODERATION_PROMPT,
 } from "../ai/prompts/moderation";
 
 /**
@@ -103,107 +98,15 @@ export async function moderateImage(
 }
 
 /**
- * 動画をモデレーション
- */
-export async function moderateVideo(
-    apiKey: string,
-    model: ReturnType<GoogleGenerativeAI["getGenerativeModel"]>,
-    videoUrl: string,
-    mimeType: string = "video/mp4"
-): Promise<MediaModerationResult> {
-    const tempFilePath = path.join(os.tmpdir(), `video_${Date.now()}.mp4`);
-
-    try {
-        // 動画をダウンロード
-        const videoBuffer = await downloadFile(videoUrl);
-        fs.writeFileSync(tempFilePath, videoBuffer);
-
-        // Gemini File APIにアップロード
-        const fileManager = new GoogleAIFileManager(apiKey);
-        const uploadResult = await fileManager.uploadFile(tempFilePath, {
-            mimeType: mimeType,
-            displayName: `moderation_video_${Date.now()} `,
-        });
-
-        // アップロード完了を待つ
-        let file = uploadResult.file;
-        while (file.state === "PROCESSING") {
-            await new Promise((resolve) => setTimeout(resolve, 2000));
-            const result = await fileManager.getFile(file.name);
-            file = result;
-        }
-
-        if (file.state === "FAILED") {
-            throw new Error("Video processing failed");
-        }
-
-        const prompt = VIDEO_MODERATION_PROMPT;
-
-        const videoPart: Part = {
-            fileData: {
-                mimeType: file.mimeType,
-                fileUri: file.uri,
-            },
-        };
-
-        const result = await model.generateContent([prompt, videoPart]);
-        const responseText = result.response.text().trim();
-        logAIUsage("media_moderation_video", result.response, {
-            mimeType: file.mimeType ?? mimeType,
-        });
-
-        let jsonText = responseText;
-        const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-        if (jsonMatch) {
-            jsonText = jsonMatch[1];
-        } else {
-            const braceMatch = responseText.match(/\{[\s\S]*\}/);
-            if (braceMatch) {
-                jsonText = braceMatch[0];
-            }
-        }
-
-        // アップロードしたファイルを削除
-        try {
-            await fileManager.deleteFile(file.name);
-        } catch (e) {
-            console.log("Failed to delete uploaded file:", e);
-        }
-
-        return JSON.parse(jsonText) as MediaModerationResult;
-    } catch (error) {
-        console.error("Video moderation error:", error);
-        // エラー時は許可
-        return {
-            isInappropriate: false,
-            category: "none",
-            confidence: 0,
-            reason: "モデレーションエラー",
-        };
-    } finally {
-        // 一時ファイルを削除
-        if (fs.existsSync(tempFilePath)) {
-            fs.unlinkSync(tempFilePath);
-        }
-    }
-}
-
-/**
  * メディアアイテムをモデレーション
  */
 export async function moderateMedia(
-    apiKey: string,
     model: ReturnType<GoogleGenerativeAI["getGenerativeModel"]>,
     mediaItems: MediaItem[]
 ): Promise<{ passed: boolean; failedItem?: MediaItem; result?: MediaModerationResult }> {
     for (const item of mediaItems) {
         if (item.type === "image") {
             const result = await moderateImage(model, item.url, item.mimeType || "image/jpeg");
-            if (result.isInappropriate && result.confidence >= 0.7) {
-                return { passed: false, failedItem: item, result };
-            }
-        } else if (item.type === "video") {
-            const result = await moderateVideo(apiKey, model, item.url, item.mimeType || "video/mp4");
             if (result.isInappropriate && result.confidence >= 0.7) {
                 return { passed: false, failedItem: item, result };
             }

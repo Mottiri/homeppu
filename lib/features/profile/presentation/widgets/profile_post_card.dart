@@ -338,9 +338,6 @@ class _ProfilePostCardState extends State<ProfilePostCard> {
     final imageCount = widget.post.allMedia
         .where((m) => m.type == MediaType.image)
         .length;
-    final videoCount = widget.post.allMedia
-        .where((m) => m.type == MediaType.video)
-        .length;
 
     final icons = <Widget>[];
 
@@ -358,29 +355,6 @@ class _ProfilePostCardState extends State<ProfilePostCard> {
               const SizedBox(width: 2),
               Text(
                 '$imageCount',
-                style: const TextStyle(fontSize: 12, color: AppColors.textHint),
-              ),
-            ],
-          ],
-        ),
-      );
-    }
-
-    if (videoCount > 0) {
-      if (icons.isNotEmpty) icons.add(const SizedBox(width: 8));
-      icons.add(
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.videocam_outlined,
-              size: 16,
-              color: AppColors.textHint,
-            ),
-            if (videoCount > 1) ...[
-              const SizedBox(width: 2),
-              Text(
-                '$videoCount',
                 style: const TextStyle(fontSize: 12, color: AppColors.textHint),
               ),
             ],

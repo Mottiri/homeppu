@@ -1,80 +1,80 @@
-﻿# CLOSED TEST BUGS
+﻿# クローズドテスト バグ管理
 
-This document tracks bugs found during closed testing.
+クローズドテスト期間中に発見されたバグを管理するドキュメントです。
 
-**Test Period**: 2026-02
-**Last Updated**: 2026-02-27
-**Note**: CT numbers are permanent identifiers. Closed items retain their original CT number.
+**テスト期間**: 2026-02
+**最終更新**: 2026-03-02
+**備考**: CT番号は永続的な識別子です。クローズ済みの項目も元のCT番号を保持します。
 
 ---
 
-## Open
+## 未対応
 
-### CT-004: Tutorial spotlight position offset
+### CT-004: チュートリアルのスポットライト位置ずれ
 
-**Report Date**: 2026-02-21
-**Priority**: Medium
-**Screen**: Tutorial
+**報告日**: 2026-02-21
+**優先度**: 中
+**画面**: チュートリアル
 
-**Issue**:
-Spotlight position does not align with target widget in some steps.
+**問題**:
+一部のステップでスポットライトの位置が対象ウィジェットとずれている。
 
-**Tasks**:
-- [ ] Review spotlight rect calculation for each step
-- [ ] Fix key timing and offset calculation
+**タスク**:
+- [ ] 各ステップのスポットライト矩形計算を確認
+- [ ] キータイミングとオフセット計算を修正
 
-**Related Files**:
+**関連ファイル**:
 - `lib/shared/widgets/tutorial_overlay.dart`
 
-### CT-005: Simplify NG moderation dialog actions
+### CT-005: NG判定ダイアログのアクションボタン簡略化
 
-**Report Date**: 2026-02-24
-**Priority**: Medium
-**Screen**: Create Post / moderation NG dialog
+**報告日**: 2026-02-24
+**優先度**: 中
+**画面**: 投稿作成 / モデレーションNGダイアログ
 
-**Issue**:
-Two action buttons currently do the same thing (close dialog).
+**問題**:
+2つのアクションボタンが同じ動作（ダイアログを閉じる）をしている。
 
-**Tasks**:
-- [ ] Replace with one `OK` action
-- [ ] Verify related help/tutorial text if needed
+**タスク**:
+- [ ] 1つの「OK」ボタンに統一
+- [ ] 関連するヘルプ・チュートリアルテキストがあれば確認
 
-### CT-006: Remove video attachments from posts
+### CT-006: 投稿からの動画添付を廃止
 
-**Report Date**: 2026-02-24
-**Priority**: High
-**Screen**: Create Post / media attachments
+**報告日**: 2026-02-24
+**優先度**: 高
+**画面**: 投稿作成 / メディア添付
 
-**Issue**:
-Video attachment should be removed for cost and moderation stability.
+**問題**:
+コストとモデレーション安定性の観点から、動画添付機能を廃止する。
 
-**Tasks**:
-- [ ] Hide video picker UI on create post screen
-- [ ] Disable video upload path
-- [ ] Stop server-side video moderation/analysis path for posts
-- [ ] Update related docs and user-facing copy
+**タスク**:
+- [ ] 投稿作成画面の動画選択UIを非表示にする
+- [ ] 動画アップロード処理を無効化する
+- [ ] サーバー側の動画モデレーション・分析処理を停止する
+- [ ] 関連ドキュメント・ユーザー向け表示を更新する
 
-### CT-007: Unify copyright text to "ほめっぷ"
+### CT-007: 著作権表記を「ほめっぷ」に統一
 
-**Report Date**: 2026-02-26
-**Priority**: Medium
-**Screen**: Global (all screens / footer / legal text)
+**報告日**: 2026-02-26
+**優先度**: 中
+**画面**: 全画面 / フッター / 法的テキスト
 
-**Issue**:
-All copyright notations should be switched to "ほめっぷ".
+**問題**:
+全ての著作権表記を「ほめっぷ」に統一する。
 
-**Tasks**:
-- [ ] Locate all copyright strings in app and related docs
-- [ ] Replace notation with "ほめっぷ"
-- [ ] Verify no old notation remains
+**タスク**:
+- [ ] アプリ内・関連ドキュメントの著作権文字列を全て特定する
+- [ ] 表記を「ほめっぷ」に変更する
+- [ ] 旧表記が残っていないことを確認する
 
 ### CT-008: 投稿の文字数上限を引き下げる
 
-**Report Date**: 2026-02-27
-**Priority**: High
-**Screen**: Create Post
+**報告日**: 2026-02-27
+**優先度**: 高
+**画面**: 投稿作成
 
-**Issue**:
+**問題**:
 現在の投稿文字数上限（500文字）では、上限いっぱいで投稿された場合にタイムラインが非常に見にくくなる。文字数上限を **200文字** に引き下げる。
 
 **200文字とする理由**:
@@ -82,106 +82,160 @@ All copyright notations should be switched to "ほめっぷ".
 - 「ほめる」アプリの特性上、気持ちを端的に伝える文化を促進する
 - 日本語200文字は十分な表現力があり、SNS投稿として自然な長さである
 
-**Tasks**:
+**タスク**:
 - [ ] クライアント側のバリデーション（文字数カウント・制限）を500→200に更新
 - [ ] サーバー側のバリデーションを500→200に更新
 - [ ] ユーザー向けの表示テキスト（カウンター等）を更新
 
 ### CT-009: プロフィール編集画面のアイコン設定時の文言修正
 
-**Report Date**: 2026-02-27
-**Priority**: Low
-**Screen**: Profile Edit / Icon Setting
+**報告日**: 2026-02-27
+**優先度**: 低
+**画面**: プロフィール編集 / アイコン設定
 
-**Issue**:
+**問題**:
 アイコン設定時に「アバターを選んでね」と表示されているが、ユーザーが選ぶのはアイコンであるため「アイコンを選んでね」に修正する。
 
-**Tasks**:
+**タスク**:
 - [ ] 該当の文言箇所を特定する
 - [ ] 「アバターを選んでね」→「アイコンを選んでね」に変更
 
+### CT-010: 全AI使用箇所でOpenAIフォールバックが実装されているか確認
+
+**報告日**: 2026-02-27
+**優先度**: 高
+**カテゴリ**: AI / バックエンド信頼性
+
+**問題**:
+現在、基本的にAIを使用する場面ではGeminiを使用しているが、全てのシーンにおいてGemini障害時にOpenAIへフォールバックする仕組みが実装されているか未確認。フォールバックが無い箇所ではGemini障害時にサービスが停止するリスクがある。
+
+**タスク**:
+- [ ] AI使用箇所（Cloud Functions等）を全て洗い出す
+- [ ] 各箇所でOpenAIフォールバックが実装されているか確認
+- [ ] 未実装の箇所にフォールバック処理を追加
+- [ ] フォールバック動作の確認テスト
+
+### CT-011: コメントのいいね表示を非表示にする
+
+**報告日**: 2026-02-28
+**優先度**: 中
+**画面**: 投稿詳細 / コメント
+
+**問題**:
+コメントにいいねをした際、UI上で「いいね！されました」と表示されるが、この表示は不要。いいね表示があると「あのコメントはいいねされているのに、自分のコメントにはいいねが付かない」といった不快感・ネガティブな比較の原因となるため、非表示にする。
+
+**タスク**:
+- [ ] コメントのいいね表示箇所を特定する
+- [ ] いいね済み状態のUI表示（テキスト・アイコン変化等）を非表示にする
+- [ ] いいね機能自体（データ保存・通知等）は維持する
+
+### CT-012: AI返信コメントの時間間隔が短すぎる
+
+**報告日**: 2026-03-02
+**優先度**: 中
+**カテゴリ**: AI / UX
+
+**問題**:
+投稿に対するAI返信コメントが到着する間隔が短すぎて不自然。現在の仕様では投稿後わずか数分で複数のAIコメントが集中的に届くため、「BOT感」が強くなりユーザー体験を損なう。
+
+**現在の仕様**（`functions/src/triggers/posts.ts`）:
+- **コメント遅延**: `(i+1)*2 + random(0〜1)` 分
+  - 1人目: 2〜3分後、2人目: 4〜5分後、3人目: 6〜7分後 … 最大5人で約2〜11分以内に全件到着
+  - 一般投稿: ランダム1〜5人、サークル投稿: サークルAI全員
+- **リアクション遅延**: `random(10〜3610)` 秒（10秒〜約1時間）、5〜10件
+
+**改善案**:
+- コメント到着の遅延を **0〜12時間の範囲** に拡大し、自然なタイムラインを演出する
+- リアクション遅延も同様に拡大を検討
+
+**タスク**:
+- [ ] `triggers/posts.ts` のコメント遅延ロジックを変更（0〜12時間の範囲に拡大）
+- [ ] リアクション遅延も必要に応じて調整
+- [ ] 遅延が長くなった場合の通知タイミングの整合性を確認
+- [ ] テスト環境で遅延動作を確認
+
 ---
 
-## In Progress
+## 対応中
 
-- None
+- なし
 
 ---
 
-## Resolved
+## 解決済み
 
-### CT-001: Tutorial gets stuck on like button in post detail
+### CT-001: 投稿詳細でチュートリアルがいいねボタンで停止する
 
-**Report Date**: 2026-02-20
-**Resolved Date**: 2026-02-27
-**Priority**: Critical
-**Screen**: Post Detail / Tutorial
+**報告日**: 2026-02-20
+**解決日**: 2026-02-27
+**優先度**: 最高
+**画面**: 投稿詳細 / チュートリアル
 
-**Issue**:
-When post content is long or media is attached, the target like button can be outside the viewport. Tutorial step cannot proceed.
+**問題**:
+投稿本文が長い場合やメディアが添付されている場合、対象のいいねボタンが画面外に位置しチュートリアルステップが進行できなくなる。
 
-**Resolution**:
-- [x] Ensure target widget is visible before spotlight step starts
-- [x] Auto-scroll to target when needed
-- [x] Add fallback if target cannot be reached
+**解決内容**:
+- [x] スポットライトステップ開始前に対象ウィジェットが表示されていることを確認
+- [x] 必要に応じて対象まで自動スクロール
+- [x] 対象に到達できない場合のフォールバックを追加
 
-**Fix**: Eager build化 + `Scrollable.ensureVisible`による自動スクロール。フォールバック時はスクロール禁止解除で手動操作可能。
+**修正**: Eager build化 + `Scrollable.ensureVisible`による自動スクロール。フォールバック時はスクロール禁止解除で手動操作可能。
 
-**Related Files**:
+**関連ファイル**:
 - `lib/features/post/presentation/screens/post_detail_screen.dart`
 - `docs/design_ct001_tutorial_autoscroll.md`
 
-### CT-002: Long post card occupies screen and hides comments
+### CT-002: 長文投稿カードが画面を占有しコメントが見えない
 
-**Report Date**: 2026-02-20
-**Resolved Date**: 2026-02-27
-**Priority**: High
-**Screen**: Post Detail
+**報告日**: 2026-02-20
+**解決日**: 2026-02-27
+**優先度**: 高
+**画面**: 投稿詳細
 
-**Issue**:
-Long post content expands card too much and comment area is not reachable as expected.
+**問題**:
+長文の投稿内容によりカードが大きく展開され、コメント領域に到達できない。
 
-**Resolution**:
+**解決内容**:
 実機再確認の結果、スクロール自体は正常に動作していた。以前の報告時はCT-001のチュートリアル制御（NeverScrollableScrollPhysics）の影響でスクロール不可だった可能性が高い。CT-001修正後は長文投稿カードが画面を占有していてもスクロールでコメントに到達可能。文字数上限の引き下げ（CT-008）で投稿カードの占有問題自体も軽減される見込み。
 
-### CT-003: Spreadsheet ID validation/update issue
+### CT-003: スプレッドシートIDの検証・更新の問題
 
-**Report Date**: 2026-02-21
-**Resolved Date**: 2026-02-27
-**Priority**: High
-**Category**: Settings / Environment
+**報告日**: 2026-02-21
+**解決日**: 2026-02-27
+**優先度**: 高
+**カテゴリ**: 設定 / 環境
 
-**Issue**:
-Spreadsheet ID check/update behavior is unstable.
+**問題**:
+スプレッドシートIDの確認・更新動作が不安定。
 
-**Resolution**:
+**解決内容**:
 - [x] スプレッドシートIDをFirestore Config化（`settings/spreadsheet.inquirySpreadsheetId`）
 - [x] Firestore未設定時は `constants.ts` のフォールバック値を使用
 - [x] 運用時はFirebaseコンソールからデプロイ不要で切替可能
 
-**Fix**: `getSpreadsheetId()` 関数を追加し、Firestore `settings/spreadsheet` ドキュメントからIDを動的に取得。フォールバック付きで安全に移行可能。
+**修正**: `getSpreadsheetId()` 関数を追加し、Firestore `settings/spreadsheet` ドキュメントからIDを動的に取得。フォールバック付きで安全に移行可能。
 
-**Related Files**:
+**関連ファイル**:
 - `functions/src/helpers/spreadsheet.ts`
 - `docs/design_ct003_spreadsheet_config.md`
 
 ---
 
-## Template
+## テンプレート
 
 ```markdown
-### CT-XXX: [Title]
+### CT-XXX: [タイトル]
 
-**Report Date**: YYYY-MM-DD
-**Priority**: Critical / High / Medium / Low
-**Screen**: [Screen Name]
+**報告日**: YYYY-MM-DD
+**優先度**: 最高 / 高 / 中 / 低
+**画面**: [画面名]
 
-**Issue**:
-[Describe issue]
+**問題**:
+[問題の説明]
 
-**Tasks**:
-- [ ] [Task]
+**タスク**:
+- [ ] [タスク]
 
-**Related Files**:
-- [path]
+**関連ファイル**:
+- [パス]
 ```

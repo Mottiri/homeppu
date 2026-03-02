@@ -16,7 +16,6 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../shared/models/post_model.dart';
 import '../../../../shared/widgets/public_user_avatar.dart';
 import '../../../../shared/widgets/report_dialog.dart';
-import '../../../../shared/widgets/video_player_screen.dart';
 import '../../../../shared/services/post_service.dart';
 import '../../../../shared/services/recent_reactions_service.dart';
 import '../../../../shared/services/reaction_limit_service.dart';
@@ -801,52 +800,27 @@ class _MediaGrid extends StatelessWidget {
         );
 
       case MediaType.video:
-        return GestureDetector(
-          onTap: () => _showVideoPlayer(context, item.url),
-          child: Container(
+        if (item.thumbnailUrl != null && item.thumbnailUrl!.isNotEmpty) {
+          return CachedNetworkImage(
+            imageUrl: item.thumbnailUrl!,
             height: height,
-            color: Colors.black87,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                // サムネイル（動画のプレビュー）
-                if (item.thumbnailUrl != null && item.thumbnailUrl!.isNotEmpty)
-                  CachedNetworkImage(
-                    imageUrl: item.thumbnailUrl!,
-                    height: height,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorWidget: (context, url, error) =>
-                        Container(color: Colors.black54),
-                  )
-                else
-                  Container(
-                    height: height,
-                    width: double.infinity,
-                    color: Colors.black54,
-                    child: const Center(
-                      child: Icon(
-                        Icons.videocam,
-                        color: Colors.white54,
-                        size: 48,
-                      ),
-                    ),
-                  ),
-                // 再生アイコン
-                Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.6),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.play_arrow,
-                    color: Colors.white,
-                    size: 36,
-                  ),
-                ),
-              ],
+            width: double.infinity,
+            fit: BoxFit.cover,
+            errorWidget: (context, url, error) => Container(
+              height: height,
+              color: Colors.grey.shade200,
+              child: const Icon(Icons.videocam_off, color: Colors.grey),
+            ),
+          );
+        }
+        return Container(
+          height: height,
+          color: Colors.grey.shade200,
+          child: const Center(
+            child: Icon(
+              Icons.videocam_off,
+              color: Colors.grey,
+              size: 48,
             ),
           ),
         );
@@ -881,12 +855,6 @@ class _MediaGrid extends StatelessWidget {
     );
   }
 
-  void _showVideoPlayer(BuildContext context, String url) {
-    // rootNavigator: true でShellRouteの外で表示（ボトムナビを非表示）
-    Navigator.of(context, rootNavigator: true).push(
-      MaterialPageRoute(builder: (context) => VideoPlayerScreen(videoUrl: url)),
-    );
-  }
 }
 
 /// LINEスタイルのリアクションオーバーレイダイアログ

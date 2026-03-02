@@ -195,7 +195,7 @@ class PostModel {
   List<MediaItem> get images =>
       allMedia.where((m) => m.type == MediaType.image).toList();
 
-  /// 動画のみ
+  /// 動画のみ（レガシーデータ用。新規投稿では動画は添付不可）
   List<MediaItem> get videos =>
       allMedia.where((m) => m.type == MediaType.video).toList();
 

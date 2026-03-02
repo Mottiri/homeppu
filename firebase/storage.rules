@@ -27,20 +27,12 @@ service firebase.storage {
       return request.resource.size < 10 * 1024 * 1024;
     }
 
-    function isValidVideoSize() {
-      return request.resource.size < 100 * 1024 * 1024;
-    }
-
     function isValidProfileSize() {
       return request.resource.size < 5 * 1024 * 1024;
     }
 
     function isImage() {
       return request.resource.contentType.matches('image/.*');
-    }
-
-    function isVideo() {
-      return request.resource.contentType.matches('video/.*');
     }
 
     // User header images
@@ -71,26 +63,6 @@ service firebase.storage {
       allow write: if isAuthenticated()
                    && request.auth.uid == userId
                    && isValidImageSize()
-                   && isImage();
-      allow delete: if isAuthenticated() && request.auth.uid == userId;
-    }
-
-    // Post videos
-    match /posts/{userId}/videos/{fileName} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated()
-                   && request.auth.uid == userId
-                   && isValidVideoSize()
-                   && isVideo();
-      allow delete: if isAuthenticated() && request.auth.uid == userId;
-    }
-
-    // Post thumbnails
-    match /posts/{userId}/thumbnails/{fileName} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated()
-                   && request.auth.uid == userId
-                   && isValidProfileSize()
                    && isImage();
       allow delete: if isAuthenticated() && request.auth.uid == userId;
     }

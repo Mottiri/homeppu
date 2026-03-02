@@ -127,6 +127,13 @@ export const createPostWithModeration = onCall(
         const shouldGrantVirtue = grantVirtueFlag !== false;
         console.log(`User: ${userId}, Content: ${content?.substring(0, 30)}...`);
 
+        // 動画メディアの拒否（動画添付は廃止済み）
+        if (Array.isArray(mediaItems) && mediaItems.some((item: { type?: string; mimeType?: string }) =>
+            item.type === "video" || (typeof item.mimeType === "string" && item.mimeType.startsWith("video/"))
+        )) {
+            throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
+        }
+
         // ユーザーがBANされているかチェック
         const userDoc = await db.collection("users").doc(userId).get();
         if (userDoc.exists && userDoc.data()?.isBanned) {
@@ -292,7 +299,7 @@ ${content}
             console.log(`Moderating ${mediaItems.length} media items...`);
 
             try {
-                const mediaResult = await moderateMedia(apiKey, model, mediaItems as MediaItem[]);
+                const mediaResult = await moderateMedia(model, mediaItems as MediaItem[]);
 
                 if (!mediaResult.passed && mediaResult.result) {
                     if (mediaResult.result.confidence >= 0.5 && mediaResult.result.confidence < 0.7) {
@@ -338,7 +345,7 @@ ${content}
                         throw new HttpsError(
                             "invalid-argument",
                             MODERATION_MESSAGES.mediaBlockedSimple(
-                                mediaResult.failedItem?.type === "video" ? "video" : "image",
+                                "image",
                                 categoryLabel
                             )
                         );
