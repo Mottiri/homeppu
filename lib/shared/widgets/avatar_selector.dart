@@ -73,7 +73,7 @@ class AvatarSelector extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        Text('アバターを選んでね', style: Theme.of(context).textTheme.bodySmall),
+        Text('アイコンを選んでね', style: Theme.of(context).textTheme.bodySmall),
         const SizedBox(height: 12),
 
         // アバターグリッド

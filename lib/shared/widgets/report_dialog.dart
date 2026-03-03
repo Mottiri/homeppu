@@ -272,19 +272,17 @@ class ReportButton extends StatelessWidget {
 /// ネガティブコンテンツ検出時のエラーダイアログ
 class NegativeContentDialog extends StatelessWidget {
   final String message;
-  final VoidCallback? onRetry;
 
-  const NegativeContentDialog({super.key, required this.message, this.onRetry});
+  const NegativeContentDialog({super.key, required this.message});
 
   static Future<void> show({
     required BuildContext context,
     required String message,
-    VoidCallback? onRetry,
   }) {
     return showDialog(
       context: context,
       builder: (context) =>
-          NegativeContentDialog(message: message, onRetry: onRetry),
+          NegativeContentDialog(message: message),
     );
   }
 
@@ -359,17 +357,9 @@ class NegativeContentDialog extends StatelessWidget {
         ),
       ),
       actions: [
-        if (onRetry != null)
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              onRetry!();
-            },
-            child: const Text('書き直す'),
-          ),
         ElevatedButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('わかった'),
+          child: const Text('OK'),
         ),
       ],
     );

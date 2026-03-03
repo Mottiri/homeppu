@@ -77,10 +77,10 @@
 - 本アプリに関して紛争が生じた場合、運営者所在地を管轄する裁判所を第一審の専属的合意管轄とします。
 
 ## 14. お問い合わせ
-運営者名：早河光洋  
+運営者名：ほめっぷ運営  
 連絡先：homeppu.app@gmail.com
 
 制定日：2026-02-17  
 改定日：2026-02-19
 
-Copyright (c) 2026 Mitsuhiro Hayakawa. All rights reserved.
+Copyright (c) 2026 ほめっぷ All rights reserved.

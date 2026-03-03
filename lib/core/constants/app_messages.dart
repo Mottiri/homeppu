@@ -729,8 +729,8 @@ class _ProfileMessages {
   String get termsTitle => '利用規約';
   String get privacyPolicyTitle => 'プライバシーポリシー';
   String get aboutVersion => 'バージョン 1.0.0';
-  String get aboutTagline => '世界一やさしいSNS';
-  String get aboutDescription => 'ほめっぷは、ほめられる体験を通じて自己肯定感を育てるSNSです。';
+  String get aboutTagline => '安心して使えるSNS';
+  String get aboutDescription => 'ほめっぷは、あなたの日常に「ほめられる」体験を届けるSNSです。';
   String get aboutFeaturesTitle => '主な機能';
   String get aboutFeaturePost => '・公開範囲を選んで安心して投稿';
   String get aboutFeatureStamp => '・スタンプとリアクションで気持ちを伝える';
@@ -738,7 +738,7 @@ class _ProfileMessages {
   String get aboutFeatureSubscription => '・プレミアム加入でEpicアイテム解放';
   String get aboutContactTitle => 'お問い合わせ';
   String get aboutContactBody => '不具合報告・ご要望は設定の「問い合わせ・要望」から送信できます。';
-  String get aboutCopyright => 'Copyright (c) 2026 Mitsuhiro Hayakawa.';
+  String get aboutCopyright => 'Copyright (c) 2026 ほめっぷ';
   String get legalLoading => '読み込み中...';
   String get legalLoadFailed => 'ドキュメントを読み込めませんでした';
   String get logoutTitle => 'ログアウト';

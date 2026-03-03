@@ -543,9 +543,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       await NegativeContentDialog.show(
         context: context,
         message: moderationError.message,
-        onRetry: () {
-          // テキストフィールドにフォーカスを戻す
-        },
       );
       return;
     }
