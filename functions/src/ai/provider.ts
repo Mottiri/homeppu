@@ -122,6 +122,26 @@ export class OpenAIProvider implements AIProvider {
         this.apiKey = apiKey;
     }
 
+    /**
+     * gpt-5系はtemperature/max_tokensをサポートしないため、モデル名で判定
+     */
+    private buildRequestBody(
+        messages: Array<{ role: string; content: unknown }>,
+        options?: AIOptions,
+    ): Record<string, unknown> {
+        const model = AI_MODELS.OPENAI_DEFAULT;
+        const isGpt5 = model.startsWith("gpt-5");
+
+        const body: Record<string, unknown> = { model, messages };
+
+        if (!isGpt5) {
+            body.temperature = options?.temperature ?? 0.7;
+            body.max_tokens = options?.maxTokens ?? 1024;
+        }
+
+        return body;
+    }
+
     async generateText(prompt: string, options?: AIOptions): Promise<string> {
         const messages: Array<{ role: string; content: string }> = [];
 
@@ -136,12 +156,7 @@ export class OpenAIProvider implements AIProvider {
                 "Content-Type": "application/json",
                 "Authorization": `Bearer ${this.apiKey}`,
             },
-            body: JSON.stringify({
-                model: AI_MODELS.OPENAI_DEFAULT,
-                messages: messages,
-                temperature: options?.temperature ?? 0.7,
-                max_tokens: options?.maxTokens ?? 1024,
-            }),
+            body: JSON.stringify(this.buildRequestBody(messages, options)),
         });
 
         if (!response.ok) {
@@ -188,12 +203,7 @@ export class OpenAIProvider implements AIProvider {
                 "Content-Type": "application/json",
                 "Authorization": `Bearer ${this.apiKey}`,
             },
-            body: JSON.stringify({
-                model: AI_MODELS.OPENAI_DEFAULT,
-                messages: messages,
-                temperature: options?.temperature ?? 0.7,
-                max_tokens: options?.maxTokens ?? 1024,
-            }),
+            body: JSON.stringify(this.buildRequestBody(messages, options)),
         });
 
         if (!response.ok) {
@@ -244,13 +254,13 @@ export class AIProviderFactory {
             if (doc.exists) {
                 const data = doc.data();
                 this.settings = {
-                    primaryProvider: data?.primaryProvider || "openai",
+                    primaryProvider: data?.primaryProvider || "gemini",
                     enableFallback: data?.enableFallback !== false, // デフォルトtrue
                 };
             } else {
                 // デフォルト設定
                 this.settings = {
-                    primaryProvider: "openai",
+                    primaryProvider: "gemini",
                     enableFallback: true,
                 };
             }
@@ -260,7 +270,7 @@ export class AIProviderFactory {
             console.error("Failed to load AI settings:", error);
             // エラー時はデフォルト設定
             return {
-                primaryProvider: "openai",
+                primaryProvider: "gemini",
                 enableFallback: true,
             };
         }
@@ -353,4 +363,15 @@ export class AIProviderFactory {
 
         throw new Error("No AI provider available");
     }
+}
+
+/**
+ * AIProviderFactoryを作成するヘルパー関数
+ * secrets宣言済みの関数内から呼び出すこと
+ */
+export function createAIProviderFactory(): AIProviderFactory {
+    const { geminiApiKey, openaiApiKey } = require("../config/secrets");
+    const geminiKey = geminiApiKey.value() || "";
+    const openaiKey = openaiApiKey.value() || "";
+    return new AIProviderFactory(geminiKey, openaiKey);
 }

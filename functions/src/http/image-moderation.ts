@@ -4,15 +4,15 @@
  */
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { GoogleGenerativeAI, Part } from "@google/generative-ai";
 
-import { AI_MODELS, LOCATION } from "../config/constants";
-import { geminiApiKey } from "../config/secrets";
+import { LOCATION } from "../config/constants";
+import { geminiApiKey, openaiApiKey } from "../config/secrets";
 import { IMAGE_MODERATION_CALLABLE_PROMPT } from "../ai/prompts/moderation";
 import { MediaModerationResult } from "../types";
 import { requireAuth } from "../helpers/auth";
 import { ErrorMessages } from "../helpers/errors";
-import { logAIUsage } from "../helpers/ai-usage";
+import { logAIProviderUsage } from "../helpers/ai-usage";
+import { createAIProviderFactory } from "../ai/provider";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_MIME_TYPES = new Set([
@@ -50,7 +50,7 @@ function logModeration(message: string, data?: Record<string, unknown>) {
  * Base64エンコードされた画像データを受け取り、不適切かどうか判定
  */
 export const moderateImageCallable = onCall(
-    { secrets: [geminiApiKey], region: LOCATION, enforceAppCheck: true },
+    { secrets: [geminiApiKey, openaiApiKey], region: LOCATION, enforceAppCheck: true },
     async (request) => {
         const { imageBase64, mimeType = "image/jpeg" } = request.data;
         logModeration("request_received", {
@@ -91,25 +91,13 @@ export const moderateImageCallable = onCall(
         requireAuth(request, ErrorMessages.UNAUTHENTICATED_EN);
 
         try {
-            const apiKey = geminiApiKey.value();
-            const genAI = new GoogleGenerativeAI(apiKey);
-            const model = genAI.getGenerativeModel({ model: AI_MODELS.GEMINI_DEFAULT });
+            const aiFactory = createAIProviderFactory();
 
             const prompt = IMAGE_MODERATION_CALLABLE_PROMPT;
 
-            const imagePart: Part = {
-                inlineData: {
-                    mimeType: mimeType,
-                    data: imageBase64,
-                },
-            };
-
-            const result = await model.generateContent([prompt, imagePart]);
-            const responseText = result.response.text().trim();
-            logAIUsage("image_moderation_callable", result.response, {
-                mimeType,
-                estimatedBytes,
-            });
+            const result = await aiFactory.generateWithImage(prompt, imageBase64, mimeType);
+            const responseText = result.text.trim();
+            logAIProviderUsage("image_moderation_callable", result, { mimeType, estimatedBytes });
             logModeration("ai_raw_response", {
                 preview: responseText.slice(0, 300),
             });

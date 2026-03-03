@@ -4,12 +4,12 @@
  */
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 
 import { db, FieldValue, Timestamp } from "../helpers/firebase";
 import { requireAuth } from "../helpers/auth";
-import { geminiApiKey } from "../config/secrets";
-import { AI_MODELS, LOCATION } from "../config/constants";
+import { geminiApiKey, openaiApiKey } from "../config/secrets";
+import { LOCATION } from "../config/constants";
+import { createAIProviderFactory } from "../ai/provider";
 import {
     AUTH_ERRORS,
     COMMENT_THANKS_MESSAGES,
@@ -26,7 +26,7 @@ import {
 import { getTextModerationPrompt } from "../ai/prompts/moderation";
 import { ModerationResult } from "../types";
 import { getVirtuePolicy, grantVirtue, VIRTUE_ROUTE_KEYS } from "../helpers/virtue-policy";
-import { logAIUsage } from "../helpers/ai-usage";
+import { logAIProviderUsage } from "../helpers/ai-usage";
 
 const EPIC_REACTIONS = new Set(["rainbow", "hundred"]);
 const EPIC_STAMP_SHEET_REACTIONS = new Set(["rainbow", "hundred", "confetti"]);
@@ -285,16 +285,15 @@ async function moderateText(
         return { isNegative: false, category: "none", confidence: 0, reason: "", suggestion: "" };
     }
 
-    const apiKey = geminiApiKey.value();
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: AI_MODELS.GEMINI_DEFAULT });
+    const aiFactory = createAIProviderFactory();
 
     const prompt = getTextModerationPrompt(text, postContent);
 
     try {
-        const result = await model.generateContent(prompt);
-        const responseText = result.response.text();
-        logAIUsage("comment_text_moderation", result.response, {
+        const result = await aiFactory.generateText(prompt);
+        const responseText = result.text;
+        console.log(`moderateText(comment): Raw response: ${responseText.substring(0, 500)}`);
+        logAIProviderUsage("comment_text_moderation", result, {
             hasPostContext: Boolean(postContent),
             textLength: text.length,
         });
@@ -320,7 +319,7 @@ export const createCommentWithModeration = onCall(
     {
         region: LOCATION,
         enforceAppCheck: true,
-        secrets: [geminiApiKey],
+        secrets: [geminiApiKey, openaiApiKey],
     },
     async (request) => {
         // 認証チェック
@@ -352,11 +351,19 @@ export const createCommentWithModeration = onCall(
         // 1. モデレーション実行（コンテキスト付き）
         const moderation = await moderateText(content, postContentText);
         if (moderation.isNegative && moderation.confidence > 0.7) {
+            console.warn("[MODERATION NG] comment rejected:", JSON.stringify({
+                category: moderation.category,
+                confidence: moderation.confidence,
+                reason: moderation.reason,
+                textLength: content.length,
+            }));
             // コメントは拒否のみ（徳ポイントは減点しない）
             throw new HttpsError(
                 "invalid-argument",
-                moderation.reason || MODERATION_MESSAGES.INAPPROPRIATE_CONTENT_DETECTED,
-                { suggestion: moderation.suggestion }
+                MODERATION_MESSAGES.suggestionWithReason(
+                    moderation.reason || MODERATION_MESSAGES.INAPPROPRIATE_CONTENT_DETECTED,
+                    moderation.suggestion
+                )
             );
         }
 

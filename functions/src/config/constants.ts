@@ -18,5 +18,5 @@ export const CLOUD_TASK_FUNCTIONS = {
 // AI モデル設定
 export const AI_MODELS = {
   GEMINI_DEFAULT: "gemini-2.5-flash",
-  OPENAI_DEFAULT: "gpt-4o-mini",
+  OPENAI_DEFAULT: "gpt-5-mini",
 } as const;

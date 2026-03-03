@@ -4,12 +4,12 @@
  */
 
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { scheduleHttpTask } from "../helpers/cloud-tasks";
 
 import { db } from "../helpers/firebase";
-import { PROJECT_ID, LOCATION, QUEUE_NAME, AI_MODELS } from "../config/constants";
-import { geminiApiKey } from "../config/secrets";
+import { PROJECT_ID, LOCATION, QUEUE_NAME } from "../config/constants";
+import { geminiApiKey, openaiApiKey } from "../config/secrets";
+import { createAIProviderFactory } from "../ai/provider";
 import { MediaItem } from "../types";
 import { analyzeMediaForComment } from "../helpers/media-analysis";
 import {
@@ -29,7 +29,7 @@ export const onPostCreated = onDocumentCreated(
     {
         document: "posts/{postId}",
         region: LOCATION,
-        secrets: [geminiApiKey],
+        secrets: [geminiApiKey, openaiApiKey],
         timeoutSeconds: 120,
         memory: "1GiB",
         serviceAccount: `cloud-tasks-sa@${PROJECT_ID}.iam.gserviceaccount.com`,
@@ -55,15 +55,15 @@ export const onPostCreated = onDocumentCreated(
             return;
         }
 
-        // APIキーを取得
-        const apiKey = geminiApiKey.value();
-        if (!apiKey) {
-            console.error("GEMINI_API_KEY is not set");
+        // APIキーが1つも利用できない場合はスキップ
+        const geminiKey = geminiApiKey.value() || "";
+        const openaiKey = openaiApiKey.value() || "";
+        if (!geminiKey && !openaiKey) {
+            console.error("No AI API key available, skipping AI comments");
             return;
         }
 
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: AI_MODELS.GEMINI_DEFAULT });
+        const aiFactory = createAIProviderFactory();
 
         // メディアがある場合は内容を分析
         let mediaDescriptions: string[] = [];
@@ -72,7 +72,7 @@ export const onPostCreated = onDocumentCreated(
         if (mediaItems && mediaItems.length > 0) {
             console.log(`Analyzing ${mediaItems.length} media items for AI comment...`);
             try {
-                mediaDescriptions = await analyzeMediaForComment(model, mediaItems);
+                mediaDescriptions = await analyzeMediaForComment(aiFactory, mediaItems);
                 console.log(`Media analysis complete: ${mediaDescriptions.length} descriptions`);
             } catch (error) {
                 console.error("Media analysis failed:", error);

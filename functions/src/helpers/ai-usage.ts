@@ -57,3 +57,17 @@ export function logAIUsage(
         ...usage,
     }));
 }
+
+export function logAIProviderUsage(
+    label: string,
+    response: { text: string; provider: string; usedFallback: boolean },
+    context: Record<string, unknown> = {}
+): void {
+    console.log("[AI USAGE]", JSON.stringify({
+        label,
+        provider: response.provider,
+        usedFallback: response.usedFallback,
+        responseLength: response.text.length,
+        ...context,
+    }));
+}

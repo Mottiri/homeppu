@@ -7,14 +7,13 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as functionsV1 from "firebase-functions/v1";
-import * as admin from "firebase-admin";
 import { scheduleHttpTask } from "../helpers/cloud-tasks";
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { db, FieldValue } from "../helpers/firebase";
+import { db, FieldValue, Timestamp } from "../helpers/firebase";
 import { isAdmin } from "../helpers/admin";
-import { PROJECT_ID, LOCATION, AI_MODELS } from "../config/constants";
-import { geminiApiKey } from "../config/secrets";
-import { AUTH_ERRORS } from "../config/messages";
+import { PROJECT_ID, LOCATION } from "../config/constants";
+import { geminiApiKey, openaiApiKey } from "../config/secrets";
+import { createAIProviderFactory } from "../ai/provider";
+import { AUTH_ERRORS, SYSTEM_ERRORS } from "../config/messages";
 
 // テスト用：本番は100
 const MAX_CIRCLES_PER_RUN = 3;
@@ -82,7 +81,7 @@ ${recentPostsSection}
  * - コスト削減のため処理数を制限
  */
 export const generateCircleAIPosts = functionsV1.region(LOCATION).runWith({
-  secrets: ["GEMINI_API_KEY"],
+  secrets: ["GEMINI_API_KEY", "OPENAI_API_KEY"],
   timeoutSeconds: 120,
   memory: "256MB",
 }).pubsub.schedule("0 9,20 * * *").timeZone("Asia/Tokyo").onRun(async () => {
@@ -131,7 +130,7 @@ export const generateCircleAIPosts = functionsV1.region(LOCATION).runWith({
     // 今日の日付
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const todayTimestamp = admin.firestore.Timestamp.fromDate(today);
+    const todayTimestamp = Timestamp.fromDate(today);
     const todayStr = new Date().toISOString().split("T")[0];
 
     for (const circleDoc of selectedCircles) {
@@ -222,7 +221,7 @@ export const generateCircleAIPosts = functionsV1.region(LOCATION).runWith({
  * サークルAI投稿を実行するワーカー（Cloud Tasksから呼び出し）
  */
 export const executeCircleAIPost = functionsV1.region(LOCATION).runWith({
-  secrets: ["GEMINI_API_KEY"],
+  secrets: ["GEMINI_API_KEY", "OPENAI_API_KEY"],
   timeoutSeconds: 60,
 }).https.onRequest(async (request, response) => {
   // Cloud Tasks からのリクエストを OIDC トークンで検証（動的インポート）
@@ -265,18 +264,12 @@ export const executeCircleAIPost = functionsV1.region(LOCATION).runWith({
     const recentPostContents = recentPostsSnapshot.docs.map(doc => doc.data().content as string).filter(Boolean);
     console.log(`Found ${recentPostContents.length} recent posts for deduplication`);
 
-    const apiKey = geminiApiKey.value();
-    if (!apiKey) {
-      throw new Error("GEMINI_API_KEY is not set");
-    }
+    const aiFactory = createAIProviderFactory();
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: AI_MODELS.GEMINI_DEFAULT });
-
-    // Geminiで投稿内容を生成（過去投稿を渡して重複回避）
+    // AIで投稿内容を生成（過去投稿を渡して重複回避）
     const prompt = getCircleAIPostPrompt(aiName, circleName, circleDescription, circleCategory, circleRules, circleGoal, recentPostContents);
-    const result = await model.generateContent(prompt);
-    let postContent = result.response.text()?.trim();
+    const result = await aiFactory.generateText(prompt);
+    let postContent = result.text.trim();
 
     // ハッシュタグが含まれていたら削除
     if (postContent) {
@@ -306,7 +299,7 @@ export const executeCircleAIPost = functionsV1.region(LOCATION).runWith({
 
     // サークルの投稿数を更新
     await db.collection("circles").doc(circleId).update({
-      postCount: admin.firestore.FieldValue.increment(1),
+      postCount: FieldValue.increment(1),
       recentActivity: FieldValue.serverTimestamp(),
     });
 
@@ -324,7 +317,7 @@ export const executeCircleAIPost = functionsV1.region(LOCATION).runWith({
  * 最適化版：generateCircleAIPostsと同じロジックを使用
  */
 export const triggerCircleAIPosts = onCall(
-  { region: LOCATION, secrets: [geminiApiKey], timeoutSeconds: 300, enforceAppCheck: true },
+  { region: LOCATION, secrets: [geminiApiKey, openaiApiKey], timeoutSeconds: 300, enforceAppCheck: true },
   async (request) => {
     // セキュリティ: 管理者権限チェック
     if (!request.auth) {
@@ -337,13 +330,15 @@ export const triggerCircleAIPosts = onCall(
 
     console.log("=== triggerCircleAIPosts (manual - optimized) START ===");
 
-    const apiKey = geminiApiKey.value();
-    if (!apiKey) {
-      return { success: false, message: "GEMINI_API_KEY is not set" };
+    // APIキーが1つも利用できない場合はエラー
+    const geminiKey = geminiApiKey.value() || "";
+    const openaiKey = openaiApiKey.value() || "";
+    if (!geminiKey && !openaiKey) {
+      console.error("ERROR: No AI API key available (both GEMINI and OPENAI are empty)");
+      throw new HttpsError("internal", SYSTEM_ERRORS.INTERNAL);
     }
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: AI_MODELS.GEMINI_DEFAULT });
+    const aiFactory = createAIProviderFactory();
 
     let totalPosts = 0;
     const postedCircleIds: string[] = [];
@@ -382,7 +377,7 @@ export const triggerCircleAIPosts = onCall(
       // 今日の日付
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const todayTimestamp = admin.firestore.Timestamp.fromDate(today);
+      const todayTimestamp = Timestamp.fromDate(today);
       const todayStr = new Date().toISOString().split("T")[0];
 
       for (const circleDoc of selectedCircles) {
@@ -427,8 +422,8 @@ export const triggerCircleAIPosts = onCall(
         );
 
         try {
-          const result = await model.generateContent(prompt);
-          let postContent = result.response.text()?.trim();
+          const result = await aiFactory.generateText(prompt);
+          let postContent = result.text.trim();
 
           if (postContent) {
             postContent = postContent.replace(/#[^\s#]+/g, "").trim();
@@ -451,7 +446,7 @@ export const triggerCircleAIPosts = onCall(
           });
 
           await db.collection("circles").doc(circleId).update({
-            postCount: admin.firestore.FieldValue.increment(1),
+            postCount: FieldValue.increment(1),
             recentActivity: FieldValue.serverTimestamp(),
           });
 

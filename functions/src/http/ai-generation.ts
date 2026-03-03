@@ -4,11 +4,8 @@
  */
 
 import * as functionsV1 from "firebase-functions/v1";
-import { GoogleGenerativeAI } from "@google/generative-ai";
-
-import { AIProviderFactory } from "../ai/provider";
-import { AI_MODELS, LOCATION } from "../config/constants";
-import { geminiApiKey, openaiApiKey } from "../config/secrets";
+import { createAIProviderFactory } from "../ai/provider";
+import { LOCATION } from "../config/constants";
 import { db, FieldValue, Timestamp } from "../helpers/firebase";
 import {
     Gender,
@@ -20,16 +17,6 @@ import {
     getCircleSystemPrompt,
 } from "../ai/personas";
 import { getPostGenerationPrompt } from "../ai/prompts/post-generation";
-
-/**
- * AIProviderFactoryを作成するヘルパー関数
- * 関数内でSecretにアクセスし、ファクトリーを返す
- */
-function createAIProviderFactory(): AIProviderFactory {
-    const geminiKey = geminiApiKey.value() || "";
-    const openaiKey = openaiApiKey.value() || "";
-    return new AIProviderFactory(geminiKey, openaiKey);
-}
 
 // TEMP DIVERSITY GUARD (2026-02-12)
 // Quick rollback: set this to false.
@@ -484,7 +471,7 @@ export const generateAIReactionV1 = functionsV1.region(LOCATION).https.onRequest
  * Cloud Tasks から呼び出される AI 投稿生成関数 (Worker)
  */
 export const executeAIPostGeneration = functionsV1.region(LOCATION).runWith({
-    secrets: ["GEMINI_API_KEY"],
+    secrets: ["GEMINI_API_KEY", "OPENAI_API_KEY"],
     timeoutSeconds: 300,
     memory: "1GB",
 }).https.onRequest(async (request, response) => {
@@ -499,11 +486,7 @@ export const executeAIPostGeneration = functionsV1.region(LOCATION).runWith({
         const { postId, personaId, postTimeIso } = request.body;
         console.log(`Executing AI post generation for ${personaId}`);
 
-        const apiKey = geminiApiKey.value();
-        if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
-
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: AI_MODELS.GEMINI_DEFAULT });
+        const aiFactory = createAIProviderFactory();
 
         // ペルソナ取得
         const persona = AI_PERSONAS.find((p) => p.id === personaId);
@@ -523,8 +506,8 @@ export const executeAIPostGeneration = functionsV1.region(LOCATION).runWith({
         // プロンプト生成 (努力・達成・日常の頑張りをテーマに)
         const prompt = getPostGenerationPrompt(persona, hours);
 
-        const result = await model.generateContent(prompt);
-        let content = result.response.text()?.trim();
+        const result = await aiFactory.generateText(prompt);
+        let content = result.text?.trim();
 
         // 生成失敗時はテンプレートからランダム選択
         if (!content && templates.length > 0) {

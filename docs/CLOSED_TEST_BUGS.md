@@ -66,21 +66,6 @@
 - [ ] 該当の文言箇所を特定する
 - [ ] 「アバターを選んでね」→「アイコンを選んでね」に変更
 
-### CT-010: 全AI使用箇所でOpenAIフォールバックが実装されているか確認
-
-**報告日**: 2026-02-27
-**優先度**: 高
-**カテゴリ**: AI / バックエンド信頼性
-
-**問題**:
-現在、基本的にAIを使用する場面ではGeminiを使用しているが、全てのシーンにおいてGemini障害時にOpenAIへフォールバックする仕組みが実装されているか未確認。フォールバックが無い箇所ではGemini障害時にサービスが停止するリスクがある。
-
-**タスク**:
-- [ ] AI使用箇所（Cloud Functions等）を全て洗い出す
-- [ ] 各箇所でOpenAIフォールバックが実装されているか確認
-- [ ] 未実装の箇所にフォールバック処理を追加
-- [ ] フォールバック動作の確認テスト
-
 ### CT-011: コメントのいいね表示を非表示にする
 
 **報告日**: 2026-02-28
@@ -122,6 +107,40 @@
 
 ---
 
+### CT-013: AIアカウント数の拡張機能
+
+**報告日**: 2026-03-02
+**優先度**: 中
+**カテゴリ**: AI / スケーラビリティ
+
+**問題**:
+現在AIアカウントは20体固定で初期化される。アクティブユーザー数が増加した場合、同じAIキャラが多数のユーザーの投稿にコメントしていることが露見しやすくなり、AIバレ防止のコンセプトに影響する。ユーザー規模に応じてAIアカウント数を50〜100体に拡張できる仕組みが必要。
+
+**タスク**:
+- [ ] AIペルソナ（`ai/personas.ts`）の拡張または動的生成の仕組みを設計
+- [ ] `initializeAIAccounts` を任意数のAIアカウントを生成できるように改修
+- [ ] 既存20体との共存・追加生成の運用フローを整理
+
+---
+
+### CT-014: AIコメントのプロンプト調整（長さ・画像描写）
+
+**報告日**: 2026-03-03
+**優先度**: 中
+**カテゴリ**: AI / UX
+
+**問題**:
+OpenAI（gpt-5-mini）をプライマリに設定した場合、AIコメント（特に画像付き投稿への返信）が長すぎる（5〜8行）。また画像の描写が美術評論のように詳細すぎ（「光沢と陰影のつけ方で上品な奥行き」等）、人間らしいコメントになっていない。テキストのみ投稿へのコメントは比較的適切な長さだが、画像付き投稿時に顕著。
+Gemini（gemini-2.5-flash）では適切な長さ・自然なコメントが生成されており、問題はOpenAI使用時に限定される。
+
+**タスク**:
+- [ ] OpenAI使用時のAIコメント生成プロンプトにコメント長の上限指示を追加（1〜3行程度）
+- [ ] OpenAI使用時の画像描写の詳細度を抑える指示をプロンプトに追加
+- [ ] キャラごとのコメントの多様性を高める指示の調整
+- [ ] OpenAI（gpt-5-mini）での品質再確認
+
+---
+
 ## 対応中
 
 - なし
@@ -129,6 +148,48 @@
 ---
 
 ## 解決済み
+
+### CT-010: 全AI使用箇所でOpenAIフォールバックが実装されているか確認
+
+**報告日**: 2026-02-27
+**解決日**: 2026-03-03
+**優先度**: 高
+**カテゴリ**: AI / バックエンド信頼性
+
+**問題**:
+AIコメント生成（`generateAICommentV1`）のみが`AIProviderFactory`によるフォールバックを持ち、残りのAI使用箇所（モデレーション、画像分析等）はGemini直接呼び出しだったため、Gemini障害時にサービスが停止するリスクがあった。
+
+**解決内容**:
+- [x] AI使用箇所（12ファイル）を全て洗い出し
+- [x] 全箇所を`AIProviderFactory`経由に統一（Geminiプライマリ、OpenAIフォールバック）
+- [x] `createAIProviderFactory()`を`provider.ts`からエクスポートし共有化
+- [x] APIキー存在チェック（fail-closed）を`callable/posts.ts`、`triggers/posts.ts`、`circle-ai/posts.ts`に追加
+- [x] `logAIProviderUsage()`追加（プロバイダー・フォールバック有無のログ出力）
+- [x] `[MODERATION NG]`ログ追加（モデレーションNG時の判定理由出力）
+- [x] `moderateText` Raw responseログ追加（AI判定内容の確認用）
+- [x] Firestore `settings/ai`でプロバイダー切替確認（1分キャッシュ）
+- [x] gpt-5系モデルのパラメータ互換対応（`buildRequestBody`で自動判定）
+- [x] OpenAIデフォルトモデルを`gpt-5-mini`に設定
+- [x] コメントNGダイアログに提案文を追加（投稿側と統一）
+- [x] Gemini障害時のフォールバック動作を実機確認済み
+
+**修正**: 全AI使用箇所を`AIProviderFactory`経由に統一。デフォルトはGeminiプライマリ、OpenAI（gpt-5-mini）フォールバック。Firestore `settings/ai`ドキュメントでプロバイダー切替可能。
+
+**関連ファイル**:
+- `functions/src/ai/provider.ts`
+- `functions/src/config/constants.ts`
+- `functions/src/helpers/ai-usage.ts`
+- `functions/src/helpers/moderation.ts`
+- `functions/src/helpers/media-analysis.ts`
+- `functions/src/callable/posts.ts`
+- `functions/src/callable/comments.ts`
+- `functions/src/http/ai-generation.ts`
+- `functions/src/http/image-moderation.ts`
+- `functions/src/triggers/posts.ts`
+- `functions/src/circle-ai/posts.ts`
+- `docs/design_ct010_ai_fallback.md`
+
+---
 
 ### CT-001: 投稿詳細でチュートリアルがいいねボタンで停止する
 

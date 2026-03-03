@@ -5,18 +5,18 @@
 
 import * as admin from "firebase-admin";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 
 import { db, FieldValue } from "../helpers/firebase";
 import { requireAuth } from "../helpers/auth";
-import { geminiApiKey } from "../config/secrets";
+import { geminiApiKey, openaiApiKey } from "../config/secrets";
 import { isAdmin, getAdminUids } from "../helpers/admin";
 import { ModerationResult, MediaItem } from "../types";
 import { moderateMedia } from "../helpers/moderation";
-import { logAIUsage } from "../helpers/ai-usage";
+import { logAIProviderUsage } from "../helpers/ai-usage";
 import { NG_WORDS } from "../helpers/virtue";
 import { getVirtuePolicy, grantVirtue, VIRTUE_ROUTE_KEYS } from "../helpers/virtue-policy";
-import { LOCATION, AI_MODELS } from "../config/constants";
+import { LOCATION } from "../config/constants";
+import { createAIProviderFactory } from "../ai/provider";
 import {
     AUTH_ERRORS,
     VALIDATION_ERRORS,
@@ -105,7 +105,7 @@ async function enforcePostRateLimits(userId: string): Promise<void> {
 export const createPostWithModeration = onCall(
     {
         region: LOCATION,
-        secrets: [geminiApiKey],
+        secrets: [geminiApiKey, openaiApiKey],
         timeoutSeconds: 120,
         memory: "1GiB",
         enforceAppCheck: true,
@@ -150,18 +150,15 @@ export const createPostWithModeration = onCall(
         }
         console.log("STEP 1: User check passed");
 
-        const apiKey = geminiApiKey.value();
-
-        // Fail Closed: APIキーがない場合はエラー
-        if (!apiKey) {
-            console.error("ERROR: GEMINI_API_KEY is not set");
+        // Fail Closed: APIキーが1つも利用できない場合はエラー
+        const geminiKey = geminiApiKey.value() || "";
+        const openaiKey = openaiApiKey.value() || "";
+        if (!geminiKey && !openaiKey) {
+            console.error("ERROR: No AI API key available (both GEMINI and OPENAI are empty)");
             throw new HttpsError("internal", SYSTEM_ERRORS.INTERNAL);
         }
-        console.log("STEP 2: API key loaded");
-
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: AI_MODELS.GEMINI_DEFAULT });
-        console.log("STEP 3: Model initialized");
+        const aiFactory = createAIProviderFactory();
+        console.log("STEP 2: AI factory initialized");
 
         // 曖昧コンテンツフラグ用変数
         let needsReview = false;
@@ -192,7 +189,7 @@ export const createPostWithModeration = onCall(
         // 1. テキストモデレーション
         // ===============================================
         console.log("STEP 4: Starting text moderation");
-        if (model && content) {
+        if (content) {
             const textPrompt = `
 あなたはSNS「ほめっぷ」のコンテンツモデレーターです。
 「ほめっぷ」は「世界一優しいSNS」を目指しています。
@@ -223,14 +220,14 @@ ${content}
 
             let rawResponseText = "";
             try {
-                const result = await model.generateContent(textPrompt);
-                const responseText = result.response.text().trim();
+                const result = await aiFactory.generateText(textPrompt);
+                const responseText = result.text.trim();
                 rawResponseText = responseText;
-                logAIUsage("post_text_moderation", result.response, {
+                logAIProviderUsage("post_text_moderation", result, {
                     userId,
                     hasContent: Boolean(content),
                 });
-                console.log("STEP 5: Got Gemini response, length:", responseText.length);
+                console.log(`moderateText(post): Raw response: ${responseText.substring(0, 500)}`);
 
                 // JSONを抽出
                 let jsonText = responseText;
@@ -256,6 +253,12 @@ ${content}
                 }
 
                 if (modResult.isNegative && modResult.confidence >= 0.7) {
+                    console.warn("[MODERATION NG] post rejected:", JSON.stringify({
+                        category: modResult.category,
+                        confidence: modResult.confidence,
+                        reason: modResult.reason,
+                        textLength: content.length,
+                    }));
                     await db.collection("moderatedContent").add({
                         userId: userId,
                         content: content,
@@ -300,11 +303,11 @@ ${content}
         // ===============================================
         // 2. メディアモデレーション
         // ===============================================
-        if (apiKey && model && mediaItems && Array.isArray(mediaItems) && mediaItems.length > 0) {
+        if (mediaItems && Array.isArray(mediaItems) && mediaItems.length > 0) {
             console.log(`Moderating ${mediaItems.length} media items...`);
 
             try {
-                const mediaResult = await moderateMedia(model, mediaItems as MediaItem[]);
+                const mediaResult = await moderateMedia(aiFactory, mediaItems as MediaItem[]);
 
                 if (!mediaResult.passed && mediaResult.result) {
                     if (mediaResult.result.confidence >= 0.5 && mediaResult.result.confidence < 0.7) {
@@ -312,6 +315,12 @@ ${content}
                         needsReviewReason = `メディア: ${mediaResult.result.category} (confidence: ${mediaResult.result.confidence})`;
                         console.log(`FLAGGED for review: ${needsReviewReason}`);
                     } else if (mediaResult.result.confidence >= 0.7) {
+                        console.warn("[MODERATION NG] post media rejected:", JSON.stringify({
+                            category: mediaResult.result.category,
+                            confidence: mediaResult.result.confidence,
+                            reason: mediaResult.result.reason,
+                            fileName: mediaResult.failedItem?.fileName,
+                        }));
                         await db.collection("moderatedContent").add({
                             userId: userId,
                             content: `[メディア] ${mediaResult.failedItem?.fileName || "media"} `,

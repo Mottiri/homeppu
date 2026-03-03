@@ -4,9 +4,9 @@
  */
 
 import * as https from "https";
-import { GoogleGenerativeAI, Part } from "@google/generative-ai";
+import { AIProviderFactory } from "../ai/provider";
 import { MediaModerationResult, MediaItem } from "../types";
-import { logAIUsage } from "./ai-usage";
+import { logAIProviderUsage } from "./ai-usage";
 import {
     IMAGE_MODERATION_PROMPT,
 } from "../ai/prompts/moderation";
@@ -43,7 +43,7 @@ export async function downloadFile(url: string): Promise<Buffer> {
  * 画像をモデレーション
  */
 export async function moderateImage(
-    model: ReturnType<GoogleGenerativeAI["getGenerativeModel"]>,
+    aiFactory: AIProviderFactory,
     imageUrl: string,
     mimeType: string = "image/jpeg"
 ): Promise<MediaModerationResult> {
@@ -55,18 +55,9 @@ export async function moderateImage(
 
         const prompt = IMAGE_MODERATION_PROMPT;
 
-        const imagePart: Part = {
-            inlineData: {
-                mimeType: mimeType,
-                data: base64Image,
-            },
-        };
-
-        const result = await model.generateContent([prompt, imagePart]);
-        const responseText = result.response.text().trim();
-        logAIUsage("media_moderation_image", result.response, {
-            mimeType,
-        });
+        const result = await aiFactory.generateWithImage(prompt, base64Image, mimeType);
+        const responseText = result.text.trim();
+        logAIProviderUsage("media_moderation_image", result, { mimeType });
         console.log(`moderateImage: Raw response: ${responseText.substring(0, 200)}`);
 
         let jsonText = responseText;
@@ -101,12 +92,12 @@ export async function moderateImage(
  * メディアアイテムをモデレーション
  */
 export async function moderateMedia(
-    model: ReturnType<GoogleGenerativeAI["getGenerativeModel"]>,
+    aiFactory: AIProviderFactory,
     mediaItems: MediaItem[]
 ): Promise<{ passed: boolean; failedItem?: MediaItem; result?: MediaModerationResult }> {
     for (const item of mediaItems) {
         if (item.type === "image") {
-            const result = await moderateImage(model, item.url, item.mimeType || "image/jpeg");
+            const result = await moderateImage(aiFactory, item.url, item.mimeType || "image/jpeg");
             if (result.isInappropriate && result.confidence >= 0.7) {
                 return { passed: false, failedItem: item, result };
             }
