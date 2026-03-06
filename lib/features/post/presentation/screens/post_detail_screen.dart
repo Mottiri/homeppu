@@ -670,6 +670,23 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                   MediaQuery.of(context).padding.bottom + 16,
                             ),
                           ),
+                        if (isOwnPost && tutorialStep == TutorialPhase2Step.aiCommentNote)
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            top: -appBarReservedHeight,
+                            bottom: 0,
+                            child: TutorialOverlay(
+                              message: AppMessages.tutorial.postDetailAiCommentNote,
+                              onMaskTap: () async {
+                                await ref
+                                    .read(tutorialPhase2Provider.notifier)
+                                    .advance();
+                              },
+                              bubbleBottomOffset:
+                                  MediaQuery.of(context).padding.bottom + 16,
+                            ),
+                          ),
                         if (isOwnPost &&
                             tutorialStep == TutorialPhase2Step.commentLongPress &&
                             _tutorialCommentRect != null)

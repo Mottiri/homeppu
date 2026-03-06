@@ -7,6 +7,7 @@ import 'auth_provider.dart';
 enum TutorialPhase2Step {
   inactive,
   detailIntro,
+  aiCommentNote,
   commentLongPress,
 }
 

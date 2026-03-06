@@ -78,6 +78,32 @@ class AboutAppScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
+                      AppMessages.profile.aboutAiTitle,
+                      style: textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(AppMessages.profile.aboutAiDescription),
+                    const SizedBox(height: 6),
+                    Text(
+                      AppMessages.profile.aboutAiNote,
+                      style: textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
                       AppMessages.profile.aboutContactTitle,
                       style: textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w700,

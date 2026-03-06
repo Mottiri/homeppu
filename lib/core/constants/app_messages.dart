@@ -413,17 +413,17 @@ class _TutorialMessages {
   String get scrollToPrivacy => 'ここが「公開範囲」の設定だよ！\nまずはここをタップして開いてみてね';
 
   // Step 3: AIモード説明
-  String get explainAI => 'AIだけが見れるモードだよ!\n人間には見えないから安心して投稿できる！AIからの返信はくるよ😊';
+  String get explainAI => 'AIだけが見れるモードだよ!\n人間には見えないから安心して投稿できる！\nAIからコメントやリアクションが届くよ😊';
 
   // Step 4: ミックスモード説明
-  String get explainMix => 'AIも人間も両方見れるモードだよ！\n色んな人からリアクションがもらえる💕';
+  String get explainMix => 'AIも人間も両方見れるモードだよ！\nAIからもコメントやリアクションが届くよ💕';
 
   // Step 5: 人間モード説明
   String get explainHuman => '人間だけが見れるモードだよ！\n投稿に慣れたらこのモードに挑戦しよう！';
 
   // Step 6: 完了
   String get complete =>
-      'これで公開範囲の説明はおしまい！\n画面操作出来るようになったら、希望のモードをタップしてね🎉\n**あとからいつでも設定は変えられるから安心してね！**';
+      'これで公開範囲の説明はおしまい！\n画面操作出来るようになったら、希望のモードをタップしてね🎉\n**あとからいつでも設定は変えられるから安心してね！**\n\n※AIのコメントは自動生成のため、\n内容が不正確な場合もありますのでご了承ください。';
   String get completeAction => 'わかった！';
   String get selectModeRequired => 'モードを1つ選んでね';
 
@@ -451,6 +451,8 @@ class _TutorialMessages {
 
   // Post detail explanation (Phase 2)
   String get postDetailOverview => 'ここは投稿詳細画面だよ！\nあなたの投稿についたコメントを確認できるよ😊';
+  String get postDetailAiCommentNote =>
+      'AIからのコメントもここに表示されるよ！\n\n※AIのコメントは自動生成のため、内容が不正確な場合があります。あたたかい気持ちでお楽しみください。';
   String get postDetailLongPressComment =>
       '他の人のコメントを長押しすると\n投稿主として「いいね！」を返せるよ❤\nいいコメントがあったらいいね！してあげてね😊';
 
@@ -736,6 +738,11 @@ class _ProfileMessages {
   String get aboutFeatureStamp => '・スタンプとリアクションで気持ちを伝える';
   String get aboutFeatureAvatar => '・名前パーツとアバターで自分らしさを表現';
   String get aboutFeatureSubscription => '・プレミアム加入でEpicアイテム解放';
+  String get aboutAiTitle => 'AIについて';
+  String get aboutAiDescription =>
+      'ほめっぷでは、公開範囲が「AIモード」または「ミックス」の場合、AIが自動でコメントやリアクションを届けます。';
+  String get aboutAiNote =>
+      '※AIのコメントは自動生成のため、内容が不正確な場合があります。あたたかい気持ちでお楽しみください。';
   String get aboutContactTitle => 'お問い合わせ';
   String get aboutContactBody => '不具合報告・ご要望は設定の「問い合わせ・要望」から送信できます。';
   String get aboutCopyright => 'Copyright (c) 2026 ほめっぷ';

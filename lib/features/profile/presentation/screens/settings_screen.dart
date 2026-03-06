@@ -30,8 +30,8 @@ import 'name_edit_screen.dart';
 
 /// 公開範囲モード
 enum PrivacyMode {
-  ai('ai', 'AIモード', 'AIだけが見れるよ\n人間には見えないから安心して投稿できる！', Icons.auto_awesome),
-  mix('mix', 'ミックス', 'AIも人間も両方見れるよ\n色んな人からリアクションがもらえる！', Icons.groups),
+  ai('ai', 'AIモード', 'AIだけが見れるよ\n人間には見えないから安心して投稿できる！\nAIからコメントやリアクションが届くよ', Icons.auto_awesome),
+  mix('mix', 'ミックス', 'AIも人間も両方見れるよ\nAIからもコメントやリアクションが届くよ', Icons.groups),
   human('human', '人間モード', '人間だけが見れるよ\n本物のリアクションだけがほしい人向け', Icons.person);
 
   const PrivacyMode(this.value, this.label, this.description, this.icon);
