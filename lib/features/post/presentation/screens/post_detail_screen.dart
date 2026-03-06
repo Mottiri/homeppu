@@ -42,6 +42,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
   late final Stream<DocumentSnapshot> _postStream;
   late final Stream<QuerySnapshot> _commentsStream;
   final GlobalKey _tutorialOverlayStackKey = GlobalKey();
+  final GlobalKey _tutorialOverlayCoordinateKey = GlobalKey();
   final GlobalKey _tutorialTargetCommentKey = GlobalKey();
   Rect? _tutorialCommentRect;
   bool _phase2TutorialInitialized = false;
@@ -153,7 +154,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     debugPrint('[TUTORIAL_PHASE2] resolve rect requested');
     final rect = await resolveRectWithRetry(
       _tutorialTargetCommentKey,
-      ancestorKey: _tutorialOverlayStackKey,
+      coordinateSpaceKey: _tutorialOverlayCoordinateKey,
     );
     debugPrint('[TUTORIAL_PHASE2] resolve rect result: $rect');
     if (!mounted) return;
@@ -358,6 +359,17 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                       key: _tutorialOverlayStackKey,
                       clipBehavior: Clip.none,
                       children: [
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          top: -appBarReservedHeight,
+                          bottom: 0,
+                          child: IgnorePointer(
+                            child: SizedBox.expand(
+                              key: _tutorialOverlayCoordinateKey,
+                            ),
+                          ),
+                        ),
                         CustomScrollView(
                           physics: (tutorialStep ==
                                       TutorialPhase2Step.commentLongPress &&
@@ -697,11 +709,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                             bottom: 0,
                             child: TutorialOverlay(
                               message: AppMessages.tutorial.postDetailLongPressComment,
-                              // Overlay is shifted upward to cover AppBar area,
-                              // so shift spotlight down by the same amount.
-                              spotlightRect: _tutorialCommentRect!.shift(
-                                Offset(0, appBarReservedHeight),
-                              ),
+                              spotlightRect: _tutorialCommentRect,
                               passThroughSpotlight: true,
                               onMaskTap: () {},
                             ),

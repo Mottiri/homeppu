@@ -68,6 +68,7 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
   bool _phase3Initialized = false;
   bool _phase3Navigating = false;
   final GlobalKey _tutorialOverlayStackKey = GlobalKey();
+  final GlobalKey _tutorialOverlayCoordinateKey = GlobalKey();
   final GlobalKey _initialSheetSelectButtonKey = GlobalKey();
   final GlobalKey _sheetLongPressTargetKey = GlobalKey();
   final GlobalKey _catalogActionKey = GlobalKey();
@@ -100,19 +101,6 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
         (a.top - b.top).abs() <= tolerance &&
         (a.width - b.width).abs() <= tolerance &&
         (a.height - b.height).abs() <= tolerance;
-  }
-
-  Future<Rect?> _resolveRectInOverlayCoords(GlobalKey targetKey) async {
-    final targetGlobalRect = await resolveRectWithRetry(targetKey);
-    if (targetGlobalRect == null) return null;
-    final overlayBox =
-        _tutorialOverlayStackKey.currentContext?.findRenderObject()
-            as RenderBox?;
-    if (overlayBox == null || !overlayBox.hasSize) return null;
-    final overlayGlobalOffset = overlayBox.localToGlobal(Offset.zero);
-    return targetGlobalRect.shift(
-      Offset(-overlayGlobalOffset.dx, -overlayGlobalOffset.dy),
-    );
   }
 
   Future<void> _resolveSpotlightForStep(
@@ -148,7 +136,10 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
       }
       return;
     }
-    final rect = await _resolveRectInOverlayCoords(targetKey);
+    final rect = await resolveRectWithRetry(
+      targetKey,
+      coordinateSpaceKey: _tutorialOverlayCoordinateKey,
+    );
     if (!mounted) return;
     if (_isRectNearlyEqual(rect, _tutorialSpotlightRect)) return;
     setState(() => _tutorialSpotlightRect = rect);
@@ -1102,6 +1093,17 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                           key: _tutorialOverlayStackKey,
                           clipBehavior: Clip.none,
                           children: [
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              top: -appBarReservedHeight,
+                              bottom: -tutorialBottomExtension,
+                              child: IgnorePointer(
+                                child: SizedBox.expand(
+                                  key: _tutorialOverlayCoordinateKey,
+                                ),
+                              ),
+                            ),
                             Center(
                               child: Padding(
                                 padding: const EdgeInsets.fromLTRB(
@@ -1171,9 +1173,7 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                                   message: AppMessages
                                       .tutorial
                                       .stampInitialSheetSelectionGuide,
-                                  spotlightRect: _tutorialSpotlightRect!.shift(
-                                    Offset(0, appBarReservedHeight),
-                                  ),
+                                  spotlightRect: _tutorialSpotlightRect,
                                   passThroughSpotlight: true,
                                   bubbleBottomOffset:
                                       tutorialBubbleBottomOffset,
@@ -1242,6 +1242,17 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                         key: _tutorialOverlayStackKey,
                         clipBehavior: Clip.none,
                         children: [
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            top: -appBarReservedHeight,
+                            bottom: -tutorialBottomExtension,
+                            child: IgnorePointer(
+                              child: SizedBox.expand(
+                                key: _tutorialOverlayCoordinateKey,
+                              ),
+                            ),
+                          ),
                           Column(
                             children: [
                               Padding(
@@ -1495,9 +1506,7 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                               child: TutorialOverlay(
                                 message:
                                     AppMessages.tutorial.stampLongPressSheet,
-                                spotlightRect: _tutorialSpotlightRect!.shift(
-                                  Offset(0, appBarReservedHeight),
-                                ),
+                                spotlightRect: _tutorialSpotlightRect,
                                 passThroughSpotlight: true,
                                 bubbleBottomOffset: tutorialBubbleBottomOffset,
                                 onMaskTap: () {},
@@ -1513,9 +1522,7 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                               bottom: -tutorialBottomExtension,
                               child: TutorialOverlay(
                                 message: AppMessages.tutorial.stampCatalogGuide,
-                                spotlightRect: _tutorialSpotlightRect!.shift(
-                                  Offset(0, appBarReservedHeight),
-                                ),
+                                spotlightRect: _tutorialSpotlightRect,
                                 bubbleBottomOffset: tutorialBubbleBottomOffset,
                                 onMaskTap: () {},
                                 onSpotlightTap: () {
@@ -1534,9 +1541,7 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                               child: TutorialOverlay(
                                 message:
                                     AppMessages.tutorial.stampCollectionGuide,
-                                spotlightRect: _tutorialSpotlightRect!.shift(
-                                  Offset(0, appBarReservedHeight),
-                                ),
+                                spotlightRect: _tutorialSpotlightRect,
                                 bubbleBottomOffset: tutorialBubbleBottomOffset,
                                 onMaskTap: () {},
                                 onSpotlightTap: () {
@@ -1554,9 +1559,7 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                               bottom: -tutorialBottomExtension,
                               child: TutorialOverlay(
                                 message: AppMessages.tutorial.stampUndoGuide,
-                                spotlightRect: _tutorialSpotlightRect!.shift(
-                                  Offset(0, appBarReservedHeight),
-                                ),
+                                spotlightRect: _tutorialSpotlightRect,
                                 passThroughSpotlight: true,
                                 bubbleBottomOffset: tutorialBubbleBottomOffset,
                                 onMaskTap: () {},

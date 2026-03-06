@@ -87,32 +87,41 @@ class ProfileStats extends StatelessWidget {
     VoidCallback? onTap,
     Key? wrapperKey,
   }) {
-    final content = Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 13,
-            color: AppColors.textSecondary,
-          ),
-        ),
-        const SizedBox(height: 4),
-        if (isLoading)
-          const SizedBox(
-            width: 22,
-            height: 22,
-            child: CircularProgressIndicator(
-              strokeWidth: 2.2,
-              color: AppColors.textSecondary,
+    final content = SizedBox(
+      width: double.infinity,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+              ),
             ),
-          )
-        else
-          Text(
-            value,
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-          ),
-      ],
+            const SizedBox(height: 4),
+            if (isLoading)
+              const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.2,
+                  color: AppColors.textSecondary,
+                ),
+              )
+            else
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+          ],
+        ),
+      ),
     );
 
     if (onTap == null) return content;

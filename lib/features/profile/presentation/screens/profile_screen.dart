@@ -66,7 +66,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _phase6Initialized = false;
   final GlobalKey _virtueStatKey = GlobalKey();
   final GlobalKey _favoritesTabKey = GlobalKey();
+  final GlobalKey _favoritesTabsContainerKey = GlobalKey();
+  final GlobalKey _phase6CharacterKey = GlobalKey();
+  final GlobalKey _phase6BubbleKey = GlobalKey();
   Rect? _phase6SpotlightRect;
+  bool _isAdjustingPhase6Spotlight = false;
 
   // ヘッダー画像とカラーパレット
   late int _headerImageIndex;
@@ -159,6 +163,86 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
     if (_showScrollToTopFab) {
       setState(() => _showScrollToTopFab = false);
+    }
+  }
+
+  Future<Rect?> _resolvePhase6SpotlightRect(
+    TutorialPhase6Step step,
+  ) async {
+    if (step == TutorialPhase6Step.virtueGuide) {
+      return resolveRectWithRetry(
+        _virtueStatKey,
+        ancestorKey: _tutorialOverlayStackKey,
+      );
+    }
+    if (step != TutorialPhase6Step.favoritesGuide) return null;
+
+    final tabsRect = await resolveRectWithRetry(
+      _favoritesTabsContainerKey,
+      ancestorKey: _tutorialOverlayStackKey,
+    );
+    if (tabsRect == null) return null;
+
+    final tabWidth = tabsRect.width / 3;
+    return Rect.fromLTWH(
+      tabsRect.left + tabWidth * 2,
+      tabsRect.top,
+      tabWidth,
+      tabsRect.height,
+    );
+  }
+
+  Future<void> _ensurePhase6SpotlightVisible(
+    BuildContext context,
+    Rect rect,
+  ) async {
+    if (_isAdjustingPhase6Spotlight) return;
+    if (!_scrollController.hasClients) return;
+    _isAdjustingPhase6Spotlight = true;
+    await Future<void>.delayed(Duration.zero);
+    try {
+      final bubbleRect = await resolveRectWithRetry(
+        _phase6BubbleKey,
+        ancestorKey: _tutorialOverlayStackKey,
+        maxRetries: 3,
+        intervalMs: 16,
+      );
+      final characterRect = await resolveRectWithRetry(
+        _phase6CharacterKey,
+        ancestorKey: _tutorialOverlayStackKey,
+        maxRetries: 3,
+        intervalMs: 16,
+      );
+
+      Rect? occupiedRect;
+      if (bubbleRect != null) occupiedRect = bubbleRect;
+      if (characterRect != null) {
+        occupiedRect = occupiedRect == null
+            ? characterRect
+            : occupiedRect.expandToInclude(characterRect);
+      }
+      if (occupiedRect == null) return;
+
+      const clearance = 16.0;
+      final overlap = rect.bottom - (occupiedRect.top - clearance);
+      if (overlap <= 0) return;
+      if (mounted && _phase6SpotlightRect != null) {
+        setState(() => _phase6SpotlightRect = null);
+        await Future<void>.delayed(const Duration(milliseconds: 16));
+      }
+
+      final target = (_scrollController.offset + overlap + clearance).clamp(
+        0.0,
+        _scrollController.position.maxScrollExtent,
+      );
+      if ((target - _scrollController.offset).abs() < 1) return;
+      await _scrollController.animateTo(
+        target,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      );
+    } finally {
+      _isAdjustingPhase6Spotlight = false;
     }
   }
 
@@ -427,12 +511,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         user.tutorialPhase1Completed &&
         phase1Step == TutorialPhase1Step.inactive;
     final isPhase6Active = canRunPhase6 && phase6Step != TutorialPhase6Step.inactive;
-    final phase6OverviewBubbleBottomOffset =
-        MediaQuery.of(context).padding.bottom - 8;
-    final phase6VirtueBubbleBottomOffset =
-        MediaQuery.of(context).padding.bottom - 12;
-    final phase6FavoritesBubbleBottomOffset =
-        MediaQuery.of(context).padding.bottom - 20;
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+    final phase6OverviewBubbleBottomOffset = (bottomPad - 8).clamp(8.0, double.infinity);
+    final phase6VirtueBubbleBottomOffset = (bottomPad - 12).clamp(8.0, double.infinity);
+    final phase6FavoritesBubbleBottomOffset = (bottomPad - 20).clamp(8.0, double.infinity);
 
     if (canRunPhase6 && !_phase6Initialized) {
       _phase6Initialized = true;
@@ -447,16 +529,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             phase6Step == TutorialPhase6Step.favoritesGuide)) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted) return;
-        final targetKey = phase6Step == TutorialPhase6Step.virtueGuide
-            ? _virtueStatKey
-            : _favoritesTabKey;
-        final rect = await resolveRectWithRetry(
-          targetKey,
-          ancestorKey: _tutorialOverlayStackKey,
-        );
+        final rect = await _resolvePhase6SpotlightRect(phase6Step);
+        if (!mounted || rect == null) return;
+        await _ensurePhase6SpotlightVisible(context, rect);
         if (!mounted) return;
-        if (rect != _phase6SpotlightRect) {
-          setState(() => _phase6SpotlightRect = rect);
+        await Future<void>.delayed(const Duration(milliseconds: 16));
+        final resolvedRect = await _resolvePhase6SpotlightRect(phase6Step);
+        if (!mounted || resolvedRect == null) return;
+        if (resolvedRect != _phase6SpotlightRect) {
+          setState(() => _phase6SpotlightRect = resolvedRect);
         }
       });
     }
@@ -601,6 +682,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               false,
                           accentColor: _primaryAccent,
                           onLoadComplete: _handlePostsListUpdated,
+                          tabsContainerKey:
+                              _isOwnProfile ? _favoritesTabsContainerKey : null,
                           favoritesTabKey:
                               _isOwnProfile ? _favoritesTabKey : null,
                         ),
@@ -683,6 +766,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           .advance(),
                       characterAssetPath: 'assets/onbord/onbord_01.png',
                       bubbleBottomOffset: phase6VirtueBubbleBottomOffset,
+                      characterKey: _phase6CharacterKey,
+                      bubbleKey: _phase6BubbleKey,
                     ),
                   ),
                 if (isPhase6Active &&
@@ -705,6 +790,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       },
                       characterAssetPath: 'assets/onbord/onbord_01.png',
                       bubbleBottomOffset: phase6FavoritesBubbleBottomOffset,
+                      characterKey: _phase6CharacterKey,
+                      bubbleKey: _phase6BubbleKey,
                     ),
                   ),
                 // チュートリアル Step 1: 設定アイコンをスポットライト

@@ -15,6 +15,7 @@ class ProfilePostsList extends StatefulWidget {
   /// 親から渡されるコールバック: ロード完了時に呼び出し
   final VoidCallback? onLoadComplete;
   final Key? favoritesTabKey;
+  final Key? tabsContainerKey;
 
   const ProfilePostsList({
     super.key,
@@ -24,6 +25,7 @@ class ProfilePostsList extends StatefulWidget {
     this.accentColor = AppColors.primary,
     this.onLoadComplete,
     this.favoritesTabKey,
+    this.tabsContainerKey,
   });
 
   @override
@@ -351,6 +353,7 @@ class ProfilePostsListState extends State<ProfilePostsList>
         children: [
           // タブバー
           Container(
+            key: widget.tabsContainerKey,
             margin: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
               color: Colors.grey.shade100,
@@ -374,9 +377,9 @@ class ProfilePostsListState extends State<ProfilePostsList>
                 const Tab(child: Icon(Icons.home_outlined, size: 20)),
                 const Tab(child: Icon(Icons.people_outline, size: 20)),
                 Tab(
-                  child: Icon(
+                  key: widget.favoritesTabKey,
+                  child: const Icon(
                     Icons.star_outline,
-                    key: widget.favoritesTabKey,
                     size: 20,
                   ),
                 ),

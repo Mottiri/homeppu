@@ -20,6 +20,8 @@ class TutorialOverlay extends StatelessWidget {
     this.passThroughSpotlight = false,
     this.pulseMinScale = 0.94,
     this.pulseMaxScale = 1.06,
+    this.characterKey,
+    this.bubbleKey,
   });
 
   final String message;
@@ -35,6 +37,8 @@ class TutorialOverlay extends StatelessWidget {
   final bool passThroughSpotlight;
   final double pulseMinScale;
   final double pulseMaxScale;
+  final Key? characterKey;
+  final Key? bubbleKey;
 
   @override
   Widget build(BuildContext context) {
@@ -62,6 +66,8 @@ class TutorialOverlay extends StatelessWidget {
             onAction: onAction,
             isActionEnabled: isActionEnabled,
             characterAssetPath: characterAssetPath,
+            characterKey: characterKey,
+            bubbleKey: bubbleKey,
           ),
         ),
       ],
@@ -135,6 +141,8 @@ class _CoachBubble extends StatelessWidget {
     this.onAction,
     this.isActionEnabled = true,
     required this.characterAssetPath,
+    this.characterKey,
+    this.bubbleKey,
   });
 
   final String message;
@@ -142,30 +150,35 @@ class _CoachBubble extends StatelessWidget {
   final VoidCallback? onAction;
   final bool isActionEnabled;
   final String characterAssetPath;
+  final Key? characterKey;
+  final Key? bubbleKey;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: Image.asset(
-            characterAssetPath,
-            width: 64,
-            height: 64,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) => Container(
+        KeyedSubtree(
+          key: characterKey,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.asset(
+              characterAssetPath,
               width: 64,
               height: 64,
-              decoration: BoxDecoration(
-                color: AppColors.primaryLight,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(
-                Icons.person,
-                color: AppColors.primary,
-                size: 32,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryLight,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.person,
+                  color: AppColors.primary,
+                  size: 32,
+                ),
               ),
             ),
           ),
@@ -173,6 +186,7 @@ class _CoachBubble extends StatelessWidget {
         const SizedBox(width: 10),
         Expanded(
           child: Container(
+            key: bubbleKey,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.white,
@@ -537,18 +551,32 @@ class _PassThroughMaskLayersState extends State<_PassThroughMaskLayers>
 Future<Rect?> resolveRectWithRetry(
   GlobalKey key, {
   GlobalKey? ancestorKey,
+  GlobalKey? coordinateSpaceKey,
   int maxRetries = 5,
   int intervalMs = 200,
 }) async {
   for (int i = 0; i < maxRetries; i++) {
     final box = key.currentContext?.findRenderObject() as RenderBox?;
     if (box != null && box.hasSize) {
-      final offset = ancestorKey != null
-          ? box.localToGlobal(
-              Offset.zero,
-              ancestor: ancestorKey.currentContext?.findRenderObject(),
-            )
-          : box.localToGlobal(Offset.zero);
+      final globalOffset = box.localToGlobal(Offset.zero);
+      Offset offset = globalOffset;
+      if (coordinateSpaceKey != null) {
+        final coordinateBox =
+            coordinateSpaceKey.currentContext?.findRenderObject() as RenderBox?;
+        if (coordinateBox == null || !coordinateBox.hasSize) {
+          await Future.delayed(Duration(milliseconds: intervalMs));
+          continue;
+        }
+        offset = globalOffset - coordinateBox.localToGlobal(Offset.zero);
+      } else if (ancestorKey != null) {
+        final ancestorBox =
+            ancestorKey.currentContext?.findRenderObject() as RenderBox?;
+        if (ancestorBox == null || !ancestorBox.hasSize) {
+          await Future.delayed(Duration(milliseconds: intervalMs));
+          continue;
+        }
+        offset = ancestorBox.globalToLocal(globalOffset);
+      }
       return Rect.fromLTWH(
         offset.dx,
         offset.dy,
