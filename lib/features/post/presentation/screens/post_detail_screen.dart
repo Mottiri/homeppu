@@ -914,24 +914,10 @@ class _CommentTileState extends State<_CommentTile> {
     final canThanks = currentUserId != null &&
         currentUserId == widget.postOwnerId &&
         widget.comment.userId != currentUserId;
+    final showThanksStatus = canThanks && _isThanked;
 
     Future<void> handleThanksTap() async {
-      if (!canThanks) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppMessages.stamp.postOwnerOnly),
-            backgroundColor: AppColors.error,
-          ),
-        );
-        return;
-      }
-
-      if (_isThanked) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppMessages.stamp.thanksAlreadyGiven)),
-        );
-        return;
-      }
+      if (!canThanks || _isThanked) return;
 
       final confirmed = await showModalBottomSheet<bool>(
         context: context,
@@ -975,29 +961,11 @@ class _CommentTileState extends State<_CommentTile> {
 
       try {
         final service = CommentThanksService();
-        final result = await service.likeCommentAsPostOwner(widget.comment.id);
+        await service.likeCommentAsPostOwner(widget.comment.id);
         if (!context.mounted) return;
-        if (result.alreadyThanked) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(AppMessages.stamp.thanksAlreadyGiven)),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppMessages.stamp.thanksSent),
-              backgroundColor: AppColors.success,
-            ),
-          );
-        }
       } catch (_) {
         if (!context.mounted) return;
         setState(() => _optimisticThanked = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppMessages.error.general),
-            backgroundColor: AppColors.error,
-          ),
-        );
       } finally {
         if (mounted) {
           setState(() => _isSubmitting = false);
@@ -1071,7 +1039,7 @@ class _CommentTileState extends State<_CommentTile> {
                         context,
                       ).textTheme.bodyMedium?.copyWith(height: 1.5),
                     ),
-                    if (_isThanked) ...[
+                    if (showThanksStatus) ...[
                       const SizedBox(height: 8),
                       Row(
                         children: [
@@ -1082,7 +1050,7 @@ class _CommentTileState extends State<_CommentTile> {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            AppMessages.stamp.thanksReceived,
+                            AppMessages.stamp.thanksSent,
                             style: Theme.of(context).textTheme.labelSmall,
                           ),
                         ],

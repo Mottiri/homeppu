@@ -793,6 +793,7 @@ class _StampMessages {
 
   String get thanksAction => 'いいね！する';
 
+  String get thanksSending => 'いいね！しています...';
   String get thanksSent => 'いいね！しました';
   String get thanksReceived => 'いいね！されたよ';
   String get thanksGiven => 'お礼スタンプを1個獲得しました';
