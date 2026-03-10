@@ -18,7 +18,6 @@ import '../../../admin/presentation/widgets/admin_menu_bottom_sheet.dart';
 import '../widgets/profile_actions.dart';
 import '../widgets/profile_admin_actions.dart';
 import '../widgets/profile_header.dart';
-import '../widgets/profile_menu.dart';
 import '../widgets/profile_posts_list.dart';
 import '../widgets/profile_stats.dart';
 import '../../../../shared/widgets/infinite_scroll_listener.dart';
@@ -634,6 +633,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                           totalPosts: user.totalPosts,
                           totalPraises: user.totalPraises,
                           virtue: user.virtue,
+                          followingCount: _isOwnProfile
+                              ? user.following.length
+                              : null,
+                          followingIds:
+                              _isOwnProfile ? user.following : null,
                           primaryAccent: _primaryAccent,
                           secondaryAccent: _secondaryAccent,
                           isVirtueLoading: _isVirtueLoading,
@@ -670,11 +674,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                         ),
 
                         const SliverToBoxAdapter(child: SizedBox(height: 24)),
-
-                        // フォロー中（自分のプロフィールのみ）
-                        // 実際のfollowingリストの長さを使用（followingCountとの不整合を防ぐ）
-                        if (_isOwnProfile && user.following.isNotEmpty)
-                          ProfileMenu(followingIds: user.following),
 
                         // 過去の投稿
                         SliverToBoxAdapter(

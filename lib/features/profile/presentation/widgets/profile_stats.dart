@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_messages.dart';
 
 class ProfileStats extends StatelessWidget {
   final int totalPosts;
   final int totalPraises;
   final int virtue;
+  final int? followingCount;
+  final List<String>? followingIds;
   final Color primaryAccent;
   final Color secondaryAccent;
   final bool isVirtueLoading;
@@ -17,6 +21,8 @@ class ProfileStats extends StatelessWidget {
     required this.totalPosts,
     required this.totalPraises,
     required this.virtue,
+    this.followingCount,
+    this.followingIds,
     required this.primaryAccent,
     required this.secondaryAccent,
     this.isVirtueLoading = false,
@@ -26,6 +32,47 @@ class ProfileStats extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final stats = <Widget>[
+      Expanded(
+        child: _buildStat(
+          label: '投稿',
+          value: '$totalPosts',
+        ),
+      ),
+      Container(width: 1, color: Colors.grey.shade300),
+      Expanded(
+        child: _buildStat(
+          label: '称賛',
+          value: '$totalPraises',
+        ),
+      ),
+      Container(width: 1, color: Colors.grey.shade300),
+      Expanded(
+        child: _buildStat(
+          label: '徳',
+          value: '$virtue',
+          isLoading: isVirtueLoading,
+          onTap: onVirtueTap,
+          wrapperKey: virtueStatKey,
+        ),
+      ),
+    ];
+
+    if (followingCount != null) {
+      stats.addAll([
+        Container(width: 1, color: Colors.grey.shade300),
+        Expanded(
+          child: _buildStat(
+            label: AppMessages.home.tabFollowing,
+            value: '$followingCount',
+            onTap: followingIds != null && followingIds!.isNotEmpty
+                ? () => context.push('/following', extra: followingIds)
+                : null,
+          ),
+        ),
+      ]);
+    }
+
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
@@ -48,31 +95,7 @@ class ProfileStats extends StatelessWidget {
           child: IntrinsicHeight(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                Expanded(
-                  child: _buildStat(
-                    label: '投稿',
-                    value: '$totalPosts',
-                  ),
-                ),
-                Container(width: 1, color: Colors.grey.shade300),
-                Expanded(
-                  child: _buildStat(
-                    label: '称賛',
-                    value: '$totalPraises',
-                  ),
-                ),
-                Container(width: 1, color: Colors.grey.shade300),
-                Expanded(
-                  child: _buildStat(
-                    label: '徳',
-                    value: '$virtue',
-                    isLoading: isVirtueLoading,
-                    onTap: onVirtueTap,
-                    wrapperKey: virtueStatKey,
-                  ),
-                ),
-              ],
+              children: stats,
             ),
           ),
         ),

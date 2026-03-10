@@ -17,6 +17,7 @@ import '../../features/profile/presentation/screens/avatar_edit_screen.dart';
 import '../../features/profile/presentation/screens/about_app_screen.dart';
 import '../../features/profile/presentation/screens/legal_document_screen.dart';
 import '../../features/profile/presentation/screens/subscription_screen.dart';
+import '../../features/profile/presentation/screens/following_list_screen.dart';
 import '../../features/circle/presentation/screens/circles_screen.dart';
 import '../../features/circle/presentation/screens/circle_detail_screen.dart';
 import '../../features/circle/presentation/screens/edit_circle_screen.dart';
@@ -166,6 +167,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: '/profile',
             name: 'profile',
             builder: (context, state) => const ProfileScreen(),
+          ),
+          GoRoute(
+            path: '/following',
+            name: 'followingList',
+            builder: (context, state) {
+              final followingIds = state.extra as List<String>;
+              return FollowingListScreen(followingIds: followingIds);
+            },
           ),
           GoRoute(
             path: '/user/:userId',
