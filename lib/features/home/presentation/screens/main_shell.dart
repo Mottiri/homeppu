@@ -580,6 +580,8 @@ class _MainShellState extends ConsumerState<MainShell>
       body: NotificationListener<ScrollNotification>(
         onNotification: (notification) {
           if (!isScrollReactiveScreen) return false;
+          // 水平スクロール（フォロー中リスト等）は無視
+          if (notification.metrics.axis != Axis.vertical) return false;
           if (notification is ScrollStartNotification) {
             _lastScrollPixels = notification.metrics.pixels;
             _scrollDeltaAccumulator = 0;
