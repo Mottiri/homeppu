@@ -1,11 +1,12 @@
-﻿// ignore_for_file: use_build_context_synchronously
+// ignore_for_file: use_build_context_synchronously
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_messages.dart';
 import '../../../../core/utils/snackbar_helper.dart';
+import '../../../../shared/models/user_model.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/providers/circle_trial_provider.dart';
 import '../../../../shared/providers/tutorial_phase1_provider.dart';
@@ -29,7 +30,7 @@ class MainShell extends ConsumerStatefulWidget {
 }
 
 class _MainShellState extends ConsumerState<MainShell>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final AnimationController _rotationController;
   late final Animation<double> _rotationAnimation;
   int _previousIndex = 0;
@@ -51,6 +52,13 @@ class _MainShellState extends ConsumerState<MainShell>
   Rect? _tutorialSpotlightRect;
   bool _tutorialInitialized = false;
   double _measuredBottomNavHeight = 88;
+  bool _isResolvingSpotlightRect = false;
+  GlobalKey? _pendingSpotlightKey;
+  ProviderSubscription<TutorialPhase1Step>? _phase1Subscription;
+  ProviderSubscription<TutorialPhase5Step>? _phase5Subscription;
+  ProviderSubscription<AsyncValue<UserModel?>>? _userSubscription;
+  bool _isForcingNavigation = false;
+  bool _isForcingBanRedirect = false;
 
   bool _isRectNearlyEqual(Rect? a, Rect? b, {double tolerance = 0.5}) {
     if (a == null || b == null) return a == b;
@@ -63,6 +71,7 @@ class _MainShellState extends ConsumerState<MainShell>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _rotationController = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
@@ -70,12 +79,55 @@ class _MainShellState extends ConsumerState<MainShell>
     _rotationAnimation = Tween<double>(begin: 0, end: 0.5).animate(
       CurvedAnimation(parent: _rotationController, curve: Curves.easeInOut),
     );
+
+    // Step 3 & 5: Phase1 listener for Rect resolution + forced navigation
+    _phase1Subscription = ref.listenManual<TutorialPhase1Step>(
+      tutorialPhase1Provider,
+      (prev, next) => _onPhase1StepChanged(prev, next),
+      fireImmediately: true,
+    );
+
+    // Step 3: Phase5 listener for FAB Rect resolution
+    _phase5Subscription = ref.listenManual<TutorialPhase5Step>(
+      tutorialPhase5Provider,
+      (prev, next) => _onPhase5StepChanged(prev, next),
+      fireImmediately: true,
+    );
+
+    // Step 5: User listener for BAN + subscription redirects
+    _userSubscription = ref.listenManual<AsyncValue<UserModel?>>(
+      currentUserProvider,
+      (prev, next) => _onCurrentUserChanged(prev, next),
+      fireImmediately: true,
+    );
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _phase1Subscription?.close();
+    _phase5Subscription?.close();
+    _userSubscription?.close();
     _rotationController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final currentStep = ref.read(tutorialPhase1Provider);
+      final currentPhase5Step = ref.read(tutorialPhase5Provider);
+      if (currentStep == TutorialPhase1Step.homeWelcome) {
+        _resolveSpotlightForKey(_myPageNavKey);
+      } else if (_isBottomNavGuideStep(currentStep)) {
+        _resolveSpotlightForKey(_targetNavKeyForStep(currentStep));
+      } else if (currentPhase5Step == TutorialPhase5Step.circleFabGuide) {
+        _resolveSpotlightForKey(_postNavKey);
+      }
+      _resolveBottomNavHeightOnce();
+    });
   }
 
   int _getCurrentIndex(BuildContext context) {
@@ -264,29 +316,114 @@ class _MainShellState extends ConsumerState<MainShell>
     });
   }
 
-  /// チュートリアル Step 0: マイページ NavItem の位置を取得
-  void _resolveMyPageNavRect() {
+  // --- Listener callbacks ---
+
+  void _onPhase1StepChanged(TutorialPhase1Step? prev, TutorialPhase1Step next) {
+    if (next == TutorialPhase1Step.homeWelcome) {
+      _resolveSpotlightForKey(_myPageNavKey);
+      _resolveBottomNavHeightOnce();
+    } else if (_isBottomNavGuideStep(next)) {
+      _resolveSpotlightForKey(_targetNavKeyForStep(next));
+      _resolveBottomNavHeightOnce();
+    }
+    // 強制遷移は build() 内でルート変化にも反応するよう処理
+  }
+
+  void _onPhase5StepChanged(TutorialPhase5Step? prev, TutorialPhase5Step next) {
+    if (next == TutorialPhase5Step.circleFabGuide) {
+      _resolveBottomNavHeightOnce();
+      _resolveSpotlightForKey(_postNavKey);
+    }
+  }
+
+  void _onCurrentUserChanged(
+    AsyncValue<UserModel?>? prev,
+    AsyncValue<UserModel?> next,
+  ) {
+    // BAN リダイレクトとサークルリダイレクトは build() 内で
+    // ルート変化にも反応するよう処理
+  }
+
+  // --- Rect resolution helpers ---
+
+  void _resolveSpotlightForKey(GlobalKey targetKey) {
+    if (_isResolvingSpotlightRect) {
+      // 解決中なら最新の要求を保持し、完了後に再実行
+      _pendingSpotlightKey = targetKey;
+      return;
+    }
+    _isResolvingSpotlightRect = true;
+    _pendingSpotlightKey = null;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
+      if (!mounted) {
+        _isResolvingSpotlightRect = false;
+        return;
+      }
       final rect = await resolveRectWithRetry(
-        _myPageNavKey,
+        targetKey,
         ancestorKey: _tutorialRootStackKey,
       );
+      _isResolvingSpotlightRect = false;
       if (mounted && !_isRectNearlyEqual(rect, _tutorialSpotlightRect)) {
         setState(() => _tutorialSpotlightRect = rect);
+      }
+      // ペンディングがあれば再実行
+      final pending = _pendingSpotlightKey;
+      if (pending != null && mounted) {
+        _resolveSpotlightForKey(pending);
       }
     });
   }
 
-  void _resolveBottomNavHeight() {
+  void _resolveBottomNavHeightOnce() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final box =
-          _bottomNavContainerKey.currentContext?.findRenderObject() as RenderBox?;
+          _bottomNavContainerKey.currentContext?.findRenderObject()
+              as RenderBox?;
       if (box == null || !box.hasSize) return;
       final h = box.size.height;
       if ((h - _measuredBottomNavHeight).abs() > 0.5) {
         setState(() => _measuredBottomNavHeight = h);
+      }
+    });
+  }
+
+  // --- Navigation helpers ---
+
+  void _scheduleNavigation(VoidCallback action) {
+    if (_isForcingNavigation) return;
+    _isForcingNavigation = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _isForcingNavigation = false;
+      action();
+    });
+  }
+
+  void _handleTutorialNavigation(TutorialPhase1Step step) {
+    _scheduleNavigation(() {
+      if (!mounted) return;
+      final latestStep = ref.read(tutorialPhase1Provider);
+      final loc = GoRouterState.of(context).matchedLocation;
+      if (latestStep == TutorialPhase1Step.profileSettings &&
+          !loc.startsWith('/profile')) {
+        context.go('/profile');
+        return;
+      }
+      if ((latestStep == TutorialPhase1Step.settingsScroll ||
+              latestStep == TutorialPhase1Step.explainAI ||
+              latestStep == TutorialPhase1Step.explainMix ||
+              latestStep == TutorialPhase1Step.explainHuman ||
+              latestStep == TutorialPhase1Step.finished) &&
+          loc != '/settings') {
+        context.go('/settings');
+        return;
+      }
+      if ((latestStep == TutorialPhase1Step.homeOverview ||
+              latestStep == TutorialPhase1Step.homeLongPress ||
+              _isBottomNavGuideStep(latestStep)) &&
+          !loc.startsWith('/home')) {
+        context.go('/home');
       }
     });
   }
@@ -354,87 +491,12 @@ class _MainShellState extends ConsumerState<MainShell>
       });
     }
 
-    // Step 0
-    if (tutorialStep == TutorialPhase1Step.homeWelcome) {
-      if (_tutorialSpotlightRect == null) {
-        _resolveMyPageNavRect();
-      }
-      _resolveBottomNavHeight();
-    }
-    if (_isBottomNavGuideStep(tutorialStep)) {
-      _resolveBottomNavHeight();
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        if (!mounted) return;
-        final rect = await resolveRectWithRetry(
-          _targetNavKeyForStep(tutorialStep),
-          ancestorKey: _tutorialRootStackKey,
-        );
-        if (!mounted) return;
-        if (!_isRectNearlyEqual(rect, _tutorialSpotlightRect)) {
-          setState(() => _tutorialSpotlightRect = rect);
-        }
-      });
-    }
-    // チュートリアル中は、必要な画面へ強制遷移して進行を維持する
-    final shouldForceProfile =
-        tutorialStep == TutorialPhase1Step.profileSettings &&
-        !location.startsWith('/profile');
-    final shouldForceSettings =
-        (tutorialStep == TutorialPhase1Step.settingsScroll ||
-            tutorialStep == TutorialPhase1Step.explainAI ||
-            tutorialStep == TutorialPhase1Step.explainMix ||
-            tutorialStep == TutorialPhase1Step.explainHuman ||
-            tutorialStep == TutorialPhase1Step.finished) &&
-        location != '/settings';
-    final shouldForceHome =
-        (tutorialStep == TutorialPhase1Step.homeOverview ||
-            tutorialStep == TutorialPhase1Step.homeLongPress ||
-            _isBottomNavGuideStep(tutorialStep)) &&
-        !location.startsWith('/home');
-    if (shouldForceProfile || shouldForceSettings || shouldForceHome) {
+    // BAN リダイレクト（最優先 — _scheduleNavigation とは独立）
+    if (currentUser?.banStatus == 'permanent' && !_isForcingBanRedirect) {
+      _isForcingBanRedirect = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        _isForcingBanRedirect = false;
         if (!mounted) return;
-        final latestStep = ref.read(tutorialPhase1Provider);
-        if (latestStep == TutorialPhase1Step.profileSettings &&
-            !GoRouterState.of(context).matchedLocation.startsWith('/profile')) {
-          context.go('/profile');
-          return;
-        }
-        if ((latestStep == TutorialPhase1Step.settingsScroll ||
-                latestStep == TutorialPhase1Step.explainAI ||
-                latestStep == TutorialPhase1Step.explainMix ||
-                latestStep == TutorialPhase1Step.explainHuman ||
-                latestStep == TutorialPhase1Step.finished) &&
-            GoRouterState.of(context).matchedLocation != '/settings') {
-          context.go('/settings');
-          return;
-        }
-        if ((latestStep == TutorialPhase1Step.homeOverview ||
-                latestStep == TutorialPhase1Step.homeLongPress ||
-                _isBottomNavGuideStep(latestStep)) &&
-            !GoRouterState.of(context).matchedLocation.startsWith('/home')) {
-          context.go('/home');
-        }
-      });
-    }
-    if (tutorialPhase5Step == TutorialPhase5Step.circleFabGuide &&
-        location.startsWith('/circles')) {
-      _resolveBottomNavHeight();
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        if (!mounted) return;
-        final rect = await resolveRectWithRetry(
-          _postNavKey,
-          ancestorKey: _tutorialRootStackKey,
-        );
-        if (!mounted) return;
-        if (!_isRectNearlyEqual(rect, _tutorialSpotlightRect)) {
-          setState(() => _tutorialSpotlightRect = rect);
-        }
-      });
-    }
-
-    if (currentUser?.banStatus == 'permanent') {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
         if (GoRouterState.of(context).matchedLocation != '/ban-appeal') {
           context.go('/ban-appeal');
         }
@@ -442,16 +504,41 @@ class _MainShellState extends ConsumerState<MainShell>
     }
 
     final currentIndex = _getCurrentIndex(context);
-    if (!isSubscriber && currentIndex == 1 && !isCircleTrialSession) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        final location = GoRouterState.of(context).matchedLocation;
-        if (location.startsWith('/circles') ||
-            location.startsWith('/circle/')) {
-          context.go('/home');
-        }
-      });
+
+    // BAN 時はチュートリアル遷移・サークルリダイレクトをスキップ
+    if (currentUser?.banStatus != 'permanent') {
+      // チュートリアル強制遷移（ルート変化に反応するため build 内で処理）
+      final shouldForceProfile =
+          tutorialStep == TutorialPhase1Step.profileSettings &&
+          !location.startsWith('/profile');
+      final shouldForceSettings =
+          (tutorialStep == TutorialPhase1Step.settingsScroll ||
+              tutorialStep == TutorialPhase1Step.explainAI ||
+              tutorialStep == TutorialPhase1Step.explainMix ||
+              tutorialStep == TutorialPhase1Step.explainHuman ||
+              tutorialStep == TutorialPhase1Step.finished) &&
+          location != '/settings';
+      final shouldForceHome =
+          (tutorialStep == TutorialPhase1Step.homeOverview ||
+              tutorialStep == TutorialPhase1Step.homeLongPress ||
+              _isBottomNavGuideStep(tutorialStep)) &&
+              !location.startsWith('/home');
+      if (shouldForceProfile || shouldForceSettings || shouldForceHome) {
+        _handleTutorialNavigation(tutorialStep);
+      }
+
+      // 非サブスク + サークル画面 → ホームへリダイレクト（ルート変化に反応するため build 内で処理）
+      if (!isSubscriber && currentIndex == 1 && !isCircleTrialSession) {
+        _scheduleNavigation(() {
+          if (!mounted) return;
+          final loc = GoRouterState.of(context).matchedLocation;
+          if (loc.startsWith('/circles') || loc.startsWith('/circle/')) {
+            context.go('/home');
+          }
+        });
+      }
     }
+
     _clearCircleTrialIfNeeded(
       isSubscriber: isSubscriber,
       currentIndex: currentIndex,
@@ -557,75 +644,119 @@ class _MainShellState extends ConsumerState<MainShell>
               opacity: (_isBottomNavVisible && !forceHideBottomNav) ? 1 : 0,
               child: IgnorePointer(
                 ignoring: !_isBottomNavVisible || forceHideBottomNav,
-                child: Container(
-                  key: _bottomNavContainerKey,
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withValues(alpha: 0.1),
-                        blurRadius: 20,
-                        offset: const Offset(0, -4),
-                      ),
-                    ],
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(24),
-                    ),
-                  ),
-                  child: SafeArea(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 8,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          IgnorePointer(
-                            ignoring:
-                                _isStartingCircleTrial ||
-                                isTutorialActive ||
-                                isStampTutorialActive ||
-                                isCircleTutorialActive ||
-                                isProfileTutorialActive,
-                            child: _NavItem(
-                              key: _homeNavKey,
-                              icon: Icons.home_outlined,
-                              activeIcon: Icons.home_rounded,
-                              label: AppMessages.home.navLabel,
-                              isActive: currentIndex == 0,
-                              onTap: () {
-                                if (currentIndex == 0) {
-                                  ref
-                                      .read(homeScrollToTopProvider.notifier)
-                                      .state++;
-                                } else {
-                                  context.go('/home');
-                                }
-                              },
-                            ),
+                child: NotificationListener<SizeChangedLayoutNotification>(
+                  onNotification: (notification) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (!mounted) return;
+                      final box =
+                          _bottomNavContainerKey.currentContext
+                                  ?.findRenderObject()
+                              as RenderBox?;
+                      if (box == null || !box.hasSize) return;
+                      final h = box.size.height;
+                      if ((h - _measuredBottomNavHeight).abs() > 0.5) {
+                        setState(() => _measuredBottomNavHeight = h);
+                      }
+                      // レイアウト変化時にスポットライト rect も再解決
+                      final currentStep = ref.read(tutorialPhase1Provider);
+                      final currentPhase5Step = ref.read(tutorialPhase5Provider);
+                      if (currentStep == TutorialPhase1Step.homeWelcome) {
+                        _resolveSpotlightForKey(_myPageNavKey);
+                      } else if (_isBottomNavGuideStep(currentStep)) {
+                        _resolveSpotlightForKey(_targetNavKeyForStep(currentStep));
+                      } else if (currentPhase5Step == TutorialPhase5Step.circleFabGuide) {
+                        _resolveSpotlightForKey(_postNavKey);
+                      }
+                    });
+                    return true;
+                  },
+                  child: SizeChangedLayoutNotifier(
+                    child: Container(
+                      key: _bottomNavContainerKey,
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.1),
+                            blurRadius: 20,
+                            offset: const Offset(0, -4),
                           ),
-                          IgnorePointer(
-                            ignoring:
-                                isTutorialActive ||
-                                isStampTutorialActive ||
-                                isCircleTutorialActive ||
-                                isProfileTutorialActive,
-                            child: _NavItem(
-                              key: _circleNavKey,
-                              icon: Icons.groups_outlined,
-                              activeIcon: Icons.groups_rounded,
-                              label: AppMessages.circle.navLabel,
-                              isActive:
-                                  currentIndex == 1 &&
-                                  (isSubscriber || isCircleTrialSession),
-                              isLoading: _isStartingCircleTrial,
-                              showLockBadge:
-                                  !isSubscriber && !isCircleTrialSession,
-                              onTap: () async {
-                                if (_isStartingCircleTrial) return;
-                                if (!isSubscriber) {
-                                  if (isCircleTrialSession) {
+                        ],
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(24),
+                        ),
+                      ),
+                      child: SafeArea(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 8,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              IgnorePointer(
+                                ignoring:
+                                    _isStartingCircleTrial ||
+                                    isTutorialActive ||
+                                    isStampTutorialActive ||
+                                    isCircleTutorialActive ||
+                                    isProfileTutorialActive,
+                                child: _NavItem(
+                                  key: _homeNavKey,
+                                  icon: Icons.home_outlined,
+                                  activeIcon: Icons.home_rounded,
+                                  label: AppMessages.home.navLabel,
+                                  isActive: currentIndex == 0,
+                                  onTap: () {
+                                    if (currentIndex == 0) {
+                                      ref
+                                          .read(
+                                            homeScrollToTopProvider.notifier,
+                                          )
+                                          .state++;
+                                    } else {
+                                      context.go('/home');
+                                    }
+                                  },
+                                ),
+                              ),
+                              IgnorePointer(
+                                ignoring:
+                                    isTutorialActive ||
+                                    isStampTutorialActive ||
+                                    isCircleTutorialActive ||
+                                    isProfileTutorialActive,
+                                child: _NavItem(
+                                  key: _circleNavKey,
+                                  icon: Icons.groups_outlined,
+                                  activeIcon: Icons.groups_rounded,
+                                  label: AppMessages.circle.navLabel,
+                                  isActive:
+                                      currentIndex == 1 &&
+                                      (isSubscriber || isCircleTrialSession),
+                                  isLoading: _isStartingCircleTrial,
+                                  showLockBadge:
+                                      !isSubscriber && !isCircleTrialSession,
+                                  onTap: () async {
+                                    if (_isStartingCircleTrial) return;
+                                    if (!isSubscriber) {
+                                      if (isCircleTrialSession) {
+                                        if (currentIndex == 1) {
+                                          ref
+                                              .read(
+                                                circleScrollToTopProvider
+                                                    .notifier,
+                                              )
+                                              .state++;
+                                        } else {
+                                          context.go('/circles');
+                                        }
+                                        return;
+                                      }
+                                      await _startCircleTrialAndOpen();
+                                      return;
+                                    }
                                     if (currentIndex == 1) {
                                       ref
                                           .read(
@@ -635,147 +766,146 @@ class _MainShellState extends ConsumerState<MainShell>
                                     } else {
                                       context.go('/circles');
                                     }
-                                    return;
-                                  }
-                                  await _startCircleTrialAndOpen();
-                                  return;
-                                }
-                                if (currentIndex == 1) {
-                                  ref
-                                      .read(circleScrollToTopProvider.notifier)
-                                      .state++;
-                                } else {
-                                  context.go('/circles');
-                                }
-                              },
-                            ),
-                          ),
-                          IgnorePointer(
-                            ignoring:
-                                isTutorialActive ||
-                                isStampTutorialActive ||
-                                isCircleTutorialActive ||
-                                isProfileTutorialActive,
-                            child: GestureDetector(
-                              key: _postNavKey,
-                              onTap: () =>
-                                  _handleCenterButtonTap(context, currentIndex),
-                              child: AnimatedBuilder(
-                                animation: _rotationAnimation,
-                                builder: (context, child) {
-                                  final isCircleScreen = currentIndex == 1;
-                                  final isSpecialScreen = isCircleScreen;
-
-                                  const circleButtonGradient = LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: [
-                                      Color(0xFF4DD0E1),
-                                      Color(0xFF00ACC1),
-                                    ],
-                                  );
-
-                                  LinearGradient buttonGradient;
-                                  Color shadowColor;
-                                  IconData buttonIcon;
-                                  double iconSize;
-
-                                  if (isCircleScreen) {
-                                    buttonGradient = circleButtonGradient;
-                                    shadowColor = const Color(0xFF00ACC1);
-                                    buttonIcon = Icons.group_add_rounded;
-                                    iconSize = 26;
-                                  } else {
-                                    buttonGradient = AppColors.primaryGradient;
-                                    shadowColor = AppColors.primary;
-                                    buttonIcon = Icons.add_rounded;
-                                    iconSize = 32;
-                                  }
-
-                                  final rotationAngle = isSpecialScreen
-                                      ? _rotationAnimation.value * 3.14159
-                                      : 0.0;
-
-                                  return AnimatedContainer(
-                                    duration: const Duration(milliseconds: 300),
-                                    width: 64,
-                                    height: 64,
-                                    decoration: BoxDecoration(
-                                      gradient: buttonGradient,
-                                      shape: BoxShape.circle,
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: shadowColor.withValues(
-                                            alpha: 0.4,
-                                          ),
-                                          blurRadius: 12,
-                                          offset: const Offset(0, 4),
-                                        ),
-                                      ],
-                                    ),
-                                    child: Transform.rotate(
-                                      angle: rotationAngle,
-                                      child: Transform.rotate(
-                                        angle: isCircleScreen ? -1.5708 : 0,
-                                        child: Icon(
-                                          buttonIcon,
-                                          color: Colors.white,
-                                          size: iconSize,
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                },
+                                  },
+                                ),
                               ),
-                            ),
+                              IgnorePointer(
+                                ignoring:
+                                    isTutorialActive ||
+                                    isStampTutorialActive ||
+                                    isCircleTutorialActive ||
+                                    isProfileTutorialActive,
+                                child: GestureDetector(
+                                  key: _postNavKey,
+                                  onTap: () => _handleCenterButtonTap(
+                                    context,
+                                    currentIndex,
+                                  ),
+                                  child: AnimatedBuilder(
+                                    animation: _rotationAnimation,
+                                    builder: (context, child) {
+                                      final isCircleScreen = currentIndex == 1;
+                                      final isSpecialScreen = isCircleScreen;
+
+                                      const circleButtonGradient =
+                                          LinearGradient(
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                            colors: [
+                                              Color(0xFF4DD0E1),
+                                              Color(0xFF00ACC1),
+                                            ],
+                                          );
+
+                                      LinearGradient buttonGradient;
+                                      Color shadowColor;
+                                      IconData buttonIcon;
+                                      double iconSize;
+
+                                      if (isCircleScreen) {
+                                        buttonGradient = circleButtonGradient;
+                                        shadowColor = const Color(0xFF00ACC1);
+                                        buttonIcon = Icons.group_add_rounded;
+                                        iconSize = 26;
+                                      } else {
+                                        buttonGradient =
+                                            AppColors.primaryGradient;
+                                        shadowColor = AppColors.primary;
+                                        buttonIcon = Icons.add_rounded;
+                                        iconSize = 32;
+                                      }
+
+                                      final rotationAngle = isSpecialScreen
+                                          ? _rotationAnimation.value * 3.14159
+                                          : 0.0;
+
+                                      return AnimatedContainer(
+                                        duration: const Duration(
+                                          milliseconds: 300,
+                                        ),
+                                        width: 64,
+                                        height: 64,
+                                        decoration: BoxDecoration(
+                                          gradient: buttonGradient,
+                                          shape: BoxShape.circle,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: shadowColor.withValues(
+                                                alpha: 0.4,
+                                              ),
+                                              blurRadius: 12,
+                                              offset: const Offset(0, 4),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Transform.rotate(
+                                          angle: rotationAngle,
+                                          child: Transform.rotate(
+                                            angle: isCircleScreen ? -1.5708 : 0,
+                                            child: Icon(
+                                              buttonIcon,
+                                              color: Colors.white,
+                                              size: iconSize,
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                              IgnorePointer(
+                                ignoring:
+                                    isTutorialActive ||
+                                    isStampTutorialActive ||
+                                    isCircleTutorialActive ||
+                                    isProfileTutorialActive,
+                                child: _NavItem(
+                                  key: _stampNavKey,
+                                  icon: Icons.collections_bookmark_outlined,
+                                  activeIcon:
+                                      Icons.collections_bookmark_rounded,
+                                  label: AppMessages.stamp.navLabel,
+                                  isActive: currentIndex == 2,
+                                  onTap: () => context.go('/stamps'),
+                                ),
+                              ),
+                              IgnorePointer(
+                                ignoring:
+                                    isStampTutorialActive ||
+                                    isCircleTutorialActive ||
+                                    isProfileTutorialActive,
+                                child: _NavItem(
+                                  key: _myPageNavKey,
+                                  icon: Icons.person_outline,
+                                  activeIcon: Icons.person_rounded,
+                                  label: AppMessages.profile.navLabel,
+                                  isActive: currentIndex == 3,
+                                  onTap: () {
+                                    // チュートリアル Step 0: マイページへ遷移して次へ
+                                    if (tutorialStep ==
+                                        TutorialPhase1Step.homeWelcome) {
+                                      context.go('/profile');
+                                      ref
+                                          .read(tutorialPhase1Provider.notifier)
+                                          .advance();
+                                      return;
+                                    }
+                                    if (currentIndex == 3) {
+                                      ref
+                                          .read(
+                                            profileScrollToTopProvider.notifier,
+                                          )
+                                          .state++;
+                                    } else {
+                                      context.go('/profile');
+                                    }
+                                  },
+                                ),
+                              ),
+                            ],
                           ),
-                          IgnorePointer(
-                            ignoring:
-                                isTutorialActive ||
-                                isStampTutorialActive ||
-                                isCircleTutorialActive ||
-                                isProfileTutorialActive,
-                            child: _NavItem(
-                              key: _stampNavKey,
-                              icon: Icons.collections_bookmark_outlined,
-                              activeIcon: Icons.collections_bookmark_rounded,
-                              label: AppMessages.stamp.navLabel,
-                              isActive: currentIndex == 2,
-                              onTap: () => context.go('/stamps'),
-                            ),
-                          ),
-                          IgnorePointer(
-                            ignoring:
-                                isStampTutorialActive ||
-                                isCircleTutorialActive ||
-                                isProfileTutorialActive,
-                            child: _NavItem(
-                              key: _myPageNavKey,
-                              icon: Icons.person_outline,
-                              activeIcon: Icons.person_rounded,
-                              label: AppMessages.profile.navLabel,
-                              isActive: currentIndex == 3,
-                              onTap: () {
-                                // チュートリアル Step 0: マイページへ遷移して次へ
-                                if (tutorialStep ==
-                                    TutorialPhase1Step.homeWelcome) {
-                                  context.go('/profile');
-                                  ref
-                                      .read(tutorialPhase1Provider.notifier)
-                                      .advance();
-                                  return;
-                                }
-                                if (currentIndex == 3) {
-                                  ref
-                                      .read(profileScrollToTopProvider.notifier)
-                                      .state++;
-                                } else {
-                                  context.go('/profile');
-                                }
-                              },
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
@@ -819,9 +949,7 @@ class _MainShellState extends ConsumerState<MainShell>
                         const SizedBox(
                           width: 20,
                           height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.2,
-                          ),
+                          child: CircularProgressIndicator(strokeWidth: 2.2),
                         ),
                         const SizedBox(width: 12),
                         Text(
@@ -879,9 +1007,8 @@ class _MainShellState extends ConsumerState<MainShell>
             child: TutorialOverlay(
               message: AppMessages.tutorial.circleFabGuide,
               spotlightRect: _tutorialSpotlightRect,
-              onSpotlightTap: () => ref
-                  .read(tutorialPhase5Provider.notifier)
-                  .markCompleted(),
+              onSpotlightTap: () =>
+                  ref.read(tutorialPhase5Provider.notifier).markCompleted(),
               onMaskTap: () {},
               characterAssetPath: 'assets/onbord/onbord_01.png',
               bubbleBottomOffset:
@@ -978,4 +1105,3 @@ class _NavItem extends StatelessWidget {
     );
   }
 }
-

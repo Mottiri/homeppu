@@ -107,6 +107,8 @@ Gemini（gemini-2.5-flash）では適切な長さ・自然なコメントが生�
 - `lib/features/profile/presentation/screens/profile_screen.dart`
 - `lib/shared/widgets/tutorial_overlay.dart`
 
+**備考**: アプリ全体のパフォーマンス最適化は `docs/specs/2026-03-10_performance_optimization.md` に分離。本チケットはチュートリアル起因の症状に限定。
+
 ---
 
 ## 対応中

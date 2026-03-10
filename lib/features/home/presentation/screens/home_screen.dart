@@ -473,7 +473,8 @@ class _PostsList extends ConsumerStatefulWidget {
   ConsumerState<_PostsList> createState() => _PostsListState();
 }
 
-class _PostsListState extends ConsumerState<_PostsList> {
+class _PostsListState extends ConsumerState<_PostsList>
+    with WidgetsBindingObserver {
   static const int _nativeAdInterval = 10;
   static const double _scrollToTopFabMinOffset = 120;
   static const double _fabShowThreshold = 24;
@@ -488,9 +489,12 @@ class _PostsListState extends ConsumerState<_PostsList> {
   bool _showScrollToTopFab = false;
   double _fabScrollAccumulator = 0;
   int _fabScrollDirection = 0;
-  ProviderSubscription<int>? _homeScrollTopSubscription;
   final GlobalKey _firstPostCardKey = GlobalKey();
   Rect? _lastReportedFirstPostRect;
+  ProviderSubscription<TutorialPhase1Step>? _tutorialStepSubscription;
+  ProviderSubscription<int>? _homeScrollTopSubscription;
+  bool _isResolvingFirstPostRect = false;
+  bool _pendingFirstPostRectRefresh = false;
 
   int _nativeAdCountForPosts(int postsCount) => postsCount ~/ _nativeAdInterval;
 
@@ -507,17 +511,35 @@ class _PostsListState extends ConsumerState<_PostsList> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _loadPosts();
+    _tutorialStepSubscription = ref.listenManual<TutorialPhase1Step>(
+      tutorialPhase1Provider,
+      (prev, next) => _onTutorialStepChanged(next),
+      fireImmediately: true,
+    );
     _homeScrollTopSubscription = ref.listenManual<int>(
       homeScrollToTopProvider,
-      (previous, next) => _scrollToTop(),
+      (_, __) => _scrollToTop(),
     );
-    _loadPosts();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _tutorialStepSubscription?.close();
     _homeScrollTopSubscription?.close();
     super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _refreshFirstPostCardRectIfNeeded();
+      }
+    });
   }
 
   @override
@@ -531,6 +553,66 @@ class _PostsListState extends ConsumerState<_PostsList> {
     if (widget.onFirstPostCardRectChanged == null &&
         oldWidget.onFirstPostCardRectChanged != null) {
       _lastReportedFirstPostRect = null;
+    }
+  }
+
+  void _onTutorialStepChanged(TutorialPhase1Step step) {
+    if (widget.onFirstPostCardRectChanged == null) return;
+    final shouldReport = step == TutorialPhase1Step.homeLongPress;
+    if (!shouldReport || _posts.isEmpty) {
+      _clearFirstPostCardRect();
+      return;
+    }
+    _resolveFirstPostCardRect();
+  }
+
+  void _resolveFirstPostCardRect() {
+    if (_isResolvingFirstPostRect) {
+      _pendingFirstPostRectRefresh = true;
+      return;
+    }
+    _isResolvingFirstPostRect = true;
+    _pendingFirstPostRectRefresh = false;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        _isResolvingFirstPostRect = false;
+        return;
+      }
+      final rect = await resolveRectWithRetry(
+        _firstPostCardKey,
+        ancestorKey: widget.tutorialOverlayAncestorKey,
+      );
+      _isResolvingFirstPostRect = false;
+      if (!mounted) return;
+      if (_lastReportedFirstPostRect != rect) {
+        _lastReportedFirstPostRect = rect;
+        widget.onFirstPostCardRectChanged!(rect);
+      }
+      // ペンディングがあれば再実行
+      if (_pendingFirstPostRectRefresh && mounted) {
+        _pendingFirstPostRectRefresh = false;
+        _resolveFirstPostCardRect();
+      }
+    });
+  }
+
+  void _clearFirstPostCardRect() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_lastReportedFirstPostRect != null) {
+        _lastReportedFirstPostRect = null;
+        widget.onFirstPostCardRectChanged!(null);
+      }
+    });
+  }
+
+  void _refreshFirstPostCardRectIfNeeded() {
+    final currentStep = ref.read(tutorialPhase1Provider);
+    if (currentStep != TutorialPhase1Step.homeLongPress) return;
+    if (_posts.isNotEmpty) {
+      _resolveFirstPostCardRect();
+    } else {
+      _clearFirstPostCardRect();
     }
   }
 
@@ -572,6 +654,9 @@ class _PostsListState extends ConsumerState<_PostsList> {
         _hasMore = snapshot.docs.length == AppConstants.postsPerPage;
         _isLoading = false;
       });
+
+      // 投稿読み込み完了後、チュートリアルが homeLongPress なら rect を再解決（空ならクリア）
+      _refreshFirstPostCardRectIfNeeded();
     } catch (e) {
       debugPrint('Error loading posts: $e');
       setState(() {
@@ -693,31 +778,6 @@ class _PostsListState extends ConsumerState<_PostsList> {
     final tutorialStep = ref.watch(tutorialPhase1Provider);
     final isTutorialHomeLongPress =
         tutorialStep == TutorialPhase1Step.homeLongPress;
-    final shouldReportFirstCardRect = isTutorialHomeLongPress;
-    if (widget.onFirstPostCardRectChanged != null) {
-      if (!shouldReportFirstCardRect || _posts.isEmpty) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          if (_lastReportedFirstPostRect != null) {
-            _lastReportedFirstPostRect = null;
-            widget.onFirstPostCardRectChanged!(null);
-          }
-        });
-      } else {
-        WidgetsBinding.instance.addPostFrameCallback((_) async {
-          if (!mounted) return;
-          final rect = await resolveRectWithRetry(
-            _firstPostCardKey,
-            ancestorKey: widget.tutorialOverlayAncestorKey,
-          );
-          if (!mounted) return;
-          if (_lastReportedFirstPostRect != rect) {
-            _lastReportedFirstPostRect = rect;
-            widget.onFirstPostCardRectChanged!(rect);
-          }
-        });
-      }
-    }
 
     if (_isLoading) {
       return Center(
@@ -822,7 +882,7 @@ class _PostsListState extends ConsumerState<_PostsList> {
                     final postIndex = _postIndexFromDisplayIndex(index);
                     final post = _posts[postIndex];
                     final isTutorialTargetCard =
-                        postIndex == 0 && shouldReportFirstCardRect;
+                        postIndex == 0 && isTutorialHomeLongPress;
                     final postCard = PostCard(
                       key: postIndex == 0
                           ? _firstPostCardKey
@@ -843,12 +903,21 @@ class _PostsListState extends ConsumerState<_PostsList> {
                         setState(() {
                           _posts.removeAt(postIndex);
                         });
+                        _refreshFirstPostCardRectIfNeeded();
                       },
                     );
                     if (isTutorialTargetCard) {
-                      return _LongPressProbe(
-                        onLongPress: () {},
-                        child: postCard,
+                      return NotificationListener<SizeChangedLayoutNotification>(
+                        onNotification: (notification) {
+                          _refreshFirstPostCardRectIfNeeded();
+                          return true;
+                        },
+                        child: SizeChangedLayoutNotifier(
+                          child: _LongPressProbe(
+                            onLongPress: () {},
+                            child: postCard,
+                          ),
+                        ),
                       );
                     }
                     return postCard;

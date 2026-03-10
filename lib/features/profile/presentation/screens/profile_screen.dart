@@ -40,7 +40,8 @@ class ProfileScreen extends ConsumerStatefulWidget {
   ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+class _ProfileScreenState extends ConsumerState<ProfileScreen>
+    with WidgetsBindingObserver {
   static const double _scrollToTopFabMinOffset = 120;
   static const double _fabShowThreshold = 24;
   static const double _fabHideThreshold = 72;
@@ -101,6 +102,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   void initState() {
     super.initState();
     _isAdminViewer = ref.read(isAdminProvider).valueOrNull ?? false;
+    WidgetsBinding.instance.addObserver(this);
     _generateHeaderAndColors();
     _loadUser(forceAdmin: _isAdminViewer);
     _adminSubscription = ref.listenManual<AsyncValue<bool>>(isAdminProvider, (
@@ -130,10 +132,27 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _adminSubscription?.close();
     _profileScrollTopSubscription?.close();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // 設定アイコンのスポットライト rect をリセットして再取得を促す
+      if (_settingsIconRect != null) {
+        setState(() => _settingsIconRect = null);
+      }
+      // Phase6 のスポットライトも再計算
+      if (_phase6SpotlightRect != null) {
+        setState(() => _phase6SpotlightRect = null);
+      }
+    });
   }
 
   /// スクロール可能かを再評価

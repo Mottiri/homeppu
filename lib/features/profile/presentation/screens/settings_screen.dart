@@ -59,7 +59,8 @@ class SettingsScreen extends ConsumerStatefulWidget {
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+class _SettingsScreenState extends ConsumerState<SettingsScreen>
+    with WidgetsBindingObserver {
   final ScrollController _settingsScrollController = ScrollController();
   final _bioController = TextEditingController();
   int _selectedAvatarIndex = 0;
@@ -90,6 +91,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadUserData();
   }
 
@@ -123,9 +125,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _settingsScrollController.dispose();
     _bioController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_tutorialSpotlightRect != null) {
+        final currentStep = ref.read(tutorialPhase1Provider);
+        _resolveSpotlightRectForStep(currentStep);
+      }
+    });
   }
 
   /// ヘッダー画像を変更
