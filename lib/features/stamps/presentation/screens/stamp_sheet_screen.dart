@@ -4,6 +4,7 @@ import 'dart:ui';
 
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:confetti/confetti.dart';
+import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -41,6 +42,7 @@ class _RuntimeState {
   bool awaitingServerEcho = false;
   String? awaitingSheetId;
   int awaitingStartedAtMs = 0;
+  bool localBySlotSeeded = false;
   final Map<String, String> localBySlot = <String, String>{};
   final Map<String, String> awaitingBySlot = <String, String>{};
 }
@@ -58,6 +60,7 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
   Future<List<StampSheetDefinition>>? _catalogFuture;
   Future<Map<String, StampSheetLayout>>? _layoutsFuture;
   Timer? _flushDebounce;
+  bool _confettiPlaying = false;
   bool _showStampBar = false;
   bool _isShowingSelectDialog = false;
   bool _isShowingCatalogSheet = false;
@@ -195,8 +198,17 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _confettiController.addListener(_onConfettiChanged);
     _catalogFuture = _sheetService.fetchCatalog();
     _layoutsFuture = _loadLayouts();
+  }
+
+  void _onConfettiChanged() {
+    final playing =
+        _confettiController.state == ConfettiControllerState.playing;
+    if (playing != _confettiPlaying) {
+      setState(() => _confettiPlaying = playing);
+    }
   }
 
   @override
@@ -215,6 +227,7 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
     }
     WidgetsBinding.instance.removeObserver(this);
     _flushDebounce?.cancel();
+    _confettiController.removeListener(_onConfettiChanged);
     _confettiController.dispose();
     unawaited(_flushSnapshotNow());
     super.dispose();
@@ -338,13 +351,6 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
     };
   }
 
-  bool _mapEquals(Map<String, String> a, Map<String, String> b) {
-    if (a.length != b.length) return false;
-    for (final entry in a.entries) {
-      if (b[entry.key] != entry.value) return false;
-    }
-    return true;
-  }
 
   void _scheduleFlush() {
     _flushDebounce?.cancel();
@@ -739,6 +745,7 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
     });
     state.selectedSheetId = sheet.id;
     state.localBySlot.clear();
+    state.localBySlotSeeded = false;
     state.isDirty = true;
     state.mutationSeq += 1;
     state.awaitingServerEcho = false;
@@ -771,6 +778,7 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
     state.selectedSheetId = sheet.id;
     state.pendingNextSheetFrom = null;
     state.localBySlot.clear();
+    state.localBySlotSeeded = false;
     state.isDirty = false;
     // Wait for server echo of the new (empty) active sheet.
     // This avoids briefly applying stale full placements right after switching.
@@ -982,294 +990,270 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                     );
                   }
                   final layouts = layoutSnapshot.data!;
-                  return StreamBuilder<Map<int, List<StampSheetPlacement>>>(
-                    stream: _sheetService.watchAllPlacementsByPage(user.uid),
-                    builder: (context, placementSnapshot) {
-                      final hasPlacementData = placementSnapshot.hasData;
-                      final pageMap =
-                          placementSnapshot.data ??
-                          const <int, List<StampSheetPlacement>>{};
-                      final state = _runtime(user.uid);
-                      final selected = _resolveSelectedSheet(
-                        sheets,
-                        state,
-                        user,
+                  // --- Compute selected sheet (independent of placement stream) ---
+                  final state = _runtime(user.uid);
+
+                  // Bootstrap persisted state (pendingNextSheetFrom, credits, etc.)
+                  // BEFORE early-return paths so that even the "choose first sheet"
+                  // screen has access to pending-next-sheet information.
+                  if (!state.initialized) {
+                    state.initialized = true;
+                    state.localCredits = user.thanksStampCredits;
+                    state.baseVersion = user.stampSheetVersion;
+                    // localBySlot will be populated once the placement stream
+                    // delivers its first snapshot inside StreamBuilder below.
+                    unawaited(() async {
+                      state.pendingNextSheetFrom =
+                        await _getPendingNextSheet(user.uid);
+                      _debugStampFlow('load_pending_next_sheet', {
+                        'user': user.uid,
+                        'pending': state.pendingNextSheetFrom,
+                      });
+                      if (mounted) {
+                        setState(() {});
+                      }
+                      final firstRequired = await _isFirstSheetRequired(user.uid);
+                      _debugPhase3('initial_selection_check', {
+                        'user': user.uid,
+                        'active': user.activeStampSheetId,
+                        'firstRequired': firstRequired,
+                        'pendingNext': state.pendingNextSheetFrom,
+                        'selected': state.selectedSheetId,
+                      });
+                      if (!mounted) return;
+                      if (state.pendingNextSheetFrom != null) {
+                        await _showSelectionDialog(
+                          user: user,
+                          sheets: sheets,
+                          first: false,
+                        );
+                      }
+                    }());
+                  }
+
+                  final selected = _resolveSelectedSheet(
+                    sheets,
+                    state,
+                    user,
+                  );
+                  final needsInitialSheetSelection =
+                    selected == null &&
+                    state.pendingNextSheetFrom == null;
+                  final tutorialSig =
+                    'u=${user.uid}|a=${user.activeStampSheetId}|s=${state.selectedSheetId}|t=${tutorialStep.name}|p=${state.pendingNextSheetFrom}|n=$_phase3Navigating';
+                  if (_lastTutorialDebugSignature != tutorialSig) {
+                    _lastTutorialDebugSignature = tutorialSig;
+                    _debugPhase3('build_state', {
+                      'user': user.uid,
+                      'active': user.activeStampSheetId,
+                      'selected': state.selectedSheetId,
+                      'tutorialStep': tutorialStep.name,
+                      'pendingNext': state.pendingNextSheetFrom,
+                      'navigating': _phase3Navigating,
+                    });
+                  }
+                  if (tutorialStep == TutorialPhase3Step.overview &&
+                    needsInitialSheetSelection) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (!mounted) return;
+                      _resolveSpotlightForStep(
+                        tutorialStep,
+                        needsInitialSheetSelection: true,
                       );
-                      final needsInitialSheetSelection =
-                          selected == null &&
-                          state.pendingNextSheetFrom == null;
-                      final tutorialSig =
-                          'u=${user.uid}|a=${user.activeStampSheetId}|s=${state.selectedSheetId}|t=${tutorialStep.name}|p=${state.pendingNextSheetFrom}|n=$_phase3Navigating';
-                      if (_lastTutorialDebugSignature != tutorialSig) {
-                        _lastTutorialDebugSignature = tutorialSig;
-                        _debugPhase3('build_state', {
-                          'user': user.uid,
-                          'active': user.activeStampSheetId,
-                          'selected': state.selectedSheetId,
-                          'tutorialStep': tutorialStep.name,
-                          'pendingNext': state.pendingNextSheetFrom,
-                          'navigating': _phase3Navigating,
-                        });
-                      }
-                      if (tutorialStep == TutorialPhase3Step.overview &&
-                          needsInitialSheetSelection) {
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          if (!mounted) return;
-                          _resolveSpotlightForStep(
-                            tutorialStep,
-                            needsInitialSheetSelection: true,
-                          );
-                        });
-                      }
-                      final serverBySlot = selected == null
-                          ? const <String, String>{}
-                          : _serverBySlot(pageMap, selected.id);
-                      if (!state.initialized) {
-                        state.initialized = true;
-                        state.localCredits = user.thanksStampCredits;
-                        state.baseVersion = user.stampSheetVersion;
-                        state.localBySlot
-                          ..clear()
-                          ..addAll(serverBySlot);
-                        unawaited(() async {
-                          state.pendingNextSheetFrom =
-                              await _getPendingNextSheet(user.uid);
-                          _debugStampFlow('load_pending_next_sheet', {
-                            'user': user.uid,
-                            'pending': state.pendingNextSheetFrom,
-                          });
-                          if (mounted) {
-                            setState(() {});
-                          }
-                          final firstRequired = await _isFirstSheetRequired(
-                            user.uid,
-                          );
-                          _debugPhase3('initial_selection_check', {
-                            'user': user.uid,
-                            'active': user.activeStampSheetId,
-                            'firstRequired': firstRequired,
-                            'pendingNext': state.pendingNextSheetFrom,
-                            'selected': state.selectedSheetId,
-                          });
-                          if (!mounted) return;
-                          if (state.pendingNextSheetFrom != null) {
-                            await _showSelectionDialog(
-                              user: user,
-                              sheets: sheets,
-                              first: false,
-                            );
-                          }
-                        }());
-                      } else if (!state.isDirty &&
-                          !state.isSending &&
-                          hasPlacementData) {
-                        final awaitingCurrentSheet =
-                            selected != null &&
-                            state.awaitingServerEcho &&
-                            state.awaitingSheetId == selected.id;
-                        final echoMatched =
-                            awaitingCurrentSheet &&
-                            _mapEquals(serverBySlot, state.awaitingBySlot);
-                        final echoExpired =
-                            awaitingCurrentSheet &&
-                            (DateTime.now().millisecondsSinceEpoch -
-                                    state.awaitingStartedAtMs) >
-                                5000;
-                        if (!awaitingCurrentSheet ||
-                            echoMatched ||
-                            echoExpired) {
-                          state.awaitingServerEcho = false;
-                          state.awaitingBySlot.clear();
-                          state.localBySlot
-                            ..clear()
-                            ..addAll(serverBySlot);
-                          state.localCredits = user.thanksStampCredits;
-                          state.baseVersion = user.stampSheetVersion;
-                        }
-                      }
+                    });
+                  }
 
-                      if (selected == null) {
-                        return Stack(
-                          key: _tutorialOverlayStackKey,
-                          clipBehavior: Clip.none,
-                          children: [
-                            Positioned(
-                              left: 0,
-                              right: 0,
-                              top: -appBarReservedHeight,
-                              bottom: -tutorialBottomExtension,
-                              child: IgnorePointer(
-                                child: SizedBox.expand(
-                                  key: _tutorialOverlayCoordinateKey,
-                                ),
-                              ),
+                  // --- Initial sheet selection (no stream needed) ---
+                  if (selected == null) {
+                    return Stack(
+                      key: _tutorialOverlayStackKey,
+                      clipBehavior: Clip.none,
+                      children: [
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          top: -appBarReservedHeight,
+                          bottom: -tutorialBottomExtension,
+                          child: IgnorePointer(
+                            child: SizedBox.expand(
+                              key: _tutorialOverlayCoordinateKey,
                             ),
-                            Center(
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  16,
-                                  16,
-                                  16,
-                                  24,
-                                ),
-                                child: ConstrainedBox(
-                                  constraints: const BoxConstraints(
-                                    maxWidth: 420,
-                                  ),
-                                  child: Card(
-                                    elevation: 2,
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(20),
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text(
-                                            AppMessages
-                                                .stamp
-                                                .chooseFirstSheetTitle,
-                                            style: Theme.of(
-                                              context,
-                                            ).textTheme.titleLarge,
-                                          ),
-                                          const SizedBox(height: 10),
-                                          Text(
-                                            AppMessages
-                                                .tutorial
-                                                .stampInitialSheetSelection,
-                                            textAlign: TextAlign.center,
-                                            style: Theme.of(
-                                              context,
-                                            ).textTheme.bodyMedium,
-                                          ),
-                                          const SizedBox(height: 16),
-                                          FilledButton(
-                                            key: _initialSheetSelectButtonKey,
-                                            onPressed: () async {
-                                              await _openCatalog(
-                                                user: user,
-                                                sheets: sheets,
-                                              );
-                                            },
-                                            child: Text(
-                                              AppMessages.stamp.designSelect,
-                                            ),
-                                          ),
-                                        ],
+                          ),
+                        ),
+                        Center(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 420),
+                              child: Card(
+                                elevation: 2,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(20),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        AppMessages.stamp.chooseFirstSheetTitle,
+                                        style: Theme.of(context).textTheme.titleLarge,
                                       ),
-                                    ),
+                                      const SizedBox(height: 10),
+                                      Text(
+                                        AppMessages.tutorial.stampInitialSheetSelection,
+                                        textAlign: TextAlign.center,
+                                        style: Theme.of(context).textTheme.bodyMedium,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      FilledButton(
+                                        key: _initialSheetSelectButtonKey,
+                                        onPressed: () async {
+                                          await _openCatalog(user: user, sheets: sheets);
+                                        },
+                                        child: Text(AppMessages.stamp.designSelect),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
                             ),
-                            if (!_phase3Navigating &&
-                                tutorialStep == TutorialPhase3Step.overview &&
-                                _tutorialSpotlightRect != null)
-                              Positioned(
-                                left: 0,
-                                right: 0,
-                                top: -appBarReservedHeight,
-                                bottom: -tutorialBottomExtension,
-                                child: TutorialOverlay(
-                                  message: AppMessages
-                                      .tutorial
-                                      .stampInitialSheetSelectionGuide,
-                                  spotlightRect: _tutorialSpotlightRect,
-                                  passThroughSpotlight: true,
-                                  bubbleBottomOffset:
-                                      tutorialBubbleBottomOffset,
-                                  onMaskTap: () {},
-                                  onSpotlightTap: () async {
-                                    await _openCatalog(
-                                      user: user,
-                                      sheets: sheets,
-                                    );
-                                  },
-                                ),
-                              ),
-                          ],
-                        );
-                      }
-
-                      final layout = layouts[selected.id]!;
-                      final hasPendingFromState =
-                          state.pendingNextSheetFrom != null;
-                      final canUndo =
-                          !hasPendingFromState &&
-                          _latestFilledSlotId(layout, state.localBySlot) !=
-                              null;
-                      Future<void> handleUndo() async {
-                        final slotId = _latestFilledSlotId(
-                          layout,
-                          state.localBySlot,
-                        );
-                        if (slotId == null) return;
-                        setState(() {
-                          state.localBySlot.remove(slotId);
-                          state.localCredits += 1;
-                          state.isDirty = true;
-                          state.mutationSeq += 1;
-                        });
-                        _scheduleFlush();
-                        if (tutorialStep == TutorialPhase3Step.undo) {
-                          await ref
-                              .read(tutorialPhase3Provider.notifier)
-                              .markCompleted();
-                        }
-                      }
-
-                      if (hasPendingFromState && _showStampBar) {
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          if (mounted) {
-                            setState(() => _showStampBar = false);
-                          }
-                        });
-                      }
-                      final hasPendingSelection =
-                          state.pendingNextSheetFrom != null;
-                      final signature =
-                          'pending=${state.pendingNextSheetFrom}|showBar=$_showStampBar|hasPending=$hasPendingSelection';
-                      if (_lastFlowDebugSignature != signature) {
-                        _lastFlowDebugSignature = signature;
-                        _debugStampFlow('fab_state', {
-                          'pending': state.pendingNextSheetFrom,
-                          'fabFlag': false,
-                          'showStampBar': _showStampBar,
-                          'hasPendingSelection': hasPendingSelection,
-                        });
-                      }
-
-                      return Stack(
-                        key: _tutorialOverlayStackKey,
-                        clipBehavior: Clip.none,
-                        children: [
+                          ),
+                        ),
+                        if (!_phase3Navigating &&
+                          tutorialStep == TutorialPhase3Step.overview &&
+                          _tutorialSpotlightRect != null)
                           Positioned(
                             left: 0,
                             right: 0,
                             top: -appBarReservedHeight,
                             bottom: -tutorialBottomExtension,
-                            child: IgnorePointer(
-                              child: SizedBox.expand(
-                                key: _tutorialOverlayCoordinateKey,
-                              ),
+                            child: TutorialOverlay(
+                              message: AppMessages.tutorial.stampInitialSheetSelectionGuide,
+                              spotlightRect: _tutorialSpotlightRect,
+                              passThroughSpotlight: true,
+                              bubbleBottomOffset: tutorialBubbleBottomOffset,
+                              onMaskTap: () {},
+                              onSpotlightTap: () async {
+                                await _openCatalog(user: user, sheets: sheets);
+                              },
                             ),
                           ),
-                          Column(
+                      ],
+                    );
+                  }
+
+                  // --- Normal stamp sheet UI ---
+                  final layout = layouts[selected.id]!;
+                  final hasPendingSelection = state.pendingNextSheetFrom != null;
+
+                  if (hasPendingSelection && _showStampBar) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) setState(() => _showStampBar = false);
+                    });
+                  }
+
+                  final signature =
+                    'pending=${state.pendingNextSheetFrom}|showBar=$_showStampBar|hasPending=$hasPendingSelection';
+                  if (_lastFlowDebugSignature != signature) {
+                    _lastFlowDebugSignature = signature;
+                    _debugStampFlow('fab_state', {
+                      'pending': state.pendingNextSheetFrom,
+                      'fabFlag': false,
+                      'showStampBar': _showStampBar,
+                      'hasPendingSelection': hasPendingSelection,
+                    });
+                  }
+
+                  return Stack(
+                    key: _tutorialOverlayStackKey,
+                    clipBehavior: Clip.none,
+                    children: [
+                      // Coordinate space for tutorial overlays
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        top: -appBarReservedHeight,
+                        bottom: -tutorialBottomExtension,
+                        child: IgnorePointer(
+                          child: SizedBox.expand(
+                            key: _tutorialOverlayCoordinateKey,
+                          ),
+                        ),
+                      ),
+                      // -- Placement-dependent content (narrow StreamBuilder scope) --
+                      // Only header + canvas rebuild on placement stream updates.
+                      // Confetti, StampBar, FAB, and tutorials stay outside.
+                      StreamBuilder<Map<int, List<StampSheetPlacement>>>(
+                        stream: _sheetService.watchAllPlacementsByPage(user.uid),
+                        builder: (context, placementSnapshot) {
+                          final hasPlacementData = placementSnapshot.hasData;
+                          final pageMap =
+                            placementSnapshot.data ??
+                            const <int, List<StampSheetPlacement>>{};
+                          final serverBySlot = _serverBySlot(pageMap, selected.id);
+
+                          // State reconciliation — seed localBySlot on the first
+                          // placement snapshot (core initialization already done
+                          // above, before the early-return paths).
+                          if (!state.localBySlotSeeded && hasPlacementData) {
+                            state.localBySlotSeeded = true;
+                            state.localBySlot
+                              ..clear()
+                              ..addAll(serverBySlot);
+                          } else if (!state.isDirty &&
+                            !state.isSending &&
+                            hasPlacementData) {
+                            final awaitingCurrentSheet =
+                              state.awaitingServerEcho &&
+                              state.awaitingSheetId == selected.id;
+                            final echoMatched =
+                              awaitingCurrentSheet &&
+                              mapEquals(serverBySlot, state.awaitingBySlot);
+                            final echoExpired =
+                              awaitingCurrentSheet &&
+                              (DateTime.now().millisecondsSinceEpoch -
+                                state.awaitingStartedAtMs) >
+                              5000;
+                            if (!awaitingCurrentSheet || echoMatched || echoExpired) {
+                              state.awaitingServerEcho = false;
+                              state.awaitingBySlot.clear();
+                              // Only update if data actually changed to avoid
+                              // unnecessary map clear/repopulate on every stream tick
+                              if (!mapEquals(state.localBySlot, serverBySlot)) {
+                                state.localBySlot
+                                  ..clear()
+                                  ..addAll(serverBySlot);
+                              }
+                              state.localCredits = user.thanksStampCredits;
+                              state.baseVersion = user.stampSheetVersion;
+                            }
+                          }
+
+                          final hasPendingFromState = state.pendingNextSheetFrom != null;
+                          final canUndo =
+                            !hasPendingFromState &&
+                            _latestFilledSlotId(layout, state.localBySlot) != null;
+                          Future<void> handleUndo() async {
+                            final slotId = _latestFilledSlotId(layout, state.localBySlot);
+                            if (slotId == null) return;
+                            setState(() {
+                              state.localBySlot.remove(slotId);
+                              state.localCredits += 1;
+                              state.isDirty = true;
+                              state.mutationSeq += 1;
+                            });
+                            _scheduleFlush();
+                            if (tutorialStep == TutorialPhase3Step.undo) {
+                              await ref
+                                .read(tutorialPhase3Provider.notifier)
+                                .markCompleted();
+                            }
+                          }
+
+                          return Column(
                             children: [
                               Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  16,
-                                  8,
-                                  16,
-                                  4,
-                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
                                 child: Row(
                                   children: [
-                                    Icon(
-                                      Icons.star_rounded,
-                                      color: AppColors.accent,
-                                      size: 20,
-                                    ),
-                                    const SizedBox(width: 6),
                                     Expanded(
                                       child: Text(
                                         AppMessages.stamp.creditsLabel(
@@ -1277,20 +1261,14 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                                               ? 0
                                               : state.localCredits,
                                         ),
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.titleMedium,
+                                        style: Theme.of(context).textTheme.titleMedium,
                                       ),
                                     ),
                                     IconButton(
                                       key: _undoActionKey,
                                       onPressed:
-                                          (tutorialStep ==
-                                                      TutorialPhase3Step
-                                                          .inactive ||
-                                                  tutorialStep ==
-                                                      TutorialPhase3Step
-                                                          .undo) &&
+                                          (tutorialStep == TutorialPhase3Step.inactive ||
+                                                  tutorialStep == TutorialPhase3Step.undo) &&
                                               canUndo
                                           ? () => unawaited(handleUndo())
                                           : null,
@@ -1302,12 +1280,7 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                               ),
                               Expanded(
                                 child: Padding(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    16,
-                                    0,
-                                    16,
-                                    110,
-                                  ),
+                                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
                                   child: _SheetCanvas(
                                     sheetAssetPath: selected.assetPath,
                                     layout: layout,
@@ -1316,9 +1289,7 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                                     onLongPress: () {
                                       if (state.pendingNextSheetFrom != null) {
                                         _toast(
-                                          AppMessages
-                                              .stamp
-                                              .chooseNextSheetRequired,
+                                          AppMessages.stamp.chooseNextSheetRequired,
                                           error: true,
                                         );
                                         return;
@@ -1329,245 +1300,203 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                                 ),
                               ),
                             ],
+                          );
+                        },
+                      ),
+                      // -- Confetti (lazy: only in tree when playing) --
+                      if (_confettiPlaying)
+                        Align(
+                          alignment: Alignment.topCenter,
+                          child: ConfettiWidget(
+                            confettiController: _confettiController,
+                            blastDirectionality: BlastDirectionality.explosive,
+                            numberOfParticles: 20,
                           ),
-                          Align(
-                            alignment: Alignment.topCenter,
-                            child: ConfettiWidget(
-                              confettiController: _confettiController,
-                              blastDirectionality:
-                                  BlastDirectionality.explosive,
-                              numberOfParticles: 20,
-                            ),
-                          ),
-                          if (_showStampBar &&
-                              state.pendingNextSheetFrom == null)
-                            _StampBar(
-                              isUnlocked: (type) =>
-                                  _isReactionUnlocked(type, user),
-                              onClose: () =>
-                                  setState(() => _showStampBar = false),
-                              onTap: (type) async {
-                                if (state.pendingNextSheetFrom != null) {
-                                  _toast(
-                                    AppMessages.stamp.chooseNextSheetRequired,
-                                    error: true,
-                                  );
-                                  return;
-                                }
-                                if (!_isReactionUnlocked(type, user)) {
-                                  _toast(
-                                    AppMessages.stamp.stampLocked,
-                                    error: true,
-                                  );
-                                  return;
-                                }
-                                if (state.localCredits <= 0) {
-                                  _toast(
-                                    AppMessages.stamp.creditNotEnough,
-                                    error: true,
-                                  );
-                                  return;
-                                }
-                                final slotId = _nextEmptySlotId(
-                                  layout,
-                                  state.localBySlot,
+                        ),
+                      // -- StampBar (not placement-dependent) --
+                      if (_showStampBar && state.pendingNextSheetFrom == null)
+                        _StampBar(
+                          isUnlocked: (type) => _isReactionUnlocked(type, user),
+                          onClose: () => setState(() => _showStampBar = false),
+                          onTap: (type) async {
+                            if (state.pendingNextSheetFrom != null) {
+                              _toast(AppMessages.stamp.chooseNextSheetRequired, error: true);
+                              return;
+                            }
+                            if (!_isReactionUnlocked(type, user)) {
+                              _toast(AppMessages.stamp.stampLocked, error: true);
+                              return;
+                            }
+                            if (state.localCredits <= 0) {
+                              _toast(AppMessages.stamp.creditNotEnough, error: true);
+                              return;
+                            }
+                            final slotId = _nextEmptySlotId(layout, state.localBySlot);
+                            if (slotId == null) {
+                              if (state.pendingNextSheetFrom == null) {
+                                state.pendingNextSheetFrom = selected.id;
+                                _debugStampFlow(
+                                  'set_pending_on_sheet_full',
+                                  {'sheet': selected.id},
                                 );
-                                if (slotId == null) {
-                                  if (state.pendingNextSheetFrom == null) {
-                                    state.pendingNextSheetFrom = selected.id;
-                                    _debugStampFlow(
-                                      'set_pending_on_sheet_full',
-                                      {'sheet': selected.id},
-                                    );
-                                    await _setPendingNextSheet(
-                                      user.uid,
-                                      selected.id,
-                                    );
-                                    if (mounted) {
-                                      setState(() {});
-                                    }
-                                  }
-                                  _toast(
-                                    AppMessages.stamp.chooseNextSheetRequired,
-                                    error: true,
-                                  );
-                                  return;
-                                }
-                                setState(() {
-                                  state.localBySlot[slotId] = type.value;
-                                  state.localCredits -= 1;
-                                  state.isDirty = true;
-                                  state.mutationSeq += 1;
-                                });
-                                _scheduleFlush();
-                                if (tutorialStep ==
-                                    TutorialPhase3Step.longPressSheet) {
-                                  await ref
-                                      .read(tutorialPhase3Provider.notifier)
-                                      .advance();
-                                }
-                                if (state.localBySlot.length >=
-                                        layout.slots.length &&
-                                    state.pendingNextSheetFrom == null) {
-                                  _confettiController.play();
-                                  state.pendingNextSheetFrom = selected.id;
-                                  _debugStampFlow(
-                                    'sheet_completed_set_pending',
-                                    {
-                                      'sheet': selected.id,
-                                      'filled': state.localBySlot.length,
-                                      'slots': layout.slots.length,
-                                    },
-                                  );
-                                  await _setPendingNextSheet(
-                                    user.uid,
-                                    selected.id,
-                                  );
-                                  if (mounted) {
-                                    await _showSelectionDialog(
-                                      user: user,
-                                      sheets: sheets,
-                                      first: false,
-                                    );
-                                  }
-                                }
-                              },
-                            ),
-                          Positioned(
-                            right: 16,
-                            bottom: 16,
-                            child: SafeArea(
-                              top: false,
-                              child: hasPendingSelection
-                                  ? SizedBox(
-                                      width: 172,
-                                      height: 56,
-                                      child: ElevatedButton.icon(
-                                        onPressed: () async {
-                                          _debugStampFlow('tap_next_sheet_fab');
-                                          final latestSheets =
-                                              await (_catalogFuture ??=
-                                                  _sheetService.fetchCatalog());
-                                          if (!mounted) return;
-                                          await _openCatalog(
-                                            user: user,
-                                            sheets: latestSheets,
-                                          );
-                                        },
-                                        icon: const Icon(
-                                          Icons.collections_bookmark_outlined,
-                                        ),
-                                        label: Text(
-                                          AppMessages
-                                              .stamp
-                                              .chooseNextSheetFabLabel,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        style: ElevatedButton.styleFrom(
-                                          shape: const StadiumBorder(),
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 16,
-                                            vertical: 12,
-                                          ),
-                                        ),
-                                      ),
-                                    )
-                                  : const SizedBox.shrink(),
-                            ),
+                                await _setPendingNextSheet(user.uid, selected.id);
+                                if (mounted) setState(() {});
+                              }
+                              _toast(AppMessages.stamp.chooseNextSheetRequired, error: true);
+                              return;
+                            }
+                            setState(() {
+                              state.localBySlot[slotId] = type.value;
+                              state.localCredits -= 1;
+                              state.isDirty = true;
+                              state.mutationSeq += 1;
+                            });
+                            _scheduleFlush();
+                            if (tutorialStep == TutorialPhase3Step.longPressSheet) {
+                              await ref.read(tutorialPhase3Provider.notifier).advance();
+                            }
+                            if (state.localBySlot.length >= layout.slots.length &&
+                              state.pendingNextSheetFrom == null) {
+                              _confettiController.play();
+                              state.pendingNextSheetFrom = selected.id;
+                              _debugStampFlow('sheet_completed_set_pending', {
+                                'sheet': selected.id,
+                                'filled': state.localBySlot.length,
+                                'slots': layout.slots.length,
+                              });
+                              await _setPendingNextSheet(user.uid, selected.id);
+                              if (mounted) {
+                                await _showSelectionDialog(
+                                  user: user,
+                                  sheets: sheets,
+                                  first: false,
+                                );
+                              }
+                            }
+                          },
+                        ),
+                      // -- FAB (not placement-dependent) --
+                      Positioned(
+                        right: 16,
+                        bottom: 16,
+                        child: SafeArea(
+                          top: false,
+                          child: hasPendingSelection
+                            ? SizedBox(
+                              width: 172,
+                              height: 56,
+                              child: ElevatedButton.icon(
+                                onPressed: () async {
+                                  _debugStampFlow('tap_next_sheet_fab');
+                                  final latestSheets =
+                                      await (_catalogFuture ??= _sheetService.fetchCatalog());
+                                  if (!mounted) return;
+                                  await _openCatalog(user: user, sheets: latestSheets);
+                                },
+                                icon: const Icon(Icons.collections_bookmark_outlined),
+                                label: Text(
+                                  AppMessages.stamp.chooseNextSheetFabLabel,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  shape: const StadiumBorder(),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
+                                ),
+                              ),
+                            )
+                            : const SizedBox.shrink(),
+                        ),
+                      ),
+                      // -- Tutorial overlays (not placement-dependent) --
+                      if (!_phase3Navigating &&
+                        tutorialStep == TutorialPhase3Step.overview)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          top: -appBarReservedHeight,
+                          bottom: -tutorialBottomExtension,
+                          child: TutorialOverlay(
+                            message: AppMessages.tutorial.stampOverview,
+                            onMaskTap: () async {
+                              await ref.read(tutorialPhase3Provider.notifier).advance();
+                            },
+                            bubbleBottomOffset: tutorialBubbleBottomOffset,
                           ),
-                          if (!_phase3Navigating &&
-                              tutorialStep == TutorialPhase3Step.overview)
-                            Positioned(
-                              left: 0,
-                              right: 0,
-                              top: -appBarReservedHeight,
-                              bottom: -tutorialBottomExtension,
-                              child: TutorialOverlay(
-                                message: AppMessages.tutorial.stampOverview,
-                                onMaskTap: () async {
-                                  await ref
-                                      .read(tutorialPhase3Provider.notifier)
-                                      .advance();
-                                },
-                                bubbleBottomOffset: tutorialBubbleBottomOffset,
-                              ),
-                            ),
-                          if (!_phase3Navigating &&
-                              tutorialStep ==
-                                  TutorialPhase3Step.longPressSheet &&
-                              !_showStampBar &&
-                              _tutorialSpotlightRect != null)
-                            Positioned(
-                              left: 0,
-                              right: 0,
-                              top: -appBarReservedHeight,
-                              bottom: -tutorialBottomExtension,
-                              child: TutorialOverlay(
-                                message:
-                                    AppMessages.tutorial.stampLongPressSheet,
-                                spotlightRect: _tutorialSpotlightRect,
-                                passThroughSpotlight: true,
-                                bubbleBottomOffset: tutorialBubbleBottomOffset,
-                                onMaskTap: () {},
-                              ),
-                            ),
-                          if (!_phase3Navigating &&
-                              tutorialStep == TutorialPhase3Step.catalog &&
-                              _tutorialSpotlightRect != null)
-                            Positioned(
-                              left: 0,
-                              right: 0,
-                              top: -appBarReservedHeight,
-                              bottom: -tutorialBottomExtension,
-                              child: TutorialOverlay(
-                                message: AppMessages.tutorial.stampCatalogGuide,
-                                spotlightRect: _tutorialSpotlightRect,
-                                bubbleBottomOffset: tutorialBubbleBottomOffset,
-                                onMaskTap: () {},
-                                onSpotlightTap: () {
-                                  unawaited(_openCatalogDuringTutorial());
-                                },
-                              ),
-                            ),
-                          if (!_phase3Navigating &&
-                              tutorialStep == TutorialPhase3Step.collection &&
-                              _tutorialSpotlightRect != null)
-                            Positioned(
-                              left: 0,
-                              right: 0,
-                              top: -appBarReservedHeight,
-                              bottom: -tutorialBottomExtension,
-                              child: TutorialOverlay(
-                                message:
-                                    AppMessages.tutorial.stampCollectionGuide,
-                                spotlightRect: _tutorialSpotlightRect,
-                                bubbleBottomOffset: tutorialBubbleBottomOffset,
-                                onMaskTap: () {},
-                                onSpotlightTap: () {
-                                  unawaited(_openCollectionDuringTutorial());
-                                },
-                              ),
-                            ),
-                          if (!_phase3Navigating &&
-                              tutorialStep == TutorialPhase3Step.undo &&
-                              _tutorialSpotlightRect != null)
-                            Positioned(
-                              left: 0,
-                              right: 0,
-                              top: -appBarReservedHeight,
-                              bottom: -tutorialBottomExtension,
-                              child: TutorialOverlay(
-                                message: AppMessages.tutorial.stampUndoGuide,
-                                spotlightRect: _tutorialSpotlightRect,
-                                passThroughSpotlight: true,
-                                bubbleBottomOffset: tutorialBubbleBottomOffset,
-                                onMaskTap: () {},
-                              ),
-                            ),
-                        ],
-                      );
-                    },
+                        ),
+                      if (!_phase3Navigating &&
+                        tutorialStep == TutorialPhase3Step.longPressSheet &&
+                        !_showStampBar &&
+                        _tutorialSpotlightRect != null)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          top: -appBarReservedHeight,
+                          bottom: -tutorialBottomExtension,
+                          child: TutorialOverlay(
+                            message: AppMessages.tutorial.stampLongPressSheet,
+                            spotlightRect: _tutorialSpotlightRect,
+                            passThroughSpotlight: true,
+                            bubbleBottomOffset: tutorialBubbleBottomOffset,
+                            onMaskTap: () {},
+                          ),
+                        ),
+                      if (!_phase3Navigating &&
+                        tutorialStep == TutorialPhase3Step.catalog &&
+                        _tutorialSpotlightRect != null)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          top: -appBarReservedHeight,
+                          bottom: -tutorialBottomExtension,
+                          child: TutorialOverlay(
+                            message: AppMessages.tutorial.stampCatalogGuide,
+                            spotlightRect: _tutorialSpotlightRect,
+                            bubbleBottomOffset: tutorialBubbleBottomOffset,
+                            onMaskTap: () {},
+                            onSpotlightTap: () {
+                              unawaited(_openCatalogDuringTutorial());
+                            },
+                          ),
+                        ),
+                      if (!_phase3Navigating &&
+                        tutorialStep == TutorialPhase3Step.collection &&
+                        _tutorialSpotlightRect != null)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          top: -appBarReservedHeight,
+                          bottom: -tutorialBottomExtension,
+                          child: TutorialOverlay(
+                            message: AppMessages.tutorial.stampCollectionGuide,
+                            spotlightRect: _tutorialSpotlightRect,
+                            bubbleBottomOffset: tutorialBubbleBottomOffset,
+                            onMaskTap: () {},
+                            onSpotlightTap: () {
+                              unawaited(_openCollectionDuringTutorial());
+                            },
+                          ),
+                        ),
+                      if (!_phase3Navigating &&
+                        tutorialStep == TutorialPhase3Step.undo &&
+                        _tutorialSpotlightRect != null)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          top: -appBarReservedHeight,
+                          bottom: -tutorialBottomExtension,
+                          child: TutorialOverlay(
+                            message: AppMessages.tutorial.stampUndoGuide,
+                            spotlightRect: _tutorialSpotlightRect,
+                            passThroughSpotlight: true,
+                            bubbleBottomOffset: tutorialBubbleBottomOffset,
+                            onMaskTap: () {},
+                          ),
+                        ),
+                    ],
                   );
                 },
               );
@@ -1675,10 +1604,12 @@ class _SheetCanvas extends StatelessWidget {
                   top: top + (slot.y * sheetH),
                   width: slot.w * sheetW,
                   height: slot.h * sheetH,
-                  child: IgnorePointer(
-                    child: _PlacedStamp(
-                      assetPath:
-                          _reactionById(bySlot[slot.slotId]!)?.assetPath ?? '',
+                  child: RepaintBoundary(
+                    child: IgnorePointer(
+                      child: _PlacedStamp(
+                        assetPath:
+                            _reactionById(bySlot[slot.slotId]!)?.assetPath ?? '',
+                      ),
                     ),
                   ),
                 ),
@@ -2154,18 +2085,30 @@ class _JellySparkleStampAnimState extends State<_JellySparkleStampAnim>
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _ctrl,
-      builder: (context, child) {
+      builder: (context, _) {
+        final op = _opacity.value;
         return Stack(
           clipBehavior: Clip.none,
           children: [
             // Jelly squish stamp body.
-            Opacity(
-              opacity: _opacity.value,
-              child: Transform.scale(
-                alignment: Alignment.center,
-                scaleX: _scaleX.value,
-                scaleY: _scaleY.value,
-                child: child,
+            // Use Image color modulation instead of Opacity widget
+            // to avoid saveLayer (offscreen buffer) on the GPU.
+            Transform.scale(
+              alignment: Alignment.center,
+              scaleX: _scaleX.value,
+              scaleY: _scaleY.value,
+              child: Padding(
+                padding: const EdgeInsets.all(3),
+                child: Image.asset(
+                  widget.assetPath,
+                  fit: BoxFit.contain,
+                  color: op < 1.0
+                      ? Color.fromRGBO(255, 255, 255, op)
+                      : null,
+                  colorBlendMode:
+                      op < 1.0 ? BlendMode.modulate : null,
+                  errorBuilder: (_, e, s) => const SizedBox(),
+                ),
               ),
             ),
             // Sparkle particles.
@@ -2174,14 +2117,6 @@ class _JellySparkleStampAnimState extends State<_JellySparkleStampAnim>
           ],
         );
       },
-      child: Padding(
-        padding: const EdgeInsets.all(3),
-        child: Image.asset(
-          widget.assetPath,
-          fit: BoxFit.contain,
-          errorBuilder: (context, error, stackTrace) => const SizedBox(),
-        ),
-      ),
     );
   }
 
@@ -2222,18 +2157,24 @@ class _JellySparkleStampAnimState extends State<_JellySparkleStampAnim>
       Color(0x88C77DFF),
       Color(0x88A8E063),
     ];
+    // Apply opacity via TextStyle.color alpha instead of Opacity widget
+    // to avoid saveLayer (offscreen buffer) per particle on the GPU.
+    final baseColor = particleColors[index];
+    final baseShadow = particleShadows[index];
     return Center(
       child: Transform.translate(
         offset: Offset(dx, dy),
-        child: Opacity(
-          opacity: opacity,
-          child: Text(
-            _particleIcons[index],
-            style: TextStyle(
-              fontSize: size,
-              color: particleColors[index],
-              shadows: [Shadow(color: particleShadows[index], blurRadius: 6)],
-            ),
+        child: Text(
+          _particleIcons[index],
+          style: TextStyle(
+            fontSize: size,
+            color: baseColor.withValues(alpha: opacity),
+            shadows: [
+              Shadow(
+                color: baseShadow.withValues(alpha: opacity * baseShadow.a),
+                blurRadius: 6,
+              ),
+            ],
           ),
         ),
       ),
