@@ -62,7 +62,11 @@ functions/lib/
 android/app/google-services*.json
 ios/Runner/GoogleService-Info*.plist
 
-# Claude Code temporary files
+# Claude Code
 tmpclaude-*/
+.claude/settings.local.json
 docs/error/
+
+# Flutter DevTools
+devtools_options.yaml
 
