@@ -56,7 +56,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   final ScrollController _scrollController = ScrollController();
   ProviderSubscription<int>? _profileScrollTopSubscription;
   bool _isScrollable = false;
-  bool _showScrollToTopFab = false;
+  final ValueNotifier<bool> _showScrollToTopFab = ValueNotifier<bool>(false);
   double _fabScrollAccumulator = 0;
   int _fabScrollDirection = 0; // 1: down, -1: up
   bool _isVirtueLoading = false;
@@ -135,6 +135,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     _adminSubscription?.close();
     _profileScrollTopSubscription?.close();
     _scrollController.dispose();
+    _showScrollToTopFab.dispose();
     super.dispose();
   }
 
@@ -167,7 +168,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
 
   void _handlePostsListUpdated() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _updateScrollable();
+      if (!mounted) return;
+      final scrollable =
+          _scrollController.hasClients &&
+          _scrollController.position.maxScrollExtent > 0;
+      _isScrollable = scrollable;
+      // 子のpagination state（hasMore/isLoadingMore等）の変化を
+      // InfiniteScrollListener・LoadMoreFooterに反映するため常にrebuild
+      setState(() {});
     });
   }
 
@@ -179,8 +187,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         curve: Curves.easeOutCubic,
       );
     }
-    if (_showScrollToTopFab) {
-      setState(() => _showScrollToTopFab = false);
+    if (_showScrollToTopFab.value) {
+      _showScrollToTopFab.value = false;
     }
   }
 
@@ -278,8 +286,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       final pixels = notification.metrics.pixels;
 
       if (pixels <= _scrollToTopFabMinOffset) {
-        if (_showScrollToTopFab) {
-          setState(() => _showScrollToTopFab = false);
+        if (_showScrollToTopFab.value) {
+          _showScrollToTopFab.value = false;
         }
         _fabScrollAccumulator = 0;
         _fabScrollDirection = 0;
@@ -292,10 +300,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           _fabScrollAccumulator = 0;
         }
         _fabScrollAccumulator += delta.abs();
-        if (!_showScrollToTopFab &&
+        if (!_showScrollToTopFab.value &&
             _fabScrollAccumulator >= _fabShowThreshold) {
           _fabScrollAccumulator = 0;
-          setState(() => _showScrollToTopFab = true);
+          _showScrollToTopFab.value = true;
         }
       } else if (delta < 0) {
         if (_fabScrollDirection != -1) {
@@ -303,9 +311,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           _fabScrollAccumulator = 0;
         }
         _fabScrollAccumulator += delta.abs();
-        if (_showScrollToTopFab && _fabScrollAccumulator >= _fabHideThreshold) {
+        if (_showScrollToTopFab.value && _fabScrollAccumulator >= _fabHideThreshold) {
           _fabScrollAccumulator = 0;
-          setState(() => _showScrollToTopFab = false);
+          _showScrollToTopFab.value = false;
         }
       }
       return false;
@@ -737,25 +745,31 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 Positioned(
                   right: 24,
                   bottom: MediaQuery.paddingOf(context).bottom + 28,
-                  child: AnimatedSlide(
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeOutCubic,
-                    offset: _showScrollToTopFab
-                        ? Offset.zero
-                        : const Offset(0, 1.2),
-                    child: AnimatedOpacity(
-                      duration: const Duration(milliseconds: 180),
-                      opacity: _showScrollToTopFab ? 1 : 0,
-                      child: IgnorePointer(
-                        ignoring: !_showScrollToTopFab,
-                        child: FloatingActionButton.small(
-                          heroTag: 'profile_scroll_top_fab',
-                          onPressed: _scrollToTop,
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          child: const Icon(Icons.keyboard_arrow_up_rounded),
+                  child: ValueListenableBuilder<bool>(
+                    valueListenable: _showScrollToTopFab,
+                    builder: (context, showFab, child) {
+                      return AnimatedSlide(
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeOutCubic,
+                        offset: showFab
+                            ? Offset.zero
+                            : const Offset(0, 1.2),
+                        child: AnimatedOpacity(
+                          duration: const Duration(milliseconds: 180),
+                          opacity: showFab ? 1 : 0,
+                          child: IgnorePointer(
+                            ignoring: !showFab,
+                            child: child!,
+                          ),
                         ),
-                      ),
+                      );
+                    },
+                    child: FloatingActionButton.small(
+                      heroTag: 'profile_scroll_top_fab',
+                      onPressed: _scrollToTop,
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      child: const Icon(Icons.keyboard_arrow_up_rounded),
                     ),
                   ),
                 ),

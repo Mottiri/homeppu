@@ -347,12 +347,12 @@ class ProfilePostsListState extends State<ProfilePostsList>
       );
     }
 
-    // タブ表示
-    return SliverToBoxAdapter(
-      child: Column(
-        children: [
-          // タブバー
-          Container(
+    // タブ表示（複数Sliverを SliverMainAxisGroup でまとめる）
+    return SliverMainAxisGroup(
+      slivers: [
+        // タブバー
+        SliverToBoxAdapter(
+          child: Container(
             key: widget.tabsContainerKey,
             margin: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
@@ -386,15 +386,15 @@ class ProfilePostsListState extends State<ProfilePostsList>
               ],
             ),
           ),
-          const SizedBox(height: 12),
-          // 投稿リスト
-          _buildPostList(),
-        ],
-      ),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 12)),
+        // 投稿リスト（SliverList.builder で遅延ビルド）
+        _buildPostSliver(),
+      ],
     );
   }
 
-  Widget _buildPostList() {
+  Widget _buildPostSliver() {
     final posts = _currentPosts;
 
     if (posts.isEmpty) {
@@ -413,27 +413,27 @@ class ProfilePostsListState extends State<ProfilePostsList>
           emptyMessage = 'まだ投稿がないよ';
       }
 
-      return Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          children: [
-            Text(
-              _currentTab == 2 ? '⭐' : '📝',
-              style: const TextStyle(fontSize: 48),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              emptyMessage,
-              style: const TextStyle(color: AppColors.textSecondary),
-            ),
-          ],
+      return SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            children: [
+              Text(
+                _currentTab == 2 ? '⭐' : '📝',
+                style: const TextStyle(fontSize: 48),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                emptyMessage,
+                style: const TextStyle(color: AppColors.textSecondary),
+              ),
+            ],
+          ),
         ),
       );
     }
 
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
+    return SliverList.builder(
       itemCount: posts.length + (hasMore ? 1 : 0),
       itemBuilder: (context, index) {
         // ローディングインジケーター（最後のアイテム）

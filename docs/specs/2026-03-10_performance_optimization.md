@@ -2,7 +2,7 @@
 
 **作成日**: 2026-03-10
 **起源**: CT-017（チュートリアルのカクつき）調査から派生
-**ステータス**: #2・#6 Phase1 実装完了、#1/#3〜#5/#7 設計中
+**ステータス**: #2・#6 Phase1・#8 Phase A 実装完了、#8 Phase B・C 保留、#1/#3〜#5/#7 設計中
 **次のアクション担当者**: ユーザー → 次の着手項目を選定
 
 ---
@@ -28,6 +28,7 @@ CT-017自体はチュートリアル起因の症状に限定し、横断的な�
 | 5 | Provider リビルド最適化 | 中 | 低〜中 | なし |
 | 6 | Follow Feed クエリ改善 | 中 | 低（Phase1） | 機能バグ修正を含む |
 | 7 | リストスクロール最適化 | 低 | 低 | 固定高リストのみ対象 |
+| 8 | プロフィール投稿一覧 shrinkWrap 撤去 | 高 | 低 | なし（DevTools実測: Build 31ms） |
 
 ---
 
@@ -227,6 +228,36 @@ tutorial-step Provider は enum 変更時にシェル全体が再構築される
 
 ---
 
+## 8. プロフィール投稿一覧 shrinkWrap 撤去
+
+**DevTools実測で確認済み（2026-03-11）**:
+- Frame 14412: Build 31.0ms / Paint 5.2ms / Raster 10.8ms
+- スクロール開始時にのみ発生するジャンク
+
+**確認済みの問題**:
+- `ProfilePostsList` が `SliverToBoxAdapter` 内で `ListView.builder(shrinkWrap: true, NeverScrollableScrollPhysics)` を使用
+- 全投稿（30件+）を一括でbuild/layoutするため、Build 31msの主因
+- Codex評価でも Rank 1（最有力原因）と判定
+
+**対策（3フェーズ）**:
+- [x] Phase A: `shrinkWrap: true` → `SliverMainAxisGroup` + `SliverList.builder` 変換（実装完了・実機確認済み）
+- [ ] Phase B: `_loadFavorites()` の遅延読み込み化 — 保留（Phase Aで許容範囲まで改善のため）
+- [ ] Phase C: 各投稿カードの `FutureBuilder<DocumentSnapshot>` バッチ化 — 保留（同上）
+
+**既に適用済みの関連最適化**:
+- `_isBottomNavVisible` → `ValueNotifier<bool>` + `ValueListenableBuilder`（main_shell.dart）
+- `_showScrollToTopFab` → `ValueNotifier<bool>` + `ValueListenableBuilder`（profile_screen.dart）
+- 水平スクロールフィルタ追加
+
+**関連ファイル**:
+- `lib/features/profile/presentation/widgets/profile_posts_list.dart`
+- `lib/features/profile/presentation/screens/profile_screen.dart`
+- `lib/features/home/presentation/screens/main_shell.dart`
+
+**詳細設計書**: `docs/specs/2026-03-11_profile_scroll_jank_fix.md`
+
+---
+
 ## 次点候補（将来対応）
 
 ### N+1 読み込み: profile_following_list
@@ -270,3 +301,4 @@ tutorial-step Provider は enum 変更時にシェル全体が再構築される
 5. **#5 Provider リビルド** — Consumer 境界分割
 6. **#4 リアクションアニメーション** — Epic burst 時のみの問題、慎重に調整
 7. **#7 リストスクロール** — 固定高リストのみ、低優先度
+8. **#8 プロフィール投稿一覧 shrinkWrap 撤去** — DevTools実測済み、Phase A 低コスト高効果

@@ -34,7 +34,7 @@ class _MainShellState extends ConsumerState<MainShell>
   late final AnimationController _rotationController;
   late final Animation<double> _rotationAnimation;
   int _previousIndex = 0;
-  bool _isBottomNavVisible = true;
+  final ValueNotifier<bool> _bottomNavVisible = ValueNotifier<bool>(true);
   double _scrollDeltaAccumulator = 0;
   double? _lastScrollPixels;
   int _scrollAccumulatorDirection = 0; // 1: down, -1: up
@@ -109,6 +109,7 @@ class _MainShellState extends ConsumerState<MainShell>
     _phase5Subscription?.close();
     _userSubscription?.close();
     _rotationController.dispose();
+    _bottomNavVisible.dispose();
     super.dispose();
   }
 
@@ -545,8 +546,12 @@ class _MainShellState extends ConsumerState<MainShell>
     );
     final isScrollReactiveScreen =
         currentIndex == 0 || currentIndex == 1 || currentIndex == 3;
-    if (!isScrollReactiveScreen && !_isBottomNavVisible) {
-      _isBottomNavVisible = true;
+    if (!isScrollReactiveScreen && !_bottomNavVisible.value) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_bottomNavVisible.value) {
+          _bottomNavVisible.value = true;
+        }
+      });
     }
     if (currentIndex != _previousIndex) {
       final wasSpecialScreen = _previousIndex == 1;
@@ -600,10 +605,10 @@ class _MainShellState extends ConsumerState<MainShell>
                 _scrollDeltaAccumulator = 0;
               }
               _scrollDeltaAccumulator += delta.abs();
-              if (_isBottomNavVisible &&
+              if (_bottomNavVisible.value &&
                   _scrollDeltaAccumulator >= _hideThreshold) {
                 _scrollDeltaAccumulator = 0;
-                setState(() => _isBottomNavVisible = false);
+                _bottomNavVisible.value = false;
               }
             } else if (delta < 0) {
               if (_scrollAccumulatorDirection != -1) {
@@ -611,10 +616,10 @@ class _MainShellState extends ConsumerState<MainShell>
                 _scrollDeltaAccumulator = 0;
               }
               _scrollDeltaAccumulator += delta.abs();
-              if (!_isBottomNavVisible &&
+              if (!_bottomNavVisible.value &&
                   _scrollDeltaAccumulator >= _showThreshold) {
                 _scrollDeltaAccumulator = 0;
-                setState(() => _isBottomNavVisible = true);
+                _bottomNavVisible.value = true;
               }
             }
             return false;
@@ -629,23 +634,25 @@ class _MainShellState extends ConsumerState<MainShell>
         child: widget.child,
       ),
       extendBody: true,
-      bottomNavigationBar: ClipRect(
-        child: AnimatedAlign(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-          alignment: Alignment.bottomCenter,
-          heightFactor: (_isBottomNavVisible && !forceHideBottomNav) ? 1 : 0,
-          child: AnimatedSlide(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            offset: (_isBottomNavVisible && !forceHideBottomNav)
-                ? Offset.zero
-                : const Offset(0, 1.0),
-            child: AnimatedOpacity(
-              duration: const Duration(milliseconds: 180),
-              opacity: (_isBottomNavVisible && !forceHideBottomNav) ? 1 : 0,
-              child: IgnorePointer(
-                ignoring: !_isBottomNavVisible || forceHideBottomNav,
+      bottomNavigationBar: ValueListenableBuilder<bool>(
+        valueListenable: _bottomNavVisible,
+        builder: (context, isVisible, child) {
+          final show = isVisible && !forceHideBottomNav;
+          return ClipRect(
+            child: AnimatedAlign(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.bottomCenter,
+              heightFactor: show ? 1 : 0,
+              child: AnimatedSlide(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                offset: show ? Offset.zero : const Offset(0, 1.0),
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 180),
+                  opacity: show ? 1 : 0,
+                  child: IgnorePointer(
+                    ignoring: !show,
                 child: NotificationListener<SizeChangedLayoutNotification>(
                   onNotification: (notification) {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -914,10 +921,13 @@ class _MainShellState extends ConsumerState<MainShell>
                 ),
               ),
             ),
-          ),
-        ),
+            ),
+            ),
+          );
+        },
       ),
     );
+
     return Stack(
       key: _tutorialRootStackKey,
       children: [
