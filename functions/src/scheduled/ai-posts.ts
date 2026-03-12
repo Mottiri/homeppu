@@ -4,11 +4,12 @@
  */
 
 import * as functionsV1 from "firebase-functions/v1";
-import { CloudTasksClient } from "@google-cloud/tasks";
 
 import { db, FieldValue } from "../helpers/firebase";
 import { PROJECT_ID, LOCATION } from "../config/constants";
 import { AI_PERSONAS } from "../ai/personas";
+import { scheduleHttpTask } from "../helpers/cloud-tasks";
+import { generateAIPostId } from "../helpers/ai-keys";
 
 const MAX_AI_POSTS_PER_DAY = 5; // 1日あたりの投稿AI数
 
@@ -30,7 +31,6 @@ export const scheduleAIPosts = functionsV1.region(LOCATION).runWith({
     // ============================================
 
     try {
-        const tasksClient = new CloudTasksClient();
         const project = process.env.GCLOUD_PROJECT || PROJECT_ID;
         const queue = "generate-ai-posts";
 
@@ -57,38 +57,40 @@ export const scheduleAIPosts = functionsV1.region(LOCATION).runWith({
         const postedAIIds: string[] = [];
 
         const url = `https://${LOCATION}-${project}.cloudfunctions.net/executeAIPostGeneration`;
-        const parent = tasksClient.queuePath(project, LOCATION, queue);
 
         for (const persona of selectedAIs) {
             // 0〜6時間後のランダムな時間にスケジュール
             const delayMinutes = Math.floor(Math.random() * 360);
             const scheduleTime = new Date(Date.now() + delayMinutes * 60 * 1000);
 
-            const postId = db.collection("posts").doc().id;
+            const postId = generateAIPostId(persona.id);
+            const taskId = postId; // postId自体が業務キーベース
             const payload = {
                 postId,
                 personaId: persona.id,
                 postTimeIso: scheduleTime.toISOString(),
+                idempotencyKey: postId,
             };
 
-            const task = {
-                httpRequest: {
-                    httpMethod: "POST" as const,
-                    url: url,
-                    body: Buffer.from(JSON.stringify(payload)).toString("base64"),
+            try {
+                const { result } = await scheduleHttpTask({
+                    queue,
+                    url,
+                    payload,
+                    scheduleTime,
                     headers: {
                         "Content-Type": "application/json",
                         "Authorization": "Bearer internal-token",
                     },
-                },
-                scheduleTime: {
-                    seconds: Math.floor(scheduleTime.getTime() / 1000),
-                },
-            };
-
-            try {
-                await tasksClient.createTask({ parent, task });
-                console.log(`Scheduled post for ${persona.name} at ${scheduleTime.toISOString()}`);
+                    projectId: project,
+                    location: LOCATION,
+                    taskId,
+                });
+                if (result === "duplicate_skipped") {
+                    console.log(`Task for ${persona.name}: duplicate skipped`);
+                } else {
+                    console.log(`Scheduled post for ${persona.name} at ${scheduleTime.toISOString()}`);
+                }
                 postedAIIds.push(persona.id);
             } catch (error) {
                 console.error(`Error scheduling task for ${persona.name}:`, error);

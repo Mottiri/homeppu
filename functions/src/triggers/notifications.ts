@@ -20,9 +20,51 @@ function resolvePushPolicy(type: string, pushPolicy?: unknown): PushPolicy {
 }
 
 /**
+ * skip判定を集約する関数
+ * 送信不要な理由がある場合はその理由文字列を返す。送信すべき場合はnullを返す。
+ */
+function getSkipReason(
+    userData: FirebaseFirestore.DocumentData | undefined,
+    data: FirebaseFirestore.DocumentData,
+    pushPolicy: PushPolicy
+): string | null {
+    const title = data?.title;
+    const body = data?.body;
+    const type = String(data?.type ?? "system");
+
+    // タイトル/本文がない場合は送信しない
+    if (!title || !body) {
+        return "missing_title_or_body";
+    }
+
+    // 明示的にpushを送らない
+    if (pushPolicy === "never") {
+        return "push_policy_never";
+    }
+
+    // 設定尊重が必要な場合のみユーザー設定を確認
+    if (pushPolicy === "bySettings") {
+        if (!userData) {
+            return "user_not_found";
+        }
+
+        const settings = userData.notificationSettings ?? {};
+        if (type === "comment" && settings.comments === false) {
+            return "comment_notification_disabled";
+        }
+        if (type === "reaction" && settings.reactions === false) {
+            return "reaction_notification_disabled";
+        }
+    }
+
+    return null;
+}
+
+/**
  * 通知ドキュメント作成時に自動でプッシュ通知を送信
  * - 設定で止めるのは comment / reaction のみ
  * - pushPolicy=never で「通知は作るがpushは送らない」を明示できる
+ * - pushStatus 5状態管理 + CAS で重複FCM送信を防止
  */
 export const onNotificationCreated = onDocumentCreated(
     {
@@ -36,109 +78,73 @@ export const onNotificationCreated = onDocumentCreated(
         const data = snap.data();
         const userId = event.params.userId;
         const notificationId = event.params.notificationId;
-        const notificationRef = snap.ref;
+        const notifRef = snap.ref;
 
         const title = data?.title;
         const body = data?.body;
         const type = String(data?.type ?? "system");
         const pushPolicy = resolvePushPolicy(type, data?.pushPolicy);
 
-        // 送信ステータスを先に記録（運用上の追跡性を上げる）
-        await notificationRef.set(
-            {
+        // ユーザードキュメントを取得（skip判定に使用）
+        const userDoc = await db.collection("users").doc(userId).get();
+        const userData = userDoc.data();
+
+        const skipReason = getSkipReason(userData, data, pushPolicy);
+
+        // === 単一トランザクションで初期化+skipped判定+CASを原子的に実行 ===
+        const acquired = await db.runTransaction(async (tx) => {
+            const freshSnap = await tx.get(notifRef);
+            const freshData = freshSnap.data();
+            if (!freshData) return false;
+
+            const currentStatus = freshData.pushStatus;
+
+            // 既に終端状態（sent/failed/skipped/sending）→ 何もしない（巻き戻し防止）
+            // pushStatus未設定（undefined）= 初期状態 = pendingと同等に扱う
+            if (currentStatus && currentStatus !== "pending") {
+                return false;
+            }
+
+            // skipped 判定（CAS取得前）
+            if (skipReason) {
+                tx.update(notifRef, {
+                    pushPolicy,
+                    pushStatus: "skipped",
+                    pushSkippedReason: skipReason,
+                    pushStatusUpdatedAt: FieldValue.serverTimestamp(),
+                });
+                return false; // skipped は送信しない
+            }
+
+            // CAS: pending（または未設定）→ sending に遷移
+            tx.update(notifRef, {
                 pushPolicy,
-                pushStatus: "pending",
-            },
-            { merge: true }
-        );
-
-        // タイトル/本文がない場合は送信しない
-        if (!title || !body) {
-            await notificationRef.set(
-                {
-                    pushStatus: "skipped",
-                    pushSkippedReason: "missing_title_or_body",
-                },
-                { merge: true }
-            );
-            return;
-        }
-
-        // 明示的にpushを送らない
-        if (pushPolicy === "never") {
-            await notificationRef.set(
-                {
-                    pushStatus: "skipped",
-                    pushSkippedReason: "push_policy_never",
-                },
-                { merge: true }
-            );
-            return;
-        }
-
-        // 設定尊重が必要な場合のみユーザー設定を確認
-        if (pushPolicy === "bySettings") {
-            const userDoc = await db.collection("users").doc(userId).get();
-            if (!userDoc.exists) {
-                await notificationRef.set(
-                    {
-                        pushStatus: "skipped",
-                        pushSkippedReason: "user_not_found",
-                    },
-                    { merge: true }
-                );
-                return;
-            }
-
-            const settings = userDoc.data()?.notificationSettings ?? {};
-            if (type === "comment" && settings.comments === false) {
-                await notificationRef.set(
-                    {
-                        pushStatus: "skipped",
-                        pushSkippedReason: "settings_disabled_comments",
-                    },
-                    { merge: true }
-                );
-                return;
-            }
-            if (type === "reaction" && settings.reactions === false) {
-                await notificationRef.set(
-                    {
-                        pushStatus: "skipped",
-                        pushSkippedReason: "settings_disabled_reactions",
-                    },
-                    { merge: true }
-                );
-                return;
-            }
-        }
-
-        try {
-            await sendPushOnly(userId, String(title), String(body), {
-                ...data,
-                notificationId,
+                pushStatus: "sending",
             });
+            return true;
+        });
 
-            await notificationRef.set(
-                {
-                    pushStatus: "sent",
-                    pushSentAt: FieldValue.serverTimestamp(),
-                },
-                { merge: true }
-            );
-        } catch (error: unknown) {
-            const errorCode =
-                error && typeof error === "object" && "code" in error
-                    ? String((error as { code?: unknown }).code ?? "unknown")
-                    : "unknown";
+        if (!acquired) return; // 送信権を獲得できなかった or skipped
 
-            await notificationRef.set(
-                {
-                    pushStatus: "error",
-                    pushErrorCode: errorCode,
-                },
-                { merge: true }
-            );
+        // FCM送信（送信権を獲得した1実行のみがここに到達）
+        const pushData = {
+            ...data,
+            notificationId,
+        };
+        const result = await sendPushOnly(userId, String(title), String(body), pushData);
+
+        // 送信結果に応じてステータス更新
+        if (result.outcome === "skipped") {
+            await notifRef.update({
+                pushStatus: "skipped",
+                pushSkippedReason: result.skippedReason ?? "unknown",
+                pushStatusUpdatedAt: FieldValue.serverTimestamp(),
+            });
+        } else {
+            await notifRef.update({
+                pushStatus: result.outcome, // "sent" or "failed"
+                pushStatusUpdatedAt: FieldValue.serverTimestamp(),
+            });
         }
     }
 );
@@ -156,6 +162,7 @@ export const onCommentCreatedNotify = onDocumentCreated(
         if (!snap) return;
 
         const commentData = snap.data();
+        const commentId = event.params.commentId;
         const postId = commentData.postId;
         const commenterName = commentData.userDisplayName;
         const commenterId = commentData.userId;
@@ -187,9 +194,11 @@ export const onCommentCreatedNotify = onDocumentCreated(
             }
         }
 
-        // 通知を送信
+        // 通知を送信（sourceIdにcommentIdを使用）
         await sendPushNotification(
             postOwnerId,
+            "comment",
+            commentId,
             "コメント",
             `${commenterName}さんがコメントしました`,
             { postId },
@@ -216,6 +225,7 @@ export const onReactionAddedNotify = onDocumentCreated(
         if (!snap) return;
 
         const reactionData = snap.data();
+        const reactionId = event.params.reactionId;
         const postId = reactionData.postId;
         const reactorId = reactionData.userId;
         const reactorName = reactionData.userDisplayName || "誰か";
@@ -233,9 +243,11 @@ export const onReactionAddedNotify = onDocumentCreated(
             return;
         }
 
-        // 通知を送信
+        // 通知を送信（sourceIdにreactionIdを使用）
         await sendPushNotification(
             postOwnerId,
+            "reaction",
+            reactionId,
             "リアクション",
             `${reactorName}さんがリアクションしました`,
             { postId },

@@ -6,6 +6,7 @@
 import { onCall } from "firebase-functions/v2/https";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { scheduleHttpTask } from "../helpers/cloud-tasks";
+import { generateAIPostId } from "../helpers/ai-keys";
 
 import { db, FieldValue } from "../helpers/firebase";
 import { PROJECT_ID, LOCATION, AI_MODELS } from "../config/constants";
@@ -186,14 +187,16 @@ export const generateAIPosts = onCall(
             const delaySeconds = Math.floor(Math.random() * (600 - 60 + 1)) + 60;
             const scheduleTime = new Date(Date.now() + delaySeconds * 1000);
 
-            const postId = db.collection("posts").doc().id;
+            const postId = generateAIPostId(persona.id);
+            const taskId = postId; // postId自体が業務キーベース
             const payload = {
                 postId,
                 personaId: persona.id,
                 postTimeIso: scheduleTime.toISOString(),
+                idempotencyKey: postId,
             };
 
-            await scheduleHttpTask({
+            const { result } = await scheduleHttpTask({
                 queue,
                 url,
                 payload,
@@ -201,8 +204,9 @@ export const generateAIPosts = onCall(
                 headers: { "Authorization": "Bearer internal-token" },
                 projectId: project,
                 location: LOCATION,
+                taskId,
             });
-            taskCount++;
+            if (result === "created") taskCount++;
         }
 
         return {

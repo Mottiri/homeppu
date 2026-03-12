@@ -17,6 +17,7 @@ import {
     getCircleSystemPrompt,
 } from "../ai/personas";
 import { getPostGenerationPrompt } from "../ai/prompts/post-generation";
+import { generateAICommentId, generateAIReactionId } from "../helpers/ai-keys";
 
 // TEMP DIVERSITY GUARD (2026-02-12)
 // Quick rollback: set this to false.
@@ -360,38 +361,48 @@ ${existingCommentsContext}${mediaNote}
             return;
         }
 
-        // バッチ書き込みで一括処理
-        const batch = db.batch();
+        // deterministic document ID + トランザクションで冪等性を確保
+        const commentId = generateAICommentId(postId, persona.id);
+        const commentRef = db.collection("comments").doc(commentId);
+        const reactionId = generateAIReactionId(postId, persona.id);
+        const reactionRef = db.collection("reactions").doc(reactionId);
 
-        // 1. コメント保存
-        const commentRef = db.collection("comments").doc();
-        batch.set(commentRef, {
-            postId: postId,
-            userId: persona.id,
-            userDisplayName: persona.name,
-            userAvatarIndex: persona.avatarIndex,
-            isAI: true,
-            content: commentText,
-            createdAt: FieldValue.serverTimestamp(),
+        await db.runTransaction(async (tx) => {
+            const [existingComment, existingReaction] = await Promise.all([
+                tx.get(commentRef),
+                tx.get(reactionRef),
+            ]);
+            if (existingComment.exists) return; // 既にあればスキップ（並行リトライ安全）
+
+            tx.set(commentRef, {
+                postId: postId,
+                userId: persona.id,
+                userDisplayName: persona.name,
+                userAvatarIndex: persona.avatarIndex,
+                isAI: true,
+                content: commentText,
+                createdAt: FieldValue.serverTimestamp(),
+            });
+
+            // リアクションが未作成の場合のみ書き込み（別タスクとの衝突防止）
+            if (!existingReaction.exists) {
+                tx.set(reactionRef, {
+                    postId: postId,
+                    userId: persona.id,
+                    userDisplayName: persona.name,
+                    reactionType: reactionType,
+                    createdAt: FieldValue.serverTimestamp(),
+                });
+                tx.update(postRef, {
+                    [`reactions.${reactionType}`]: FieldValue.increment(1),
+                    commentCount: FieldValue.increment(1),
+                });
+            } else {
+                tx.update(postRef, {
+                    commentCount: FieldValue.increment(1),
+                });
+            }
         });
-
-        // 2. リアクション保存 (通知トリガー用)
-        const reactionRef = db.collection("reactions").doc();
-        batch.set(reactionRef, {
-            postId: postId,
-            userId: persona.id,
-            userDisplayName: persona.name,
-            reactionType: reactionType,
-            createdAt: FieldValue.serverTimestamp(),
-        });
-
-        // 3. 投稿のリアクションカウント・コメント数を更新
-        batch.update(postRef, {
-            [`reactions.${reactionType}`]: FieldValue.increment(1),
-            commentCount: FieldValue.increment(1),
-        });
-
-        await batch.commit();
 
         console.log(`AI comment and reaction posted: ${persona.name} (Reaction: ${reactionType})`);
         response.status(200).send("Comment and reaction posted successfully");
@@ -425,38 +436,27 @@ export const generateAIReactionV1 = functionsV1.region(LOCATION).https.onRequest
             return;
         }
 
-        // 重複チェック: この AI が既にこの投稿にリアクションしているか確認
-        const existingReaction = await db.collection("reactions")
-            .where("postId", "==", postId)
-            .where("userId", "==", persona.id)
-            .limit(1)
-            .get();
-
-        if (!existingReaction.empty) {
-            console.log(`Skipping duplicate reaction: ${persona.name} already reacted to post ${postId}`);
-            response.status(200).send("Reaction already exists, skipped");
-            return;
-        }
-
-        const batch = db.batch();
-
-        // 1. リアクション保存
-        const reactionRef = db.collection("reactions").doc();
-        batch.set(reactionRef, {
-            postId: postId,
-            userId: persona.id,
-            userDisplayName: persona.name,
-            reactionType: reactionType,
-            createdAt: FieldValue.serverTimestamp(),
-        });
-
-        // 2. 投稿のリアクションカウント更新
+        // deterministic document ID + トランザクションで冪等性を確保
+        const reactionId = generateAIReactionId(postId, persona.id);
+        const reactionRef = db.collection("reactions").doc(reactionId);
         const postRef = db.collection("posts").doc(postId);
-        batch.update(postRef, {
-            [`reactions.${reactionType}`]: FieldValue.increment(1),
-        });
 
-        await batch.commit();
+        await db.runTransaction(async (tx) => {
+            const existing = await tx.get(reactionRef);
+            if (existing.exists) return; // 既にあればスキップ（並行リトライ安全）
+
+            tx.set(reactionRef, {
+                postId: postId,
+                userId: persona.id,
+                userDisplayName: persona.name,
+                reactionType: reactionType,
+                createdAt: FieldValue.serverTimestamp(),
+            });
+
+            tx.update(postRef, {
+                [`reactions.${reactionType}`]: FieldValue.increment(1),
+            });
+        });
 
         console.log(`AI reaction posted: ${persona.name} -> ${reactionType}`);
         response.status(200).send("Reaction posted successfully");
@@ -518,8 +518,16 @@ export const executeAIPostGeneration = functionsV1.region(LOCATION).runWith({
             throw new Error("Failed to generate content");
         }
 
-        // 投稿作成
+        // 投稿作成（冪等性チェック付き）
         const postRef = db.collection("posts").doc(postId);
+        const existing = await postRef.get();
+        if (existing.exists) {
+            // 投稿が既に存在 → 統計更新も含めてスキップ
+            console.log(`Post ${postId} already exists, skipped`);
+            response.status(200).send("Post already exists, skipped");
+            return;
+        }
+
         const reactions = {
             love: Math.floor(Math.random() * 5),
             praise: Math.floor(Math.random() * 5),
@@ -532,24 +540,29 @@ export const executeAIPostGeneration = functionsV1.region(LOCATION).runWith({
             ? Timestamp.fromDate(new Date(postTimeIso))
             : FieldValue.serverTimestamp();
 
-        await postRef.set({
-            userId: persona.id,
-            userDisplayName: persona.name,
-            userAvatarIndex: persona.avatarIndex,
-            content: content,
-            postMode: "mix", // 公開範囲
-            circleId: null, // タイムラインのクエリ(where circleId isNull)にマッチさせるため明示的にnullを設定
-            createdAt: createdAt,
-            reactions: reactions,
-            commentCount: 0,
-            isVisible: true,
-        });
-
-        // ユーザーの統計更新
+        // 投稿作成 + 統計更新をトランザクションで実行
         const totalReactions = Object.values(reactions).reduce((a, b) => a + b, 0);
-        await db.collection("users").doc(persona.id).update({
-            totalPosts: FieldValue.increment(1),
-            totalPraises: FieldValue.increment(totalReactions),
+        await db.runTransaction(async (tx) => {
+            const postSnap = await tx.get(postRef);
+            if (postSnap.exists) return; // 二重チェック
+
+            tx.set(postRef, {
+                userId: persona.id,
+                userDisplayName: persona.name,
+                userAvatarIndex: persona.avatarIndex,
+                content: content,
+                postMode: "mix", // 公開範囲
+                circleId: null, // タイムラインのクエリ(where circleId isNull)にマッチさせるため明示的にnullを設定
+                createdAt: createdAt,
+                reactions: reactions,
+                commentCount: 0,
+                isVisible: true,
+            });
+
+            tx.update(db.collection("users").doc(persona.id), {
+                totalPosts: FieldValue.increment(1),
+                totalPraises: FieldValue.increment(totalReactions),
+            });
         });
 
         console.log(`Successfully created post for ${persona.name}: ${content}`);

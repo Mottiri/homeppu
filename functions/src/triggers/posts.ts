@@ -3,8 +3,10 @@
  * Phase 5: index.ts から分離
  */
 
+import { createHash } from "crypto";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { scheduleHttpTask } from "../helpers/cloud-tasks";
+import { deterministicShuffle, generateAICommentId, generateAIReactionId } from "../helpers/ai-keys";
 
 import { db } from "../helpers/firebase";
 import { PROJECT_ID, LOCATION, QUEUE_NAME } from "../config/constants";
@@ -153,16 +155,14 @@ export const onPostCreated = onDocumentCreated(
 
             console.log(`Using ${selectedPersonas.length} circle AIs for comments`);
         } else {
-            // 一般投稿：ランダムに1〜5人のAIを選択
-            const commentCount = Math.floor(Math.random() * 5) + 1;
-            selectedPersonas = [...AI_PERSONAS]
-                .sort(() => Math.random() - 0.5)
-                .slice(0, commentCount);
+            // 一般投稿：postIdシードのdeterministic shuffleでAIを選択
+            const shuffledForComment = deterministicShuffle(AI_PERSONAS, postId);
+            const commentCountHash = createHash("sha256").update(`${postId}-comment-count`).digest();
+            const commentCount = (commentCountHash[0] % 5) + 1; // 1-5の範囲でdeterministic
+            selectedPersonas = shuffledForComment.slice(0, commentCount);
 
             console.log(`Using ${selectedPersonas.length} general AIs for comments`);
         }
-
-        let _totalComments = 0;
 
         // 投稿者の名前を取得
         const posterName = postData.userDisplayName || "投稿者";
@@ -173,94 +173,122 @@ export const onPostCreated = onDocumentCreated(
 
         const project = process.env.GCLOUD_PROJECT || PROJECT_ID;
 
-        // Cloud Tasks クライアント
+        // Cloud Tasks: コメントタスクを並列投入
+        const commentTargetUrl = `https://${LOCATION}-${project}.cloudfunctions.net/generateAICommentV1`;
 
-        for (let i = 0; i < selectedPersonas.length; i++) {
-            const persona = selectedPersonas[i];
-            const delayMinutes = delays[i];
+        const commentResults = await Promise.allSettled(
+            selectedPersonas.map((persona, i) => {
+                const delayMinutes = delays[i];
+                const scheduleTime = new Date(Date.now() + delayMinutes * 60 * 1000);
+                const idempotencyKey = generateAICommentId(postId, persona.id);
 
-            const scheduleTime = new Date(Date.now() + delayMinutes * 60 * 1000);
-
-            try {
-                const payload = {
-                    postId: postId,
-                    postContent: postData.content || "",
-                    userDisplayName: posterName,
-                    personaId: persona.id,
-                    personaName: persona.name,
-                    personaGender: persona.gender,
-                    personaAgeGroup: persona.ageGroup,
-                    personaOccupation: persona.occupation,
-                    personaPersonality: persona.personality,
-                    personaPraiseStyle: persona.praiseStyle,
-                    personaAvatarIndex: persona.avatarIndex,
-                    mediaDescriptions: mediaDescriptions,
-                    isCirclePost: isCirclePost,
-                    circleName: isCirclePost ? circleName : "",
-                    circleDescription: isCirclePost ? circleDescription : "",
-                    circleGoal: isCirclePost ? circleGoal : "",
-                    circleRules: isCirclePost ? circleRules : "",
-                };
-
-                const targetUrl = `https://${LOCATION}-${project}.cloudfunctions.net/generateAICommentV1`;
-
-                console.log(`Enqueuing task for ${persona.name} to ${targetUrl}`);
-
-                await scheduleHttpTask({
+                return scheduleHttpTask({
                     queue: QUEUE_NAME,
-                    url: targetUrl,
-                    payload,
+                    url: commentTargetUrl,
+                    payload: {
+                        postId: postId,
+                        postContent: postData.content || "",
+                        userDisplayName: posterName,
+                        personaId: persona.id,
+                        personaName: persona.name,
+                        personaGender: persona.gender,
+                        personaAgeGroup: persona.ageGroup,
+                        personaOccupation: persona.occupation,
+                        personaPersonality: persona.personality,
+                        personaPraiseStyle: persona.praiseStyle,
+                        personaAvatarIndex: persona.avatarIndex,
+                        mediaDescriptions: mediaDescriptions,
+                        isCirclePost: isCirclePost,
+                        circleName: isCirclePost ? circleName : "",
+                        circleDescription: isCirclePost ? circleDescription : "",
+                        circleGoal: isCirclePost ? circleGoal : "",
+                        circleRules: isCirclePost ? circleRules : "",
+                        idempotencyKey,
+                    },
                     scheduleTime,
                     projectId: project,
                     location: LOCATION,
+                    taskId: idempotencyKey,
                 });
+            })
+        );
 
-                console.log(`Task enqueued for ${persona.name}: delay=${delayMinutes}m, time=${scheduleTime.toISOString()}`);
-                _totalComments++;
-            } catch (error) {
-                console.error(`Error enqueuing task for ${persona.name}:`, error);
+        commentResults.forEach((result, i) => {
+            const persona = selectedPersonas[i];
+            if (result.status === "fulfilled") {
+                const outcome = result.value.result;
+                if (outcome === "duplicate_skipped") {
+                    console.log(`Task for ${persona.name}: duplicate skipped`);
+                } else {
+                    console.log(`Task enqueued for ${persona.name}: delay=${delays[i]}m`);
+                }
+            } else {
+                console.error(`Error enqueuing task for ${persona.name}:`, result.reason);
             }
-        }
+        });
 
         // ===========================================
         // 2. AIリアクションの大量投下 (5〜10件)
         // ===========================================
-        const reactionCount = Math.floor(Math.random() * 6) + 5;
+        // reactionCountもpostIdから決定的に算出（リトライ間で変わらない）
+        const countHash = createHash("sha256").update(`${postId}-reaction-count`).digest();
+        const reactionCount = Math.min(
+            (countHash[0] % 6) + 5, // 5-10の範囲でdeterministic
+            AI_PERSONAS.length
+        );
         console.log(`Scheduling ${reactionCount} reactions (burst)...`);
 
         const POSITIVE_REACTIONS = ["love", "praise", "cheer", "sparkles", "clap", "thumbsup", "smile", "flower", "fire", "nice"];
 
-        for (let i = 0; i < reactionCount; i++) {
-            const persona = AI_PERSONAS[Math.floor(Math.random() * AI_PERSONAS.length)];
-            const reactionType = POSITIVE_REACTIONS[Math.floor(Math.random() * POSITIVE_REACTIONS.length)];
+        // postIdシードのdeterministic shuffleでpersonaを選択（重複なし）
+        // コメントペルソナはgenerateAICommentV1内でリアクションも作成するため除外
+        const commentPersonaIds = new Set(selectedPersonas.map(p => p.id));
+        const nonCommentPersonas = AI_PERSONAS.filter(p => !commentPersonaIds.has(p.id));
+        const shuffled = deterministicShuffle(nonCommentPersonas, postId);
+        const selectedForReaction = shuffled.slice(0, reactionCount);
 
-            const delaySeconds = Math.floor(Math.random() * 3600) + 10;
-            const scheduleTime = new Date(Date.now() + delaySeconds * 1000);
+        const reactionUrl = `https://${LOCATION}-${project}.cloudfunctions.net/generateAIReactionV1`;
 
-            const payload = {
-                postId,
-                personaId: persona.id,
-                personaName: persona.name,
-                reactionType,
-            };
+        const reactionResults = await Promise.allSettled(
+            selectedForReaction.map((persona) => {
+                const reactionHash = createHash("sha256").update(`${postId}-reaction-type-${persona.id}`).digest();
+                const reactionType = POSITIVE_REACTIONS[reactionHash[0] % POSITIVE_REACTIONS.length];
 
-            const url = `https://${LOCATION}-${project}.cloudfunctions.net/generateAIReactionV1`;
+                const delayHash = createHash("sha256").update(`${postId}-reaction-delay-${persona.id}`).digest();
+                const delaySeconds = (delayHash.readUInt16BE(0) % 3600) + 10;
+                const scheduleTime = new Date(Date.now() + delaySeconds * 1000);
 
-            try {
-                await scheduleHttpTask({
+                const idempotencyKey = generateAIReactionId(postId, persona.id);
+
+                return scheduleHttpTask({
                     queue: QUEUE_NAME,
-                    url,
-                    payload,
+                    url: reactionUrl,
+                    payload: {
+                        postId,
+                        personaId: persona.id,
+                        personaName: persona.name,
+                        reactionType,
+                        idempotencyKey,
+                    },
                     scheduleTime,
                     headers: { "Authorization": "Bearer secret-token" },
                     projectId: project,
                     location: LOCATION,
+                    taskId: idempotencyKey,
                 });
-            } catch (error) {
-                console.error(`Error enqueuing reaction for ${persona.name}:`, error);
-            }
-        }
+            })
+        );
 
-        console.log(`Scheduled ${reactionCount} reaction tasks`);
+        let reactionCreated = 0;
+        let reactionDuplicates = 0;
+        reactionResults.forEach((r) => {
+            if (r.status === "fulfilled") {
+                if (r.value.result === "duplicate_skipped") reactionDuplicates++;
+                else reactionCreated++;
+            } else {
+                console.error("Reaction task enqueue failed:", r.reason);
+            }
+        });
+        console.log(`Reaction tasks: ${reactionCreated} created, ${reactionDuplicates} duplicates skipped, ${reactionResults.length - reactionCreated - reactionDuplicates} failed`);
     }
 );
