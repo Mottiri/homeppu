@@ -107,6 +107,20 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
+          "fieldPath": "postId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "comments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
           "fieldPath": "isAI",
           "order": "ASCENDING"
         },

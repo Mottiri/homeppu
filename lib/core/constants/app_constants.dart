@@ -56,7 +56,7 @@ class AppConstants {
 
   // ページネーション
   static const int postsPerPage = 20;
-  static const int commentsPerPage = 10;
+  static const int commentsPerPage = 20;
 
   // 徳システム
   static const int virtueInitial = 100;

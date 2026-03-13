@@ -148,18 +148,20 @@ class ModerationService {
     required String content,
     required String userDisplayName,
     required int userAvatarIndex,
+    String? clientRequestId,
   }) async {
     try {
       final callable = _functions.httpsCallable(
         'createCommentWithModeration',
         options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
       );
-      
+
       final result = await callable.call({
         'postId': postId,
         'content': content,
         'userDisplayName': userDisplayName,
         'userAvatarIndex': userAvatarIndex,
+        if (clientRequestId != null) 'clientRequestId': clientRequestId,
       });
 
       return result.data['commentId'] as String;

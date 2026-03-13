@@ -184,16 +184,6 @@ export const onCommentCreatedNotify = onDocumentCreated(
             return;
         }
 
-        // 未来の投稿（AIの予約投稿）の場合は通知しない
-        if (commentData.scheduledAt) {
-            const scheduledAt = commentData.scheduledAt.toDate();
-            const now = new Date();
-            if (scheduledAt > now) {
-                console.log(`Skipping notification for scheduled comment(scheduledAt: ${scheduledAt.toISOString()})`);
-                return;
-            }
-        }
-
         // 通知を送信（sourceIdにcommentIdを使用）
         await sendPushNotification(
             postOwnerId,

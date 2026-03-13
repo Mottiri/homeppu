@@ -167,9 +167,23 @@ export const onPostCreated = onDocumentCreated(
         // 投稿者の名前を取得
         const posterName = postData.userDisplayName || "投稿者";
 
-        // ランダムな遅延時間を生成
-        const delays = Array.from({ length: selectedPersonas.length }, (_, i) => (i + 1) * 2 + Math.floor(Math.random() * 2))
-            .sort((a, b) => a - b);
+        // deterministic遅延時間を生成（1分〜12時間、1件目は最大30分保証）
+        const MIN_DELAY_MINUTES = 1;
+        const MAX_DELAY_MINUTES = 720; // 12時間
+        const FIRST_COMMENT_MAX_MINUTES = 30; // 1件目の上限
+
+        // persona と delay をペアで管理し、delay 順に sort（persona-delay 対応を維持）
+        const personaDelays = selectedPersonas.map((persona) => {
+            const hash = createHash("sha256")
+                .update(`${postId}-comment-delay-${persona.id}`)
+                .digest();
+            const delay = MIN_DELAY_MINUTES +
+                (hash.readUInt16BE(0) % (MAX_DELAY_MINUTES - MIN_DELAY_MINUTES + 1));
+            return { persona, delay };
+        }).sort((a, b) => a.delay - b.delay);
+
+        // 1件目だけは最大30分に制限（投稿直後に長時間無反応になるのを防ぐ）
+        personaDelays[0].delay = Math.min(personaDelays[0].delay, FIRST_COMMENT_MAX_MINUTES);
 
         const project = process.env.GCLOUD_PROJECT || PROJECT_ID;
 
@@ -177,8 +191,7 @@ export const onPostCreated = onDocumentCreated(
         const commentTargetUrl = `https://${LOCATION}-${project}.cloudfunctions.net/generateAICommentV1`;
 
         const commentResults = await Promise.allSettled(
-            selectedPersonas.map((persona, i) => {
-                const delayMinutes = delays[i];
+            personaDelays.map(({ persona, delay: delayMinutes }) => {
                 const scheduleTime = new Date(Date.now() + delayMinutes * 60 * 1000);
                 const idempotencyKey = generateAICommentId(postId, persona.id);
 
@@ -214,13 +227,13 @@ export const onPostCreated = onDocumentCreated(
         );
 
         commentResults.forEach((result, i) => {
-            const persona = selectedPersonas[i];
+            const { persona, delay } = personaDelays[i];
             if (result.status === "fulfilled") {
                 const outcome = result.value.result;
                 if (outcome === "duplicate_skipped") {
                     console.log(`Task for ${persona.name}: duplicate skipped`);
                 } else {
-                    console.log(`Task enqueued for ${persona.name}: delay=${delays[i]}m`);
+                    console.log(`Task enqueued for ${persona.name}: delay=${delay}m`);
                 }
             } else {
                 console.error(`Error enqueuing task for ${persona.name}:`, result.reason);

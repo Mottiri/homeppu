@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import 'package:timeago/timeago.dart' as timeago;
+import 'package:uuid/uuid.dart';
 import 'dart:async';
 
 import '../../../../core/constants/app_colors.dart';
@@ -38,9 +39,13 @@ class PostDetailScreen extends ConsumerStatefulWidget {
 class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
   final _commentController = TextEditingController();
   bool _isSending = false;
-  Timer? _refreshTimer;
   late final Stream<DocumentSnapshot> _postStream;
-  late final Stream<QuerySnapshot> _commentsStream;
+  List<CommentModel> _comments = [];
+  bool _isLoading = true;
+  bool _isLoadingOlder = false;
+  bool _hasMoreComments = true;
+  DocumentSnapshot? _lastDocument;
+  final _scrollController = ScrollController();
   final GlobalKey _tutorialOverlayStackKey = GlobalKey();
   final GlobalKey _tutorialOverlayCoordinateKey = GlobalKey();
   final GlobalKey _tutorialTargetCommentKey = GlobalKey();
@@ -73,76 +78,412 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         .doc(widget.postId)
         .snapshots();
 
-    _commentsStream = FirebaseFirestore.instance
-        .collection('comments')
-        .where('postId', isEqualTo: widget.postId)
-        .orderBy('createdAt', descending: false)
-        .snapshots();
-
-    // 30秒ごとに画面を更新して、時間経過で表示されるべきコメントを表示する
-    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (mounted) setState(() {});
-    });
+    _loadComments();
+    _scrollController.addListener(_onScroll);
   }
 
   @override
   void dispose() {
-    _refreshTimer?.cancel();
+    _scrollController.dispose();
     _commentController.dispose();
     super.dispose();
   }
 
+  Future<void> _loadComments() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('comments')
+          .where('postId', isEqualTo: widget.postId)
+          .orderBy('createdAt', descending: true)
+          .limit(AppConstants.commentsPerPage)
+          .get();
+
+      final comments = snapshot.docs
+          .map((doc) => CommentModel.fromFirestore(doc))
+          .toList();
+
+      if (!mounted) return;
+      setState(() {
+        _comments = comments;
+        _hasMoreComments = snapshot.docs.length == AppConstants.commentsPerPage;
+        if (snapshot.docs.isNotEmpty) {
+          _lastDocument = snapshot.docs.last;
+        }
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _refreshComments() async {
+    // 過去コメント読み込み中はリフレッシュをスキップ（競合防止）
+    if (_isLoadingOlder) return;
+
+    final snapshot = await FirebaseFirestore.instance
+        .collection('comments')
+        .where('postId', isEqualTo: widget.postId)
+        .orderBy('createdAt', descending: true)
+        .limit(AppConstants.commentsPerPage)
+        .get();
+
+    final serverComments = snapshot.docs
+        .map((doc) => CommentModel.fromFirestore(doc))
+        .toList();
+
+    if (!mounted) return;
+    setState(() {
+      final pendingOptimistic = _isSending
+          ? _comments.where((c) => c.id.startsWith('optimistic_')).toList()
+          : <CommentModel>[];
+
+      final dedupedOptimistic = pendingOptimistic.where((opt) {
+        final reqId = opt.id.replaceFirst('optimistic_', '');
+        return !serverComments.any((s) => s.clientRequestId == reqId);
+      }).toList();
+
+      _comments = [...dedupedOptimistic, ...serverComments];
+      _hasMoreComments = snapshot.docs.length == AppConstants.commentsPerPage;
+      _lastDocument = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
+    });
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 300) {
+      _loadOlderComments();
+    }
+  }
+
+  Future<void> _loadOlderComments() async {
+    if (_isLoadingOlder || !_hasMoreComments || _lastDocument == null) return;
+    setState(() => _isLoadingOlder = true);
+
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('comments')
+          .where('postId', isEqualTo: widget.postId)
+          .orderBy('createdAt', descending: true)
+          .startAfterDocument(_lastDocument!)
+          .limit(AppConstants.commentsPerPage)
+          .get();
+
+      final newComments = snapshot.docs
+          .map((doc) => CommentModel.fromFirestore(doc))
+          .toList();
+
+      if (!mounted) return;
+      setState(() {
+        _comments.addAll(newComments);
+        _hasMoreComments = snapshot.docs.length == AppConstants.commentsPerPage;
+        if (snapshot.docs.isNotEmpty) {
+          _lastDocument = snapshot.docs.last;
+        }
+        _isLoadingOlder = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoadingOlder = false);
+    }
+  }
+
+  List<Widget> _buildCommentSlivers({
+    required List<CommentModel> comments,
+    required PostModel post,
+    required bool isOwnPost,
+    required TutorialPhase2Step? tutorialStep,
+  }) {
+    // b) ターゲットコメントIDの固定
+    final isCommentLongPress = tutorialStep ==
+            TutorialPhase2Step.commentLongPress &&
+        isOwnPost;
+
+    // ターゲットID消失時の再選定
+    if (isCommentLongPress &&
+        _tutorialTargetCommentId != null) {
+      final idStillExists = comments.any(
+        (c) => c.id == _tutorialTargetCommentId,
+      );
+      if (!idStillExists) {
+        debugPrint(
+          '[TUTORIAL_PHASE2] target ID '
+          '$_tutorialTargetCommentId disappeared, '
+          're-selecting',
+        );
+        final replacement = comments
+            .cast<CommentModel?>()
+            .firstWhere(
+              (c) => c!.userId != post.userId,
+              orElse: () => null,
+            );
+        _tutorialTargetCommentId =
+            replacement?.id;
+        _didAutoScrollToComment = false;
+        _commentScrollRetryCount = 0;
+        _tutorialCommentRect = null;
+        _tutorialScrollFallback = false;
+        debugPrint(
+          '[TUTORIAL_PHASE2] re-selected target: '
+          '$_tutorialTargetCommentId',
+        );
+      }
+    }
+
+    // 初回ターゲット検出時にIDを固定
+    if (isCommentLongPress &&
+        _tutorialTargetCommentId == null) {
+      final firstNonOwner = comments
+          .cast<CommentModel?>()
+          .firstWhere(
+            (c) => c!.userId != post.userId,
+            orElse: () => null,
+          );
+      if (firstNonOwner != null) {
+        _tutorialTargetCommentId =
+            firstNonOwner.id;
+        debugPrint(
+          '[TUTORIAL_PHASE2] fixed target ID: '
+          '$_tutorialTargetCommentId',
+        );
+      }
+    }
+
+    final tutorialTargetIndex = isCommentLongPress &&
+            _tutorialTargetCommentId != null
+        ? comments.indexWhere(
+            (c) =>
+                c.id ==
+                _tutorialTargetCommentId,
+          )
+        : -1;
+    final hasTutorialTarget = tutorialTargetIndex >= 0;
+    final commentCount = comments.length;
+    if (_lastLoggedCommentCount != commentCount ||
+        _lastLoggedHasTutorialTarget !=
+            hasTutorialTarget) {
+      debugPrint(
+        '[TUTORIAL_PHASE2] comments=$commentCount '
+        'hasTarget=$hasTutorialTarget '
+        'targetIndex=$tutorialTargetIndex '
+        'targetId=$_tutorialTargetCommentId '
+        'step=$tutorialStep '
+        'isOwnPost=$isOwnPost',
+      );
+      _lastLoggedCommentCount = commentCount;
+      _lastLoggedHasTutorialTarget =
+          hasTutorialTarget;
+    }
+
+    // e) 処理順序の制御: 自動スクロール → rect解決を統合
+    // フォールバック時はrect解決・overlay表示をスキップ
+    if (isCommentLongPress &&
+        hasTutorialTarget &&
+        !_tutorialScrollFallback) {
+      if (!_didAutoScrollToComment) {
+        // Phase 1: スクロール → rect解決
+        _maybeAutoScrollToComment();
+      } else if (_tutorialCommentRect == null) {
+        // Phase 2: スクロール済み、rect再解決
+        WidgetsBinding.instance
+            .addPostFrameCallback((_) {
+          _resolveTutorialCommentRect();
+        });
+      }
+    } else if (!(isCommentLongPress &&
+            hasTutorialTarget) &&
+        _tutorialCommentRect != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() => _tutorialCommentRect = null);
+      });
+    }
+
+    // c) eager build閾値チェック
+    final useEagerBuild = isCommentLongPress &&
+        hasTutorialTarget &&
+        commentCount <= 200;
+
+    // c) コメント200件超の場合はeager buildせずフォールバック
+    if (isCommentLongPress &&
+        hasTutorialTarget &&
+        commentCount > 200 &&
+        !_tutorialScrollFallback) {
+      debugPrint(
+        '[TUTORIAL_PHASE2] fallback activated: '
+        'comments=$commentCount > 200',
+      );
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          _tutorialScrollFallback = true;
+          _didAutoScrollToComment = true;
+        });
+      });
+    }
+
+    // コメントタイルビルダー
+    Widget buildCommentTile(
+      CommentModel comment,
+      bool isTutorialTarget,
+    ) {
+      // f) フォールバック時は全非オーナーコメントに
+      //    onThanksCompletedを付与
+      final isNonOwnerComment =
+          comment.userId != post.userId;
+      final shouldAttachCallback =
+          isCommentLongPress &&
+              (isTutorialTarget ||
+                  (_tutorialScrollFallback &&
+                      isNonOwnerComment));
+      return _CommentTile(
+        // Keep a stable key so long-press flow
+        // is not disposed when tutorial state
+        // switches to inactive.
+        key: ValueKey(comment.id),
+        comment: comment,
+        postOwnerId: post.userId,
+        disableTapActions: isTutorialTarget &&
+            !_tutorialScrollFallback,
+        spotlightCardKey: isTutorialTarget &&
+                !_tutorialScrollFallback
+            ? _tutorialTargetCommentKey
+            : null,
+        onThanksCompleted: shouldAttachCallback
+            ? () async {
+                await ref
+                    .read(
+                      tutorialPhase2Provider
+                          .notifier,
+                    )
+                    .markCompleted();
+              }
+            : null,
+      );
+    }
+
+    // c) eager build切り替え
+    if (useEagerBuild) {
+      return [
+        SliverToBoxAdapter(
+          child: Column(
+            children: [
+              for (int i = 0;
+                  i < comments.length;
+                  i++)
+                buildCommentTile(
+                  comments[i],
+                  hasTutorialTarget &&
+                      i == tutorialTargetIndex,
+                ),
+            ],
+          ),
+        ),
+      ];
+    }
+
+    return [
+      SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            final comment = comments[index];
+            final isTutorialTarget =
+                hasTutorialTarget &&
+                    index == tutorialTargetIndex;
+            return buildCommentTile(
+              comment,
+              isTutorialTarget,
+            );
+          },
+          childCount: comments.length,
+        ),
+      ),
+    ];
+  }
+
   Future<void> _sendComment() async {
     final content = _commentController.text.trim();
-    if (content.isEmpty) return;
+    if (content.isEmpty || _isSending) return;
 
     final user = ref.read(currentUserProvider).valueOrNull;
     if (user == null) return;
 
     setState(() => _isSending = true);
 
+    final clientRequestId = const Uuid().v4();
+
+    final optimisticComment = CommentModel(
+      id: 'optimistic_$clientRequestId',
+      postId: widget.postId,
+      userId: user.uid,
+      userDisplayName: user.displayName,
+      userAvatarIndex: user.avatarIndex,
+      isAI: false,
+      content: content,
+      createdAt: DateTime.now(),
+      thanksLikedByPostOwner: false,
+      clientRequestId: clientRequestId,
+    );
+
+    setState(() {
+      _comments.insert(0, optimisticComment);
+    });
+
     try {
-      // モデレーション付きコメント作成（Cloud Functions経由）
       final moderationService = ref.read(moderationServiceProvider);
-      await moderationService.createCommentWithModeration(
+      final commentId = await moderationService.createCommentWithModeration(
         postId: widget.postId,
         content: content,
         userDisplayName: user.displayName,
         userAvatarIndex: user.avatarIndex,
+        clientRequestId: clientRequestId,
       );
 
-      _commentController.clear();
+      if (!mounted) return;
+      setState(() {
+        final idx = _comments.indexWhere((c) => c.id == optimisticComment.id);
+        if (idx >= 0) {
+          _comments[idx] = optimisticComment.copyWith(id: commentId);
+        }
+        _commentController.clear();
+      });
 
-      // 徳ポイント状態を更新
       ref.invalidate(virtueStatusProvider);
     } on ModerationException catch (e) {
-      if (mounted) {
-        final isCommentRateLimit =
-            e.code == 'resource-exhausted' &&
-            e.message.contains('コメントは60秒で2回までです');
-        if (isCommentRateLimit) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(e.message),
-              backgroundColor: AppColors.error,
-            ),
-          );
-        } else {
-          // ネガティブコンテンツが検出された場合
-          await NegativeContentDialog.show(context: context, message: e.message);
-        }
-        // 徳ポイント状態を更新
-        ref.invalidate(virtueStatusProvider);
-      }
-    } catch (e) {
-      if (mounted) {
+      if (!mounted) return;
+      setState(() {
+        _comments.removeWhere((c) => c.id == optimisticComment.id);
+        _commentController.text = content;
+      });
+
+      final isCommentRateLimit =
+          e.code == 'resource-exhausted' &&
+          e.message.contains('コメントは60秒で2回までです');
+      if (isCommentRateLimit) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(AppMessages.error.general),
+            content: Text(e.message),
             backgroundColor: AppColors.error,
           ),
         );
+      } else {
+        await NegativeContentDialog.show(context: context, message: e.message);
       }
+      ref.invalidate(virtueStatusProvider);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _comments.removeWhere((c) => c.id == optimisticComment.id);
+        _commentController.text = content;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppMessages.error.general),
+          backgroundColor: AppColors.error,
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() => _isSending = false);
@@ -370,13 +711,16 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                             ),
                           ),
                         ),
-                        CustomScrollView(
-                          physics: (tutorialStep ==
-                                      TutorialPhase2Step.commentLongPress &&
-                                  !_tutorialScrollFallback)
-                              ? const NeverScrollableScrollPhysics()
-                              : null,
-                          slivers: [
+                        RefreshIndicator(
+                          onRefresh: _refreshComments,
+                          child: CustomScrollView(
+                            controller: _scrollController,
+                            physics: (tutorialStep ==
+                                        TutorialPhase2Step.commentLongPress &&
+                                    !_tutorialScrollFallback)
+                                ? const NeverScrollableScrollPhysics()
+                                : const AlwaysScrollableScrollPhysics(),
+                            slivers: [
                             // 投稿本体（PostCardウィジェットを再利用）
                             SliverToBoxAdapter(
                               child: _buildPostCard(post, currentUser, isAdmin),
@@ -397,273 +741,80 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                             ),
 
                             // コメントリスト
-                            StreamBuilder<QuerySnapshot>(
-                              stream: _commentsStream,
-                              builder: (context, commentSnapshot) {
-                                if (!commentSnapshot.hasData) {
-                                  return const SliverToBoxAdapter(
-                                    child: Center(
-                                      child: Padding(
-                                        padding: EdgeInsets.all(20),
-                                        child: CircularProgressIndicator(
-                                          color: AppColors.primary,
-                                        ),
-                                      ),
+                            if (_isLoading)
+                              const SliverToBoxAdapter(
+                                child: Center(
+                                  child: Padding(
+                                    padding: EdgeInsets.all(20),
+                                    child: CircularProgressIndicator(
+                                      color: AppColors.primary,
                                     ),
-                                  );
-                                }
-
-                                final comments = commentSnapshot.data!.docs
-                                    .map((doc) => CommentModel.fromFirestore(doc))
-                                    .where((c) => c.isVisibleNow)
-                                    .toList();
-
-                                if (comments.isEmpty) {
-                                  if (_tutorialCommentRect != null) {
-                                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                                      if (!mounted) return;
-                                      setState(() => _tutorialCommentRect = null);
-                                    });
-                                  }
-                                  return SliverToBoxAdapter(
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(40),
-                                      child: Center(
-                                        child: Column(
-                                          children: [
-                                            const Text(
-                                              '💬',
-                                              style: TextStyle(fontSize: 40),
-                                            ),
-                                            const SizedBox(height: 12),
-                                            Text(
-                                              'まだコメントがないよ',
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodyMedium
-                                                  ?.copyWith(
-                                                    color: AppColors.textSecondary,
-                                                  ),
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              '最初のコメントを送ってみよう！',
-                                              style: Theme.of(
-                                                context,
-                                              ).textTheme.bodySmall,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                }
-
-                                // b) ターゲットコメントIDの固定
-                                final isCommentLongPress = tutorialStep ==
-                                        TutorialPhase2Step.commentLongPress &&
-                                    isOwnPost;
-
-                                // ターゲットID消失時の再選定
-                                if (isCommentLongPress &&
-                                    _tutorialTargetCommentId != null) {
-                                  final idStillExists = comments.any(
-                                    (c) => c.id == _tutorialTargetCommentId,
-                                  );
-                                  if (!idStillExists) {
-                                    debugPrint(
-                                      '[TUTORIAL_PHASE2] target ID '
-                                      '$_tutorialTargetCommentId disappeared, '
-                                      're-selecting',
-                                    );
-                                    final replacement = comments
-                                        .cast<CommentModel?>()
-                                        .firstWhere(
-                                          (c) => c!.userId != post.userId,
-                                          orElse: () => null,
-                                        );
-                                    _tutorialTargetCommentId =
-                                        replacement?.id;
-                                    _didAutoScrollToComment = false;
-                                    _commentScrollRetryCount = 0;
-                                    _tutorialCommentRect = null;
-                                    _tutorialScrollFallback = false;
-                                    debugPrint(
-                                      '[TUTORIAL_PHASE2] re-selected target: '
-                                      '$_tutorialTargetCommentId',
-                                    );
-                                  }
-                                }
-
-                                // 初回ターゲット検出時にIDを固定
-                                if (isCommentLongPress &&
-                                    _tutorialTargetCommentId == null) {
-                                  final firstNonOwner = comments
-                                      .cast<CommentModel?>()
-                                      .firstWhere(
-                                        (c) => c!.userId != post.userId,
-                                        orElse: () => null,
-                                      );
-                                  if (firstNonOwner != null) {
-                                    _tutorialTargetCommentId =
-                                        firstNonOwner.id;
-                                    debugPrint(
-                                      '[TUTORIAL_PHASE2] fixed target ID: '
-                                      '$_tutorialTargetCommentId',
-                                    );
-                                  }
-                                }
-
-                                final tutorialTargetIndex = isCommentLongPress &&
-                                        _tutorialTargetCommentId != null
-                                    ? comments.indexWhere(
-                                        (c) =>
-                                            c.id ==
-                                            _tutorialTargetCommentId,
-                                      )
-                                    : -1;
-                                final hasTutorialTarget = tutorialTargetIndex >= 0;
-                                final commentCount = comments.length;
-                                if (_lastLoggedCommentCount != commentCount ||
-                                    _lastLoggedHasTutorialTarget !=
-                                        hasTutorialTarget) {
-                                  debugPrint(
-                                    '[TUTORIAL_PHASE2] comments=$commentCount '
-                                    'hasTarget=$hasTutorialTarget '
-                                    'targetIndex=$tutorialTargetIndex '
-                                    'targetId=$_tutorialTargetCommentId '
-                                    'step=$tutorialStep '
-                                    'isOwnPost=$isOwnPost',
-                                  );
-                                  _lastLoggedCommentCount = commentCount;
-                                  _lastLoggedHasTutorialTarget =
-                                      hasTutorialTarget;
-                                }
-
-                                // e) 処理順序の制御: 自動スクロール → rect解決を統合
-                                // フォールバック時はrect解決・overlay表示をスキップ
-                                if (isCommentLongPress &&
-                                    hasTutorialTarget &&
-                                    !_tutorialScrollFallback) {
-                                  if (!_didAutoScrollToComment) {
-                                    // Phase 1: スクロール → rect解決
-                                    _maybeAutoScrollToComment();
-                                  } else if (_tutorialCommentRect == null) {
-                                    // Phase 2: スクロール済み、rect再解決
-                                    WidgetsBinding.instance
-                                        .addPostFrameCallback((_) {
-                                      _resolveTutorialCommentRect();
-                                    });
-                                  }
-                                } else if (!(isCommentLongPress &&
-                                        hasTutorialTarget) &&
-                                    _tutorialCommentRect != null) {
-                                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                                    if (!mounted) return;
-                                    setState(() => _tutorialCommentRect = null);
-                                  });
-                                }
-
-                                // c) eager build閾値チェック
-                                final useEagerBuild = isCommentLongPress &&
-                                    hasTutorialTarget &&
-                                    commentCount <= 200;
-
-                                // c) コメント200件超の場合はeager buildせずフォールバック
-                                if (isCommentLongPress &&
-                                    hasTutorialTarget &&
-                                    commentCount > 200 &&
-                                    !_tutorialScrollFallback) {
-                                  debugPrint(
-                                    '[TUTORIAL_PHASE2] fallback activated: '
-                                    'comments=$commentCount > 200',
-                                  );
-                                  WidgetsBinding.instance
-                                      .addPostFrameCallback((_) {
-                                    if (!mounted) return;
-                                    setState(() {
-                                      _tutorialScrollFallback = true;
-                                      _didAutoScrollToComment = true;
-                                    });
-                                  });
-                                }
-
-                                // コメントタイルビルダー
-                                Widget buildCommentTile(
-                                  CommentModel comment,
-                                  bool isTutorialTarget,
-                                ) {
-                                  // f) フォールバック時は全非オーナーコメントに
-                                  //    onThanksCompletedを付与
-                                  final isNonOwnerComment =
-                                      comment.userId != post.userId;
-                                  final shouldAttachCallback =
-                                      isCommentLongPress &&
-                                          (isTutorialTarget ||
-                                              (_tutorialScrollFallback &&
-                                                  isNonOwnerComment));
-                                  return _CommentTile(
-                                    // Keep a stable key so long-press flow
-                                    // is not disposed when tutorial state
-                                    // switches to inactive.
-                                    key: ValueKey(comment.id),
-                                    comment: comment,
-                                    postOwnerId: post.userId,
-                                    disableTapActions: isTutorialTarget &&
-                                        !_tutorialScrollFallback,
-                                    spotlightCardKey: isTutorialTarget &&
-                                            !_tutorialScrollFallback
-                                        ? _tutorialTargetCommentKey
-                                        : null,
-                                    onThanksCompleted: shouldAttachCallback
-                                        ? () async {
-                                            await ref
-                                                .read(
-                                                  tutorialPhase2Provider
-                                                      .notifier,
-                                                )
-                                                .markCompleted();
-                                          }
-                                        : null,
-                                  );
-                                }
-
-                                // c) eager build切り替え
-                                if (useEagerBuild) {
-                                  return SliverToBoxAdapter(
-                                    child: Column(
-                                      children: [
-                                        for (int i = 0;
-                                            i < comments.length;
-                                            i++)
-                                          buildCommentTile(
-                                            comments[i],
-                                            hasTutorialTarget &&
-                                                i == tutorialTargetIndex,
+                                  ),
+                                ),
+                              )
+                            else ...[
+                              if (_comments.isEmpty)
+                                SliverToBoxAdapter(
+                                  child: Builder(
+                                    builder: (context) {
+                                      if (_tutorialCommentRect != null) {
+                                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                                          if (!mounted) return;
+                                          setState(() => _tutorialCommentRect = null);
+                                        });
+                                      }
+                                      return Padding(
+                                        padding: const EdgeInsets.all(40),
+                                        child: Center(
+                                          child: Column(
+                                            children: [
+                                              const Text(
+                                                '💬',
+                                                style: TextStyle(fontSize: 40),
+                                              ),
+                                              const SizedBox(height: 12),
+                                              Text(
+                                                'まだコメントがないよ',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodyMedium
+                                                    ?.copyWith(
+                                                      color: AppColors.textSecondary,
+                                                    ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                '最初のコメントを送ってみよう！',
+                                                style: Theme.of(
+                                                  context,
+                                                ).textTheme.bodySmall,
+                                              ),
+                                            ],
                                           ),
-                                      ],
-                                    ),
-                                  );
-                                }
-
-                                return SliverList(
-                                  delegate: SliverChildBuilderDelegate(
-                                    (context, index) {
-                                      final comment = comments[index];
-                                      final isTutorialTarget =
-                                          hasTutorialTarget &&
-                                              index == tutorialTargetIndex;
-                                      return buildCommentTile(
-                                        comment,
-                                        isTutorialTarget,
+                                        ),
                                       );
                                     },
-                                    childCount: comments.length,
                                   ),
-                                );
-                              },
-                            ),
+                                )
+                              else
+                                ..._buildCommentSlivers(
+                                  comments: _comments,
+                                  post: post,
+                                  isOwnPost: isOwnPost,
+                                  tutorialStep: tutorialStep,
+                                ),
+                              if (_isLoadingOlder)
+                                const SliverToBoxAdapter(
+                                  child: Center(
+                                    child: Padding(
+                                      padding: EdgeInsets.all(8),
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ],
+                        ),
                         ),
                         if (isOwnPost && tutorialStep == TutorialPhase2Step.detailIntro)
                           Positioned(

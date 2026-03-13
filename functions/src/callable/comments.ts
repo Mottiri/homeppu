@@ -323,7 +323,7 @@ export const createCommentWithModeration = onCall(
     },
     async (request) => {
         // 認証チェック
-        const { postId, content, userDisplayName, userAvatarIndex } = request.data;
+        const { postId, content, userDisplayName, userAvatarIndex, clientRequestId } = request.data;
         const userId = requireAuth(request, AUTH_ERRORS.USER_MUST_BE_LOGGED_IN);
 
         if (!postId || !content) {
@@ -400,7 +400,7 @@ export const createCommentWithModeration = onCall(
 
         // 3. コメント保存
         const commentRef = db.collection("comments").doc();
-        await commentRef.set({
+        const commentDoc: Record<string, unknown> = {
             postId,
             userId,
             userDisplayName: userDisplayName || "Unknown",
@@ -408,15 +408,22 @@ export const createCommentWithModeration = onCall(
             content,
             isAI: false,
             createdAt: FieldValue.serverTimestamp(),
-            isVisibleNow: true, // 即時表示
-        });
+        };
+        if (clientRequestId && typeof clientRequestId === "string") {
+            commentDoc.clientRequestId = clientRequestId;
+        }
+        await commentRef.set(commentDoc);
 
         // 4. 投稿のコメント数を更新
         await db.collection("posts").doc(postId).update({
             commentCount: FieldValue.increment(1),
         });
 
-        return { commentId: commentRef.id };
+        const result: Record<string, string> = { commentId: commentRef.id };
+        if (clientRequestId && typeof clientRequestId === "string") {
+            result.clientRequestId = clientRequestId;
+        }
+        return result;
     }
 );
 
