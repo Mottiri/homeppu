@@ -335,6 +335,8 @@ class _CircleMessages {
   String get tabJoined => '参加中';
   String get searchNotFound => '見つかりませんでした';
   String get searchError => '検索中にエラーが発生しました';
+  String get createLimitExceeded => 'サークルの作成上限（30個）に達しています';
+  String get searchJoinedTruncated => '参加中のサークルが多いため、一部のサークルが表示されていない可能性があります';
   String get listError => 'エラーが発生しました';
   String get emptyTitle => 'まだサークルがないよ';
   String get emptyDescription => '最初のサークルを作ってみよう！';

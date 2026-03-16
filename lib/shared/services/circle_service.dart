@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
+import '../../core/constants/app_constants.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/circle_model.dart';
 import '../models/post_model.dart';
@@ -188,32 +189,93 @@ class CircleService {
     }
   }
 
-  // サークル検索
-  // セキュリティルールに合わせてORクエリを使用
-  Future<List<CircleModel>> searchCircles(
+  // サークル検索（Cloud Functions callable経由）
+  Future<({
+    List<CircleModel> circles,
+    List<CircleModel> privateOwnerCircles,
+    bool hasMore,
+    ({int memberCount, String id})? nextCursor,
+    bool joinedTruncated,
+  })> searchCircles(
     String query, {
     required String userId,
+    String? category,
+    ({int memberCount, String id})? cursor,
+    bool joinedOnly = false,
   }) async {
-    // Firestoreは部分一致検索をサポートしないため、クライアント側でフィルター
-    // ORクエリ: 公開サークル(mix/humanOnly) OR 自分が作成したサークル
-    final snapshot = await _firestore
-        .collection('circles')
-        .where(
-          Filter.or(
-            Filter('aiMode', whereIn: ['mix', 'humanOnly']),
-            Filter('ownerId', isEqualTo: userId),
-          ),
-        )
-        .get();
+    final functions = FirebaseFunctions.instanceFor(region: AppConstants.functionsRegion);
+    final callable = functions.httpsCallable('searchCircles');
 
-    // クライアント側で名前フィルター
-    final lowerQuery = query.toLowerCase();
-    return snapshot.docs
-        .map((doc) => CircleModel.fromFirestore(doc))
-        .where((c) => !c.isDeleted)
-        .where((c) => c.name.toLowerCase().contains(lowerQuery))
-        .take(20)
-        .toList();
+    final result = await callable.call({
+      'query': query,
+      if (category != null && category != '全て') 'category': category,
+      'limit': 20,
+      if (joinedOnly) 'joinedOnly': true,
+      if (cursor != null)
+        'cursor': {
+          'memberCount': cursor.memberCount,
+          'id': cursor.id,
+        },
+    });
+
+    final data = Map<String, dynamic>.from(result.data as Map);
+    final hasMore = data['hasMore'] as bool? ?? false;
+    final rawCursor = data['nextCursor'];
+    final cursorData = rawCursor != null
+        ? Map<String, dynamic>.from(rawCursor as Map)
+        : null;
+    final nextCursor = cursorData != null
+        ? (
+            memberCount: cursorData['memberCount'] as int,
+            id: cursorData['id'] as String,
+          )
+        : null;
+
+    CircleModel parseCircle(dynamic item) {
+      final json = Map<String, dynamic>.from(item as Map);
+      return CircleModel(
+        id: json['id'] as String,
+        name: json['name'] as String,
+        description: json['description'] as String,
+        category: json['category'] as String,
+        ownerId: json['ownerId'] as String,
+        subOwnerId: json['subOwnerId'] as String?,
+        aiMode: CircleAIMode.values.firstWhere(
+          (e) => e.name == (json['aiMode'] ?? 'mix'),
+          orElse: () => CircleAIMode.mix,
+        ),
+        isPublic: json['isPublic'] as bool? ?? true,
+        memberCount: json['memberCount'] as int? ?? 0,
+        postCount: json['postCount'] as int? ?? 0,
+        iconImageUrl: json['iconImageUrl'] as String?,
+        coverImageUrl: json['coverImageUrl'] as String?,
+        goal: json['goal'] as String? ?? '',
+        recentActivity:
+            DateTime.tryParse(json['recentActivity'] as String? ?? ''),
+        lastHumanPostAt:
+            DateTime.tryParse(json['lastHumanPostAt'] as String? ?? ''),
+        createdAt:
+            DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+                DateTime.now(),
+        memberIds: [],
+      );
+    }
+
+    final circlesList = data['circles'] as List? ?? [];
+    final circles = circlesList.map(parseCircle).toList();
+
+    final privateList = data['privateOwnerCircles'] as List? ?? [];
+    final privateOwnerCircles = privateList.map(parseCircle).toList();
+
+    final joinedTruncated = data['joinedTruncated'] as bool? ?? false;
+
+    return (
+      circles: circles,
+      privateOwnerCircles: privateOwnerCircles,
+      hasMore: hasMore,
+      nextCursor: nextCursor,
+      joinedTruncated: joinedTruncated,
+    );
   }
 
   // サークル詳細を取得
@@ -231,48 +293,36 @@ class CircleService {
     required String name,
     required String description,
     required String category,
-    required String ownerId,
     required CircleAIMode aiMode,
     required String goal,
     bool isPublic = true,
-    String? coverImageUrl,
-    String? iconImageUrl,
     String? rules,
   }) async {
-    final docRef = _firestore.collection('circles').doc();
-
-    final circle = CircleModel(
-      id: docRef.id,
-      name: name,
-      description: description,
-      category: category,
-      ownerId: ownerId,
-      memberIds: [ownerId], // 作成者は自動参加
-      aiMode: aiMode,
-      goal: goal,
-      isPublic: isPublic,
-      createdAt: DateTime.now(),
-      coverImageUrl: coverImageUrl,
-      iconImageUrl: iconImageUrl,
-      memberCount: 1,
-      postCount: 0,
-      rules: rules,
-    );
-
-    await docRef.set(circle.toFirestore());
-    return docRef.id;
+    final functions = FirebaseFunctions.instanceFor(region: AppConstants.functionsRegion);
+    final callable = functions.httpsCallable('createCircle');
+    final result = await callable.call({
+      'name': name,
+      'description': description,
+      'category': category,
+      'aiMode': aiMode.name,
+      'goal': goal,
+      'isPublic': isPublic,
+      if (rules != null) 'rules': rules,
+    });
+    final data = Map<String, dynamic>.from(result.data as Map);
+    return data['circleId'] as String;
   }
 
   // サークル参加
   Future<void> joinCircle(String circleId) async {
-    final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+    final functions = FirebaseFunctions.instanceFor(region: AppConstants.functionsRegion);
     final callable = functions.httpsCallable('joinCircle');
 
     await callable.call({'circleId': circleId});
   }
 
   Future<bool> startCircleBrowseTrial() async {
-    final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+    final functions = FirebaseFunctions.instanceFor(region: AppConstants.functionsRegion);
     final callable = functions.httpsCallable('startCircleBrowseTrial');
     final result = await callable.call();
     final data = Map<String, dynamic>.from(result.data as Map);
@@ -280,14 +330,14 @@ class CircleService {
   }
 
   Future<void> endCircleBrowseTrial() async {
-    final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+    final functions = FirebaseFunctions.instanceFor(region: AppConstants.functionsRegion);
     final callable = functions.httpsCallable('endCircleBrowseTrial');
     await callable.call();
   }
 
   // サークル退会
   Future<void> leaveCircle(String circleId) async {
-    final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+    final functions = FirebaseFunctions.instanceFor(region: AppConstants.functionsRegion);
     final callable = functions.httpsCallable('leaveCircle');
 
     await callable.call({'circleId': circleId});
@@ -327,7 +377,7 @@ class CircleService {
 
   // 参加申請を送信（Cloud Function経由）
   Future<void> sendJoinRequest(String circleId, String userId) async {
-    final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+    final functions = FirebaseFunctions.instanceFor(region: AppConstants.functionsRegion);
     final callable = functions.httpsCallable('sendJoinRequest');
 
     await callable.call({'circleId': circleId});
@@ -377,7 +427,7 @@ class CircleService {
     String circleId,
     String circleName,
   ) async {
-    final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+    final functions = FirebaseFunctions.instanceFor(region: AppConstants.functionsRegion);
     final callable = functions.httpsCallable('approveJoinRequest');
 
     await callable.call({
@@ -393,7 +443,7 @@ class CircleService {
     String circleId,
     String circleName,
   ) async {
-    final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+    final functions = FirebaseFunctions.instanceFor(region: AppConstants.functionsRegion);
     final callable = functions.httpsCallable('rejectJoinRequest');
 
     await callable.call({
@@ -491,7 +541,7 @@ class CircleService {
   /// 関連データ（投稿、コメント、リアクション、申請）も削除
   /// メンバーに通知を送信
   Future<void> deleteCircle({required String circleId, String? reason}) async {
-    final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+    final functions = FirebaseFunctions.instanceFor(region: AppConstants.functionsRegion);
     final callable = functions.httpsCallable('deleteCircle');
 
     await callable.call({'circleId': circleId, 'reason': reason});

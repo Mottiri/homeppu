@@ -78,7 +78,7 @@ class _ReactionButtonState extends ConsumerState<ReactionButton>
       setState(() => _isReacted = false);
       try {
         final functions = FirebaseFunctions.instanceFor(
-          region: 'asia-northeast1',
+          region: AppConstants.functionsRegion,
         );
         final callable = functions.httpsCallable('removeUserReaction');
         await callable.call({
@@ -119,7 +119,7 @@ class _ReactionButtonState extends ConsumerState<ReactionButton>
   Future<void> _sendReactionToServer() async {
     try {
       final functions = FirebaseFunctions.instanceFor(
-        region: 'asia-northeast1',
+        region: AppConstants.functionsRegion,
       );
       final callable = functions.httpsCallable('addUserReaction');
       await callable.call({

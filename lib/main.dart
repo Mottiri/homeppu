@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:timeago/timeago.dart' as timeago;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -37,6 +38,7 @@ void main() async {
   await NotificationService().initialize();
 
   await initializeDateFormatting('ja');
+  timeago.setLocaleMessages('ja', timeago.JaMessages());
 
   runApp(const ProviderScope(child: HomeppuApp()));
 }

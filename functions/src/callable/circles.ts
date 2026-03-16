@@ -11,10 +11,11 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as functionsV1 from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import { scheduleHttpTask } from "../helpers/cloud-tasks";
-import { db, FieldValue } from "../helpers/firebase";
+import { db, FieldValue, FieldPath, Timestamp } from "../helpers/firebase";
 import { requireAuth } from "../helpers/auth";
 import { isAdmin } from "../helpers/admin";
 import { deleteStorageFileFromUrl } from "../helpers/storage";
+import { generateNameTokens } from "../helpers/search-tokens";
 import { PROJECT_ID, LOCATION } from "../config/constants";
 import {
   AUTH_ERRORS,
@@ -32,6 +33,22 @@ async function assertSubscriber(userId: string): Promise<void> {
     throw new HttpsError("not-found", RESOURCE_ERRORS.USER_NOT_FOUND);
   }
   if (userDoc.data()?.isSubscriber !== true) {
+    throw new HttpsError("permission-denied", PERMISSION_ERRORS.EPIC_REACTION_REQUIRES_SUBSCRIPTION);
+  }
+}
+
+/** サブスクまたはトライアルアクティブのいずれかを要求 */
+async function assertSubscriberOrTrial(userId: string): Promise<void> {
+  const userDoc = await db.collection("users").doc(userId).get();
+  if (!userDoc.exists) {
+    throw new HttpsError("permission-denied", PERMISSION_ERRORS.EPIC_REACTION_REQUIRES_SUBSCRIPTION);
+  }
+  const userData = userDoc.data()!;
+  const isSubscriber = userData.isSubscriber === true;
+  const trialStarted = userData.circleTrialLastStartedAt?.toDate?.();
+  const trialEnded = userData.circleTrialLastEndedAt?.toDate?.();
+  const isTrialActive = trialStarted && (!trialEnded || trialEnded < trialStarted);
+  if (!isSubscriber && !isTrialActive) {
     throw new HttpsError("permission-denied", PERMISSION_ERRORS.EPIC_REACTION_REQUIRES_SUBSCRIPTION);
   }
 }
@@ -430,8 +447,8 @@ export const approveJoinRequest = onCall(
 
       // サークルにメンバーを追加
       await db.collection("circles").doc(circleId).update({
-        memberIds: admin.firestore.FieldValue.arrayUnion(applicantId),
-        memberCount: admin.firestore.FieldValue.increment(1),
+        memberIds: FieldValue.arrayUnion(applicantId),
+        memberCount: FieldValue.increment(1),
       });
 
       // 申請者の表示名を取得
@@ -683,8 +700,8 @@ export const joinCircle = onCall(
         }
 
         tx.update(circleRef, {
-          memberIds: admin.firestore.FieldValue.arrayUnion(userId),
-          memberCount: admin.firestore.FieldValue.increment(1),
+          memberIds: FieldValue.arrayUnion(userId),
+          memberCount: FieldValue.increment(1),
         });
       });
 
@@ -733,8 +750,8 @@ export const leaveCircle = onCall(
         }
 
         const updates: Record<string, unknown> = {
-          memberIds: admin.firestore.FieldValue.arrayRemove(userId),
-          memberCount: admin.firestore.FieldValue.increment(-1),
+          memberIds: FieldValue.arrayRemove(userId),
+          memberCount: FieldValue.increment(-1),
         };
 
         if (circleData.subOwnerId === userId) {
@@ -752,5 +769,275 @@ export const leaveCircle = onCall(
       console.error("leaveCircle error:", error);
       throw new HttpsError("internal", "leaveCircle failed");
     }
+  }
+);
+
+/**
+ * サークル検索（Cloud Functions callable）
+ * N-gramトークン + array-contains による部分一致検索
+ * cursorページネーション対応
+ */
+export const searchCircles = onCall(
+  {
+    region: LOCATION,
+    enforceAppCheck: true,
+    timeoutSeconds: 10,
+    memory: "256MiB",
+  },
+  async (request) => {
+    const userId = requireAuth(request, AUTH_ERRORS.UNAUTHENTICATED_ALT);
+
+    await assertSubscriberOrTrial(userId);
+
+    const { query, category, limit: requestLimit, cursor, joinedOnly } = request.data;
+
+    // バリデーション
+    if (!query || typeof query !== "string" || query.trim().length < 1) {
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
+    }
+    if (query.length > 100) {
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
+    }
+    // cursorバリデーション
+    if (cursor) {
+      if (typeof cursor.memberCount !== "number" || typeof cursor.id !== "string") {
+        throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
+      }
+    }
+
+    const searchLimit = Math.min(Math.max(requestLimit || 20, 1), 50);
+    const searchToken = query.toLowerCase().trim();
+    const isJoinedOnly = joinedOnly === true;
+
+    // レスポンス整形ヘルパー
+    const formatCircle = (data: FirebaseFirestore.DocumentData, id: string) => ({
+      id,
+      name: data.name || "",
+      description: data.description || "",
+      category: data.category || "その他",
+      ownerId: data.ownerId || "",
+      subOwnerId: data.subOwnerId || null,
+      aiMode: data.aiMode || "mix",
+      isPublic: data.isPublic ?? true,
+      memberCount: data.memberCount || 0,
+      postCount: data.postCount || 0,
+      iconImageUrl: data.iconImageUrl || null,
+      coverImageUrl: data.coverImageUrl || null,
+      goal: data.goal || "",
+      recentActivity: data.recentActivity?.toDate?.()?.toISOString() || null,
+      lastHumanPostAt: data.lastHumanPostAt?.toDate?.()?.toISOString() || null,
+      createdAt: data.createdAt?.toDate?.()?.toISOString() || null,
+    });
+
+    // --- joinedOnlyモード ---
+    // memberIds array-contains userId で参加サークルを取得し、名前でJSフィルタ
+    // 参加サークル数は通常少数（数十件）なのでページネーション不要
+    if (isJoinedOnly) {
+      let joinedQuery: FirebaseFirestore.Query = db.collection("circles")
+        .where("isDeleted", "==", false)
+        .where("memberIds", "array-contains", userId);
+
+      if (category && category !== "全て") {
+        joinedQuery = joinedQuery.where("category", "==", category);
+      }
+
+      // 参加サークルは通常少数なので全件取得（上限200）
+      joinedQuery = joinedQuery.orderBy("memberCount", "desc").limit(200);
+      const joinedSnapshot = await joinedQuery.get();
+
+      // 名前でフィルタ（部分一致）
+      const matchedDocs = joinedSnapshot.docs.filter((doc) => {
+        const name = (doc.data().name || "").toLowerCase();
+        return name.includes(searchToken);
+      });
+
+      // aiOnlyのオーナーサークルとそれ以外を分離
+      const privateOwnerCircles: ReturnType<typeof formatCircle>[] = [];
+      const circles: ReturnType<typeof formatCircle>[] = [];
+      for (const doc of matchedDocs) {
+        const data = doc.data();
+        if (data.aiMode === "aiOnly" && data.ownerId === userId) {
+          privateOwnerCircles.push(formatCircle(data, doc.id));
+        } else {
+          circles.push(formatCircle(data, doc.id));
+        }
+      }
+
+      // 200件上限に達した場合、結果が不完全であることを通知
+      const joinedTruncated = joinedSnapshot.docs.length >= 200;
+
+      return { circles, privateOwnerCircles, hasMore: false, nextCursor: undefined, joinedTruncated };
+    }
+
+    // --- 通常モード（全体検索） ---
+    // クエリ1: オーナーのaiOnlyサークル（初回のみ）
+    // クエリ2: 公開サークル検索（cursorページネーション対応）
+    // 両クエリは独立しているため Promise.all で並列実行
+    const fetchLimit = searchLimit + 1;
+
+    let ownerQueryPromise: Promise<FirebaseFirestore.QuerySnapshot> | null = null;
+
+    if (!cursor) {
+      let ownerQuery: FirebaseFirestore.Query = db.collection("circles")
+        .where("isDeleted", "==", false)
+        .where("ownerId", "==", userId)
+        .where("aiMode", "==", "aiOnly")
+        .where("nameTokens", "array-contains", searchToken);
+
+      if (category && category !== "全て") {
+        ownerQuery = ownerQuery.where("category", "==", category);
+      }
+
+      ownerQuery = ownerQuery.limit(50);
+      ownerQueryPromise = ownerQuery.get();
+    }
+
+    let publicQuery: FirebaseFirestore.Query = db.collection("circles")
+      .where("isDeleted", "==", false)
+      .where("isPublic", "==", true)
+      .where("aiMode", "in", ["mix", "humanOnly"])
+      .where("nameTokens", "array-contains", searchToken)
+      .orderBy("memberCount", "desc")
+      .orderBy(FieldPath.documentId())
+      .limit(fetchLimit);
+
+    if (category && category !== "全て") {
+      publicQuery = publicQuery.where("category", "==", category);
+    }
+
+    if (cursor) {
+      publicQuery = publicQuery.startAfter(cursor.memberCount, cursor.id);
+    }
+
+    const [ownerSnapshot, publicSnapshot] = await Promise.all([
+      ownerQueryPromise ?? Promise.resolve(null),
+      publicQuery.get(),
+    ]);
+
+    // オーナーのaiOnlyサークル
+    const privateOwnerCircles: ReturnType<typeof formatCircle>[] = [];
+    if (ownerSnapshot) {
+      for (const doc of ownerSnapshot.docs) {
+        privateOwnerCircles.push(formatCircle(doc.data(), doc.id));
+      }
+    }
+
+    // 公開サークル
+    const hasMore = publicSnapshot.docs.length > searchLimit;
+    const publicDocs = publicSnapshot.docs.slice(0, searchLimit);
+    const circles = publicDocs.map((doc) => formatCircle(doc.data(), doc.id));
+
+    let nextCursor: { memberCount: number; id: string } | undefined;
+    if (hasMore) {
+      const lastDoc = publicDocs[publicDocs.length - 1];
+      nextCursor = {
+        memberCount: lastDoc.data().memberCount || 0,
+        id: lastDoc.id,
+      };
+    }
+
+    return { circles, privateOwnerCircles, hasMore, nextCursor };
+  }
+);
+
+/**
+ * サークル作成（Cloud Functions callable）
+ * オーナーが作成できるサークル数を上限30に制限
+ */
+const MAX_CIRCLES_PER_USER = 30;
+
+export const createCircle = onCall(
+  {
+    region: LOCATION,
+    enforceAppCheck: true,
+    timeoutSeconds: 15,
+    memory: "256MiB",
+  },
+  async (request) => {
+    const userId = requireAuth(request, AUTH_ERRORS.UNAUTHENTICATED_ALT);
+    await assertSubscriber(userId);
+
+    // BANチェック
+    const userDoc = await db.collection("users").doc(userId).get();
+    if (userDoc.exists && userDoc.data()?.isBanned) {
+      throw new HttpsError("permission-denied", AUTH_ERRORS.BANNED);
+    }
+
+    const { name, description, category, aiMode, goal, isPublic, rules: circleRules } = request.data;
+
+    // バリデーション
+    if (!name || typeof name !== "string" || name.trim().length === 0) {
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.MISSING_REQUIRED);
+    }
+    if (name.length > 30) {
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
+    }
+    if (!description || typeof description !== "string") {
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.MISSING_REQUIRED);
+    }
+    if (description.length > 500) {
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
+    }
+    if (goal !== undefined && typeof goal !== "string") {
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
+    }
+    if (typeof goal === "string" && goal.length > 200) {
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
+    }
+    if (circleRules !== undefined && (typeof circleRules !== "string" || circleRules.length > 1000)) {
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
+    }
+    const validCategories = ["勉強", "ダイエット", "運動", "趣味", "仕事", "資格", "読書", "語学", "音楽", "その他"];
+    if (!category || typeof category !== "string" || !validCategories.includes(category)) {
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
+    }
+    if (isPublic !== undefined && typeof isPublic !== "boolean") {
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
+    }
+    const validAIModes = ["aiOnly", "mix", "humanOnly"];
+    if (!aiMode || !validAIModes.includes(aiMode)) {
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
+    }
+
+    // オーナーが作成したサークル数をチェック（削除済みは除外）
+    const ownedCirclesSnapshot = await db.collection("circles")
+      .where("ownerId", "==", userId)
+      .where("isDeleted", "==", false)
+      .select() // ドキュメントデータ不要、カウントのみ
+      .get();
+
+    if (ownedCirclesSnapshot.size >= MAX_CIRCLES_PER_USER) {
+      throw new HttpsError("resource-exhausted", VALIDATION_ERRORS.CIRCLE_LIMIT_EXCEEDED);
+    }
+
+    // サークル作成
+    const docRef = db.collection("circles").doc();
+    const circleData = {
+      name: name.trim(),
+      description: description.trim(),
+      category: category || "その他",
+      ownerId: userId,
+      subOwnerId: null,
+      memberIds: [userId],
+      aiMode,
+      generatedAIs: [],
+      isPublic: aiMode === "aiOnly" ? false : isPublic !== false,
+      maxMembers: 20,
+      createdAt: Timestamp.now(),
+      recentActivity: null,
+      lastHumanPostAt: null,
+      goal: (goal || "").trim(),
+      coverImageUrl: null,
+      iconImageUrl: null,
+      memberCount: 1,
+      postCount: 0,
+      rules: circleRules || null,
+      isDeleted: false,
+      nameTokens: generateNameTokens(name.trim()),
+    };
+
+    await docRef.set(circleData);
+
+    return { circleId: docRef.id };
   }
 );

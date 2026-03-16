@@ -38,6 +38,8 @@ export {
     sendJoinRequest,
     joinCircle,
     leaveCircle,
+    searchCircles,
+    createCircle,
 } from "./callable/circles";
 export {
     followUser,
@@ -53,6 +55,7 @@ export {
     deleteAllAIUsers,
     cleanupOrphanedCircleAIs,
     backfillPublicUsers,
+    backfillCircleNameTokens,
     adminDeletePostWithPenalty,
     setAdminRole,
     removeAdminRole,

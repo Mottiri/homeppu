@@ -7,8 +7,9 @@ import * as admin from "firebase-admin";
 import * as functionsV1 from "firebase-functions/v1";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 
-import { db } from "../helpers/firebase";
+import { db, FieldPath } from "../helpers/firebase";
 import { requireAdmin, requireAuth } from "../helpers/auth";
+import { generateNameTokens } from "../helpers/search-tokens";
 import { isAdmin } from "../helpers/admin";
 import { getVirtuePolicy } from "../helpers/virtue-policy";
 import { deleteStorageFileFromUrl } from "../helpers/storage";
@@ -640,5 +641,64 @@ export const adminDeletePostWithPenalty = onCall(
             penaltyPoints,
             newVirtue,
         };
+    }
+);
+
+/**
+ * 管理用: 既存サークルのnameTokensを一括バックフィル
+ * S4サークル検索のサーバー側クエリ化に伴うワンタイムマイグレーション
+ * 完了後に削除すること
+ */
+export const backfillCircleNameTokens = onCall(
+    {
+        region: LOCATION,
+        timeoutSeconds: 540,
+        memory: "256MiB",
+        enforceAppCheck: false, // 管理用ワンタイム関数のためApp Check不要
+    },
+    async (request) => {
+        await requireAdmin(request);
+
+        const BATCH_SIZE = 400;
+        const PAGE_SIZE = 500;
+        let updated = 0;
+        let total = 0;
+        let lastDoc: FirebaseFirestore.DocumentSnapshot | undefined;
+
+        while (true) {
+            let query: FirebaseFirestore.Query = db.collection("circles")
+                .orderBy(FieldPath.documentId())
+                .limit(PAGE_SIZE);
+
+            if (lastDoc) {
+                query = query.startAfter(lastDoc);
+            }
+
+            const snapshot = await query.get();
+            if (snapshot.empty) break;
+
+            for (let i = 0; i < snapshot.docs.length; i += BATCH_SIZE) {
+                const batch = db.batch();
+                const chunk = snapshot.docs.slice(i, i + BATCH_SIZE);
+
+                for (const doc of chunk) {
+                    const data = doc.data();
+                    const name = data.name || "";
+                    const tokens = generateNameTokens(name);
+                    batch.update(doc.ref, { nameTokens: tokens });
+                    updated++;
+                }
+
+                await batch.commit();
+            }
+
+            total += snapshot.docs.length;
+            lastDoc = snapshot.docs[snapshot.docs.length - 1];
+
+            if (snapshot.docs.length < PAGE_SIZE) break;
+        }
+
+        console.log(`backfillCircleNameTokens: updated=${updated}, total=${total}`);
+        return { updated, total };
     }
 );

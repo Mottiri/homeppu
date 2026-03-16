@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/services.dart';
+import '../../core/constants/app_constants.dart';
 
 class StampSheetDefinition {
   final String id;
@@ -235,7 +236,7 @@ class StampSheetService {
   }) : _firestore = firestore ?? FirebaseFirestore.instance,
        _functions =
            functions ??
-           FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+           FirebaseFunctions.instanceFor(region: AppConstants.functionsRegion);
 
   Future<List<StampSheetDefinition>> fetchCatalog() async {
     final catalogDoc = await _firestore

@@ -6,6 +6,9 @@ import 'app_colors.dart';
 class AppConstants {
   AppConstants._();
 
+  // Firebase Functions リージョン
+  static const String functionsRegion = 'asia-northeast1';
+
   // アプリ情報
   static const String appName = 'ほめっぷ';
   static const String appTagline = '世界一優しいSNS';

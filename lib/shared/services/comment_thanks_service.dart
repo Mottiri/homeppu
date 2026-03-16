@@ -1,4 +1,5 @@
 import 'package:cloud_functions/cloud_functions.dart';
+import '../../core/constants/app_constants.dart';
 
 class CommentThanksResult {
   final bool alreadyThanked;
@@ -15,7 +16,7 @@ class CommentThanksService {
 
   CommentThanksService({FirebaseFunctions? functions})
     : _functions =
-          functions ?? FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+          functions ?? FirebaseFunctions.instanceFor(region: AppConstants.functionsRegion);
 
   Future<CommentThanksResult> likeCommentAsPostOwner(String commentId) async {
     final callable = _functions.httpsCallable('likeCommentAsPostOwner');

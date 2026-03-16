@@ -28,13 +28,13 @@ functions/src/
 
 | ファイル | 機能 | 主な関数 |
 |---------|------|---------|
-| `admin.ts` | 管理者機能 | `cleanUpUserFollows`, `deleteAllAIUsers`, `cleanupOrphanedCircleAIs`, `backfillPublicUsers`, `adminDeletePostWithPenalty`, `setAdminRole`, `removeAdminRole`, `banUser`, `permanentBanUser`, `unbanUser` |
-| `users.ts` | ユーザー機能 | `followUser`, `unfollowUser`, `getFollowStatus`, `getVirtueHistory`, `getVirtueStatus` |
+| `admin.ts` | 管理者機能 | `cleanUpUserFollows`, `deleteAllAIUsers`, `cleanupOrphanedCircleAIs`, `backfillPublicUsers`, `backfillCircleNameTokens`, `adminDeletePostWithPenalty`, `setAdminRole`, `removeAdminRole`, `banUser`, `permanentBanUser`, `unbanUser` |
+| `users.ts` | ユーザー機能 | `followUser`, `unfollowUser`, `getFollowStatus`, `getVirtueHistory`, `getVirtueStatus`, `checkPasswordResetTarget` |
 | `virtue_shop.ts` | 徳ポイントショップ | `getVirtueShopConfig`, `purchaseVirtueItem` |
 | `posts.ts` | 投稿作成 | `createPostWithRateLimit`, `createPostWithModeration` |
 | `comments.ts` | コメント・リアクション | `createCommentWithModeration`, `addUserReaction`, `removeUserReaction` |
 | `rewarded_reactions.ts` | リワード解放 | `grantRewardedReactionUnlock` |
-| `circles.ts` | サークル管理 | `deleteCircle`, `cleanupDeletedCircle`, `approveJoinRequest`, `rejectJoinRequest`, `sendJoinRequest`, `joinCircle`, `leaveCircle` |
+| `circles.ts` | サークル管理 | `deleteCircle`, `cleanupDeletedCircle`, `startCircleBrowseTrial`, `endCircleBrowseTrial`, `approveJoinRequest`, `rejectJoinRequest`, `sendJoinRequest`, `joinCircle`, `leaveCircle`, `searchCircles` |
 | `tasks.ts` | タスク管理 | `createTask`, `getTasks` |
 | `reports.ts` | 通報機能 | `reportContent` |
 | `names.ts` | 名前管理 | `initializeNameParts`, `getNameParts`, `updateUserName` |
@@ -120,6 +120,7 @@ functions/src/
 | `public-users.ts` | 公開ユーザー情報 `buildPublicUserData` |
 | `spreadsheet.ts` | Googleスプレッドシート連携 |
 | `errors.ts` | エラー定義 |
+| `search-tokens.ts` | N-gram検索トークン生成 `generateNameTokens` |
 
 ---
 
@@ -192,6 +193,7 @@ functions/src/
 - `triggerCircleAIPosts`
 - `triggerEvolveCircleAIs`
 - `backfillPublicUsers`
+- `backfillCircleNameTokens`
 
 **権限付与** は将来の運用で必要になる可能性があるため **現状維持** とします。
 - `setAdminRole`

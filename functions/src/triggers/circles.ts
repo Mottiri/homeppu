@@ -8,10 +8,10 @@ import {
   onDocumentCreated,
   onDocumentUpdated,
 } from "firebase-functions/v2/firestore";
-import * as admin from "firebase-admin";
-import { db, FieldValue } from "../helpers/firebase";
+import { db, FieldValue, Timestamp } from "../helpers/firebase";
 import { deleteStorageFileFromUrl } from "../helpers/storage";
 import { generateCircleAIPersona } from "../circle-ai/generator";
+import { generateNameTokens } from "../helpers/search-tokens";
 import { LOCATION } from "../config/constants";
 import { NOTIFICATION_TITLES, LABELS } from "../config/messages";
 
@@ -35,6 +35,21 @@ export const onCircleCreated = onDocumentCreated(
 
     console.log(`=== onCircleCreated: ${circleId} ===`);
     console.log(`Circle name: ${circleData.name}, AI mode: ${circleData.aiMode}`);
+
+    // nameTokens を補完（createCircle callable経由なら既にセット済み、直接書き込みの場合のみ必要）
+    try {
+      const existingTokens = circleData.nameTokens;
+      if (!existingTokens || existingTokens.length === 0) {
+        const nameTokens = generateNameTokens(circleData.name || "");
+        if (nameTokens.length > 0) {
+          await db.collection("circles").doc(circleId).update({ nameTokens });
+          console.log(`Set ${nameTokens.length} nameTokens for circle ${circleId}`);
+        }
+      }
+    } catch (tokenError) {
+      console.error(`Failed to set nameTokens for circle ${circleId}:`, tokenError);
+      // nameTokens失敗はAI生成をブロックしない
+    }
 
     // humanOnlyモードの場合はAIを生成しない
     if (circleData.aiMode === "humanOnly") {
@@ -72,7 +87,7 @@ export const onCircleCreated = onDocumentCreated(
           circleId: circleId, // このAIが所属するサークル
           circleContext: aiPersona.circleContext,
           growthLevel: aiPersona.growthLevel,
-          lastGrowthAt: admin.firestore.Timestamp.fromDate(aiPersona.lastGrowthAt),
+          lastGrowthAt: Timestamp.fromDate(aiPersona.lastGrowthAt),
           publicMode: "mix", // AIはmixモードで動作
           virtue: 100, // 初期徳ポイント
           createdAt: FieldValue.serverTimestamp(),
@@ -125,6 +140,13 @@ export const onCircleUpdated = onDocumentUpdated(
     console.log(`=== onCircleUpdated START: ${circleId} ===`);
 
     try {
+      // ===== 名前変更時のnameTokens更新 =====
+      if (beforeData.name !== afterData.name) {
+        const nameTokens = generateNameTokens(afterData.name || "");
+        await db.collection("circles").doc(circleId).update({ nameTokens });
+        console.log(`Updated nameTokens for circle ${circleId}: ${nameTokens.length} tokens`);
+      }
+
       // ===== 画像変更時の古い画像削除 =====
       // アイコン画像が変更された場合、古い画像を削除
       if (beforeData.iconImageUrl && beforeData.iconImageUrl !== afterData.iconImageUrl) {

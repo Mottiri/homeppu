@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_constants.dart';
 import '../../../../core/constants/app_messages.dart';
 import '../../../../core/utils/dialog_helper.dart';
 import '../../../../core/utils/snackbar_helper.dart';
@@ -26,7 +27,7 @@ class AdminReportContentScreen extends ConsumerStatefulWidget {
 class _AdminReportContentScreenState
     extends ConsumerState<AdminReportContentScreen> {
   final _firestore = FirebaseFirestore.instance;
-  final _functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+  final _functions = FirebaseFunctions.instanceFor(region: AppConstants.functionsRegion);
   bool _isProcessing = false;
 
   @override

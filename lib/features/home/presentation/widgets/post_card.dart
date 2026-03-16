@@ -348,7 +348,7 @@ class _PostCardState extends ConsumerState<PostCard> {
   Future<void> _sendReactionToServer(String reactionType) async {
     try {
       final functions = FirebaseFunctions.instanceFor(
-        region: 'asia-northeast1',
+        region: AppConstants.functionsRegion,
       );
       final callable = functions.httpsCallable('addUserReaction');
       await callable.call({'postId': post.id, 'reactionType': reactionType});
@@ -399,9 +399,6 @@ class _PostCardState extends ConsumerState<PostCard> {
 
   @override
   Widget build(BuildContext context) {
-    // timeagoの日本語設定
-    timeago.setLocaleMessages('ja', timeago.JaMessages());
-
     return Card(
       margin: widget.isDetailView
           ? const EdgeInsets.all(16)
@@ -1645,7 +1642,7 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
   Future<bool> _grantRewardedUnlock(ReactionType type) async {
     try {
       final functions = FirebaseFunctions.instanceFor(
-        region: 'asia-northeast1',
+        region: AppConstants.functionsRegion,
       );
       final callable = functions.httpsCallable('grantRewardedReactionUnlock');
       await callable.call({'reactionType': type.value});

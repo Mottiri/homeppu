@@ -1,5 +1,6 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
+import '../../core/constants/app_constants.dart';
 import '../models/name_part_model.dart';
 
 /// 名前パーツサービス
@@ -7,7 +8,7 @@ class NamePartsService {
   final FirebaseFunctions _functions;
 
   NamePartsService()
-    : _functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+    : _functions = FirebaseFunctions.instanceFor(region: AppConstants.functionsRegion);
 
   /// 名前パーツマスタを初期化（管理者用）
   Future<void> initializeNameParts() async {

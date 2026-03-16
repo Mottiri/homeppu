@@ -17,4 +17,5 @@ export const storage = admin.storage();
 
 // FieldValue等のユーティリティも再エクスポート
 export const FieldValue = admin.firestore.FieldValue;
+export const FieldPath = admin.firestore.FieldPath;
 export const Timestamp = admin.firestore.Timestamp;

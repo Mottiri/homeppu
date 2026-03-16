@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -128,7 +129,6 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen>
         name: _nameController.text.trim(),
         description: _descriptionController.text.trim(),
         category: _selectedCategory,
-        ownerId: currentUser.uid,
         aiMode: _aiMode,
         goal: _goalController.text.trim(),
         isPublic: _isPublic,
@@ -172,7 +172,10 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen>
       }
     }).catchError((e) {
       if (mounted) {
-        SnackBarHelper.showError(context, AppMessages.error.general);
+        final message = (e is FirebaseFunctionsException && e.code == 'resource-exhausted')
+            ? AppMessages.circle.createLimitExceeded
+            : AppMessages.error.general;
+        SnackBarHelper.showError(context, message);
         debugPrint('Circle creation failed: $e');
       }
     });

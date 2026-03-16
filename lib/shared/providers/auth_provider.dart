@@ -113,7 +113,7 @@ class AuthService {
   final FirebaseFunctions _functions;
 
   AuthService(this._auth, this._firestore)
-      : _functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+      : _functions = FirebaseFunctions.instanceFor(region: AppConstants.functionsRegion);
 
   /// メールでサインアップ
   Future<UserModel?> signUpWithEmail({

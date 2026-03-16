@@ -6,6 +6,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_constants.dart';
 import '../../../../core/constants/app_messages.dart';
 import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../core/utils/dialog_helper.dart';
@@ -1036,7 +1037,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       }
 
       await FirebaseFunctions.instanceFor(
-        region: 'asia-northeast1',
+        region: AppConstants.functionsRegion,
       ).httpsCallable(functionName).call(data);
 
       if (mounted) {

@@ -1,4 +1,5 @@
 import 'package:cloud_functions/cloud_functions.dart';
+import '../../core/constants/app_constants.dart';
 import '../models/post_model.dart';
 
 /// モデレーション結果
@@ -105,7 +106,7 @@ class ModerationService {
   final FirebaseFunctions _functions;
 
   ModerationService() 
-      : _functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+      : _functions = FirebaseFunctions.instanceFor(region: AppConstants.functionsRegion);
 
   /// モデレーション付き投稿作成
   /// ネガティブな内容の場合はエラーをスローし、徳ポイントが減少する

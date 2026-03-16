@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -35,7 +37,13 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   String _selectedCategory = CircleService.categories.first;
   final TextEditingController _searchController = TextEditingController();
   List<CircleModel> _searchResults = [];
+  List<CircleModel> _privateOwnerResults = [];
   bool _isSearching = false;
+  bool _searchHasMore = false;
+  bool _isLoadingMoreSearch = false;
+  ({int memberCount, String id})? _searchCursor;
+  Timer? _debounceTimer;
+  int _searchGeneration = 0;
 
   // プル更新・無限スクロール用の状態
   List<CircleModel> _circles = [];
@@ -58,7 +66,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   @override
   void initState() {
     super.initState();
-    // ScrollControllerはスクロールトップ制御用のみ
+    _scrollController.addListener(_onScroll);
   }
 
   @override
@@ -70,9 +78,23 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _searchController.dispose();
+    _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    // 検索モード中の無限スクロール
+    if (_searchController.text.isNotEmpty &&
+        _searchHasMore &&
+        !_isLoadingMoreSearch &&
+        _scrollController.hasClients &&
+        _scrollController.position.pixels >=
+            _scrollController.position.maxScrollExtent - 200) {
+      _loadMoreSearchResults();
+    }
   }
 
   /// スクロール可能かを再評価
@@ -163,11 +185,36 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     }
   }
 
+  void _onSearchChanged(String value) {
+    _debounceTimer?.cancel();
+    _searchGeneration++; // 進行中リクエストを失効させる
+    if (value.isEmpty) {
+      setState(() {
+        _isSearching = false;
+        _searchResults = [];
+        _privateOwnerResults = [];
+        _searchHasMore = false;
+        _searchCursor = null;
+        _isLoadingMoreSearch = false;
+      });
+      return;
+    }
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      _performSearch(value);
+    });
+  }
+
   Future<void> _performSearch(String query) async {
+    _searchGeneration++;
+    final generation = _searchGeneration;
+
     if (query.isEmpty) {
       setState(() {
         _isSearching = false;
         _searchResults = [];
+        _privateOwnerResults = [];
+        _searchHasMore = false;
+        _searchCursor = null;
       });
       return;
     }
@@ -176,18 +223,34 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     try {
       final circleService = ref.read(circleServiceProvider);
       final currentUser = ref.read(currentUserProvider).valueOrNull;
-      final results = await circleService.searchCircles(
+      final result = await circleService.searchCircles(
         query,
         userId: currentUser?.uid ?? '',
+        category: _selectedCategory,
+        joinedOnly: _selectedTab == 1,
       );
+      if (!mounted || generation != _searchGeneration) return;
       setState(() {
-        _searchResults = results;
+        _searchResults = result.circles;
+        _privateOwnerResults = result.privateOwnerCircles;
+        _searchHasMore = result.hasMore;
+        _searchCursor = result.nextCursor;
         _isSearching = false;
       });
+      if (result.joinedTruncated && mounted) {
+        SnackBarHelper.showInfo(
+          context,
+          AppMessages.circle.searchJoinedTruncated,
+        );
+      }
     } catch (e) {
       debugPrint('_performSearch エラー: $e');
+      if (!mounted || generation != _searchGeneration) return;
       setState(() {
         _searchResults = [];
+        _privateOwnerResults = [];
+        _searchHasMore = false;
+        _searchCursor = null;
         _isSearching = false;
       });
       if (mounted) {
@@ -196,6 +259,38 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
           AppMessages.circle.searchError,
         );
       }
+    }
+  }
+
+  Future<void> _loadMoreSearchResults() async {
+    if (_isLoadingMoreSearch || !_searchHasMore || _searchCursor == null) return;
+
+    final generation = _searchGeneration;
+    setState(() => _isLoadingMoreSearch = true);
+    try {
+      final circleService = ref.read(circleServiceProvider);
+      final currentUser = ref.read(currentUserProvider).valueOrNull;
+      final result = await circleService.searchCircles(
+        _searchController.text,
+        userId: currentUser?.uid ?? '',
+        category: _selectedCategory,
+        joinedOnly: _selectedTab == 1,
+        cursor: _searchCursor,
+      );
+      if (!mounted) return;
+      if (generation != _searchGeneration) {
+        setState(() => _isLoadingMoreSearch = false);
+        return;
+      }
+      setState(() {
+        _searchResults.addAll(result.circles);
+        _searchHasMore = result.hasMore;
+        _searchCursor = result.nextCursor;
+        _isLoadingMoreSearch = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoadingMoreSearch = false);
     }
   }
 
@@ -361,7 +456,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
                               ),
                               child: TextField(
                                 controller: _searchController,
-                                onChanged: (value) => _performSearch(value),
+                                onChanged: _onSearchChanged,
                                 decoration: InputDecoration(
                                   hintText: AppMessages.circle.searchHint,
                                   hintStyle: TextStyle(color: Colors.grey[400]),
@@ -374,7 +469,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
                                           icon: const Icon(Icons.close, size: 20),
                                           onPressed: () {
                                             _searchController.clear();
-                                            _performSearch('');
+                                            _onSearchChanged('');
                                           },
                                         )
                                       : null,
@@ -443,7 +538,11 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
                                     selected: isSelected,
                                     onSelected: (selected) {
                                       setState(() => _selectedCategory = category);
-                                      _loadCircles();
+                                      if (_searchController.text.isNotEmpty) {
+                                        _performSearch(_searchController.text);
+                                      } else {
+                                        _loadCircles();
+                                      }
                                     },
                                     selectedColor: AppColors.primary.withValues(
                                       alpha: 0.2,
@@ -477,7 +576,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
 
                         // サークルリスト
                         _searchController.text.isNotEmpty
-                            ? _buildSearchResults()
+                            ? _buildSearchResults(currentUser?.uid)
                             : _buildCircleList(
                                 currentUser?.uid,
                                 currentUser?.isSubscriber ?? false,
@@ -587,14 +686,21 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     );
   }
 
-  Widget _buildSearchResults() {
-    if (_isSearching) {
+  List<CircleModel> get _allSearchResults => [
+        ..._privateOwnerResults,
+        ..._searchResults,
+      ];
+
+  Widget _buildSearchResults(String? userId) {
+    if (_isSearching && _searchResults.isEmpty) {
       return const SliverFillRemaining(
         child: Center(child: CircularProgressIndicator()),
       );
     }
 
-    if (_searchResults.isEmpty) {
+    final allResults = _allSearchResults;
+
+    if (allResults.isEmpty) {
       return SliverFillRemaining(
         hasScrollBody: false,
         child: Padding(
@@ -623,11 +729,24 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
       padding: EdgeInsets.only(bottom: bottomPadding),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate(
-          (context, index) => _CircleCard(
-            circle: _searchResults[index],
-            onDeleted: _loadCircles,
-          ),
-          childCount: _searchResults.length,
+          (context, index) {
+            if (index < allResults.length) {
+              return _CircleCard(
+                circle: allResults[index],
+                currentUserId: userId,
+                onDeleted: _loadCircles,
+              );
+            }
+            // 追加読み込みインジケーター（ロード中のみ表示）
+            if (_isLoadingMoreSearch) {
+              return const Padding(
+                padding: EdgeInsets.all(16),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            return const SizedBox.shrink();
+          },
+          childCount: allResults.length + (_searchHasMore ? 1 : 0),
         ),
       ),
     );
@@ -834,7 +953,14 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   Widget _buildTabButton(String label, int index) {
     final isSelected = _selectedTab == index;
     return GestureDetector(
-      onTap: () => setState(() => _selectedTab = index),
+      onTap: () {
+        if (_selectedTab == index) return;
+        setState(() => _selectedTab = index);
+        // 検索中ならタブ切り替え時に再検索
+        if (_searchController.text.isNotEmpty) {
+          _performSearch(_searchController.text);
+        }
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
@@ -1455,9 +1581,6 @@ class _CircleCard extends ConsumerWidget {
   }
 
   Widget _buildActivityChip(DateTime? recentActivity) {
-    // timeagoの日本語設定
-    timeago.setLocaleMessages('ja', timeago.JaMessages());
-
     if (recentActivity == null) {
       return Row(
         mainAxisSize: MainAxisSize.min,
@@ -1501,9 +1624,6 @@ class _CircleCard extends ConsumerWidget {
 
   /// 管理者向け：人間ユーザーの最終投稿日時チップ
   Widget _buildHumanActivityChip(DateTime? lastHumanPostDate) {
-    // timeagoの日本語設定
-    timeago.setLocaleMessages('ja', timeago.JaMessages());
-
     if (lastHumanPostDate == null) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),

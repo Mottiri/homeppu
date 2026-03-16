@@ -1,8 +1,9 @@
 import 'package:cloud_functions/cloud_functions.dart';
+import '../../core/constants/app_constants.dart';
 
 class FollowService {
   final FirebaseFunctions _functions =
-      FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+      FirebaseFunctions.instanceFor(region: AppConstants.functionsRegion);
 
   /// ユーザーをフォローする
   Future<void> followUser(String targetUserId) async {

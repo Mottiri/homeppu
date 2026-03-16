@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../core/constants/app_constants.dart';
 
 /// 問い合わせカテゴリ
 enum InquiryCategory {
@@ -128,7 +129,7 @@ class InquiryService {
   InquiryService._internal();
 
   final _firestore = FirebaseFirestore.instance;
-  final _functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+  final _functions = FirebaseFunctions.instanceFor(region: AppConstants.functionsRegion);
   final _auth = FirebaseAuth.instance;
 
   /// 自分の問い合わせ一覧を取得

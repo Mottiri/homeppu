@@ -74,6 +74,8 @@ export const VALIDATION_ERRORS = {
     IMAGE_BASE64_REQUIRED: "imageBase64 is required",
     MISSING_POST_ID_CONTENT: "Missing postId or content",
 
+    CIRCLE_LIMIT_EXCEEDED: "サークルの作成上限（30個）に達しています",
+
     RATE_LIMITED: "投稿が多すぎます。少し待ってから再度投稿してください",
     RATE_LIMITED_PER_MINUTE: "短時間での投稿が多すぎます。少し待ってから再度投稿してください",
     RATE_LIMITED_DAILY_15: "1日に投稿できる回数は15回までです。明日また投稿してください",

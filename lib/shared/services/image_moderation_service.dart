@@ -2,12 +2,13 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
+import '../../core/constants/app_constants.dart';
 
 /// 画像モデレーションサービス
 /// Cloud Functionsを呼び出して画像の適切性を判定
 class ImageModerationService {
   final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(
-    region: 'asia-northeast1',
+    region: AppConstants.functionsRegion,
   );
   static const int _maxImageBytes = 5 * 1024 * 1024;
   static const Set<String> _allowedExtensions = {

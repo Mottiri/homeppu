@@ -1,4 +1,5 @@
 import 'package:cloud_functions/cloud_functions.dart';
+import '../../core/constants/app_constants.dart';
 
 class VirtueShopConfig {
   final Map<String, int> namePartCostsByRarity;
@@ -46,7 +47,7 @@ class VirtueShopService {
   final FirebaseFunctions _functions;
 
   VirtueShopService()
-    : _functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+    : _functions = FirebaseFunctions.instanceFor(region: AppConstants.functionsRegion);
 
   Future<VirtueShopConfig> getConfig() async {
     final callable = _functions.httpsCallable('getVirtueShopConfig');

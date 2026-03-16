@@ -556,8 +556,6 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    timeago.setLocaleMessages('ja', timeago.JaMessages());
-
     // ユーザーのヘッダー色を取得
     final currentUser = ref.watch(currentUserProvider).valueOrNull;
     final tutorialStep = ref.watch(tutorialPhase2Provider);

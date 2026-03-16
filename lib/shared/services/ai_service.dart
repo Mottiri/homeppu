@@ -1,5 +1,6 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
+import '../../core/constants/app_constants.dart';
 
 /// AIサービス
 /// Cloud Functionsを呼び出すラッパー
@@ -7,7 +8,7 @@ class AIService {
   final FirebaseFunctions _functions;
 
   AIService()
-    : _functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+    : _functions = FirebaseFunctions.instanceFor(region: AppConstants.functionsRegion);
 
   /// AIアカウントを初期化（管理者用）
   Future<void> initializeAIAccounts() async {
