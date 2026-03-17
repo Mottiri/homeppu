@@ -14,6 +14,7 @@ import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/services/circle_service.dart';
 import '../../../../shared/services/media_service.dart';
 import '../../../../shared/services/image_moderation_service.dart';
+import '../../../../shared/widgets/report_dialog.dart';
 
 class CreateCircleScreen extends ConsumerStatefulWidget {
   const CreateCircleScreen({super.key});
@@ -99,89 +100,117 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen>
     if (currentUser == null) return;
 
     await runWithLoading(() async {
-      final circleService = ref.read(circleServiceProvider);
-      final mediaService = MediaService();
-      final moderationService = ImageModerationService();
+      try {
+        final circleService = ref.read(circleServiceProvider);
+        final mediaService = MediaService();
+        final moderationService = ImageModerationService();
 
-      // 画像のモデレーションを先に実行
-      if (_iconImage != null) {
-        final error = await moderationService.moderateImage(_iconImage!);
-        if (error != null) {
-          if (mounted) {
-            SnackBarHelper.showError(context, error);
+        // 画像のモデレーションを先に実行（並列）
+        if (_iconImage != null || _coverImage != null) {
+          final results = await Future.wait([
+            if (_iconImage != null) moderationService.moderateImage(_iconImage!),
+            if (_coverImage != null) moderationService.moderateImage(_coverImage!),
+          ]);
+          for (final error in results) {
+            if (error != null) {
+              if (mounted) {
+                SnackBarHelper.showError(context, error);
+              }
+              return;
+            }
           }
-          return;
         }
-      }
 
-      if (_coverImage != null) {
-        final error = await moderationService.moderateImage(_coverImage!);
-        if (error != null) {
-          if (mounted) {
-            SnackBarHelper.showError(context, error);
-          }
-          return;
-        }
-      }
-
-      // モデレーション通過後、サークルを作成
-      final circleId = await circleService.createCircle(
-        name: _nameController.text.trim(),
-        description: _descriptionController.text.trim(),
-        category: _selectedCategory,
-        aiMode: _aiMode,
-        goal: _goalController.text.trim(),
-        isPublic: _isPublic,
-        rules: _rulesController.text.trim().isNotEmpty
-            ? _rulesController.text.trim()
-            : null,
-      );
-
-      // 画像をアップロード
-      String? iconUrl;
-      String? coverUrl;
-
-      if (_iconImage != null) {
-        iconUrl = await mediaService.uploadCircleImage(
-          filePath: _iconImage!.path,
-          circleId: circleId,
-          imageType: 'icon',
+        // モデレーション通過後、サークルを作成
+        final circleId = await circleService.createCircle(
+          name: _nameController.text.trim(),
+          description: _descriptionController.text.trim(),
+          category: _selectedCategory,
+          aiMode: _aiMode,
+          goal: _goalController.text.trim(),
+          isPublic: _isPublic,
+          rules: _rulesController.text.trim().isNotEmpty
+              ? _rulesController.text.trim()
+              : null,
         );
-      }
 
-      if (_coverImage != null) {
-        coverUrl = await mediaService.uploadCircleImage(
-          filePath: _coverImage!.path,
-          circleId: circleId,
-          imageType: 'cover',
-        );
-      }
+        // 画像をアップロード（並列）— 失敗してもサークルは作成済み
+        String? iconUrl;
+        String? coverUrl;
+        bool uploadFailed = false;
 
-      // 画像 URLを更新
-      if (iconUrl != null || coverUrl != null) {
-        await circleService.updateCircle(circleId, {
-          if (iconUrl != null) 'iconImageUrl': iconUrl,
-          if (coverUrl != null) 'coverImageUrl': coverUrl,
-        });
-      }
+        if (_iconImage != null || _coverImage != null) {
+          final iconResult = _iconImage != null
+              ? mediaService.uploadCircleImage(
+                  filePath: _iconImage!.path,
+                  circleId: circleId,
+                  imageType: 'icon',
+                ).then<String?>((v) => v).catchError((_) => null as String?)
+              : Future<String?>.value(null);
+          final coverResult = _coverImage != null
+              ? mediaService.uploadCircleImage(
+                  filePath: _coverImage!.path,
+                  circleId: circleId,
+                  imageType: 'cover',
+                ).then<String?>((v) => v).catchError((_) => null as String?)
+              : Future<String?>.value(null);
 
-      if (mounted) {
-        SnackBarHelper.showSuccess(context, AppMessages.success.circleCreated);
-        context.pop();
-        context.push('/circle/$circleId');
-      }
-    }).catchError((e) {
-      if (mounted) {
-        String message = AppMessages.error.general;
-        if (e is FirebaseFunctionsException) {
-          if (e.code == 'resource-exhausted') {
-            message = AppMessages.circle.createLimitExceeded;
-          } else if (e.code == 'invalid-argument' && e.message != null && e.message!.isNotEmpty) {
-            message = e.message!;
+          final results = await Future.wait([iconResult, coverResult]);
+          iconUrl = results[0];
+          coverUrl = results[1];
+
+          // 期待した画像のURLが取得できなかった場合は部分失敗
+          if ((_iconImage != null && iconUrl == null) ||
+              (_coverImage != null && coverUrl == null)) {
+            uploadFailed = true;
+            debugPrint('Image upload partially failed: icon=$iconUrl, cover=$coverUrl');
           }
         }
-        SnackBarHelper.showError(context, message);
-        debugPrint('Circle creation failed: $e');
+
+        // 画像 URLを更新
+        if (iconUrl != null || coverUrl != null) {
+          await circleService.updateCircle(circleId, {
+            if (iconUrl != null) 'iconImageUrl': iconUrl,
+            if (coverUrl != null) 'coverImageUrl': coverUrl,
+          });
+        }
+
+        if (mounted) {
+          if (uploadFailed) {
+            SnackBarHelper.showWarning(
+              context,
+              AppMessages.circle.imageUploadFailedButCreated,
+            );
+          } else {
+            SnackBarHelper.showSuccess(context, AppMessages.success.circleCreated);
+          }
+          context.pop();
+          context.push('/circle/$circleId');
+        }
+      } catch (e) {
+        if (mounted) {
+          if (e is FirebaseFunctionsException) {
+            if (e.code == 'resource-exhausted') {
+              SnackBarHelper.showError(context, AppMessages.circle.createLimitExceeded);
+            } else if (e.code == 'invalid-argument' && e.message != null && e.message!.isNotEmpty) {
+              // モデレーション由来（提案付き or NGワード）はダイアログ、それ以外はSnackBar
+              final msg = e.message!;
+              if (msg.contains('提案:') || msg.contains('NGワード')) {
+                await NegativeContentDialog.show(
+                  context: context,
+                  message: msg,
+                );
+              } else {
+                SnackBarHelper.showError(context, msg);
+              }
+            } else {
+              SnackBarHelper.showError(context, AppMessages.error.general);
+            }
+          } else {
+            SnackBarHelper.showError(context, AppMessages.error.general);
+          }
+          debugPrint('Circle creation failed: $e');
+        }
       }
     });
   }

@@ -336,6 +336,7 @@ class _CircleMessages {
   String get searchNotFound => '見つかりませんでした';
   String get searchError => '検索中にエラーが発生しました';
   String get createLimitExceeded => 'サークルの作成上限（30個）に達しています';
+  String get imageUploadFailedButCreated => 'サークルは作成されましたが、画像のアップロードに失敗しました。サークル設定から画像を再設定できます。';
   String get searchJoinedTruncated => '参加中のサークルが多いため、一部のサークルが表示されていない可能性があります';
   String get listError => 'エラーが発生しました';
   String get emptyTitle => 'まだサークルがないよ';
