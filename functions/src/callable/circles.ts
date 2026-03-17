@@ -17,11 +17,14 @@ import { isAdmin } from "../helpers/admin";
 import { deleteStorageFileFromUrl } from "../helpers/storage";
 import { generateNameTokens } from "../helpers/search-tokens";
 import { PROJECT_ID, LOCATION } from "../config/constants";
+import { geminiApiKey, openaiApiKey } from "../config/secrets";
+import { moderateText } from "../helpers/text-moderation";
 import {
   AUTH_ERRORS,
   RESOURCE_ERRORS,
   VALIDATION_ERRORS,
   PERMISSION_ERRORS,
+  SYSTEM_ERRORS,
   NOTIFICATION_TITLES,
   LABELS,
   SUCCESS_MESSAGES,
@@ -894,7 +897,6 @@ export const searchCircles = onCall(
 
     let publicQuery: FirebaseFirestore.Query = db.collection("circles")
       .where("isDeleted", "==", false)
-      .where("isPublic", "==", true)
       .where("aiMode", "in", ["mix", "humanOnly"])
       .where("nameTokens", "array-contains", searchToken)
       .orderBy("memberCount", "desc")
@@ -950,16 +952,23 @@ export const createCircle = onCall(
   {
     region: LOCATION,
     enforceAppCheck: true,
-    timeoutSeconds: 15,
-    memory: "256MiB",
+    secrets: [geminiApiKey, openaiApiKey],
+    timeoutSeconds: 120,
+    memory: "1GiB",
   },
   async (request) => {
     const userId = requireAuth(request, AUTH_ERRORS.UNAUTHENTICATED_ALT);
-    await assertSubscriber(userId);
 
-    // BANチェック
+    // サブスク + BANチェック（1回のDB読み込みで両方確認）
     const userDoc = await db.collection("users").doc(userId).get();
-    if (userDoc.exists && userDoc.data()?.isBanned) {
+    if (!userDoc.exists) {
+      throw new HttpsError("not-found", RESOURCE_ERRORS.USER_NOT_FOUND);
+    }
+    const userData = userDoc.data()!;
+    if (userData.isSubscriber !== true) {
+      throw new HttpsError("permission-denied", PERMISSION_ERRORS.EPIC_REACTION_REQUIRES_SUBSCRIPTION);
+    }
+    if (userData.isBanned) {
       throw new HttpsError("permission-denied", AUTH_ERRORS.BANNED);
     }
 
@@ -1000,6 +1009,7 @@ export const createCircle = onCall(
     }
 
     // オーナーが作成したサークル数をチェック（削除済みは除外）
+    // AIモデレーションより先に安価なDBチェックで弾く
     const ownedCirclesSnapshot = await db.collection("circles")
       .where("ownerId", "==", userId)
       .where("isDeleted", "==", false)
@@ -1008,6 +1018,37 @@ export const createCircle = onCall(
 
     if (ownedCirclesSnapshot.size >= MAX_CIRCLES_PER_USER) {
       throw new HttpsError("resource-exhausted", VALIDATION_ERRORS.CIRCLE_LIMIT_EXCEEDED);
+    }
+
+    // Fail Closed: APIキーが1つも利用できない場合はエラー
+    const geminiKey = geminiApiKey.value() || "";
+    const openaiKey = openaiApiKey.value() || "";
+    if (!geminiKey && !openaiKey) {
+      console.error("ERROR: No AI API key available (both GEMINI and OPENAI are empty)");
+      throw new HttpsError("internal", SYSTEM_ERRORS.INTERNAL);
+    }
+
+    // ===============================================
+    // テキストモデレーション（NGワード + AIモデレーション）
+    // ===============================================
+    const textFields = [name, description, goal, circleRules].filter(
+      (f): f is string => typeof f === "string" && f.trim().length > 0
+    );
+    const combinedText = textFields.join(" ");
+    if (combinedText) {
+      const contentBody = [
+        `サークル名: ${name}`,
+        `説明: ${description}`,
+        goal ? `目標: ${goal}` : "",
+        circleRules ? `ルール: ${circleRules}` : "",
+      ].filter(Boolean).join("\n");
+
+      await moderateText({
+        type: "circle_create",
+        userId,
+        contentDescription: "サークル作成内容",
+        contentBody,
+      });
     }
 
     // サークル作成

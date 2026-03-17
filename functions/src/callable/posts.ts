@@ -10,10 +10,9 @@ import { db, FieldValue } from "../helpers/firebase";
 import { requireAuth } from "../helpers/auth";
 import { geminiApiKey, openaiApiKey } from "../config/secrets";
 import { isAdmin, getAdminUids } from "../helpers/admin";
-import { ModerationResult, MediaItem } from "../types";
+import { MediaItem } from "../types";
 import { moderateMedia } from "../helpers/moderation";
-import { logAIProviderUsage } from "../helpers/ai-usage";
-import { NG_WORDS } from "../helpers/virtue";
+import { moderateText } from "../helpers/text-moderation";
 import { getVirtuePolicy, grantVirtue, VIRTUE_ROUTE_KEYS } from "../helpers/virtue-policy";
 import { LOCATION } from "../config/constants";
 import { createAIProviderFactory } from "../ai/provider";
@@ -173,130 +172,20 @@ export const createPostWithModeration = onCall(
         }
 
         // ===============================================
-        // 0. 静的NGワードチェック
-        // ===============================================
-        if (content) {
-            const hasNgWord = NG_WORDS.some((word) => content.includes(word));
-            if (hasNgWord) {
-                throw new HttpsError(
-                    "invalid-argument",
-                    MODERATION_MESSAGES.NG_WORD_USED
-                );
-            }
-        }
-
-        // ===============================================
-        // 1. テキストモデレーション
+        // 0-1. テキストモデレーション（NGワード + AIモデレーション）
         // ===============================================
         console.log("STEP 4: Starting text moderation");
         if (content) {
-            const textPrompt = `
-あなたはSNS「ほめっぷ」のコンテンツモデレーターです。
-「ほめっぷ」は「世界一優しいSNS」を目指しています。
-
-以下の投稿内容を分析して、「他者への攻撃」や「暴力的な表現」があるかどうか厳格に判定してください。
-
-【ブロック対象（isNegative: true）】
-- harassment: 他者への誹謗中傷、人格攻撃、悪口
-- hate_speech: 差別、ヘイトスピーチ
-- profanity: 暴言、罵倒、汚い言葉（「死ね」「殺す」などは対象なしでもNG）
-- violence: 暴力的な表現、脅迫
-- self_harm: 自傷行為の助長
-- spam: スパム、宣伝
-
-上記に該当しない場合は isNegative: false としてください。
-
-【重要な判定基準】
-⚠️ 暴力的な言葉（殺す、死ね、殴るなど）は、対象が特定されていなくても「profanity」または「violence」としてブロックしてください。
-⚠️ 「他者を攻撃しているか」は厳しく見てください。
-
-【投稿内容】
-${content}
-
-【回答形式】
-必ず以下のJSON形式で回答してください。他の文字は含めないでください。
-{"isNegative": true/false, "category": "harassment"|"hate_speech"|"profanity"|"violence"|"self_harm"|"spam"|"none", "confidence": 0-1, "reason": "判定理由", "suggestion": "より良い表現の提案"}
-`;
-
-            let rawResponseText = "";
-            try {
-                const result = await aiFactory.generateText(textPrompt);
-                const responseText = result.text.trim();
-                rawResponseText = responseText;
-                logAIProviderUsage("post_text_moderation", result, {
-                    userId,
-                    hasContent: Boolean(content),
-                });
-                console.log(`moderateText(post): Raw response: ${responseText.substring(0, 500)}`);
-
-                // JSONを抽出
-                let jsonText = responseText;
-                const codeBlockMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-                if (codeBlockMatch && codeBlockMatch[1]) {
-                    jsonText = codeBlockMatch[1].trim();
-                } else {
-                    const firstBrace = responseText.indexOf("{");
-                    const lastBrace = responseText.lastIndexOf("}");
-                    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-                        jsonText = responseText.substring(firstBrace, lastBrace + 1);
-                    }
-                }
-
-                const modResult = JSON.parse(jsonText) as ModerationResult;
-                console.log("STEP 5d: Parsed successfully, isNegative:", modResult.isNegative);
-
-                // 曖昧コンテンツ判定 (0.5-0.7) → フラグ付き投稿
-                if (modResult.isNegative && modResult.confidence >= 0.5 && modResult.confidence < 0.7) {
-                    needsReview = true;
-                    needsReviewReason = `テキスト: ${modResult.category} (confidence: ${modResult.confidence})`;
-                    console.log(`FLAGGED for review: ${needsReviewReason}`);
-                }
-
-                if (modResult.isNegative && modResult.confidence >= 0.7) {
-                    console.warn("[MODERATION NG] post rejected:", JSON.stringify({
-                        category: modResult.category,
-                        confidence: modResult.confidence,
-                        reason: modResult.reason,
-                        textLength: content.length,
-                    }));
-                    await db.collection("moderatedContent").add({
-                        userId: userId,
-                        content: content,
-                        type: "post",
-                        category: modResult.category,
-                        confidence: modResult.confidence,
-                        reason: modResult.reason,
-                        createdAt: FieldValue.serverTimestamp(),
-                    });
-
-                    throw new HttpsError(
-                        "invalid-argument",
-                        MODERATION_MESSAGES.suggestionWithReason(
-                            modResult.reason,
-                            modResult.suggestion
-                        )
-                    );
-                }
-            } catch (error) {
-                if (error instanceof HttpsError) {
-                    throw error;
-                }
-                console.error("Text moderation error:", error);
-
-                try {
-                    await db.collection("moderationErrors").add({
-                        userId: userId,
-                        content: content?.substring(0, 100) || "",
-                        error: String(error),
-                        rawResponse: rawResponseText ? rawResponseText.substring(0, 500) : "empty",
-                        createdAt: FieldValue.serverTimestamp(),
-                    });
-                } catch (firestoreError) {
-                    console.error("Failed to save moderation error:", firestoreError);
-                }
-
-                // Fail Open: AIエラー時は投稿を許可する
-                console.log("Moderation failed, allowing post (fail-open)");
+            const modOutcome = await moderateText({
+                type: "post",
+                userId,
+                contentDescription: "投稿内容",
+                contentBody: content,
+            });
+            if (modOutcome.flagged) {
+                needsReview = true;
+                needsReviewReason = modOutcome.flagReason || "";
+                console.log(`FLAGGED for review: ${needsReviewReason}`);
             }
         }
 

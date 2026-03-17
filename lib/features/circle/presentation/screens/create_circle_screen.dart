@@ -172,9 +172,14 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen>
       }
     }).catchError((e) {
       if (mounted) {
-        final message = (e is FirebaseFunctionsException && e.code == 'resource-exhausted')
-            ? AppMessages.circle.createLimitExceeded
-            : AppMessages.error.general;
+        String message = AppMessages.error.general;
+        if (e is FirebaseFunctionsException) {
+          if (e.code == 'resource-exhausted') {
+            message = AppMessages.circle.createLimitExceeded;
+          } else if (e.code == 'invalid-argument' && e.message != null && e.message!.isNotEmpty) {
+            message = e.message!;
+          }
+        }
         SnackBarHelper.showError(context, message);
         debugPrint('Circle creation failed: $e');
       }

@@ -329,10 +329,6 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "isPublic",
-          "order": "ASCENDING"
-        },
-        {
           "fieldPath": "aiMode",
           "order": "ASCENDING"
         },
@@ -404,10 +400,6 @@
       "fields": [
         {
           "fieldPath": "isDeleted",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "isPublic",
           "order": "ASCENDING"
         },
         {

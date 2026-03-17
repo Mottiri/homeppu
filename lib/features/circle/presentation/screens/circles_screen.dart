@@ -538,6 +538,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
                                     selected: isSelected,
                                     onSelected: (selected) {
                                       setState(() => _selectedCategory = category);
+                                      _debounceTimer?.cancel();
                                       if (_searchController.text.isNotEmpty) {
                                         _performSearch(_searchController.text);
                                       } else {
@@ -698,7 +699,17 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
       );
     }
 
-    final allResults = _allSearchResults;
+    final allResults = _applyFilters(_allSearchResults);
+
+    if (allResults.isEmpty && _searchHasMore && !_isLoadingMoreSearch) {
+      // フィルタで全件除外されたがサーバーにまだデータがある → 次ページを自動ロード
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _loadMoreSearchResults();
+      });
+      return const SliverFillRemaining(
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
 
     if (allResults.isEmpty) {
       return SliverFillRemaining(
@@ -854,22 +865,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     }
 
     // フィルター適用
-    if (_selectedFilters.contains(_FilterOption.hasSpace)) {
-      filteredCircles = filteredCircles
-          .where((c) => c.memberCount < c.maxMembers)
-          .toList();
-    }
-    if (_selectedFilters.contains(_FilterOption.hasPosts)) {
-      filteredCircles = filteredCircles.where((c) => c.postCount > 0).toList();
-    }
-    final hasPublicFilter = _selectedFilters.contains(_FilterOption.publicOnly);
-    final hasInviteFilter =
-        _selectedFilters.contains(_FilterOption.inviteOnly);
-    if (hasPublicFilter && !hasInviteFilter) {
-      filteredCircles = filteredCircles.where((c) => c.isPublic).toList();
-    } else if (hasInviteFilter && !hasPublicFilter) {
-      filteredCircles = filteredCircles.where((c) => !c.isPublic).toList();
-    }
+    filteredCircles = _applyFilters(filteredCircles);
 
     // 並び順適用
     switch (_selectedSort) {
@@ -956,6 +952,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
       onTap: () {
         if (_selectedTab == index) return;
         setState(() => _selectedTab = index);
+        _debounceTimer?.cancel();
         // 検索中ならタブ切り替え時に再検索
         if (_searchController.text.isNotEmpty) {
           _performSearch(_searchController.text);
@@ -1152,6 +1149,27 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         ),
       ),
     );
+  }
+
+  /// フィルター条件を適用（検索結果・通常一覧共通）
+  List<CircleModel> _applyFilters(List<CircleModel> circles) {
+    var result = circles;
+    if (_selectedFilters.contains(_FilterOption.hasSpace)) {
+      result = result.where((c) => c.memberCount < c.maxMembers).toList();
+    }
+    if (_selectedFilters.contains(_FilterOption.hasPosts)) {
+      result = result.where((c) => c.postCount > 0).toList();
+    }
+    final hasPublicFilter =
+        _selectedFilters.contains(_FilterOption.publicOnly);
+    final hasInviteFilter =
+        _selectedFilters.contains(_FilterOption.inviteOnly);
+    if (hasPublicFilter && !hasInviteFilter) {
+      result = result.where((c) => c.isPublic).toList();
+    } else if (hasInviteFilter && !hasPublicFilter) {
+      result = result.where((c) => !c.isPublic).toList();
+    }
+    return result;
   }
 
   void _openFilterSheet() {
