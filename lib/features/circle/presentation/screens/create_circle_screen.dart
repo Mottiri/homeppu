@@ -145,14 +145,14 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen>
                   filePath: _iconImage!.path,
                   circleId: circleId,
                   imageType: 'icon',
-                ).then<String?>((v) => v).catchError((_) => null as String?)
+                ).then<String?>((v) => v).catchError((e) { debugPrint('Icon upload error: $e'); return null as String?; })
               : Future<String?>.value(null);
           final coverResult = _coverImage != null
               ? mediaService.uploadCircleImage(
                   filePath: _coverImage!.path,
                   circleId: circleId,
                   imageType: 'cover',
-                ).then<String?>((v) => v).catchError((_) => null as String?)
+                ).then<String?>((v) => v).catchError((e) { debugPrint('Cover upload error: $e'); return null as String?; })
               : Future<String?>.value(null);
 
           final results = await Future.wait([iconResult, coverResult]);
@@ -393,6 +393,7 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen>
                 title: 'サークル名',
                 child: TextFormField(
                   controller: _nameController,
+                  maxLength: 30,
                   decoration: _inputDecoration(hintText: '例：朝活チャレンジ'),
                   validator: (value) =>
                       value?.isEmpty ?? true ? 'サークル名を入力してください' : null,
@@ -404,8 +405,9 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen>
                 title: '説明',
                 child: TextFormField(
                   controller: _descriptionController,
-                  decoration: _inputDecoration(hintText: 'どのような活動をするサークルですか？'),
+                  maxLength: 150,
                   maxLines: 3,
+                  decoration: _inputDecoration(hintText: 'どのような活動をするサークルですか？'),
                   validator: (value) =>
                       value?.isEmpty ?? true ? '説明を入力してください' : null,
                 ),
@@ -416,6 +418,7 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen>
                 title: '共通の目標（任意）',
                 child: TextFormField(
                   controller: _goalController,
+                  maxLength: 100,
                   decoration: _inputDecoration(hintText: '例：毎日1回投稿する'),
                   // バリデーションなし（任意）
                 ),
@@ -542,7 +545,7 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen>
                 child: TextFormField(
                   controller: _rulesController,
                   maxLines: 4,
-                  maxLength: 500,
+                  maxLength: 300,
                   decoration: InputDecoration(
                     hintText: '例：みんなで励まし合って楽しく頑張りましょう🎉',
                     filled: true,

@@ -185,8 +185,17 @@ service cloud.firestore {
         (isNotBanned() && isSubscriberUser()) ||
         isAdmin()
       );
+      // テキストフィールドはCloud Functions(updateCircle)経由で更新。直接更新は画像URL・subOwnerIdのみ許可
+      // subOwnerIdの変更はオーナーのみ許可（権限昇格防止）
       allow update: if isAuthenticated() && (
-        (isCircleOwnerOrSubOwner(circleId) && isNotBanned()) ||
+        (isCircleOwnerOrSubOwner(circleId) && isNotBanned() &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+           'iconImageUrl', 'coverImageUrl'
+         ])) ||
+        (isOwner(resource.data.ownerId) && isNotBanned() &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+           'iconImageUrl', 'coverImageUrl', 'subOwnerId'
+         ])) ||
         isAdmin()
       );
       allow delete: if isAuthenticated() &&

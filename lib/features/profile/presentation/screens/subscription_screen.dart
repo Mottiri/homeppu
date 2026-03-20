@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -26,6 +27,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
   bool _loading = true;
   bool _isProcessing = false;
   bool _isAwaitingSubscriptionSync = false;
+  Timer? _syncTimeoutTimer;
   static const String _androidManageUrl =
       'https://play.google.com/store/account/subscriptions?package=com.homeppu.homeppu';
 
@@ -51,6 +53,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
 
   @override
   void dispose() {
+    _syncTimeoutTimer?.cancel();
     _glowController.dispose();
     super.dispose();
   }
@@ -72,23 +75,36 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
     }
   }
 
+  Future<bool> _syncAndHandleResult({bool showAwaitingOnFailure = false}) async {
+    final isSubscriber = await SubscriptionService.instance
+        .syncSubscriptionStatus(force: true)
+        .timeout(const Duration(seconds: 30), onTimeout: () => false);
+    ref.invalidate(currentUserProvider);
+    if (mounted) {
+      if (isSubscriber) {
+        SnackBarHelper.showSuccess(
+          context,
+          AppMessages.success.purchaseCompleted,
+        );
+      } else if (showAwaitingOnFailure) {
+        setState(() => _isAwaitingSubscriptionSync = true);
+        _startSyncTimeout();
+      } else {
+        _showSyncFailedDialog();
+      }
+    }
+    return isSubscriber;
+  }
+
   Future<void> _purchase() async {
     if (_package == null) {
       _showPurchaseFailedDialog();
       return;
     }
-    var purchaseSucceeded = false;
     setState(() => _isProcessing = true);
     try {
       await SubscriptionService.instance.purchasePackage(_package!);
-      purchaseSucceeded = true;
-      ref.invalidate(currentUserProvider);
-      if (mounted) {
-        SnackBarHelper.showSuccess(
-          context,
-          AppMessages.success.purchaseCompleted,
-        );
-      }
+      await _syncAndHandleResult(showAwaitingOnFailure: true);
     } on PlatformException catch (e) {
       final errorCode = PurchasesErrorHelper.getErrorCode(e);
       if (errorCode != PurchasesErrorCode.purchaseCancelledError && mounted) {
@@ -100,12 +116,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
       }
     } finally {
       if (mounted) {
-        setState(() {
-          _isProcessing = false;
-          if (purchaseSucceeded) {
-            _isAwaitingSubscriptionSync = true;
-          }
-        });
+        setState(() => _isProcessing = false);
       }
     }
   }
@@ -149,6 +160,56 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
     );
   }
 
+  void _startSyncTimeout() {
+    _syncTimeoutTimer?.cancel();
+    _syncTimeoutTimer = Timer(const Duration(seconds: 30), () {
+      if (mounted && _isAwaitingSubscriptionSync) {
+        setState(() => _isAwaitingSubscriptionSync = false);
+        _showSyncFailedDialog();
+      }
+    });
+  }
+
+  void _showSyncFailedDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(AppMessages.error.syncFailedTitle),
+        content: Text(AppMessages.error.syncFailedMessage),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              _retrySyncSubscription();
+            },
+            child: Text(AppMessages.label.restorePurchase),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              if (mounted) {
+                context.push('/inquiry');
+              }
+            },
+            child: Text(AppMessages.profile.inquiryTitle),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _retrySyncSubscription() async {
+    setState(() => _isProcessing = true);
+    try {
+      await Purchases.restorePurchases();
+      await _syncAndHandleResult();
+    } catch (_) {
+      if (mounted) _showSyncFailedDialog();
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider).valueOrNull;
@@ -163,7 +224,9 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
       });
     }
 
-    return Stack(
+    return PopScope(
+      canPop: !_isProcessing,
+      child: Stack(
       children: [
         Scaffold(
           appBar: AppBar(
@@ -216,6 +279,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
         // 購入処理中オーバーレイ（ブラー + カード）
         if (_isProcessing) _buildProcessingOverlay(),
       ],
+    ),
     );
   }
 

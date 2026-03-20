@@ -11,11 +11,15 @@ export const IMAGE_MODERATION_PROMPT = `
 
 【ブロック対象（isInappropriate: true）】
 - adult: 成人向けコンテンツ、露出の多い画像、性的な内容
-- violence: 暴力的な画像、血液、怪我、残虐な内容、血まみれ
+- violence: 実際の暴力写真、血液、怪我、残虐な内容、血まみれ
 - hate: ヘイトシンボル、差別的な画像
 - dangerous: 違法行為、麻薬、薬
 
-上記に該当しない場合は isInappropriate: false としてください。
+【許容（isInappropriate: false）】
+- ゲーム、アニメ、漫画、映画、ドラマ等のフィクション作品の画像・カバーアート・スクリーンショット（戦闘シーンやアクションシーンを含む場合でも、フィクション作品であれば許容）
+- ただし、フィクション作品であっても性的な内容（adult）は許容しない
+
+上記ブロック対象に該当せず、許容条件を満たす場合は isInappropriate: false としてください。
 
 【回答形式】
 JSON形式のみで回答:

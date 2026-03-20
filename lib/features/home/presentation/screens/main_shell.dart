@@ -16,6 +16,7 @@ import '../../../../shared/providers/tutorial_phase6_provider.dart';
 import '../../../../shared/providers/ui_overlay_provider.dart';
 import '../../../../shared/widgets/tutorial_overlay.dart';
 import '../../../../shared/services/circle_service.dart';
+import '../../../../shared/services/subscription_service.dart';
 import '../../../circle/presentation/screens/circles_screen.dart';
 import 'home_screen.dart';
 import '../../../profile/presentation/screens/profile_screen.dart';
@@ -100,6 +101,10 @@ class _MainShellState extends ConsumerState<MainShell>
       (prev, next) => _onCurrentUserChanged(prev, next),
       fireImmediately: true,
     );
+
+    // サブスクリプション同期（アプリ起動時）
+    SubscriptionService.instance.attachCustomerInfoListener();
+    SubscriptionService.instance.syncSubscriptionStatus();
   }
 
   @override
@@ -111,6 +116,14 @@ class _MainShellState extends ConsumerState<MainShell>
     _rotationController.dispose();
     _bottomNavVisible.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      SubscriptionService.instance.syncSubscriptionStatus();
+    }
   }
 
   @override

@@ -365,6 +365,31 @@ async function applyProfileImageSubscriptionFallbackIfNeeded(
   return true;
 }
 
+async function applyHeaderImageSubscriptionFallbackIfNeeded(
+  userId: string,
+  afterData: Record<string, unknown>,
+  isSubscriber: boolean
+): Promise<boolean> {
+  if (isSubscriber) return false;
+
+  const headerImageUrl = toStringOrNull(afterData.headerImageUrl);
+  if (!headerImageUrl) return false;
+
+  try {
+    await deleteStorageFileFromUrl(headerImageUrl);
+  } catch (error) {
+    console.warn("Failed to delete header image:", error);
+  }
+
+  await db.collection(COLLECTIONS.USERS).doc(userId).update({
+    headerImageUrl: FieldValue.delete(),
+    headerPrimaryColor: FieldValue.delete(),
+    headerSecondaryColor: FieldValue.delete(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  return true;
+}
+
 export const onUserCreated = onDocumentCreated(
   {
     document: "users/{userId}",
@@ -402,9 +427,11 @@ export const onUserUpdated = onDocumentUpdated(
     let publicSource = afterData;
     let requiresRefresh = false;
 
-    if (!isSubscriber) {
+    if (wasSubscriber && !isSubscriber) {
+      // 購読→非購読への遷移時のみフォールバック処理を実行
+      // 元々非購読者やcallable-404による更新では画像削除しない
       const appliedSubscriptionFallback = await applySubscriptionFallbackIfNeeded(userId, afterData, {
-        forceStampSheetFallback: wasSubscriber && !isSubscriber,
+        forceStampSheetFallback: true,
       });
       const appliedProfileImageFallback = await applyProfileImageSubscriptionFallbackIfNeeded(
         userId,
@@ -412,7 +439,12 @@ export const onUserUpdated = onDocumentUpdated(
         afterData,
         isSubscriber
       );
-      requiresRefresh = appliedSubscriptionFallback || appliedProfileImageFallback;
+      const appliedHeaderImageFallback = await applyHeaderImageSubscriptionFallbackIfNeeded(
+        userId,
+        afterData,
+        isSubscriber
+      );
+      requiresRefresh = appliedSubscriptionFallback || appliedProfileImageFallback || appliedHeaderImageFallback;
     }
 
     if (requiresRefresh) {

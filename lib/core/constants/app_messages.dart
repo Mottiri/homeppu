@@ -121,6 +121,8 @@ class _ErrorMessages {
   String get notFoundDescription => '大丈夫、ホームに戻ろう！';
   String get purchaseFailedTitle => '購入に失敗しました';
   String get purchaseFailedSupport => '購入に失敗しました。お手数ですが運営にお問い合わせください。';
+  String get syncFailedTitle => '購入の反映に時間がかかっています';
+  String get syncFailedMessage => '購入は完了していますが、反映に時間がかかっています。\n「購入を復元する」をお試しください。';
   String get rewardedAdFailed => '広告の再生に失敗しました。';
   String get rewardedUnlockFailed => '一時解放に失敗しました。';
   String get epicReactionLocked => 'サブスクまたは一時解放が必要です。';
@@ -225,6 +227,7 @@ class _LabelMessages {
   String get yes => 'はい';
   String get no => 'いいえ';
   String get purchase => '購入する';
+  String get restorePurchase => '購入を復元する';
   String get subscribe => '詳細';
   String get watchAd => '広告を見る';
   String get done => '完了';
@@ -337,6 +340,7 @@ class _CircleMessages {
   String get searchError => '検索中にエラーが発生しました';
   String get createLimitExceeded => 'サークルの作成上限（30個）に達しています';
   String get imageUploadFailedButCreated => 'サークルは作成されましたが、画像のアップロードに失敗しました。サークル設定から画像を再設定できます。';
+  String get imageUploadFailedButUpdated => 'サークル情報は更新されましたが、画像のアップロードに失敗しました。再度お試しください。';
   String get searchJoinedTruncated => '参加中のサークルが多いため、一部のサークルが表示されていない可能性があります';
   String get listError => 'エラーが発生しました';
   String get emptyTitle => 'まだサークルがないよ';

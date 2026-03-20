@@ -66,20 +66,25 @@ function toNumber(value: unknown): number | null {
 
 function resolveSubscriberStatus(event: RevenueCatEvent): boolean | null {
     const nowMs = Date.now();
-    const expirationMs =
-        toNumber(event.expiration_at_ms) ??
-        toNumber(event.expires_date_ms) ??
-        (() => {
-            if (!event.entitlements) return null;
-            for (const entitlement of Object.values(event.entitlements)) {
-                const exp = toNumber(entitlement?.expires_date_ms);
-                if (exp != null) return exp;
-            }
-            return null;
-        })();
 
-    if (expirationMs != null) {
-        return expirationMs > nowMs;
+    // イベント直接のexpiration（単一商品イベント）
+    const directExpMs =
+        toNumber(event.expiration_at_ms) ??
+        toNumber(event.expires_date_ms);
+
+    if (directExpMs != null) {
+        return directExpMs > nowMs;
+    }
+
+    // entitlements全体を走査し、1つでも有効なら購読中と判定
+    // （Callable側 subscription.ts の判定ロジックと統一）
+    if (event.entitlements && Object.keys(event.entitlements).length > 0) {
+        return Object.values(event.entitlements).some((entitlement) => {
+            const exp = toNumber(entitlement?.expires_date_ms);
+            if (exp != null) return exp > nowMs;
+            // expires_date_msがない = 無期限エンタイトルメント
+            return true;
+        });
     }
 
     const type = (event.type || "").toUpperCase();
@@ -167,6 +172,8 @@ export const revenueCatWebhook = onRequest(
         await db.collection(COLLECTIONS.USERS).doc(userId).set(
             {
                 isSubscriber,
+                subscriptionLastSyncedAt: FieldValue.serverTimestamp(),
+                subscriptionSource: "webhook",
                 updatedAt: FieldValue.serverTimestamp(),
             },
             { merge: true }

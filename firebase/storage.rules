@@ -10,8 +10,9 @@ service firebase.storage {
       return request.auth != null && request.auth.token.admin == true;
     }
 
+    // Storage rulesでは$(database)変数が使えないため(default)を直接指定
     function circleData(circleId) {
-      return firestore.get(/databases/$(database)/documents/circles/$(circleId)).data;
+      return firestore.get(/databases/(default)/documents/circles/$(circleId)).data;
     }
 
     function isCircleOwnerOrSubOwner(circleId) {

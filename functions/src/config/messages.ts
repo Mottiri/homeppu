@@ -20,6 +20,7 @@ export const AUTH_ERRORS = {
 // ===============================================
 export const PERMISSION_ERRORS = {
     CIRCLE_DELETE_OWNER_ONLY: "サークル削除はオーナーまたは管理者のみ可能です",
+    CIRCLE_EDIT_PERMISSION_DENIED: "サークル編集はオーナー、サブオーナー、または管理者のみ可能です",
     CIRCLE_APPROVE_OWNER_ONLY: "オーナー、サブオーナー、または管理者のみ承認できます",
     CIRCLE_REJECT_OWNER_ONLY: "オーナー、サブオーナー、または管理者のみ拒否できます",
     INQUIRY_ACCESS_DENIED: "この問い合わせにはアクセスできません",
@@ -99,6 +100,13 @@ export const SYSTEM_ERRORS = {
     ADMIN_SET_FAILED: "管理者設定に失敗しました",
     ADMIN_REMOVE_FAILED: "管理者削除に失敗しました",
     API_KEY_MISSING: "GEMINI_API_KEY is not set",
+} as const;
+
+// ===============================================
+// サブスクリプションエラー (SUBSCRIPTION_ERRORS)
+// ===============================================
+export const SUBSCRIPTION_ERRORS = {
+    SYNC_FAILED: "サブスクリプション情報の取得に失敗しました",
 } as const;
 
 // ===============================================

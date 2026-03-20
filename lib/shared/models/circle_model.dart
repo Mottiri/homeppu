@@ -22,7 +22,7 @@ class CircleModel {
   final String? iconImageUrl;
   final int memberCount;
   final int postCount;
-  final String? rules; // サークルルール（500文字以内）
+  final String? rules; // サークルルール（300文字以内）
   final bool isDeleted; // ソフトデリート済み
 
   CircleModel({

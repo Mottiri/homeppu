@@ -358,9 +358,32 @@ class CircleService {
         });
   }
 
-  // サークル更新
+  // サークル更新（Firestore直接 — 画像URL等の非テキストフィールド用）
   Future<void> updateCircle(String circleId, Map<String, dynamic> data) async {
     await _firestore.collection('circles').doc(circleId).update(data);
+  }
+
+  // サークル編集（Cloud Functions経由 — テキストモデレーション付き）
+  Future<void> updateCircleWithModeration({
+    required String circleId,
+    required String name,
+    required String description,
+    required String category,
+    required String goal,
+    required bool isPublic,
+    String? rules,
+  }) async {
+    final functions = FirebaseFunctions.instanceFor(region: AppConstants.functionsRegion);
+    final callable = functions.httpsCallable('updateCircle');
+    await callable.call({
+      'circleId': circleId,
+      'name': name,
+      'description': description,
+      'category': category,
+      'goal': goal,
+      'isPublic': isPublic,
+      'rules': rules,
+    });
   }
 
   // 申請中かどうかをチェック

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_messages.dart';
 import '../../../../core/mixins/loading_state_mixin.dart';
@@ -13,6 +14,7 @@ import '../../../../shared/models/circle_model.dart';
 import '../../../../shared/services/circle_service.dart';
 import '../../../../shared/services/media_service.dart';
 import '../../../../shared/services/image_moderation_service.dart';
+import '../../../../shared/widgets/report_dialog.dart';
 
 class EditCircleScreen extends ConsumerStatefulWidget {
   final String circleId;
@@ -118,72 +120,108 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen>
     if (!_formKey.currentState!.validate()) return;
 
     await runWithLoading(() async {
-      final circleService = ref.read(circleServiceProvider);
-      final mediaService = MediaService();
-      final moderationService = ImageModerationService();
+      try {
+        final circleService = ref.read(circleServiceProvider);
+        final mediaService = MediaService();
+        final moderationService = ImageModerationService();
 
-      // 新しい画像のモデレーションを先に実行
-      if (_iconImage != null) {
-        final error = await moderationService.moderateImage(_iconImage!);
-        if (error != null) {
-          if (mounted) {
-            SnackBarHelper.showError(context, error);
+        // 新しい画像のモデレーションを先に実行（並列）
+        if (_iconImage != null || _coverImage != null) {
+          final results = await Future.wait([
+            if (_iconImage != null) moderationService.moderateImage(_iconImage!),
+            if (_coverImage != null) moderationService.moderateImage(_coverImage!),
+          ]);
+          for (final error in results) {
+            if (error != null) {
+              if (mounted) {
+                SnackBarHelper.showError(context, error);
+              }
+              return;
+            }
           }
-          return;
         }
-      }
 
-      if (_coverImage != null) {
-        final error = await moderationService.moderateImage(_coverImage!);
-        if (error != null) {
-          if (mounted) {
-            SnackBarHelper.showError(context, error);
+        // テキストフィールド更新（Cloud Functions経由 — テキストモデレーション付き）
+        final rulesText = _rulesController.text.trim();
+        await circleService.updateCircleWithModeration(
+          circleId: widget.circleId,
+          name: _nameController.text.trim(),
+          description: _descriptionController.text.trim(),
+          category: _selectedCategory,
+          goal: _goalController.text.trim(),
+          isPublic: _isPublic,
+          rules: rulesText.isNotEmpty ? rulesText : null,
+        );
+
+        // 画像アップロード — テキスト更新成功後に実行
+        String? newIconUrl = _iconImageUrl;
+        String? newCoverUrl = _coverImageUrl;
+        bool uploadFailed = false;
+
+        if (_iconImage != null || _coverImage != null) {
+          final iconResult = _iconImage != null
+              ? mediaService.uploadCircleImage(
+                  filePath: _iconImage!.path,
+                  circleId: widget.circleId,
+                  imageType: 'icon',
+                ).catchError((e) { debugPrint('Icon upload error: $e'); return null as String?; })
+              : Future<String?>.value(null);
+          final coverResult = _coverImage != null
+              ? mediaService.uploadCircleImage(
+                  filePath: _coverImage!.path,
+                  circleId: widget.circleId,
+                  imageType: 'cover',
+                ).catchError((e) { debugPrint('Cover upload error: $e'); return null as String?; })
+              : Future<String?>.value(null);
+
+          final results = await Future.wait([iconResult, coverResult]);
+          if (_iconImage != null) newIconUrl = results[0] ?? _iconImageUrl;
+          if (_coverImage != null) newCoverUrl = results[1] ?? _coverImageUrl;
+
+          if ((_iconImage != null && results[0] == null) ||
+              (_coverImage != null && results[1] == null)) {
+            uploadFailed = true;
           }
-          return;
         }
-      }
 
-      // モデレーション通過後、画像をアップロード
-      String? newIconUrl = _iconImageUrl;
-      String? newCoverUrl = _coverImageUrl;
+        // 画像URLを更新（Firestore直接）
+        await circleService.updateCircle(widget.circleId, {
+          'iconImageUrl': newIconUrl,
+          'coverImageUrl': newCoverUrl,
+        });
 
-      if (_iconImage != null) {
-        newIconUrl = await mediaService.uploadCircleImage(
-          filePath: _iconImage!.path,
-          circleId: widget.circleId,
-          imageType: 'icon',
-        );
-      }
-
-      if (_coverImage != null) {
-        newCoverUrl = await mediaService.uploadCircleImage(
-          filePath: _coverImage!.path,
-          circleId: widget.circleId,
-          imageType: 'cover',
-        );
-      }
-
-      await circleService.updateCircle(widget.circleId, {
-        'name': _nameController.text.trim(),
-        'description': _descriptionController.text.trim(),
-        'category': _selectedCategory,
-        'goal': _goalController.text.trim(),
-        'rules': _rulesController.text.trim().isEmpty
-            ? null
-            : _rulesController.text.trim(),
-        'isPublic': _isPublic,
-        'iconImageUrl': newIconUrl,
-        'coverImageUrl': newCoverUrl,
-      });
-
-      if (mounted) {
-        SnackBarHelper.showSuccess(context, AppMessages.success.circleUpdated);
-        context.pop();
-      }
-    }).catchError((e) {
-      if (mounted) {
-        SnackBarHelper.showError(context, AppMessages.error.general);
-        debugPrint('Circle update failed: $e');
+        if (mounted) {
+          if (uploadFailed) {
+            SnackBarHelper.showWarning(
+              context,
+              AppMessages.circle.imageUploadFailedButUpdated,
+            );
+          } else {
+            SnackBarHelper.showSuccess(context, AppMessages.success.circleUpdated);
+          }
+          context.pop();
+        }
+      } catch (e) {
+        if (mounted) {
+          if (e is FirebaseFunctionsException) {
+            if (e.code == 'invalid-argument' && e.message != null && e.message!.isNotEmpty) {
+              final msg = e.message!;
+              if (msg.contains('提案:') || msg.contains('NGワード')) {
+                await NegativeContentDialog.show(
+                  context: context,
+                  message: msg,
+                );
+              } else {
+                SnackBarHelper.showError(context, msg);
+              }
+            } else {
+              SnackBarHelper.showError(context, AppMessages.error.general);
+            }
+          } else {
+            SnackBarHelper.showError(context, AppMessages.error.general);
+          }
+          debugPrint('Circle update failed: $e');
+        }
       }
     });
   }
@@ -391,13 +429,11 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen>
               title: 'サークル名',
               child: TextFormField(
                 controller: _nameController,
+                maxLength: 30,
                 decoration: _inputDecoration('サークル名を入力'),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
                     return 'サークル名を入力してください';
-                  }
-                  if (value.trim().length > 30) {
-                    return '30文字以内で入力してください';
                   }
                   return null;
                 },
@@ -411,8 +447,9 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen>
               title: '説明',
               child: TextFormField(
                 controller: _descriptionController,
-                decoration: _inputDecoration('サークルの説明を入力'),
+                maxLength: 150,
                 maxLines: 3,
+                decoration: _inputDecoration('サークルの説明を入力'),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
                     return '説明を入力してください';
@@ -459,6 +496,7 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen>
               title: '目標',
               child: TextFormField(
                 controller: _goalController,
+                maxLength: 100,
                 decoration: _inputDecoration('サークルの目標（任意）'),
                 maxLines: 2,
               ),
@@ -469,18 +507,12 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen>
             // ルール
             _buildSection(
               title: 'サークルルール',
-              subtitle: '参加時に同意を求めます（任意・500文字以内）',
+              subtitle: '参加時に同意を求めます（任意・300文字以内）',
               child: TextFormField(
                 controller: _rulesController,
                 decoration: _inputDecoration('サークルのルールを入力'),
                 maxLines: 5,
-                maxLength: 500,
-                validator: (value) {
-                  if (value != null && value.length > 500) {
-                    return '500文字以内で入力してください';
-                  }
-                  return null;
-                },
+                maxLength: 300,
               ),
             ),
 

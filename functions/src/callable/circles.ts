@@ -942,6 +942,84 @@ export const searchCircles = onCall(
   }
 );
 
+// ===============================================
+// サークル作成/編集 共通ヘルパー
+// ===============================================
+const VALID_CATEGORIES = ["勉強", "ダイエット", "運動", "趣味", "仕事", "資格", "読書", "語学", "音楽", "その他"];
+
+/** サークル作成/編集時の共通バリデーション */
+function validateCircleFields(
+  data: { name: unknown; description: unknown; category: unknown; goal: unknown; isPublic: unknown; circleRules: unknown },
+  options?: { allowNullRules?: boolean }
+): void {
+  const { name, description, category, goal, isPublic, circleRules } = data;
+
+  if (!name || typeof name !== "string" || name.trim().length === 0) {
+    throw new HttpsError("invalid-argument", VALIDATION_ERRORS.MISSING_REQUIRED);
+  }
+  if (name.length > 30) {
+    throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
+  }
+  if (!description || typeof description !== "string") {
+    throw new HttpsError("invalid-argument", VALIDATION_ERRORS.MISSING_REQUIRED);
+  }
+  if (description.length > 150) {
+    throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
+  }
+  if (goal !== undefined && typeof goal !== "string") {
+    throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
+  }
+  if (typeof goal === "string" && goal.length > 100) {
+    throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
+  }
+  if (options?.allowNullRules) {
+    if (circleRules !== undefined && circleRules !== null &&
+        (typeof circleRules !== "string" || circleRules.length > 300)) {
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
+    }
+  } else {
+    if (circleRules !== undefined && (typeof circleRules !== "string" || circleRules.length > 300)) {
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
+    }
+  }
+  if (!category || typeof category !== "string" || !VALID_CATEGORIES.includes(category)) {
+    throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
+  }
+  if (isPublic !== undefined && typeof isPublic !== "boolean") {
+    throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
+  }
+}
+
+/** Fail Closed APIキーチェック + テキストモデレーション実行 */
+async function moderateCircleText(
+  fields: { name: string; description: string; goal?: string; circleRules?: string | null },
+  type: string,
+  userId: string,
+  contentDescription: string
+): Promise<void> {
+  const geminiKey = geminiApiKey.value() || "";
+  const openaiKey = openaiApiKey.value() || "";
+  if (!geminiKey && !openaiKey) {
+    console.error("ERROR: No AI API key available (both GEMINI and OPENAI are empty)");
+    throw new HttpsError("internal", SYSTEM_ERRORS.INTERNAL);
+  }
+
+  const { name, description, goal, circleRules } = fields;
+  const textFields = [name, description, goal, circleRules].filter(
+    (f): f is string => typeof f === "string" && f.trim().length > 0
+  );
+  if (textFields.length === 0) return;
+
+  const contentBody = [
+    `サークル名: ${name}`,
+    `説明: ${description}`,
+    goal ? `目標: ${goal}` : "",
+    circleRules ? `ルール: ${circleRules}` : "",
+  ].filter(Boolean).join("\n");
+
+  await moderateText({ type, userId, contentDescription, contentBody });
+}
+
 /**
  * サークル作成（Cloud Functions callable）
  * オーナーが作成できるサークル数を上限30に制限
@@ -974,35 +1052,8 @@ export const createCircle = onCall(
 
     const { name, description, category, aiMode, goal, isPublic, rules: circleRules } = request.data;
 
-    // バリデーション
-    if (!name || typeof name !== "string" || name.trim().length === 0) {
-      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.MISSING_REQUIRED);
-    }
-    if (name.length > 30) {
-      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
-    }
-    if (!description || typeof description !== "string") {
-      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.MISSING_REQUIRED);
-    }
-    if (description.length > 500) {
-      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
-    }
-    if (goal !== undefined && typeof goal !== "string") {
-      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
-    }
-    if (typeof goal === "string" && goal.length > 200) {
-      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
-    }
-    if (circleRules !== undefined && (typeof circleRules !== "string" || circleRules.length > 1000)) {
-      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
-    }
-    const validCategories = ["勉強", "ダイエット", "運動", "趣味", "仕事", "資格", "読書", "語学", "音楽", "その他"];
-    if (!category || typeof category !== "string" || !validCategories.includes(category)) {
-      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
-    }
-    if (isPublic !== undefined && typeof isPublic !== "boolean") {
-      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
-    }
+    // バリデーション（共通）
+    validateCircleFields({ name, description, category, goal, isPublic, circleRules });
     const validAIModes = ["aiOnly", "mix", "humanOnly"];
     if (!aiMode || !validAIModes.includes(aiMode)) {
       throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
@@ -1020,36 +1071,11 @@ export const createCircle = onCall(
       throw new HttpsError("resource-exhausted", VALIDATION_ERRORS.CIRCLE_LIMIT_EXCEEDED);
     }
 
-    // Fail Closed: APIキーが1つも利用できない場合はエラー
-    const geminiKey = geminiApiKey.value() || "";
-    const openaiKey = openaiApiKey.value() || "";
-    if (!geminiKey && !openaiKey) {
-      console.error("ERROR: No AI API key available (both GEMINI and OPENAI are empty)");
-      throw new HttpsError("internal", SYSTEM_ERRORS.INTERNAL);
-    }
-
-    // ===============================================
-    // テキストモデレーション（NGワード + AIモデレーション）
-    // ===============================================
-    const textFields = [name, description, goal, circleRules].filter(
-      (f): f is string => typeof f === "string" && f.trim().length > 0
+    // テキストモデレーション（Fail Closed + NGワード + AI）
+    await moderateCircleText(
+      { name, description, goal, circleRules },
+      "circle_create", userId, "サークル作成内容"
     );
-    const combinedText = textFields.join(" ");
-    if (combinedText) {
-      const contentBody = [
-        `サークル名: ${name}`,
-        `説明: ${description}`,
-        goal ? `目標: ${goal}` : "",
-        circleRules ? `ルール: ${circleRules}` : "",
-      ].filter(Boolean).join("\n");
-
-      await moderateText({
-        type: "circle_create",
-        userId,
-        contentDescription: "サークル作成内容",
-        contentBody,
-      });
-    }
 
     // サークル作成
     const docRef = db.collection("circles").doc();
@@ -1080,5 +1106,81 @@ export const createCircle = onCall(
     await docRef.set(circleData);
 
     return { circleId: docRef.id };
+  }
+);
+
+/**
+ * サークル編集（Cloud Functions callable）
+ * テキストモデレーション付き
+ */
+export const updateCircle = onCall(
+  {
+    region: LOCATION,
+    enforceAppCheck: true,
+    secrets: [geminiApiKey, openaiApiKey],
+    timeoutSeconds: 120,
+    memory: "512MiB",
+  },
+  async (request) => {
+    const userId = requireAuth(request, AUTH_ERRORS.UNAUTHENTICATED_ALT);
+
+    const { circleId, name, description, category, goal, isPublic, rules: circleRules } = request.data;
+
+    if (!circleId || typeof circleId !== "string") {
+      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.CIRCLE_ID_REQUIRED);
+    }
+
+    // サークル存在チェック + 権限・BANチェック（並列）
+    const [circleDoc, userIsAdmin, userDoc] = await Promise.all([
+      db.collection("circles").doc(circleId).get(),
+      isAdmin(userId),
+      db.collection("users").doc(userId).get(),
+    ]);
+
+    if (!circleDoc.exists || circleDoc.data()?.isDeleted) {
+      throw new HttpsError("not-found", RESOURCE_ERRORS.CIRCLE_NOT_FOUND);
+    }
+    const circleData = circleDoc.data()!;
+    if (circleData.ownerId !== userId && circleData.subOwnerId !== userId && !userIsAdmin) {
+      throw new HttpsError("permission-denied", PERMISSION_ERRORS.CIRCLE_EDIT_PERMISSION_DENIED);
+    }
+    if (userDoc.exists && userDoc.data()?.isBanned) {
+      throw new HttpsError("permission-denied", AUTH_ERRORS.BANNED);
+    }
+
+    // バリデーション（共通）
+    validateCircleFields(
+      { name, description, category, goal, isPublic, circleRules },
+      { allowNullRules: true }
+    );
+
+    // テキストモデレーション（Fail Closed + NGワード + AI）
+    await moderateCircleText(
+      { name, description, goal, circleRules },
+      "circle_update", userId, "サークル編集内容"
+    );
+
+    // 更新データ構築
+    const updateData: Record<string, unknown> = {
+      name: name.trim(),
+      description: description.trim(),
+      category,
+      goal: (goal || "").trim(),
+      rules: circleRules || null,
+    };
+
+    // aiOnlyの場合はisPublic変更不可
+    if (circleData.aiMode !== "aiOnly" && isPublic !== undefined) {
+      updateData.isPublic = isPublic;
+    }
+
+    // 名前が変わった場合はnameTokensを再生成
+    if (name.trim() !== circleData.name) {
+      updateData.nameTokens = generateNameTokens(name.trim());
+    }
+
+    await db.collection("circles").doc(circleId).update(updateData);
+
+    return { success: true };
   }
 );

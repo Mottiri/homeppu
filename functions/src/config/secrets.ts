@@ -11,3 +11,6 @@ export const sheetsServiceAccountKey = defineSecret("SHEETS_SERVICE_ACCOUNT");
 
 // RevenueCat Webhook Secret
 export const revenueCatWebhookSecret = defineSecret("REVENUECAT_WEBHOOK_SECRET");
+
+// RevenueCat Server API Key (REST API用)
+export const revenueCatServerApiKey = defineSecret("REVENUECAT_SERVER_API_KEY");
