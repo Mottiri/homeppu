@@ -51,7 +51,7 @@ export {
     checkPasswordResetTarget,
 } from "./callable/users";
 export { getVirtueShopConfig, purchaseVirtueItem } from "./callable/virtue_shop";
-export { syncSubscriptionStatus } from "./callable/subscription";
+
 export {
     cleanUpUserFollows,
     deleteAllAIUsers,

@@ -1,8 +1,5 @@
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
-
-import '../../core/constants/app_constants.dart';
 
 class SubscriptionService {
   SubscriptionService._();
@@ -10,9 +7,6 @@ class SubscriptionService {
   static final SubscriptionService instance = SubscriptionService._();
 
   bool _configured = false;
-  bool _listenerAttached = false;
-  DateTime? _lastSyncAt;
-  static const _minSyncInterval = Duration(seconds: 30);
 
   Future<void> _configureIfNeeded() async {
     if (_configured) return;
@@ -80,6 +74,14 @@ class SubscriptionService {
     await Purchases.purchase(PurchaseParams.package(package));
   }
 
+  Future<void> restorePurchases() async {
+    await _configureIfNeeded();
+    if (!_configured) {
+      throw StateError('RevenueCat is not configured.');
+    }
+    await Purchases.restorePurchases();
+  }
+
   Future<void> logOut() async {
     if (!_configured) return;
     try {
@@ -89,55 +91,6 @@ class SubscriptionService {
       }
     } catch (e) {
       debugPrint('RevenueCat logOut failed: $e');
-    }
-  }
-
-  /// Cloud Functionを呼び出してサブスクリプション状態を同期。
-  /// [force] trueで30秒debounceをバイパス（購入直後など）。
-  Future<bool> syncSubscriptionStatus({bool force = false}) async {
-    if (!force && _lastSyncAt != null) {
-      final elapsed = DateTime.now().difference(_lastSyncAt!);
-      if (elapsed < _minSyncInterval) {
-        if (kDebugMode) {
-          debugPrint(
-            'syncSubscriptionStatus skipped (debounce: ${elapsed.inSeconds}s)',
-          );
-        }
-        return false;
-      }
-    }
-
-    try {
-      final functions = FirebaseFunctions.instanceFor(
-        region: AppConstants.functionsRegion,
-      );
-      final callable = functions.httpsCallable(
-        'syncSubscriptionStatus',
-        options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
-      );
-      final result = await callable.call();
-      _lastSyncAt = DateTime.now();
-      final data = Map<String, dynamic>.from(result.data as Map);
-      return data['isSubscriber'] == true;
-    } catch (e) {
-      debugPrint('syncSubscriptionStatus failed: $e');
-      return false;
-    }
-  }
-
-  /// CustomerInfoリスナーを登録（エンタイトルメント変更時に自動sync）。
-  Future<void> attachCustomerInfoListener() async {
-    if (_listenerAttached) return;
-    await _configureIfNeeded();
-    if (!_configured) return;
-    _listenerAttached = true;
-
-    Purchases.addCustomerInfoUpdateListener((_) {
-      syncSubscriptionStatus();
-    });
-
-    if (kDebugMode) {
-      debugPrint('RevenueCat CustomerInfo listener attached.');
     }
   }
 }

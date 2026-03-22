@@ -169,6 +169,27 @@ export const revenueCatWebhook = onRequest(
             return;
         }
 
+        // レースコンディション防止: isSubscriber=false に変更する場合、
+        // 直近でisSubscriber=trueが書き込まれていないか確認する。
+        // INITIAL_PURCHASE と EXPIRATION が同時に届く場合、
+        // EXPIRATION（旧サブスク）がINITIAL_PURCHASE（新サブスク）を上書きするのを防ぐ。
+        if (!isSubscriber) {
+            const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+            if (userDoc.exists) {
+                const userData = userDoc.data();
+                const currentIsSubscriber = userData?.isSubscriber === true;
+                const lastSyncedAt = userData?.subscriptionLastSyncedAt?.toDate?.();
+                if (currentIsSubscriber && lastSyncedAt) {
+                    const elapsedMs = Date.now() - lastSyncedAt.getTime();
+                    if (elapsedMs < 10000) {
+                        // 10秒以内にisSubscriber=trueが書き込まれた → EXPIRATION上書きを防止
+                        res.status(200).send("OK");
+                        return;
+                    }
+                }
+            }
+        }
+
         await db.collection(COLLECTIONS.USERS).doc(userId).set(
             {
                 isSubscriber,

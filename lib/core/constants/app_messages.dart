@@ -121,8 +121,8 @@ class _ErrorMessages {
   String get notFoundDescription => '大丈夫、ホームに戻ろう！';
   String get purchaseFailedTitle => '購入に失敗しました';
   String get purchaseFailedSupport => '購入に失敗しました。お手数ですが運営にお問い合わせください。';
-  String get syncFailedTitle => '購入の反映に時間がかかっています';
-  String get syncFailedMessage => '購入は完了していますが、反映に時間がかかっています。\n「購入を復元する」をお試しください。';
+  String get purchasePendingTitle => '購入の反映に時間がかかっています';
+  String get purchasePendingMessage => '購入は完了していますが、反映に時間がかかっています。\nしばらく待っても反映されない場合は「購入を復元する」をお試しください。';
   String get rewardedAdFailed => '広告の再生に失敗しました。';
   String get rewardedUnlockFailed => '一時解放に失敗しました。';
   String get epicReactionLocked => 'サブスクまたは一時解放が必要です。';
@@ -684,7 +684,6 @@ class _ProfileMessages {
   String get premiumPriceLabel => '/月';
   String get premiumProcessing => '購入処理中...';
   String get premiumProcessingWait => '少々お待ちください';
-  String get premiumActivationInProgress => '購入内容を反映中...';
   String get premiumNotice => '反映まで数十秒かかる場合があります';
   String get premiumSubscribed => '加入済み';
   String get premiumManage => '定期購入を管理';

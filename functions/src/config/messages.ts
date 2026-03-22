@@ -103,13 +103,6 @@ export const SYSTEM_ERRORS = {
 } as const;
 
 // ===============================================
-// サブスクリプションエラー (SUBSCRIPTION_ERRORS)
-// ===============================================
-export const SUBSCRIPTION_ERRORS = {
-    SYNC_FAILED: "サブスクリプション情報の取得に失敗しました",
-} as const;
-
-// ===============================================
 // 通知タイトル (NOTIFICATION_TITLES)
 // ===============================================
 export const NOTIFICATION_TITLES = {

@@ -26,8 +26,6 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
   Package? _package;
   bool _loading = true;
   bool _isProcessing = false;
-  bool _isAwaitingSubscriptionSync = false;
-  Timer? _syncTimeoutTimer;
   static const String _androidManageUrl =
       'https://play.google.com/store/account/subscriptions?package=com.homeppu.homeppu';
 
@@ -53,7 +51,6 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
 
   @override
   void dispose() {
-    _syncTimeoutTimer?.cancel();
     _glowController.dispose();
     super.dispose();
   }
@@ -75,27 +72,6 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
     }
   }
 
-  Future<bool> _syncAndHandleResult({bool showAwaitingOnFailure = false}) async {
-    final isSubscriber = await SubscriptionService.instance
-        .syncSubscriptionStatus(force: true)
-        .timeout(const Duration(seconds: 30), onTimeout: () => false);
-    ref.invalidate(currentUserProvider);
-    if (mounted) {
-      if (isSubscriber) {
-        SnackBarHelper.showSuccess(
-          context,
-          AppMessages.success.purchaseCompleted,
-        );
-      } else if (showAwaitingOnFailure) {
-        setState(() => _isAwaitingSubscriptionSync = true);
-        _startSyncTimeout();
-      } else {
-        _showSyncFailedDialog();
-      }
-    }
-    return isSubscriber;
-  }
-
   Future<void> _purchase() async {
     if (_package == null) {
       _showPurchaseFailedDialog();
@@ -104,11 +80,75 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
     setState(() => _isProcessing = true);
     try {
       await SubscriptionService.instance.purchasePackage(_package!);
-      await _syncAndHandleResult(showAwaitingOnFailure: true);
+      // Webhookが isSubscriber を更新するのを待つ
+      final synced = await _waitForSubscription();
+      if (mounted) {
+        if (synced) {
+          SnackBarHelper.showSuccess(
+            context,
+            AppMessages.success.purchaseCompleted,
+          );
+        } else {
+          _showPurchasePendingDialog();
+        }
+      }
     } on PlatformException catch (e) {
       final errorCode = PurchasesErrorHelper.getErrorCode(e);
       if (errorCode != PurchasesErrorCode.purchaseCancelledError && mounted) {
         _showPurchaseFailedDialog();
+      }
+    } catch (_) {
+      if (mounted) {
+        _showPurchaseFailedDialog();
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+      }
+    }
+  }
+
+  /// Firestoreの isSubscriber が true になるまで最大15秒待つ。
+  /// StreamProviderなのでWebhook→Firestore更新が自動反映される。
+  Future<bool> _waitForSubscription() async {
+    final completer = Completer<bool>();
+
+    final sub = ref.listenManual<AsyncValue>(
+      currentUserProvider,
+      (_, next) {
+        if (next.valueOrNull?.isSubscriber == true && !completer.isCompleted) {
+          completer.complete(true);
+        }
+      },
+    );
+
+    final timer = Timer(const Duration(seconds: 15), () {
+      if (!completer.isCompleted) completer.complete(false);
+    });
+
+    // 現在値もチェック（既にtrueかもしれない）
+    ref.invalidate(currentUserProvider);
+
+    final result = await completer.future;
+    timer.cancel();
+    sub.close();
+    return result;
+  }
+
+  Future<void> _restorePurchases() async {
+    setState(() => _isProcessing = true);
+    try {
+      await SubscriptionService.instance.restorePurchases();
+      final synced = await _waitForSubscription();
+      if (mounted) {
+        if (synced) {
+          SnackBarHelper.showSuccess(
+            context,
+            AppMessages.success.purchaseCompleted,
+          );
+        } else {
+          _showPurchasePendingDialog();
+        }
       }
     } catch (_) {
       if (mounted) {
@@ -131,6 +171,36 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
     if (!ok && mounted) {
       SnackBarHelper.showError(context, AppMessages.error.general);
     }
+  }
+
+  void _showPurchasePendingDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(AppMessages.error.purchasePendingTitle),
+          content: Text(AppMessages.error.purchasePendingMessage),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _restorePurchases();
+              },
+              child: Text(AppMessages.label.restorePurchase),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                if (mounted) {
+                  this.context.push('/inquiry');
+                }
+              },
+              child: Text(AppMessages.profile.inquiryTitle),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _showPurchaseFailedDialog() {
@@ -160,69 +230,11 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
     );
   }
 
-  void _startSyncTimeout() {
-    _syncTimeoutTimer?.cancel();
-    _syncTimeoutTimer = Timer(const Duration(seconds: 30), () {
-      if (mounted && _isAwaitingSubscriptionSync) {
-        setState(() => _isAwaitingSubscriptionSync = false);
-        _showSyncFailedDialog();
-      }
-    });
-  }
-
-  void _showSyncFailedDialog() {
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(AppMessages.error.syncFailedTitle),
-        content: Text(AppMessages.error.syncFailedMessage),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-              _retrySyncSubscription();
-            },
-            child: Text(AppMessages.label.restorePurchase),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-              if (mounted) {
-                context.push('/inquiry');
-              }
-            },
-            child: Text(AppMessages.profile.inquiryTitle),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _retrySyncSubscription() async {
-    setState(() => _isProcessing = true);
-    try {
-      await Purchases.restorePurchases();
-      await _syncAndHandleResult();
-    } catch (_) {
-      if (mounted) _showSyncFailedDialog();
-    } finally {
-      if (mounted) setState(() => _isProcessing = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider).valueOrNull;
     final isSubscriber = user?.isSubscriber ?? false;
     final priceLabel = _package?.storeProduct.priceString ?? '¥500';
-    final isAwaitingSync = _isAwaitingSubscriptionSync && !isSubscriber;
-
-    if (_isAwaitingSubscriptionSync && isSubscriber) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        setState(() => _isAwaitingSubscriptionSync = false);
-      });
-    }
 
     return PopScope(
       canPop: !_isProcessing,
@@ -256,10 +268,22 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
                   const SizedBox(height: 24),
 
                   // 購入ボタン
-                  _buildPurchaseButton(
-                    isSubscriber: isSubscriber,
-                    isAwaitingSync: isAwaitingSync,
-                  ),
+                  _buildPurchaseButton(isSubscriber: isSubscriber),
+                  if (!isSubscriber) ...[
+                    const SizedBox(height: 8),
+                    Center(
+                      child: TextButton(
+                        onPressed: _isProcessing ? null : _restorePurchases,
+                        child: Text(
+                          AppMessages.label.restorePurchase,
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: AppColors.textSecondary,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
 
                   // 注意書き
@@ -463,42 +487,16 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
     );
   }
 
-  Widget _buildPurchaseButton({
-    required bool isSubscriber,
-    required bool isAwaitingSync,
-  }) {
-    final disableButton = _isProcessing || isAwaitingSync;
+  Widget _buildPurchaseButton({required bool isSubscriber}) {
     return SizedBox(
       height: 56,
       child: ElevatedButton(
-        onPressed: disableButton
+        onPressed: _isProcessing
             ? null
             : isSubscriber
             ? _openManageSubscription
             : _purchase,
-        child: isAwaitingSync
-            ? Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    AppMessages.profile.premiumActivationInProgress,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              )
-            : Text(
+        child: Text(
                 isSubscriber
                     ? AppMessages.profile.premiumManage
                     : AppMessages.label.purchase,
