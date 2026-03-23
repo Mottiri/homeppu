@@ -8,6 +8,7 @@
  */
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { logger } from "firebase-functions/v2";
 import * as functionsV1 from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import { scheduleHttpTask } from "../helpers/cloud-tasks";
@@ -788,29 +789,48 @@ export const searchCircles = onCall(
     memory: "256MiB",
   },
   async (request) => {
+    try {
+    logger.info("[searchCircles] START", { data: request.data });
     const userId = requireAuth(request, AUTH_ERRORS.UNAUTHENTICATED_ALT);
+    logger.info("[searchCircles] auth OK", { userId });
 
     await assertSubscriberOrTrial(userId);
+    logger.info("[searchCircles] subscriber/trial OK");
 
-    const { query, category, limit: requestLimit, cursor, joinedOnly } = request.data;
+    const { query, category, limit: requestLimit, cursor, joinedOnly,
+      sortBy, isPublic: isPublicFilter, hasSpace, hasPosts } = request.data;
+
+    logger.info("[searchCircles] params", { query, category, sortBy, isPublicFilter, hasSpace, hasPosts, joinedOnly, cursor: !!cursor });
 
     // バリデーション
-    if (!query || typeof query !== "string" || query.trim().length < 1) {
-      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
+    if (query !== undefined && query !== null && query !== "") {
+      if (typeof query !== "string" || query.length > 100) {
+        throw new HttpsError("invalid-argument", "[V1] query長すぎ");
+      }
     }
-    if (query.length > 100) {
-      throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
-    }
+
+    // sortBy設定
+    const SORT_CONFIG: Record<string, { field: string; dir: "asc" | "desc" }> = {
+      newest: { field: "createdAt", dir: "desc" },
+      active: { field: "recentActivity", dir: "desc" },
+      popular: { field: "memberCount", dir: "desc" },
+      postCount: { field: "postCount", dir: "desc" },
+      humanPostOldest: { field: "lastHumanPostAt", dir: "asc" },
+    };
+    const searchToken = query ? query.toLowerCase().trim() : "";
+    const effectiveSortBy = sortBy && SORT_CONFIG[sortBy] ? sortBy : (searchToken ? "popular" : "newest");
+    const sort = SORT_CONFIG[effectiveSortBy];
+
     // cursorバリデーション
     if (cursor) {
-      if (typeof cursor.memberCount !== "number" || typeof cursor.id !== "string") {
-        throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
+      if (typeof cursor.value === "undefined" || typeof cursor.id !== "string") {
+        throw new HttpsError("invalid-argument", "[V2] cursor不正");
       }
     }
 
     const searchLimit = Math.min(Math.max(requestLimit || 20, 1), 50);
-    const searchToken = query.toLowerCase().trim();
     const isJoinedOnly = joinedOnly === true;
+    const needsJsFilter = hasSpace === true || hasPosts === true || isPublicFilter === false;
 
     // レスポンス整形ヘルパー
     const formatCircle = (data: FirebaseFirestore.DocumentData, id: string) => ({
@@ -827,6 +847,7 @@ export const searchCircles = onCall(
       iconImageUrl: data.iconImageUrl || null,
       coverImageUrl: data.coverImageUrl || null,
       goal: data.goal || "",
+      maxMembers: data.maxMembers || 30,
       recentActivity: data.recentActivity?.toDate?.()?.toISOString() || null,
       lastHumanPostAt: data.lastHumanPostAt?.toDate?.()?.toISOString() || null,
       createdAt: data.createdAt?.toDate?.()?.toISOString() || null,
@@ -845,14 +866,33 @@ export const searchCircles = onCall(
       }
 
       // 参加サークルは通常少数なので全件取得（上限200）
-      joinedQuery = joinedQuery.orderBy("memberCount", "desc").limit(200);
+      joinedQuery = joinedQuery.orderBy(sort.field, sort.dir).limit(200);
       const joinedSnapshot = await joinedQuery.get();
 
-      // 名前でフィルタ（部分一致）
-      const matchedDocs = joinedSnapshot.docs.filter((doc) => {
-        const name = (doc.data().name || "").toLowerCase();
-        return name.includes(searchToken);
-      });
+      // 名前でフィルタ（部分一致） - searchTokenがある場合のみ
+      let matchedDocs = joinedSnapshot.docs;
+      if (searchToken) {
+        matchedDocs = matchedDocs.filter((doc) => {
+          const name = (doc.data().name || "").toLowerCase();
+          return name.includes(searchToken);
+        });
+      }
+
+      // JS-side filters
+      if (isPublicFilter === true) {
+        matchedDocs = matchedDocs.filter((doc) => doc.data().isPublic !== false);
+      } else if (isPublicFilter === false) {
+        matchedDocs = matchedDocs.filter((doc) => doc.data().isPublic === false);
+      }
+      if (hasSpace === true) {
+        matchedDocs = matchedDocs.filter((doc) => {
+          const data = doc.data();
+          return (data.memberCount || 0) < (data.maxMembers || 30);
+        });
+      }
+      if (hasPosts === true) {
+        matchedDocs = matchedDocs.filter((doc) => (doc.data().postCount || 0) > 0);
+      }
 
       // aiOnlyのオーナーサークルとそれ以外を分離
       const privateOwnerCircles: ReturnType<typeof formatCircle>[] = [];
@@ -876,7 +916,7 @@ export const searchCircles = onCall(
     // クエリ1: オーナーのaiOnlyサークル（初回のみ）
     // クエリ2: 公開サークル検索（cursorページネーション対応）
     // 両クエリは独立しているため Promise.all で並列実行
-    const fetchLimit = searchLimit + 1;
+    const overfetchLimit = needsJsFilter ? (searchLimit + 1) * 3 : searchLimit + 1;
 
     let ownerQueryPromise: Promise<FirebaseFirestore.QuerySnapshot> | null = null;
 
@@ -884,8 +924,11 @@ export const searchCircles = onCall(
       let ownerQuery: FirebaseFirestore.Query = db.collection("circles")
         .where("isDeleted", "==", false)
         .where("ownerId", "==", userId)
-        .where("aiMode", "==", "aiOnly")
-        .where("nameTokens", "array-contains", searchToken);
+        .where("aiMode", "==", "aiOnly");
+
+      if (searchToken) {
+        ownerQuery = ownerQuery.where("nameTokens", "array-contains", searchToken);
+      }
 
       if (category && category !== "全て") {
         ownerQuery = ownerQuery.where("category", "==", category);
@@ -896,25 +939,46 @@ export const searchCircles = onCall(
     }
 
     let publicQuery: FirebaseFirestore.Query = db.collection("circles")
-      .where("isDeleted", "==", false)
-      .where("aiMode", "in", ["mix", "humanOnly"])
-      .where("nameTokens", "array-contains", searchToken)
-      .orderBy("memberCount", "desc")
-      .orderBy(FieldPath.documentId())
-      .limit(fetchLimit);
+      .where("isDeleted", "==", false);
 
+    // aiMode フィルタ（常にaiOnly除外、isPublicはJS-sideでフィルタ）
+    publicQuery = publicQuery.where("aiMode", "in", ["mix", "humanOnly"]);
+
+    // テキスト検索フィルタ（queryがある場合のみ）
+    if (searchToken) {
+      publicQuery = publicQuery.where("nameTokens", "array-contains", searchToken);
+    }
+
+    // カテゴリフィルタ
     if (category && category !== "全て") {
       publicQuery = publicQuery.where("category", "==", category);
     }
 
-    if (cursor) {
-      publicQuery = publicQuery.startAfter(cursor.memberCount, cursor.id);
+    // ソートとページネーション
+    publicQuery = publicQuery
+      .orderBy(sort.field, sort.dir)
+      .orderBy(FieldPath.documentId())
+      .limit(overfetchLimit);
+
+    if (cursor && typeof cursor.value !== "undefined" && typeof cursor.id === "string") {
+      let cursorValue = cursor.value;
+      if (typeof cursorValue === "string" && ["newest", "active", "humanPostOldest"].includes(effectiveSortBy)) {
+        cursorValue = Timestamp.fromDate(new Date(cursorValue));
+      }
+      publicQuery = publicQuery.startAfter(cursorValue, cursor.id);
     }
 
-    const [ownerSnapshot, publicSnapshot] = await Promise.all([
-      ownerQueryPromise ?? Promise.resolve(null),
-      publicQuery.get(),
-    ]);
+    let ownerSnapshot: FirebaseFirestore.QuerySnapshot | null;
+    let publicSnapshot: FirebaseFirestore.QuerySnapshot;
+    try {
+      [ownerSnapshot, publicSnapshot] = await Promise.all([
+        ownerQueryPromise ?? Promise.resolve(null),
+        publicQuery.get(),
+      ]) as [FirebaseFirestore.QuerySnapshot | null, FirebaseFirestore.QuerySnapshot];
+    } catch (err) {
+      console.error("[searchCircles] Firestore query failed:", err);
+      throw err;
+    }
 
     // オーナーのaiOnlyサークル
     const privateOwnerCircles: ReturnType<typeof formatCircle>[] = [];
@@ -924,21 +988,47 @@ export const searchCircles = onCall(
       }
     }
 
-    // 公開サークル
-    const hasMore = publicSnapshot.docs.length > searchLimit;
-    const publicDocs = publicSnapshot.docs.slice(0, searchLimit);
+    // 公開サークル - JS-sideフィルタ適用
+    let publicDocs = publicSnapshot.docs;
+
+    if (isPublicFilter === true) {
+      publicDocs = publicDocs.filter((doc) => doc.data().isPublic !== false);
+    } else if (isPublicFilter === false) {
+      publicDocs = publicDocs.filter((doc) => doc.data().isPublic === false);
+    }
+    if (hasSpace === true) {
+      publicDocs = publicDocs.filter((doc) => {
+        const data = doc.data();
+        return (data.memberCount || 0) < (data.maxMembers || 30);
+      });
+    }
+    if (hasPosts === true) {
+      publicDocs = publicDocs.filter((doc) => (doc.data().postCount || 0) > 0);
+    }
+
+    const hasMore = publicDocs.length > searchLimit;
+    publicDocs = publicDocs.slice(0, searchLimit);
     const circles = publicDocs.map((doc) => formatCircle(doc.data(), doc.id));
 
-    let nextCursor: { memberCount: number; id: string } | undefined;
-    if (hasMore) {
+    let nextCursor: { value: number | string; id: string } | undefined;
+    if (hasMore && publicDocs.length > 0) {
       const lastDoc = publicDocs[publicDocs.length - 1];
-      nextCursor = {
-        memberCount: lastDoc.data().memberCount || 0,
-        id: lastDoc.id,
-      };
+      const lastData = lastDoc.data();
+      const sortField = sort.field;
+      let value: number | string;
+      if (["createdAt", "recentActivity", "lastHumanPostAt"].includes(sortField)) {
+        value = lastData[sortField]?.toDate?.()?.toISOString() || "";
+      } else {
+        value = lastData[sortField] || 0;
+      }
+      nextCursor = { value, id: lastDoc.id };
     }
 
     return { circles, privateOwnerCircles, hasMore, nextCursor };
+    } catch (err) {
+      logger.error("[searchCircles] ERROR", { error: String(err), stack: (err as Error).stack });
+      throw err;
+    }
   }
 );
 

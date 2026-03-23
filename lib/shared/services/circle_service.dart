@@ -190,45 +190,44 @@ class CircleService {
   }
 
   // サークル検索（Cloud Functions callable経由）
+  // queryが空の場合はブラウズモード（フィルター/ソートのみ）
   Future<({
     List<CircleModel> circles,
     List<CircleModel> privateOwnerCircles,
     bool hasMore,
-    ({int memberCount, String id})? nextCursor,
+    Map<String, dynamic>? nextCursor,
     bool joinedTruncated,
   })> searchCircles(
-    String query, {
+    String? query, {
     required String userId,
     String? category,
-    ({int memberCount, String id})? cursor,
+    Map<String, dynamic>? cursor,
     bool joinedOnly = false,
+    String? sortBy,
+    bool? isPublic,
+    bool? hasSpace,
+    bool? hasPosts,
   }) async {
     final functions = FirebaseFunctions.instanceFor(region: AppConstants.functionsRegion);
     final callable = functions.httpsCallable('searchCircles');
 
     final result = await callable.call({
-      'query': query,
+      if (query != null && query.isNotEmpty) 'query': query,
       if (category != null && category != '全て') 'category': category,
       'limit': 20,
       if (joinedOnly) 'joinedOnly': true,
-      if (cursor != null)
-        'cursor': {
-          'memberCount': cursor.memberCount,
-          'id': cursor.id,
-        },
+      if (cursor != null) 'cursor': cursor,
+      if (sortBy != null) 'sortBy': sortBy,
+      if (isPublic != null) 'isPublic': isPublic,
+      if (hasSpace == true) 'hasSpace': true,
+      if (hasPosts == true) 'hasPosts': true,
     });
 
     final data = Map<String, dynamic>.from(result.data as Map);
     final hasMore = data['hasMore'] as bool? ?? false;
     final rawCursor = data['nextCursor'];
-    final cursorData = rawCursor != null
+    final nextCursor = rawCursor != null
         ? Map<String, dynamic>.from(rawCursor as Map)
-        : null;
-    final nextCursor = cursorData != null
-        ? (
-            memberCount: cursorData['memberCount'] as int,
-            id: cursorData['id'] as String,
-          )
         : null;
 
     CircleModel parseCircle(dynamic item) {

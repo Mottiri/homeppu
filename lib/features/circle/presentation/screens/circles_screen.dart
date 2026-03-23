@@ -41,7 +41,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   bool _isSearching = false;
   bool _searchHasMore = false;
   bool _isLoadingMoreSearch = false;
-  ({int memberCount, String id})? _searchCursor;
+  Map<String, dynamic>? _searchCursor;
   Timer? _debounceTimer;
   int _searchGeneration = 0;
 
@@ -58,6 +58,9 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   double _fabScrollAccumulator = 0;
   int _fabScrollDirection = 0; // 1: down, -1: up
 
+  // callable browse用の状態
+  Map<String, dynamic>? _browseCursor;
+
   // 並び順・フィルター用の状態
   _SortOption _selectedSort = _SortOption.newest;
   final Set<_FilterOption> _selectedFilters = {};
@@ -66,14 +69,23 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   @override
   void initState() {
     super.initState();
+    debugPrint('[CirclesScreen] initState called');
     _scrollController.addListener(_onScroll);
   }
+
+  bool _initialLoadDone = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // 画面が再表示されるたびにリロード（他の画面から戻ってきた時など）
-    _loadCircles();
+    debugPrint('[CirclesScreen] didChangeDependencies called (initialLoadDone=$_initialLoadDone)');
+    // 初回のみロード（didChangeDependencies は MediaQuery 等の変更でも呼ばれるため）
+    if (!_initialLoadDone) {
+      _initialLoadDone = true;
+      _loadCircles();
+    } else {
+      debugPrint('[CirclesScreen] didChangeDependencies SKIPPED (not first call)');
+    }
   }
 
   @override
@@ -97,6 +109,26 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     }
   }
 
+  /// フィルターまたはソートがアクティブか
+  bool get _isFilterOrSortActive =>
+      _selectedSort != _SortOption.newest || _selectedFilters.isNotEmpty;
+
+  String _sortOptionToString(_SortOption option) => switch (option) {
+    _SortOption.newest => 'newest',
+    _SortOption.active => 'active',
+    _SortOption.popular => 'popular',
+    _SortOption.postCount => 'postCount',
+    _SortOption.humanPostOldest => 'humanPostOldest',
+  };
+
+  bool? get _isPublicFilter {
+    final hasPub = _selectedFilters.contains(_FilterOption.publicOnly);
+    final hasInv = _selectedFilters.contains(_FilterOption.inviteOnly);
+    if (hasPub && !hasInv) return true;
+    if (hasInv && !hasPub) return false;
+    return null;
+  }
+
   /// スクロール可能かを再評価
   void _updateScrollable() {
     if (!mounted) return;
@@ -109,40 +141,61 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   }
 
   Future<void> _loadCircles() async {
+    debugPrint('[CirclesScreen] _loadCircles called (stack: ${StackTrace.current.toString().split('\n').take(5).join(' | ')})');
     final currentUser = ref.read(currentUserProvider).valueOrNull;
-    if (currentUser == null) {
-      // ログインしていない場合は何もしない（通常ありえない）
-      return;
-    }
+    if (currentUser == null) return;
 
     setState(() {
       _isLoading = _circles.isEmpty;
       _error = null;
       _hasMore = true;
       _lastDocument = null;
+      _browseCursor = null;
+      _privateOwnerResults = [];
     });
 
     try {
       final circleService = ref.read(circleServiceProvider);
-      final isAdmin = ref.read(isAdminProvider).valueOrNull ?? false;
-      final result = await circleService.getPublicCirclesPaginated(
-        category: _selectedCategory,
-        userId: currentUser.uid,
-        isAdmin: isAdmin,
-        limit: 15,
-      );
-      setState(() {
-        _circles = result.circles;
-        _lastDocument = result.lastDoc;
-        _hasMore = result.hasMore;
-        _isLoading = false;
-      });
-      // レイアウト後にスクロール可能か再評価
+
+      if (_isFilterOrSortActive || _searchController.text.isNotEmpty) {
+        // フィルター/ソート/検索がアクティブ → callable browse mode
+        final result = await circleService.searchCircles(
+          _searchController.text.isNotEmpty ? _searchController.text : null,
+          userId: currentUser.uid,
+          category: _selectedCategory,
+          sortBy: _sortOptionToString(_selectedSort),
+          isPublic: _isPublicFilter,
+          hasSpace: _selectedFilters.contains(_FilterOption.hasSpace) ? true : null,
+          hasPosts: _selectedFilters.contains(_FilterOption.hasPosts) ? true : null,
+          joinedOnly: _selectedTab == 1,
+        );
+        setState(() {
+          _circles = result.circles;
+          _privateOwnerResults = result.privateOwnerCircles;
+          _browseCursor = result.nextCursor;
+          _hasMore = result.hasMore;
+          _isLoading = false;
+        });
+      } else {
+        // デフォルト表示 → Firestore直接クエリ（高速）
+        final isAdmin = ref.read(isAdminProvider).valueOrNull ?? false;
+        final result = await circleService.getPublicCirclesPaginated(
+          category: _selectedCategory,
+          userId: currentUser.uid,
+          isAdmin: isAdmin,
+          limit: 15,
+        );
+        setState(() {
+          _circles = result.circles;
+          _lastDocument = result.lastDoc;
+          _hasMore = result.hasMore;
+          _isLoading = false;
+        });
+      }
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _updateScrollable();
       });
     } catch (e, stackTrace) {
-      // デバッグ用：エラーの詳細をコンソールに出力
       debugPrint('CirclesScreen._loadCircles エラー: $e');
       debugPrint('スタックトレース: $stackTrace');
       setState(() {
@@ -153,30 +206,68 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   }
 
   Future<void> _loadMoreCircles() async {
-    if (_isLoadingMore || !_hasMore || _lastDocument == null) return;
+    if (_isLoadingMore || !_hasMore) {
+      debugPrint('[CirclesScreen] _loadMoreCircles SKIPPED (isLoadingMore=$_isLoadingMore, hasMore=$_hasMore)');
+      return;
+    }
 
     final currentUser = ref.read(currentUserProvider).valueOrNull;
     if (currentUser == null) return;
+
+    if (_isFilterOrSortActive) {
+      // callable browse mode
+      if (_browseCursor == null) {
+        debugPrint('[CirclesScreen] _loadMoreCircles SKIPPED (browseCursor is null)');
+        return;
+      }
+    } else {
+      // Firestore直接
+      if (_lastDocument == null) {
+        debugPrint('[CirclesScreen] _loadMoreCircles SKIPPED (lastDocument is null)');
+        return;
+      }
+    }
+    debugPrint('[CirclesScreen] _loadMoreCircles EXECUTING (circles=${_circles.length})');
 
     setState(() => _isLoadingMore = true);
 
     try {
       final circleService = ref.read(circleServiceProvider);
-      final isAdmin = ref.read(isAdminProvider).valueOrNull ?? false;
-      final result = await circleService.getPublicCirclesPaginated(
-        category: _selectedCategory,
-        userId: currentUser.uid,
-        isAdmin: isAdmin,
-        lastDocument: _lastDocument,
-        limit: 15,
-      );
-      setState(() {
-        _circles.addAll(result.circles);
-        _lastDocument = result.lastDoc;
-        _hasMore = result.hasMore;
-        _isLoadingMore = false;
-      });
-      // レイアウト後にスクロール可能か再評価
+
+      if (_isFilterOrSortActive || _searchController.text.isNotEmpty) {
+        final result = await circleService.searchCircles(
+          _searchController.text.isNotEmpty ? _searchController.text : null,
+          userId: currentUser.uid,
+          category: _selectedCategory,
+          cursor: _browseCursor,
+          sortBy: _sortOptionToString(_selectedSort),
+          isPublic: _isPublicFilter,
+          hasSpace: _selectedFilters.contains(_FilterOption.hasSpace) ? true : null,
+          hasPosts: _selectedFilters.contains(_FilterOption.hasPosts) ? true : null,
+          joinedOnly: _selectedTab == 1,
+        );
+        setState(() {
+          _circles.addAll(result.circles);
+          _browseCursor = result.nextCursor;
+          _hasMore = result.hasMore;
+          _isLoadingMore = false;
+        });
+      } else {
+        final isAdmin = ref.read(isAdminProvider).valueOrNull ?? false;
+        final result = await circleService.getPublicCirclesPaginated(
+          category: _selectedCategory,
+          userId: currentUser.uid,
+          isAdmin: isAdmin,
+          lastDocument: _lastDocument,
+          limit: 15,
+        );
+        setState(() {
+          _circles.addAll(result.circles);
+          _lastDocument = result.lastDoc;
+          _hasMore = result.hasMore;
+          _isLoadingMore = false;
+        });
+      }
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _updateScrollable();
       });
@@ -228,6 +319,10 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         userId: currentUser?.uid ?? '',
         category: _selectedCategory,
         joinedOnly: _selectedTab == 1,
+        sortBy: _sortOptionToString(_selectedSort),
+        isPublic: _isPublicFilter,
+        hasSpace: _selectedFilters.contains(_FilterOption.hasSpace) ? true : null,
+        hasPosts: _selectedFilters.contains(_FilterOption.hasPosts) ? true : null,
       );
       if (!mounted || generation != _searchGeneration) return;
       setState(() {
@@ -276,6 +371,10 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         category: _selectedCategory,
         joinedOnly: _selectedTab == 1,
         cursor: _searchCursor,
+        sortBy: _sortOptionToString(_selectedSort),
+        isPublic: _isPublicFilter,
+        hasSpace: _selectedFilters.contains(_FilterOption.hasSpace) ? true : null,
+        hasPosts: _selectedFilters.contains(_FilterOption.hasPosts) ? true : null,
       );
       if (!mounted) return;
       if (generation != _searchGeneration) {
@@ -295,6 +394,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   }
 
   void _scrollToTop() {
+    debugPrint('[CirclesScreen] _scrollToTop called (stack: ${StackTrace.current.toString().split('\n').take(3).join(' | ')})');
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
         0,
@@ -855,44 +955,18 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     final keyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
     final bottomPadding = keyboardVisible ? 16.0 : 100.0;
 
-    // タブに応じてフィルタリング
-    List<CircleModel> filteredCircles = _circles;
-    if (_selectedTab == 1 && userId != null) {
-      // 参加中タブ: 自分がメンバーのサークルのみ
-      filteredCircles = _circles
-          .where((c) => c.memberIds.contains(userId))
-          .toList();
-    }
-
-    // フィルター適用
-    filteredCircles = _applyFilters(filteredCircles);
-
-    // 並び順適用
-    switch (_selectedSort) {
-      case _SortOption.newest:
-        filteredCircles.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        break;
-      case _SortOption.active:
-        filteredCircles.sort((a, b) {
-          final aActivity = a.recentActivity ?? DateTime(1970);
-          final bActivity = b.recentActivity ?? DateTime(1970);
-          return bActivity.compareTo(aActivity);
-        });
-        break;
-      case _SortOption.popular:
-        filteredCircles.sort((a, b) => b.memberCount.compareTo(a.memberCount));
-        break;
-      case _SortOption.postCount:
-        filteredCircles.sort((a, b) => b.postCount.compareTo(a.postCount));
-        break;
-      case _SortOption.humanPostOldest:
-        // 人間投稿が古い順（ゴーストサークル発見用）
-        filteredCircles.sort((a, b) {
-          final aDate = a.lastHumanPostAt ?? DateTime(1970);
-          final bDate = b.lastHumanPostAt ?? DateTime(1970);
-          return aDate.compareTo(bDate); // 古い方が先
-        });
-        break;
+    // callable使用時はサーバー側でフィルター/ソート済み
+    List<CircleModel> filteredCircles;
+    if (_isFilterOrSortActive) {
+      filteredCircles = _circles;
+    } else {
+      // デフォルト表示: クライアント側でタブフィルター適用
+      filteredCircles = _circles;
+      if (_selectedTab == 1 && userId != null) {
+        filteredCircles = _circles
+            .where((c) => c.memberIds.contains(userId))
+            .toList();
+      }
     }
 
     if (filteredCircles.isEmpty) {
@@ -1040,7 +1114,11 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
       initialValue: _selectedSort,
       onSelected: (value) {
         setState(() => _selectedSort = value);
-        _loadCircles();
+        if (_searchController.text.isNotEmpty) {
+          _performSearch(_searchController.text);
+        } else {
+          _loadCircles();
+        }
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -1279,7 +1357,11 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
                                         ..addAll(tempFilters);
                                     });
                                     Navigator.pop(context);
-                                    _loadCircles();
+                                    if (_searchController.text.isNotEmpty) {
+                                      _performSearch(_searchController.text);
+                                    } else {
+                                      _loadCircles();
+                                    }
                                   },
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppColors.primary,

@@ -40,10 +40,12 @@ class InfiniteScrollListener extends StatelessWidget {
   Widget build(BuildContext context) {
     return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
-        if (notification is ScrollEndNotification) {
+        if (notification is ScrollUpdateNotification ||
+            notification is ScrollEndNotification) {
           if (notification.metrics.extentAfter < threshold) {
             // ガード: ロード中でなく、かつ追加データがある場合のみ発火
             if (!isLoadingMore && hasMore) {
+              debugPrint('[InfiniteScroll] onLoadMore fired (extentAfter=${notification.metrics.extentAfter.toStringAsFixed(0)}, pixels=${notification.metrics.pixels.toStringAsFixed(0)}, maxExtent=${notification.metrics.maxScrollExtent.toStringAsFixed(0)})');
               onLoadMore();
             }
           }
