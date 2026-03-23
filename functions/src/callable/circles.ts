@@ -25,6 +25,7 @@ import {
   RESOURCE_ERRORS,
   VALIDATION_ERRORS,
   PERMISSION_ERRORS,
+  CIRCLE_ERRORS,
   SYSTEM_ERRORS,
   NOTIFICATION_TITLES,
   LABELS,
@@ -444,15 +445,26 @@ export const approveJoinRequest = onCall(
       const requestData = requestDoc.data()!;
       const applicantId = requestData.userId;
 
-      // 申請を承認済みに更新
-      await db.collection("circleJoinRequests").doc(requestId).update({
-        status: "approved",
-      });
+      // トランザクションで満員チェック + メンバー追加（同時承認の競合防止）
+      const circleRef = db.collection("circles").doc(circleId);
+      const requestRef = db.collection("circleJoinRequests").doc(requestId);
+      await db.runTransaction(async (tx) => {
+        const freshCircle = await tx.get(circleRef);
+        if (!freshCircle.exists) {
+          throw new HttpsError("not-found", RESOURCE_ERRORS.CIRCLE_NOT_FOUND);
+        }
+        const freshData = freshCircle.data()!;
+        const memberCount: number = freshData.memberCount ?? (freshData.memberIds || []).length;
+        const maxMembers: number = freshData.maxMembers ?? 20;
+        if (memberCount >= maxMembers) {
+          throw new HttpsError("failed-precondition", CIRCLE_ERRORS.FULL);
+        }
 
-      // サークルにメンバーを追加
-      await db.collection("circles").doc(circleId).update({
-        memberIds: FieldValue.arrayUnion(applicantId),
-        memberCount: FieldValue.increment(1),
+        tx.update(requestRef, { status: "approved" });
+        tx.update(circleRef, {
+          memberIds: FieldValue.arrayUnion(applicantId),
+          memberCount: FieldValue.increment(1),
+        });
       });
 
       // 申請者の表示名を取得
@@ -590,6 +602,13 @@ export const sendJoinRequest = onCall(
       const subOwnerId = circleData.subOwnerId;
       const circleName = circleData.name;
 
+      // 満員チェック
+      const memberCount: number = circleData.memberCount ?? (circleData.memberIds || []).length;
+      const maxMembers: number = circleData.maxMembers ?? 20;
+      if (memberCount >= maxMembers) {
+        throw new HttpsError("failed-precondition", CIRCLE_ERRORS.FULL);
+      }
+
       // 既に申請中かチェック
       const existingRequest = await db
         .collection("circleJoinRequests")
@@ -684,12 +703,12 @@ export const joinCircle = onCall(
 
         const circleData = circleDoc.data()!;
         if (circleData.isDeleted) {
-          throw new HttpsError("failed-precondition", "circle_deleted");
+          throw new HttpsError("failed-precondition", CIRCLE_ERRORS.DELETED);
         }
 
         const isPublic = circleData.isPublic !== false;
         if (!isPublic) {
-          throw new HttpsError("failed-precondition", "circle_invite_only");
+          throw new HttpsError("failed-precondition", CIRCLE_ERRORS.INVITE_ONLY);
         }
 
         const memberIds: string[] = circleData.memberIds || [];
@@ -700,7 +719,7 @@ export const joinCircle = onCall(
         const memberCount: number = circleData.memberCount ?? memberIds.length;
         const maxMembers: number = circleData.maxMembers ?? 20;
         if (memberCount >= maxMembers) {
-          throw new HttpsError("failed-precondition", "circle_full");
+          throw new HttpsError("failed-precondition", CIRCLE_ERRORS.FULL);
         }
 
         tx.update(circleRef, {

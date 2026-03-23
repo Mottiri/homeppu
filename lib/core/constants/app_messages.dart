@@ -329,6 +329,7 @@ class _CircleMessages {
   String get joinButton => '参加する';
   String get joinRequestButton => '参加申請';
   String get joinedLabel => '参加中';
+  String get circleFullLabel => '満員です';
   String get requestPendingLabel => '申請中';
 
   // サークル一覧画面
@@ -348,8 +349,6 @@ class _CircleMessages {
   String get createCircle => 'サークルを作る';
   String get emptyJoined => '参加中のサークルがありません';
   String get emptyGeneric => 'サークルがありません';
-  String get filterLabel => 'フィルター';
-  String filterWithCount(int count) => 'フィルター($count)';
   String memberCountLabel(int count) => '$count人';
   String postCountLabel(int count) => '$count件';
   String get aiModeLabel => 'AIモード';
@@ -364,6 +363,8 @@ class _CircleMessages {
   String get sortPostCount => '投稿数順';
   String get sortHumanPostOldest => '人間投稿古い順';
   String get filterHasSpace => '空きあり';
+  String get loadMoreButton => 'もっと見る';
+  String get circleFullError => 'このサークルは満員のため、参加できません';
   String get trialBannerTitle => '初回サークル体験中';
   String get trialBannerDescription =>
       'この体験では閲覧のみ可能です（作成・参加はできません）。画面遷移またはアプリ終了で体験は終了し、再度閲覧できません。';

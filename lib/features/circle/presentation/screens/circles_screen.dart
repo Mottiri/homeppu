@@ -15,7 +15,6 @@ import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/providers/circle_trial_provider.dart';
 import '../../../../shared/providers/tutorial_phase5_provider.dart';
 import '../../../../shared/widgets/infinite_scroll_listener.dart';
-import '../../../../shared/widgets/load_more_footer.dart';
 import '../../../../shared/widgets/tutorial_overlay.dart';
 
 /// サークル画面のスクロールトップを要求するProvider
@@ -63,7 +62,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
 
   // 並び順・フィルター用の状態
   _SortOption _selectedSort = _SortOption.newest;
-  final Set<_FilterOption> _selectedFilters = {};
+  bool _filterHasSpace = false;
   bool _phase5Initialized = false;
 
   @override
@@ -111,7 +110,16 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
 
   /// フィルターまたはソートがアクティブか
   bool get _isFilterOrSortActive =>
-      _selectedSort != _SortOption.newest || _selectedFilters.isNotEmpty;
+      _selectedSort != _SortOption.newest || _filterHasSpace;
+
+  /// Callable browse経路を使うか（検索・フィルタ・ソートのいずれかがアクティブ）
+  bool get _isBrowseMode =>
+      _isFilterOrSortActive || _searchController.text.isNotEmpty;
+
+  /// 現在の経路で次ページを取得可能か
+  bool get _canLoadMore =>
+      _hasMore &&
+      (_isBrowseMode ? _browseCursor != null : _lastDocument != null);
 
   String _sortOptionToString(_SortOption option) => switch (option) {
     _SortOption.newest => 'newest',
@@ -149,14 +157,14 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     try {
       final circleService = ref.read(circleServiceProvider);
 
-      if (_isFilterOrSortActive || _searchController.text.isNotEmpty) {
+      if (_isBrowseMode) {
         // フィルター/ソート/検索がアクティブ → callable browse mode
         final result = await circleService.searchCircles(
           _searchController.text.isNotEmpty ? _searchController.text : null,
           userId: currentUser.uid,
           category: _selectedCategory,
           sortBy: _sortOptionToString(_selectedSort),
-          hasSpace: _selectedFilters.contains(_FilterOption.hasSpace) ? true : null,
+          hasSpace: _filterHasSpace ? true : null,
           joinedOnly: _selectedTab == 1,
         );
         setState(() {
@@ -204,7 +212,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     final currentUser = ref.read(currentUserProvider).valueOrNull;
     if (currentUser == null) return;
 
-    if (_isFilterOrSortActive) {
+    if (_isBrowseMode) {
       // callable browse mode
       if (_browseCursor == null) {
         debugPrint('[CirclesScreen] _loadMoreCircles SKIPPED (browseCursor is null)');
@@ -224,14 +232,14 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     try {
       final circleService = ref.read(circleServiceProvider);
 
-      if (_isFilterOrSortActive || _searchController.text.isNotEmpty) {
+      if (_isBrowseMode) {
         final result = await circleService.searchCircles(
           _searchController.text.isNotEmpty ? _searchController.text : null,
           userId: currentUser.uid,
           category: _selectedCategory,
           cursor: _browseCursor,
           sortBy: _sortOptionToString(_selectedSort),
-          hasSpace: _selectedFilters.contains(_FilterOption.hasSpace) ? true : null,
+          hasSpace: _filterHasSpace ? true : null,
           joinedOnly: _selectedTab == 1,
         );
         setState(() {
@@ -308,7 +316,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         category: _selectedCategory,
         joinedOnly: _selectedTab == 1,
         sortBy: _sortOptionToString(_selectedSort),
-        hasSpace: _selectedFilters.contains(_FilterOption.hasSpace) ? true : null,
+        hasSpace: _filterHasSpace ? true : null,
       );
       if (!mounted || generation != _searchGeneration) return;
       setState(() {
@@ -358,7 +366,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         joinedOnly: _selectedTab == 1,
         cursor: _searchCursor,
         sortBy: _sortOptionToString(_selectedSort),
-        hasSpace: _selectedFilters.contains(_FilterOption.hasSpace) ? true : null,
+        hasSpace: _filterHasSpace ? true : null,
       );
       if (!mounted) return;
       if (generation != _searchGeneration) {
@@ -667,17 +675,6 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
                                 currentUser?.isSubscriber ?? false,
                               ),
 
-                        // LoadMoreFooter（ショートリスト用手動フォールバック）
-                        SliverToBoxAdapter(
-                          child: LoadMoreFooter(
-                            hasMore: !isSearchMode && _hasMore,
-                            isLoadingMore: !isSearchMode && _isLoadingMore,
-                            isInitialLoadComplete: !_isLoading,
-                            canLoadMore: _lastDocument != null,
-                            isScrollable: _isScrollable,
-                            onLoadMore: _loadMoreCircles,
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -783,17 +780,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
       );
     }
 
-    final allResults = _applyFilters(_allSearchResults);
-
-    if (allResults.isEmpty && _searchHasMore && !_isLoadingMoreSearch) {
-      // フィルタで全件除外されたがサーバーにまだデータがある → 次ページを自動ロード
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _loadMoreSearchResults();
-      });
-      return const SliverFillRemaining(
-        child: Center(child: CircularProgressIndicator()),
-      );
-    }
+    final allResults = _allSearchResults;
 
     if (allResults.isEmpty) {
       return SliverFillRemaining(
@@ -982,24 +969,36 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         delegate: SliverChildBuilderDelegate((context, index) {
           // 最後の項目の場合、ローディングインジケーターを表示
           if (index == filteredCircles.length) {
-            return _hasMore
-                ? const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                  )
-                : const SizedBox.shrink();
+            if (_isLoadingMore) {
+              return const Padding(
+                padding: EdgeInsets.all(16),
+                child: Center(
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppColors.primary,
+                  ),
+                ),
+              );
+            }
+            if (_canLoadMore && !_isScrollable) {
+              return Padding(
+                padding: const EdgeInsets.all(16),
+                child: Center(
+                  child: TextButton(
+                    onPressed: _loadMoreCircles,
+                    child: Text(AppMessages.circle.loadMoreButton),
+                  ),
+                ),
+              );
+            }
+            return const SizedBox.shrink();
           }
           return _CircleCard(
             circle: filteredCircles[index],
             currentUserId: userId,
             onDeleted: _loadCircles,
           );
-        }, childCount: filteredCircles.length + (_hasMore ? 1 : 0)),
+        }, childCount: filteredCircles.length + ((_isLoadingMore || (_canLoadMore && !_isScrollable)) ? 1 : 0)),
       ),
     );
   }
@@ -1069,13 +1068,6 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         return AppMessages.circle.sortPostCount;
       case _SortOption.humanPostOldest:
         return AppMessages.circle.sortHumanPostOldest;
-    }
-  }
-
-  String _filterLabel(_FilterOption option) {
-    switch (option) {
-      case _FilterOption.hasSpace:
-        return AppMessages.circle.filterHasSpace;
     }
   }
 
@@ -1158,48 +1150,47 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     );
   }
 
-  /// フィルタードロップダウン
+  /// 「空きあり」トグルボタン
   Widget _buildFilterDropdown() {
-    final hasActiveFilter = _selectedFilters.isNotEmpty;
-
     return InkWell(
-      onTap: _openFilterSheet,
+      onTap: () {
+        setState(() {
+          _filterHasSpace = !_filterHasSpace;
+        });
+        if (_searchController.text.isNotEmpty) {
+          _performSearch(_searchController.text);
+        } else {
+          _loadCircles();
+        }
+      },
       borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: hasActiveFilter
+          color: _filterHasSpace
               ? AppColors.primary.withValues(alpha: 0.1)
               : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: hasActiveFilter ? AppColors.primary : Colors.grey[300]!,
+            color: _filterHasSpace ? AppColors.primary : Colors.grey[300]!,
           ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              Icons.filter_list,
+              Icons.person_add,
               size: 14,
-              color: hasActiveFilter ? AppColors.primary : Colors.grey[600],
+              color: _filterHasSpace ? AppColors.primary : Colors.grey[600],
             ),
             const SizedBox(width: 4),
             Text(
-              hasActiveFilter
-                  ? AppMessages.circle.filterWithCount(_selectedFilters.length)
-                  : AppMessages.circle.filterLabel,
+              AppMessages.circle.filterHasSpace,
               style: TextStyle(
                 fontSize: 12,
-                color: hasActiveFilter ? AppColors.primary : Colors.grey[700],
-                fontWeight: hasActiveFilter ? FontWeight.w600 : FontWeight.w500,
+                color: _filterHasSpace ? AppColors.primary : Colors.grey[700],
+                fontWeight: _filterHasSpace ? FontWeight.w600 : FontWeight.w500,
               ),
-            ),
-            const SizedBox(width: 2),
-            Icon(
-              Icons.arrow_drop_down,
-              size: 16,
-              color: hasActiveFilter ? AppColors.primary : Colors.grey[600],
             ),
           ],
         ),
@@ -1207,144 +1198,6 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     );
   }
 
-  /// フィルター条件を適用（検索結果・通常一覧共通）
-  List<CircleModel> _applyFilters(List<CircleModel> circles) {
-    var result = circles;
-    if (_selectedFilters.contains(_FilterOption.hasSpace)) {
-      result = result.where((c) => c.memberCount < c.maxMembers).toList();
-    }
-    return result;
-  }
-
-  void _openFilterSheet() {
-    final tempFilters = Set<_FilterOption>.from(_selectedFilters);
-
-    void toggleFilter(
-      _FilterOption option,
-      void Function(void Function()) setModalState,
-    ) {
-      setModalState(() {
-        if (tempFilters.contains(option)) {
-          tempFilters.remove(option);
-        } else {
-          tempFilters.add(option);
-        }
-      });
-    }
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            final hasFilters = tempFilters.isNotEmpty;
-            return SafeArea(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final maxHeight = constraints.maxHeight * 0.8;
-                  return ConstrainedBox(
-                    constraints: BoxConstraints(maxHeight: maxHeight),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                          child: Row(
-                            children: [
-                              Text(
-                                AppMessages.circle.filterLabel,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const Spacer(),
-                              TextButton(
-                                onPressed: hasFilters
-                                    ? () => setModalState(
-                                          () => tempFilters.clear(),
-                                        )
-                                    : null,
-                                child: const Text('全解除'),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Flexible(
-                          child: SingleChildScrollView(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: Column(
-                              children: [
-                                ..._FilterOption.values.map((option) {
-                                  final isSelected =
-                                      tempFilters.contains(option);
-                                  return CheckboxListTile(
-                                    value: isSelected,
-                                    onChanged: (_) =>
-                                        toggleFilter(option, setModalState),
-                                    activeColor: AppColors.primary,
-                                    title: Text(_filterLabel(option)),
-                                    dense: true,
-                                    controlAffinity:
-                                        ListTileControlAffinity.leading,
-                                  );
-                                }),
-                              ],
-                            ),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  child: const Text('キャンセル'),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: ElevatedButton(
-                                  onPressed: () {
-                                    if (!mounted) return;
-                                    setState(() {
-                                      _selectedFilters
-                                        ..clear()
-                                        ..addAll(tempFilters);
-                                    });
-                                    Navigator.pop(context);
-                                    if (_searchController.text.isNotEmpty) {
-                                      _performSearch(_searchController.text);
-                                    } else {
-                                      _loadCircles();
-                                    }
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.primary,
-                                    foregroundColor: Colors.white,
-                                  ),
-                                  child: const Text('適用'),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
 }
 
 /// サークルカード
@@ -1765,10 +1618,3 @@ enum _SortOption {
   const _SortOption(this.icon);
 }
 
-/// フィルターオプション
-enum _FilterOption {
-  hasSpace(Icons.person_add);
-
-  final IconData icon;
-  const _FilterOption(this.icon);
-}

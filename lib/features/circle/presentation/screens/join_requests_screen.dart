@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
@@ -160,7 +161,11 @@ class _JoinRequestCardState extends State<_JoinRequestCard>
       }
     }).catchError((e) {
       if (mounted) {
-        SnackBarHelper.showError(context, AppMessages.error.general);
+        if (e is FirebaseFunctionsException && e.message == 'circle_full') {
+          SnackBarHelper.showError(context, AppMessages.circle.circleFullError);
+        } else {
+          SnackBarHelper.showError(context, AppMessages.error.general);
+        }
         debugPrint('Approve join request failed: $e');
       }
     });

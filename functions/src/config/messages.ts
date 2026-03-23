@@ -86,6 +86,15 @@ export const VALIDATION_ERRORS = {
 } as const;
 
 // ===============================================
+// サークルエラー (CIRCLE_ERRORS)
+// ===============================================
+export const CIRCLE_ERRORS = {
+    FULL: "circle_full",
+    DELETED: "circle_deleted",
+    INVITE_ONLY: "circle_invite_only",
+} as const;
+
+// ===============================================
 // システムエラー (SYSTEM_ERRORS)
 // ===============================================
 export const SYSTEM_ERRORS = {

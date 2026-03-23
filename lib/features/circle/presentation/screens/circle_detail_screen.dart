@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
@@ -354,6 +355,15 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
             );
           }
         }
+      }
+    } on FirebaseFunctionsException catch (e) {
+      if (mounted) {
+        if (e.message == 'circle_full') {
+          SnackBarHelper.showError(context, AppMessages.circle.circleFullError);
+        } else {
+          SnackBarHelper.showError(context, AppMessages.error.general);
+        }
+        debugPrint('サークル参加エラー: $e');
       }
     } catch (e) {
       if (mounted) {

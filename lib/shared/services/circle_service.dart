@@ -241,6 +241,7 @@ class CircleService {
         ),
         isPublic: json['isPublic'] as bool? ?? true,
         memberCount: json['memberCount'] as int? ?? 0,
+        maxMembers: json['maxMembers'] as int? ?? 20,
         postCount: json['postCount'] as int? ?? 0,
         iconImageUrl: json['iconImageUrl'] as String?,
         coverImageUrl: json['coverImageUrl'] as String?,
