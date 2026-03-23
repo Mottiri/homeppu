@@ -364,9 +364,6 @@ class _CircleMessages {
   String get sortPostCount => '投稿数順';
   String get sortHumanPostOldest => '人間投稿古い順';
   String get filterHasSpace => '空きあり';
-  String get filterHasPosts => '投稿あり';
-  String get filterPublic => '公開';
-  String get filterInviteOnly => '招待制';
   String get trialBannerTitle => '初回サークル体験中';
   String get trialBannerDescription =>
       'この体験では閲覧のみ可能です（作成・参加はできません）。画面遷移またはアプリ終了で体験は終了し、再度閲覧できません。';

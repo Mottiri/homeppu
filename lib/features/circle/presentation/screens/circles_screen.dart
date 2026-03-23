@@ -121,14 +121,6 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     _SortOption.humanPostOldest => 'humanPostOldest',
   };
 
-  bool? get _isPublicFilter {
-    final hasPub = _selectedFilters.contains(_FilterOption.publicOnly);
-    final hasInv = _selectedFilters.contains(_FilterOption.inviteOnly);
-    if (hasPub && !hasInv) return true;
-    if (hasInv && !hasPub) return false;
-    return null;
-  }
-
   /// スクロール可能かを再評価
   void _updateScrollable() {
     if (!mounted) return;
@@ -164,9 +156,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
           userId: currentUser.uid,
           category: _selectedCategory,
           sortBy: _sortOptionToString(_selectedSort),
-          isPublic: _isPublicFilter,
           hasSpace: _selectedFilters.contains(_FilterOption.hasSpace) ? true : null,
-          hasPosts: _selectedFilters.contains(_FilterOption.hasPosts) ? true : null,
           joinedOnly: _selectedTab == 1,
         );
         setState(() {
@@ -241,9 +231,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
           category: _selectedCategory,
           cursor: _browseCursor,
           sortBy: _sortOptionToString(_selectedSort),
-          isPublic: _isPublicFilter,
           hasSpace: _selectedFilters.contains(_FilterOption.hasSpace) ? true : null,
-          hasPosts: _selectedFilters.contains(_FilterOption.hasPosts) ? true : null,
           joinedOnly: _selectedTab == 1,
         );
         setState(() {
@@ -320,9 +308,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         category: _selectedCategory,
         joinedOnly: _selectedTab == 1,
         sortBy: _sortOptionToString(_selectedSort),
-        isPublic: _isPublicFilter,
         hasSpace: _selectedFilters.contains(_FilterOption.hasSpace) ? true : null,
-        hasPosts: _selectedFilters.contains(_FilterOption.hasPosts) ? true : null,
       );
       if (!mounted || generation != _searchGeneration) return;
       setState(() {
@@ -372,9 +358,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         joinedOnly: _selectedTab == 1,
         cursor: _searchCursor,
         sortBy: _sortOptionToString(_selectedSort),
-        isPublic: _isPublicFilter,
         hasSpace: _selectedFilters.contains(_FilterOption.hasSpace) ? true : null,
-        hasPosts: _selectedFilters.contains(_FilterOption.hasPosts) ? true : null,
       );
       if (!mounted) return;
       if (generation != _searchGeneration) {
@@ -1092,12 +1076,6 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     switch (option) {
       case _FilterOption.hasSpace:
         return AppMessages.circle.filterHasSpace;
-      case _FilterOption.hasPosts:
-        return AppMessages.circle.filterHasPosts;
-      case _FilterOption.publicOnly:
-        return AppMessages.circle.filterPublic;
-      case _FilterOption.inviteOnly:
-        return AppMessages.circle.filterInviteOnly;
     }
   }
 
@@ -1235,18 +1213,6 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     if (_selectedFilters.contains(_FilterOption.hasSpace)) {
       result = result.where((c) => c.memberCount < c.maxMembers).toList();
     }
-    if (_selectedFilters.contains(_FilterOption.hasPosts)) {
-      result = result.where((c) => c.postCount > 0).toList();
-    }
-    final hasPublicFilter =
-        _selectedFilters.contains(_FilterOption.publicOnly);
-    final hasInviteFilter =
-        _selectedFilters.contains(_FilterOption.inviteOnly);
-    if (hasPublicFilter && !hasInviteFilter) {
-      result = result.where((c) => c.isPublic).toList();
-    } else if (hasInviteFilter && !hasPublicFilter) {
-      result = result.where((c) => !c.isPublic).toList();
-    }
     return result;
   }
 
@@ -1261,11 +1227,6 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         if (tempFilters.contains(option)) {
           tempFilters.remove(option);
         } else {
-          if (option == _FilterOption.publicOnly) {
-            tempFilters.remove(_FilterOption.inviteOnly);
-          } else if (option == _FilterOption.inviteOnly) {
-            tempFilters.remove(_FilterOption.publicOnly);
-          }
           tempFilters.add(option);
         }
       });
@@ -1806,10 +1767,7 @@ enum _SortOption {
 
 /// フィルターオプション
 enum _FilterOption {
-  hasSpace(Icons.person_add),
-  hasPosts(Icons.article),
-  publicOnly(Icons.public),
-  inviteOnly(Icons.lock);
+  hasSpace(Icons.person_add);
 
   final IconData icon;
   const _FilterOption(this.icon);

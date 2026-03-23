@@ -204,9 +204,7 @@ class CircleService {
     Map<String, dynamic>? cursor,
     bool joinedOnly = false,
     String? sortBy,
-    bool? isPublic,
     bool? hasSpace,
-    bool? hasPosts,
   }) async {
     final functions = FirebaseFunctions.instanceFor(region: AppConstants.functionsRegion);
     final callable = functions.httpsCallable('searchCircles');
@@ -218,9 +216,7 @@ class CircleService {
       if (joinedOnly) 'joinedOnly': true,
       if (cursor != null) 'cursor': cursor,
       if (sortBy != null) 'sortBy': sortBy,
-      if (isPublic != null) 'isPublic': isPublic,
       if (hasSpace == true) 'hasSpace': true,
-      if (hasPosts == true) 'hasPosts': true,
     });
 
     final data = Map<String, dynamic>.from(result.data as Map);

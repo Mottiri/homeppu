@@ -798,9 +798,9 @@ export const searchCircles = onCall(
     logger.info("[searchCircles] subscriber/trial OK");
 
     const { query, category, limit: requestLimit, cursor, joinedOnly,
-      sortBy, isPublic: isPublicFilter, hasSpace, hasPosts } = request.data;
+      sortBy, hasSpace } = request.data;
 
-    logger.info("[searchCircles] params", { query, category, sortBy, isPublicFilter, hasSpace, hasPosts, joinedOnly, cursor: !!cursor });
+    logger.info("[searchCircles] params", { query, category, sortBy, hasSpace, joinedOnly, cursor: !!cursor });
 
     // バリデーション
     if (query !== undefined && query !== null && query !== "") {
@@ -830,7 +830,12 @@ export const searchCircles = onCall(
 
     const searchLimit = Math.min(Math.max(requestLimit || 20, 1), 50);
     const isJoinedOnly = joinedOnly === true;
-    const needsJsFilter = hasSpace === true || hasPosts === true || isPublicFilter === false;
+    const needsJsFilter = hasSpace === true;
+    const DEFAULT_MAX_MEMBERS = 20;
+
+    /** 空きありフィルター判定 */
+    const hasSpaceAvailable = (data: FirebaseFirestore.DocumentData) =>
+      (data.memberCount || 0) < (data.maxMembers || DEFAULT_MAX_MEMBERS);
 
     // レスポンス整形ヘルパー
     const formatCircle = (data: FirebaseFirestore.DocumentData, id: string) => ({
@@ -847,7 +852,7 @@ export const searchCircles = onCall(
       iconImageUrl: data.iconImageUrl || null,
       coverImageUrl: data.coverImageUrl || null,
       goal: data.goal || "",
-      maxMembers: data.maxMembers || 30,
+      maxMembers: data.maxMembers || DEFAULT_MAX_MEMBERS,
       recentActivity: data.recentActivity?.toDate?.()?.toISOString() || null,
       lastHumanPostAt: data.lastHumanPostAt?.toDate?.()?.toISOString() || null,
       createdAt: data.createdAt?.toDate?.()?.toISOString() || null,
@@ -879,19 +884,8 @@ export const searchCircles = onCall(
       }
 
       // JS-side filters
-      if (isPublicFilter === true) {
-        matchedDocs = matchedDocs.filter((doc) => doc.data().isPublic !== false);
-      } else if (isPublicFilter === false) {
-        matchedDocs = matchedDocs.filter((doc) => doc.data().isPublic === false);
-      }
       if (hasSpace === true) {
-        matchedDocs = matchedDocs.filter((doc) => {
-          const data = doc.data();
-          return (data.memberCount || 0) < (data.maxMembers || 30);
-        });
-      }
-      if (hasPosts === true) {
-        matchedDocs = matchedDocs.filter((doc) => (doc.data().postCount || 0) > 0);
+        matchedDocs = matchedDocs.filter((doc) => hasSpaceAvailable(doc.data()));
       }
 
       // aiOnlyのオーナーサークルとそれ以外を分離
@@ -916,7 +910,7 @@ export const searchCircles = onCall(
     // クエリ1: オーナーのaiOnlyサークル（初回のみ）
     // クエリ2: 公開サークル検索（cursorページネーション対応）
     // 両クエリは独立しているため Promise.all で並列実行
-    const overfetchLimit = needsJsFilter ? (searchLimit + 1) * 3 : searchLimit + 1;
+    const fetchBatchSize = needsJsFilter ? (searchLimit + 1) * 3 : searchLimit + 1;
 
     let ownerQueryPromise: Promise<FirebaseFirestore.QuerySnapshot> | null = null;
 
@@ -955,29 +949,128 @@ export const searchCircles = onCall(
     }
 
     // ソートとページネーション
-    publicQuery = publicQuery
+    // ベースクエリ（ソート付き、limitとcursorはループ内で設定）
+    let baseQuery = publicQuery
       .orderBy(sort.field, sort.dir)
-      .orderBy(FieldPath.documentId())
-      .limit(overfetchLimit);
+      .orderBy(FieldPath.documentId());
 
+    let initialCursorValue: FirebaseFirestore.Timestamp | string | number | undefined;
+    let initialCursorId: string | undefined;
     if (cursor && typeof cursor.value !== "undefined" && typeof cursor.id === "string") {
       let cursorValue = cursor.value;
       if (typeof cursorValue === "string" && ["newest", "active", "humanPostOldest"].includes(effectiveSortBy)) {
         cursorValue = Timestamp.fromDate(new Date(cursorValue));
       }
-      publicQuery = publicQuery.startAfter(cursorValue, cursor.id);
+      initialCursorValue = cursorValue as FirebaseFirestore.Timestamp | string | number;
+      initialCursorId = cursor.id;
     }
 
-    let ownerSnapshot: FirebaseFirestore.QuerySnapshot | null;
-    let publicSnapshot: FirebaseFirestore.QuerySnapshot;
-    try {
-      [ownerSnapshot, publicSnapshot] = await Promise.all([
-        ownerQueryPromise ?? Promise.resolve(null),
-        publicQuery.get(),
-      ]) as [FirebaseFirestore.QuerySnapshot | null, FirebaseFirestore.QuerySnapshot];
-    } catch (err) {
-      console.error("[searchCircles] Firestore query failed:", err);
-      throw err;
+    // オーナーのaiOnlyサークル（並行取得）
+    let ownerSnapshot: FirebaseFirestore.QuerySnapshot | null = null;
+    const ownerPromise = ownerQueryPromise ?? Promise.resolve(null);
+
+    // JS-sideフィルター使用時: 20件揃うまでループフェッチ
+    // 未使用時: 1回のフェッチで完了
+    const collectedDocs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+    let hasMore = false;
+    const MAX_FETCH_ROUNDS = 5; // 安全弁: 最大5回のフェッチで打ち切り
+
+    // ループフェッチ時: publicDocsが空でもページネーションを進めるためスキャン境界を保持
+    let lastScannedCursorValue: FirebaseFirestore.Timestamp | string | number | undefined;
+    let lastScannedCursorId: string | undefined;
+
+    if (needsJsFilter) {
+      // 最初のバッチでオーナークエリも並行取得
+      let currentCursorValue = initialCursorValue;
+      let currentCursorId = initialCursorId;
+      let firestoreExhausted = false;
+
+      for (let round = 0; round < MAX_FETCH_ROUNDS; round++) {
+        let roundQuery = baseQuery.limit(fetchBatchSize);
+        if (currentCursorValue !== undefined && currentCursorId) {
+          roundQuery = roundQuery.startAfter(currentCursorValue, currentCursorId);
+        }
+
+        let roundSnapshot: FirebaseFirestore.QuerySnapshot;
+        try {
+          if (round === 0) {
+            const [ownerResult, publicResult] = await Promise.all([
+              ownerPromise,
+              roundQuery.get(),
+            ]) as [FirebaseFirestore.QuerySnapshot | null, FirebaseFirestore.QuerySnapshot];
+            ownerSnapshot = ownerResult;
+            roundSnapshot = publicResult;
+          } else {
+            roundSnapshot = await roundQuery.get();
+          }
+        } catch (err) {
+          console.error(`[searchCircles] Firestore query failed (round ${round}):`, err);
+          throw err;
+        }
+
+        if (roundSnapshot.empty) {
+          firestoreExhausted = true;
+          break; // Firestoreにもうデータがない
+        }
+
+        // JS-sideフィルター適用
+        const filtered = roundSnapshot.docs.filter((doc) => hasSpaceAvailable(doc.data()));
+        collectedDocs.push(...filtered);
+
+        // searchLimit + 1 件以上集まったら終了（+1はhasMore判定用）
+        if (collectedDocs.length > searchLimit) {
+          hasMore = true;
+          break;
+        }
+
+        // Firestoreから返った件数がlimitより少ない → もうデータがない
+        if (roundSnapshot.docs.length < fetchBatchSize) {
+          firestoreExhausted = true;
+          break;
+        }
+
+        // 次のラウンド用カーソルを更新（バッチ最後のドキュメントから）
+        const lastFetched = roundSnapshot.docs[roundSnapshot.docs.length - 1];
+        const lastData = lastFetched.data();
+        const sortField = sort.field;
+        if (["createdAt", "recentActivity", "lastHumanPostAt"].includes(sortField)) {
+          currentCursorValue = lastData[sortField] as FirebaseFirestore.Timestamp;
+        } else {
+          currentCursorValue = (lastData[sortField] || 0) as number;
+        }
+        currentCursorId = lastFetched.id;
+
+        // スキャン境界をシリアライズ済みで保持（nextCursorフォールバック用）
+        lastScannedCursorValue = ["createdAt", "recentActivity", "lastHumanPostAt"].includes(sortField)
+          ? (lastData[sortField]?.toDate?.()?.toISOString() || "")
+          : (lastData[sortField] || 0);
+        lastScannedCursorId = lastFetched.id;
+      }
+
+      // MAX_FETCH_ROUNDS到達時: Firestoreにまだデータがある可能性 → hasMore = true
+      if (!firestoreExhausted && collectedDocs.length <= searchLimit) {
+        hasMore = true;
+      }
+    } else {
+      // JS-sideフィルター不要: 1回のフェッチで完了
+      let singleQuery = baseQuery.limit(fetchBatchSize);
+      if (initialCursorValue !== undefined && initialCursorId) {
+        singleQuery = singleQuery.startAfter(initialCursorValue, initialCursorId);
+      }
+
+      let publicSnapshot: FirebaseFirestore.QuerySnapshot;
+      try {
+        [ownerSnapshot, publicSnapshot] = await Promise.all([
+          ownerPromise,
+          singleQuery.get(),
+        ]) as [FirebaseFirestore.QuerySnapshot | null, FirebaseFirestore.QuerySnapshot];
+      } catch (err) {
+        console.error("[searchCircles] Firestore query failed:", err);
+        throw err;
+      }
+
+      collectedDocs.push(...publicSnapshot.docs);
+      hasMore = collectedDocs.length > searchLimit;
     }
 
     // オーナーのaiOnlyサークル
@@ -988,40 +1081,33 @@ export const searchCircles = onCall(
       }
     }
 
-    // 公開サークル - JS-sideフィルタ適用
-    let publicDocs = publicSnapshot.docs;
-
-    if (isPublicFilter === true) {
-      publicDocs = publicDocs.filter((doc) => doc.data().isPublic !== false);
-    } else if (isPublicFilter === false) {
-      publicDocs = publicDocs.filter((doc) => doc.data().isPublic === false);
-    }
-    if (hasSpace === true) {
-      publicDocs = publicDocs.filter((doc) => {
-        const data = doc.data();
-        return (data.memberCount || 0) < (data.maxMembers || 30);
-      });
-    }
-    if (hasPosts === true) {
-      publicDocs = publicDocs.filter((doc) => (doc.data().postCount || 0) > 0);
-    }
-
-    const hasMore = publicDocs.length > searchLimit;
-    publicDocs = publicDocs.slice(0, searchLimit);
+    // searchLimit件に切り詰め
+    const publicDocs = collectedDocs.slice(0, searchLimit);
     const circles = publicDocs.map((doc) => formatCircle(doc.data(), doc.id));
 
     let nextCursor: { value: number | string; id: string } | undefined;
-    if (hasMore && publicDocs.length > 0) {
-      const lastDoc = publicDocs[publicDocs.length - 1];
-      const lastData = lastDoc.data();
-      const sortField = sort.field;
-      let value: number | string;
-      if (["createdAt", "recentActivity", "lastHumanPostAt"].includes(sortField)) {
-        value = lastData[sortField]?.toDate?.()?.toISOString() || "";
-      } else {
-        value = lastData[sortField] || 0;
+    if (hasMore) {
+      if (publicDocs.length > 0) {
+        // フィルター済みの最後のドキュメントをカーソルに使用
+        // → 次ページで満員サークルが再スキャンされるが、フィルターで除外されるだけ（欠損なし）
+        const lastDoc = publicDocs[publicDocs.length - 1];
+        const lastData = lastDoc.data();
+        const sortField = sort.field;
+        let value: number | string;
+        if (["createdAt", "recentActivity", "lastHumanPostAt"].includes(sortField)) {
+          value = lastData[sortField]?.toDate?.()?.toISOString() || "";
+        } else {
+          value = lastData[sortField] || 0;
+        }
+        nextCursor = { value, id: lastDoc.id };
+      } else if (lastScannedCursorValue !== undefined && lastScannedCursorId) {
+        // フィルター通過0件だがFirestoreにまだデータがある場合:
+        // スキャン境界をカーソルに使用して次ページに進める
+        nextCursor = {
+          value: lastScannedCursorValue as number | string,
+          id: lastScannedCursorId,
+        };
       }
-      nextCursor = { value, id: lastDoc.id };
     }
 
     return { circles, privateOwnerCircles, hasMore, nextCursor };
