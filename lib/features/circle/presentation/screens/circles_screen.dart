@@ -45,6 +45,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   int _searchGeneration = 0;
 
   // プル更新・無限スクロール用の状態
+  int _loadGeneration = 0;
   List<CircleModel> _circles = [];
   bool _isLoading = true;
   bool _isLoadingMore = false;
@@ -117,9 +118,10 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
       _isFilterOrSortActive || _searchController.text.isNotEmpty;
 
   /// 現在の経路で次ページを取得可能か
+  bool get _useCallable => _isBrowseMode || _selectedTab == 1;
   bool get _canLoadMore =>
       _hasMore &&
-      (_isBrowseMode ? _browseCursor != null : _lastDocument != null);
+      (_useCallable ? _browseCursor != null : _lastDocument != null);
 
   String _sortOptionToString(_SortOption option) => switch (option) {
     _SortOption.newest => 'newest',
@@ -128,6 +130,30 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     _SortOption.postCount => 'postCount',
     _SortOption.humanPostOldest => 'humanPostOldest',
   };
+
+  /// マージされたサークルリストを現在のソート順で再ソート
+  /// タイブレーカーとしてdocumentId（circle.id）を使用
+  void _sortMergedCircles(List<CircleModel> circles) {
+    int Function(CircleModel, CircleModel) primaryCompare;
+    switch (_selectedSort) {
+      case _SortOption.newest:
+        primaryCompare = (a, b) => b.createdAt.compareTo(a.createdAt);
+      case _SortOption.active:
+        primaryCompare = (a, b) => (b.recentActivity ?? DateTime(2000))
+            .compareTo(a.recentActivity ?? DateTime(2000));
+      case _SortOption.popular:
+        primaryCompare = (a, b) => b.memberCount.compareTo(a.memberCount);
+      case _SortOption.postCount:
+        primaryCompare = (a, b) => b.postCount.compareTo(a.postCount);
+      case _SortOption.humanPostOldest:
+        primaryCompare = (a, b) => (a.lastHumanPostAt ?? DateTime(2099))
+            .compareTo(b.lastHumanPostAt ?? DateTime(2099));
+    }
+    circles.sort((a, b) {
+      final cmp = primaryCompare(a, b);
+      return cmp != 0 ? cmp : a.id.compareTo(b.id);
+    });
+  }
 
   /// スクロール可能かを再評価
   void _updateScrollable() {
@@ -145,8 +171,11 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     final currentUser = ref.read(currentUserProvider).valueOrNull;
     if (currentUser == null) return;
 
+    final generation = ++_loadGeneration;
+
     setState(() {
       _isLoading = _circles.isEmpty;
+      _isLoadingMore = false;
       _error = null;
       _hasMore = true;
       _lastDocument = null;
@@ -157,8 +186,8 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     try {
       final circleService = ref.read(circleServiceProvider);
 
-      if (_isBrowseMode) {
-        // フィルター/ソート/検索がアクティブ → callable browse mode
+      if (_isBrowseMode || _selectedTab == 1) {
+        // フィルター/ソート/検索がアクティブ、または参加中タブ → callable経由
         final result = await circleService.searchCircles(
           _searchController.text.isNotEmpty ? _searchController.text : null,
           userId: currentUser.uid,
@@ -167,13 +196,29 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
           hasSpace: _filterHasSpace ? true : null,
           joinedOnly: _selectedTab == 1,
         );
+        if (generation != _loadGeneration) return; // 古いリクエストを破棄
         setState(() {
-          _circles = result.circles;
+          // privateOwnerCircles（非公開サークル）をマージしてデデュプ・ソート順維持
+          final publicIds = result.circles.map((c) => c.id).toSet();
+          final merged = [
+            ...result.circles,
+            ...result.privateOwnerCircles.where((c) => !publicIds.contains(c.id)),
+          ];
+          // サーバーのソート順を再現（privateOwnerは分離されるため末尾に来る）
+          _sortMergedCircles(merged);
+          _circles = merged;
           _privateOwnerResults = result.privateOwnerCircles;
           _browseCursor = result.nextCursor;
           _hasMore = result.hasMore;
           _isLoading = false;
         });
+        // 参加中200件上限で切り詰められた場合に通知
+        if (result.joinedTruncated && mounted) {
+          SnackBarHelper.showInfo(
+            context,
+            AppMessages.circle.searchJoinedTruncated,
+          );
+        }
       } else {
         // デフォルト表示 → Firestore直接クエリ（高速）
         final isAdmin = ref.read(isAdminProvider).valueOrNull ?? false;
@@ -183,6 +228,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
           isAdmin: isAdmin,
           limit: 15,
         );
+        if (generation != _loadGeneration) return; // 古いリクエストを破棄
         setState(() {
           _circles = result.circles;
           _lastDocument = result.lastDoc;
@@ -196,6 +242,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     } catch (e, stackTrace) {
       debugPrint('CirclesScreen._loadCircles エラー: $e');
       debugPrint('スタックトレース: $stackTrace');
+      if (generation != _loadGeneration) return; // 古いリクエストの失敗を無視
       setState(() {
         _error = e.toString();
         _isLoading = false;
@@ -212,8 +259,8 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     final currentUser = ref.read(currentUserProvider).valueOrNull;
     if (currentUser == null) return;
 
-    if (_isBrowseMode) {
-      // callable browse mode
+    if (_useCallable) {
+      // callable mode（browse + 参加中タブ）
       if (_browseCursor == null) {
         debugPrint('[CirclesScreen] _loadMoreCircles SKIPPED (browseCursor is null)');
         return;
@@ -227,12 +274,13 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     }
     debugPrint('[CirclesScreen] _loadMoreCircles EXECUTING (circles=${_circles.length})');
 
+    final generation = _loadGeneration;
     setState(() => _isLoadingMore = true);
 
     try {
       final circleService = ref.read(circleServiceProvider);
 
-      if (_isBrowseMode) {
+      if (_isBrowseMode || _selectedTab == 1) {
         final result = await circleService.searchCircles(
           _searchController.text.isNotEmpty ? _searchController.text : null,
           userId: currentUser.uid,
@@ -242,8 +290,13 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
           hasSpace: _filterHasSpace ? true : null,
           joinedOnly: _selectedTab == 1,
         );
+        if (generation != _loadGeneration) return; // 古いリクエストを破棄
         setState(() {
-          _circles.addAll(result.circles);
+          final existingIds = _circles.map((c) => c.id).toSet();
+          final newCircles = [...result.circles, ...result.privateOwnerCircles]
+              .where((c) => !existingIds.contains(c.id));
+          _circles.addAll(newCircles);
+          _sortMergedCircles(_circles);
           _browseCursor = result.nextCursor;
           _hasMore = result.hasMore;
           _isLoadingMore = false;
@@ -257,6 +310,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
           lastDocument: _lastDocument,
           limit: 15,
         );
+        if (generation != _loadGeneration) return; // 古いリクエストを破棄
         setState(() {
           _circles.addAll(result.circles);
           _lastDocument = result.lastDoc;
@@ -268,6 +322,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         _updateScrollable();
       });
     } catch (e) {
+      if (generation != _loadGeneration) return;
       setState(() => _isLoadingMore = false);
     }
   }
@@ -461,6 +516,16 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     final isAdminAsync = ref.watch(isAdminProvider);
     final isAdmin = isAdminAsync.valueOrNull ?? false;
     final isCircleTrialSession = ref.watch(circleTrialSessionProvider);
+    // サブスク/トライアルが無効になったら参加中タブをリセット
+    final canShowJoinedTab = (currentUser?.isSubscriber ?? false) || isCircleTrialSession;
+    if (!canShowJoinedTab && _selectedTab == 1) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _selectedTab == 1) {
+          setState(() => _selectedTab = 0);
+          _loadCircles();
+        }
+      });
+    }
     final isSearchMode =
         _searchController.text.isNotEmpty || _isSearching;
     final tutorialPhase5Step = ref.watch(tutorialPhase5Provider);
@@ -579,6 +644,8 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
                         const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
                         // タブセレクター（みんなの / 参加中）
+                        // サブスクまたはトライアル中のみ表示（非サブスクには参加サークルが無い）
+                        if (canShowJoinedTab)
                         SliverToBoxAdapter(
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -928,17 +995,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
 
     // callable使用時はサーバー側でフィルター/ソート済み
     List<CircleModel> filteredCircles;
-    if (_isFilterOrSortActive) {
-      filteredCircles = _circles;
-    } else {
-      // デフォルト表示: クライアント側でタブフィルター適用
-      filteredCircles = _circles;
-      if (_selectedTab == 1 && userId != null) {
-        filteredCircles = _circles
-            .where((c) => c.memberIds.contains(userId))
-            .toList();
-      }
-    }
+    filteredCircles = _circles;
 
     if (filteredCircles.isEmpty) {
       return SliverFillRemaining(
@@ -1008,11 +1065,14 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     return GestureDetector(
       onTap: () {
         if (_selectedTab == index) return;
-        setState(() => _selectedTab = index);
+        setState(() {
+          _selectedTab = index;
+          _circles = [];
+        });
         _debounceTimer?.cancel();
         if (_searchController.text.isNotEmpty) {
           _performSearch(_searchController.text);
-        } else if (_isBrowseMode) {
+        } else {
           _loadCircles();
         }
       },
