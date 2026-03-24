@@ -131,22 +131,38 @@ class CircleService {
     try {
       Query query;
 
+      // カテゴリフィルター（「全て」以外）
+      final hasCategory = category != null && category != '全て';
+
       if (isAdmin) {
         // 管理者は全サークルを取得
-        query = _firestore
-            .collection('circles')
-            .orderBy('createdAt', descending: true)
-            .limit(limit + 1);
+        if (hasCategory) {
+          query = _firestore
+              .collection('circles')
+              .where('category', isEqualTo: category)
+              .orderBy('createdAt', descending: true)
+              .limit(limit + 1);
+        } else {
+          query = _firestore
+              .collection('circles')
+              .orderBy('createdAt', descending: true)
+              .limit(limit + 1);
+        }
       } else {
         // 一般ユーザー: 公開サークル(mix/humanOnly) OR 自分が作成したサークル
+        final visibilityFilter = Filter.or(
+          Filter('aiMode', whereIn: ['mix', 'humanOnly']),
+          Filter('ownerId', isEqualTo: userId),
+        );
+        final combinedFilter = hasCategory
+            ? Filter.and(
+                visibilityFilter,
+                Filter('category', isEqualTo: category),
+              )
+            : visibilityFilter;
         query = _firestore
             .collection('circles')
-            .where(
-              Filter.or(
-                Filter('aiMode', whereIn: ['mix', 'humanOnly']),
-                Filter('ownerId', isEqualTo: userId),
-              ),
-            )
+            .where(combinedFilter)
             .orderBy('createdAt', descending: true)
             .limit(limit + 1);
       }
@@ -171,11 +187,6 @@ class CircleService {
           )
           .where((c) => !c.isDeleted) // ソフトデリート済みは除外
           .toList();
-
-      // カテゴリフィルター
-      if (category != null && category != '全て') {
-        circles = circles.where((c) => c.category == category).toList();
-      }
 
       return (
         circles: circles,

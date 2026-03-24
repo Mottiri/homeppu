@@ -1010,9 +1010,10 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         if (_selectedTab == index) return;
         setState(() => _selectedTab = index);
         _debounceTimer?.cancel();
-        // 検索中ならタブ切り替え時に再検索
         if (_searchController.text.isNotEmpty) {
           _performSearch(_searchController.text);
+        } else if (_isBrowseMode) {
+          _loadCircles();
         }
       },
       child: Container(
