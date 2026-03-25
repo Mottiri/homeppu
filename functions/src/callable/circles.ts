@@ -870,7 +870,7 @@ export const searchCircles = onCall(
 
     // バリデーション
     if (query !== undefined && query !== null && query !== "") {
-      if (typeof query !== "string" || query.length > 100) {
+      if (typeof query !== "string" || [...query].length > 100) {
         throw new HttpsError("invalid-argument", "[V1] query長すぎ");
       }
     }
@@ -1111,28 +1111,28 @@ function validateCircleFields(
   if (!name || typeof name !== "string" || name.trim().length === 0) {
     throw new HttpsError("invalid-argument", VALIDATION_ERRORS.MISSING_REQUIRED);
   }
-  if (name.length > 30) {
+  if ([...name].length > 30) {
     throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
   }
   if (!description || typeof description !== "string") {
     throw new HttpsError("invalid-argument", VALIDATION_ERRORS.MISSING_REQUIRED);
   }
-  if (description.length > 150) {
+  if ([...description].length > 150) {
     throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
   }
   if (goal !== undefined && typeof goal !== "string") {
     throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
   }
-  if (typeof goal === "string" && goal.length > 100) {
+  if (typeof goal === "string" && [...goal].length > 100) {
     throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
   }
   if (options?.allowNullRules) {
     if (circleRules !== undefined && circleRules !== null &&
-        (typeof circleRules !== "string" || circleRules.length > 300)) {
+        (typeof circleRules !== "string" || [...circleRules].length > 300)) {
       throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
     }
   } else {
-    if (circleRules !== undefined && (typeof circleRules !== "string" || circleRules.length > 300)) {
+    if (circleRules !== undefined && (typeof circleRules !== "string" || [...circleRules].length > 300)) {
       throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
     }
   }
