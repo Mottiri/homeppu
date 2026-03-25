@@ -7,6 +7,7 @@ import { onDocumentCreated } from "firebase-functions/v2/firestore";
 
 import { db, FieldValue } from "../helpers/firebase";
 import { sendPushNotification, sendPushOnly } from "../helpers/notification";
+import { getNotificationCategory, getCategoryCountField } from "../helpers/notification-category";
 import { LOCATION } from "../config/constants";
 
 type PushPolicy = "always" | "never" | "bySettings";
@@ -84,6 +85,18 @@ export const onNotificationCreated = onDocumentCreated(
         const body = data?.body;
         const type = String(data?.type ?? "system");
         const pushPolicy = resolvePushPolicy(type, data?.pushPolicy);
+        const isRead = data?.isRead ?? false;
+
+        // === S6: 未読カウントのインクリメント ===
+        if (!isRead) {
+            const category = getNotificationCategory(type);
+            const categoryField = getCategoryCountField(category);
+            const userRef = db.collection("users").doc(userId);
+            await userRef.update({
+                unreadNotificationCount: FieldValue.increment(1),
+                [categoryField]: FieldValue.increment(1),
+            });
+        }
 
         // ユーザードキュメントを取得（skip判定に使用）
         const userDoc = await db.collection("users").doc(userId).get();

@@ -76,8 +76,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
             unselectedLabelColor: AppColors.textSecondary,
             indicatorColor: AppColors.primary,
             labelPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-            ), // 適度なパディング
+              horizontal: 28,
+            ), // タブ間の距離を確保
             tabs: _tabs.map((tab) {
               final category = tab.$1;
               final labelKey = tab.$2;
@@ -238,6 +238,7 @@ class _NotificationTile extends ConsumerWidget {
     final user = ref.watch(currentUserProvider).valueOrNull;
 
     return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       leading: GestureDetector(
         onTap: () {
           if (notification.senderId.isNotEmpty) {
@@ -274,7 +275,7 @@ class _NotificationTile extends ConsumerWidget {
         if (!notification.isRead && user != null) {
           await ref
               .read(notificationRepositoryProvider)
-              .markAsRead(user.uid, notification.id);
+              .markAsRead(user.uid, notification.id, notification.type);
         }
 
         // 遷移先を決定

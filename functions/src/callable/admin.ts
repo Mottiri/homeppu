@@ -14,6 +14,7 @@ import { isAdmin } from "../helpers/admin";
 import { getVirtuePolicy } from "../helpers/virtue-policy";
 import { deleteStorageFileFromUrl } from "../helpers/storage";
 import { LOCATION } from "../config/constants";
+import { getNotificationCategory } from "../helpers/notification-category";
 import { buildPublicUserData } from "../helpers/public-users";
 import {
     AUTH_ERRORS,
@@ -707,3 +708,85 @@ export const backfillCircleNameTokens = onCall(
         return { updated, total };
     }
 );
+
+/**
+ * S6: 通知未読カウント再計算
+ * カウントのドリフト（不整合）が発生した場合に管理者が実行する運用ツール。
+ * targetUserId指定で特定ユーザー、省略で全ユーザーを対象とする。
+ */
+export const recalculateUnreadCounts = onCall(
+    {
+        region: LOCATION,
+        timeoutSeconds: 540,
+        memory: "256MiB",
+        enforceAppCheck: false,
+    },
+    async (request) => {
+        await requireAdmin(request);
+
+        const { targetUserId } = request.data as { targetUserId?: string };
+        const PAGE_SIZE = 500;
+        let updatedCount = 0;
+
+        if (targetUserId) {
+            // 特定ユーザーのみ
+            await recalculateForUser(targetUserId);
+            updatedCount = 1;
+        } else {
+            // 全ユーザーをページネーションで処理
+            let lastDoc: FirebaseFirestore.DocumentSnapshot | undefined;
+            while (true) {
+                let query: FirebaseFirestore.Query = db.collection("users")
+                    .orderBy(FieldPath.documentId())
+                    .limit(PAGE_SIZE);
+
+                if (lastDoc) {
+                    query = query.startAfter(lastDoc);
+                }
+
+                const snapshot = await query.get();
+                if (snapshot.empty) break;
+
+                // 逐次処理でFirestoreへの負荷を分散
+                for (const doc of snapshot.docs) {
+                    await recalculateForUser(doc.id);
+                    updatedCount++;
+                }
+
+                lastDoc = snapshot.docs[snapshot.docs.length - 1];
+                if (snapshot.docs.length < PAGE_SIZE) break;
+            }
+        }
+
+        console.log(`recalculateUnreadCounts: updated=${updatedCount}`);
+        return { success: true, updatedCount };
+    }
+);
+
+async function recalculateForUser(userId: string): Promise<void> {
+    const notifSnapshot = await db.collection("users").doc(userId)
+        .collection("notifications")
+        .where("isRead", "==", false)
+        .get();
+
+    let timelineCount = 0;
+    let circleCount = 0;
+    let supportCount = 0;
+
+    for (const doc of notifSnapshot.docs) {
+        const type = String(doc.data().type ?? "system");
+        const category = getNotificationCategory(type);
+        switch (category) {
+            case "timeline": timelineCount++; break;
+            case "circle": circleCount++; break;
+            case "support": supportCount++; break;
+        }
+    }
+
+    await db.collection("users").doc(userId).update({
+        unreadNotificationCount: timelineCount + circleCount + supportCount,
+        unreadTimelineCount: timelineCount,
+        unreadCircleCount: circleCount,
+        unreadSupportCount: supportCount,
+    });
+}

@@ -1,4 +1,4 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/notification_model.dart';
 
@@ -46,46 +46,78 @@ class NotificationRepository {
         });
   }
 
-  // 未読件数を取得するストリーム（全体）
+  // S6: 未読件数を取得するストリーム（全体）
+  // userドキュメントの非正規化フィールドを監視（1ドキュメント）
   Stream<int> getUnreadCountStream(String userId) {
     return _firestore
         .collection('users')
         .doc(userId)
-        .collection('notifications')
-        .where('isRead', isEqualTo: false)
         .snapshots()
-        .map((snapshot) => snapshot.docs.length);
+        .map((snapshot) {
+          final data = snapshot.data();
+          final count = (data?['unreadNotificationCount'] as int?) ?? 0;
+          return count < 0 ? 0 : count;
+        });
   }
 
-  // カテゴリ別の未読件数を取得するストリーム
+  // S6: カテゴリ別の未読件数を取得するストリーム
+  // userドキュメントの非正規化フィールドを監視（同一ドキュメントのためリスナー共有）
   Stream<int> getUnreadCountStreamByCategory(
     String userId,
     NotificationCategory category,
   ) {
-    final types = _getNotificationTypesForCategory(category);
+    final field = _getCategoryCountField(category);
     return _firestore
         .collection('users')
         .doc(userId)
-        .collection('notifications')
-        .where('isRead', isEqualTo: false)
-        .where('type', whereIn: types)
         .snapshots()
-        .map((snapshot) => snapshot.docs.length);
+        .map((snapshot) {
+          final data = snapshot.data();
+          final count = (data?[field] as int?) ?? 0;
+          return count < 0 ? 0 : count;
+        });
   }
 
-  // 通知を既読にする
-  Future<void> markAsRead(String userId, String notificationId) async {
-    await _firestore
+  String _getCategoryCountField(NotificationCategory category) {
+    switch (category) {
+      case NotificationCategory.timeline:
+        return 'unreadTimelineCount';
+      case NotificationCategory.circle:
+        return 'unreadCircleCount';
+      case NotificationCategory.support:
+        return 'unreadSupportCount';
+    }
+  }
+
+  // S6: 通知を既読にする（カウントデクリメント付き）
+  Future<void> markAsRead(
+    String userId,
+    String notificationId,
+    NotificationType type,
+  ) async {
+    final batch = _firestore.batch();
+
+    final notifRef = _firestore
         .collection('users')
         .doc(userId)
         .collection('notifications')
-        .doc(notificationId)
-        .update({'isRead': true});
+        .doc(notificationId);
+    batch.update(notifRef, {'isRead': true});
+
+    final userRef = _firestore.collection('users').doc(userId);
+    final category = getCategoryFromType(type);
+    final categoryField = _getCategoryCountField(category);
+    batch.update(userRef, {
+      'unreadNotificationCount': FieldValue.increment(-1),
+      categoryField: FieldValue.increment(-1),
+    });
+
+    await batch.commit();
   }
 
-  // 全て既読にする
+  // S6: 全て既読にする（カウントリセット付き）
+  // increment(-count) で競合安全に減算
   Future<void> markAllAsRead(String userId) async {
-    final batch = _firestore.batch();
     final snapshot = await _firestore
         .collection('users')
         .doc(userId)
@@ -93,11 +125,51 @@ class NotificationRepository {
         .where('isRead', isEqualTo: false)
         .get();
 
+    if (snapshot.docs.isEmpty) return;
+
+    // カテゴリ別にカウント
+    int timelineCount = 0;
+    int circleCount = 0;
+    int supportCount = 0;
+    for (var doc in snapshot.docs) {
+      final type = doc.data()['type'] as String? ?? 'system';
+      final category = getCategoryFromType(
+        NotificationType.values.firstWhere(
+          (e) => e.name == _snakeToCamel(type),
+          orElse: () => NotificationType.system,
+        ),
+      );
+      switch (category) {
+        case NotificationCategory.timeline:
+          timelineCount++;
+        case NotificationCategory.circle:
+          circleCount++;
+        case NotificationCategory.support:
+          supportCount++;
+      }
+    }
+
+    final batch = _firestore.batch();
     for (var doc in snapshot.docs) {
       batch.update(doc.reference, {'isRead': true});
     }
 
+    final userRef = _firestore.collection('users').doc(userId);
+    batch.update(userRef, {
+      'unreadNotificationCount': FieldValue.increment(-(timelineCount + circleCount + supportCount)),
+      'unreadTimelineCount': FieldValue.increment(-timelineCount),
+      'unreadCircleCount': FieldValue.increment(-circleCount),
+      'unreadSupportCount': FieldValue.increment(-supportCount),
+    });
+
     await batch.commit();
+  }
+
+  /// Firestore の snake_case type を camelCase に変換
+  static String _snakeToCamel(String snake) {
+    final parts = snake.split('_');
+    return parts.first +
+        parts.skip(1).map((p) => p[0].toUpperCase() + p.substring(1)).join();
   }
 
   List<String> _getNotificationTypesForCategory(
@@ -119,6 +191,8 @@ class NotificationRepository {
           'circle_settings_changed',
           'circle_ghost_warning',
           'circle_ghost_deleted',
+          'sub_owner_appointed',
+          'sub_owner_removed',
         ];
       case NotificationCategory.support:
         return const [

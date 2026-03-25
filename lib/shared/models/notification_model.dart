@@ -11,6 +11,8 @@ enum NotificationType {
   circleSettingsChanged,
   circleGhostWarning,
   circleGhostDeleted,
+  subOwnerAppointed,
+  subOwnerRemoved,
   inquiryReply,
   inquiryStatusChanged,
   inquiryReceived,
@@ -43,6 +45,8 @@ NotificationCategory getCategoryFromType(NotificationType type) {
     case NotificationType.circleSettingsChanged:
     case NotificationType.circleGhostWarning:
     case NotificationType.circleGhostDeleted:
+    case NotificationType.subOwnerAppointed:
+    case NotificationType.subOwnerRemoved:
       return NotificationCategory.circle;
     case NotificationType.inquiryReply:
     case NotificationType.inquiryStatusChanged:
@@ -154,6 +158,10 @@ class NotificationModel {
         return NotificationType.circleGhostWarning;
       case 'circle_ghost_deleted':
         return NotificationType.circleGhostDeleted;
+      case 'sub_owner_appointed':
+        return NotificationType.subOwnerAppointed;
+      case 'sub_owner_removed':
+        return NotificationType.subOwnerRemoved;
       case 'inquiry_reply':
         return NotificationType.inquiryReply;
       case 'inquiry_status_changed':
