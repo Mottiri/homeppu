@@ -210,9 +210,9 @@ class _AdminMenuBottomSheetState extends ConsumerState<AdminMenuBottomSheet>
           ),
           const SizedBox(height: 12),
           _buildMenuButton(
-            icon: Icons.sync,
-            label: 'サークルバックフィル',
-            subtitle: 'nameTokens + hasSpace を一括更新',
+            icon: Icons.notifications_active,
+            label: '未読カウント再計算',
+            subtitle: '全ユーザーの通知バッジを再計算',
             color: Colors.teal,
             onTap: () async {
               Navigator.pop(context);
@@ -220,16 +220,16 @@ class _AdminMenuBottomSheetState extends ConsumerState<AdminMenuBottomSheet>
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('バックフィル実行中...'),
+                      content: Text('未読カウント再計算中...'),
                       backgroundColor: Colors.teal,
-                      duration: Duration(seconds: 30),
+                      duration: Duration(seconds: 60),
                     ),
                   );
                 }
                 final result = await FirebaseFunctions.instanceFor(
                   region: 'asia-northeast1',
                 ).httpsCallable(
-                  'backfillCircleNameTokens',
+                  'recalculateUnreadCounts',
                   options: HttpsCallableOptions(timeout: const Duration(minutes: 9)),
                 ).call({});
                 if (mounted) {
@@ -237,14 +237,14 @@ class _AdminMenuBottomSheetState extends ConsumerState<AdminMenuBottomSheet>
                   final data = result.data as Map<String, dynamic>;
                   SnackBarHelper.showSuccess(
                     context,
-                    'バックフィル完了: ${data['updated']}件更新 / ${data['total']}件処理',
+                    '再計算完了: ${data['updatedCount']}ユーザー更新',
                   );
                 }
               } catch (e) {
-                debugPrint('AdminMenuBottomSheet: backfill failed: $e');
+                debugPrint('AdminMenuBottomSheet: recalculate failed: $e');
                 if (mounted) {
                   ScaffoldMessenger.of(context).clearSnackBars();
-                  SnackBarHelper.showError(context, 'バックフィル失敗: $e');
+                  SnackBarHelper.showError(context, '再計算失敗: $e');
                 }
               }
             },

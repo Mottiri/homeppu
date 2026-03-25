@@ -57,7 +57,6 @@ export {
     deleteAllAIUsers,
     cleanupOrphanedCircleAIs,
     backfillPublicUsers,
-    backfillCircleNameTokens,
     recalculateUnreadCounts,
     adminDeletePostWithPenalty,
     setAdminRole,
