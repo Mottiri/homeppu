@@ -65,6 +65,8 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   _SortOption _selectedSort = _SortOption.newest;
   bool _filterHasSpace = false;
   bool _phase5Initialized = false;
+  Timer? _filterDebounceTimer;
+  static const int _filterDebounceMs = 150;
 
   @override
   void initState() {
@@ -91,6 +93,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   @override
   void dispose() {
     _debounceTimer?.cancel();
+    _filterDebounceTimer?.cancel();
     _searchController.dispose();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
@@ -698,11 +701,17 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
                                     onSelected: (selected) {
                                       setState(() => _selectedCategory = category);
                                       _debounceTimer?.cancel();
-                                      if (_searchController.text.isNotEmpty) {
-                                        _performSearch(_searchController.text);
-                                      } else {
-                                        _loadCircles();
-                                      }
+                                      _filterDebounceTimer?.cancel();
+                                      _filterDebounceTimer = Timer(
+                                        const Duration(milliseconds: _filterDebounceMs),
+                                        () {
+                                          if (_searchController.text.isNotEmpty) {
+                                            _performSearch(_searchController.text);
+                                          } else {
+                                            _loadCircles();
+                                          }
+                                        },
+                                      );
                                     },
                                     selectedColor: AppColors.primary.withValues(
                                       alpha: 0.2,
@@ -1145,11 +1154,17 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
       initialValue: _selectedSort,
       onSelected: (value) {
         setState(() => _selectedSort = value);
-        if (_searchController.text.isNotEmpty) {
-          _performSearch(_searchController.text);
-        } else {
-          _loadCircles();
-        }
+        _filterDebounceTimer?.cancel();
+        _filterDebounceTimer = Timer(
+          const Duration(milliseconds: _filterDebounceMs),
+          () {
+            if (_searchController.text.isNotEmpty) {
+              _performSearch(_searchController.text);
+            } else {
+              _loadCircles();
+            }
+          },
+        );
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -1218,11 +1233,17 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         setState(() {
           _filterHasSpace = !_filterHasSpace;
         });
-        if (_searchController.text.isNotEmpty) {
-          _performSearch(_searchController.text);
-        } else {
-          _loadCircles();
-        }
+        _filterDebounceTimer?.cancel();
+        _filterDebounceTimer = Timer(
+          const Duration(milliseconds: _filterDebounceMs),
+          () {
+            if (_searchController.text.isNotEmpty) {
+              _performSearch(_searchController.text);
+            } else {
+              _loadCircles();
+            }
+          },
+        );
       },
       borderRadius: BorderRadius.circular(16),
       child: Container(

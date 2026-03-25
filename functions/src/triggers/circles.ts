@@ -51,9 +51,14 @@ export const onCircleCreated = onDocumentCreated(
       // nameTokens失敗はAI生成をブロックしない
     }
 
-    // humanOnlyモードの場合はAIを生成しない
+    // humanOnlyモードの場合はAIを生成しないが、hasSpaceは設定する
     if (circleData.aiMode === "humanOnly") {
       console.log(`Circle ${circleId} is humanOnly mode, skipping AI generation`);
+      const maxMembers: number = circleData.maxMembers ?? 20;
+      const currentMemberIds = circleData.memberIds || [];
+      await db.collection("circles").doc(circleId).update({
+        hasSpace: currentMemberIds.length < maxMembers,
+      });
       return;
     }
 
@@ -105,10 +110,12 @@ export const onCircleCreated = onDocumentCreated(
       const currentMemberIds = circleData.memberIds || [];
       const updatedMemberIds = [...currentMemberIds, ...aiMemberIds];
 
+      const maxMembers: number = circleData.maxMembers ?? 20;
       await db.collection("circles").doc(circleId).update({
         generatedAIs: generatedAIs,
         memberIds: updatedMemberIds,
         memberCount: updatedMemberIds.length,
+        hasSpace: updatedMemberIds.length < maxMembers,
       });
 
       console.log(`=== onCircleCreated SUCCESS: Added ${generatedAIs.length} AIs to ${circleId} ===`);

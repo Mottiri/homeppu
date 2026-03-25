@@ -685,7 +685,12 @@ export const backfillCircleNameTokens = onCall(
                     const data = doc.data();
                     const name = data.name || "";
                     const tokens = generateNameTokens(name);
-                    batch.update(doc.ref, { nameTokens: tokens });
+                    const memberCount: number = data.memberCount || 0;
+                    const maxMembers: number = data.maxMembers || 20;
+                    batch.update(doc.ref, {
+                        nameTokens: tokens,
+                        hasSpace: memberCount < maxMembers,
+                    });
                     updated++;
                 }
 

@@ -29,59 +29,6 @@ class CircleService {
   // カテゴリ一覧（categoryIconsのキーから生成）
   static List<String> get categories => categoryIcons.keys.toList();
 
-  // サークル一覧を取得
-  Stream<List<CircleModel>> streamCircles({String? category}) {
-    // シンプルなクエリでデータを取得し、クライアント側でソート
-    return _firestore.collection('circles').snapshots().map((snapshot) {
-      var circles = snapshot.docs
-          .map((doc) => CircleModel.fromFirestore(doc))
-          .where((c) => !c.isDeleted) // ソフトデリート済みは除外
-          .toList();
-
-      // カテゴリフィルター
-      if (category != null && category != '全て') {
-        circles = circles.where((c) => c.category == category).toList();
-      }
-
-      // 作成日でソート（降順）
-      circles.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      return circles;
-    });
-  }
-
-  // サークル一覧を取得（AIモードは作成者のみ表示）
-  // セキュリティルールに合わせてORクエリを使用
-  Stream<List<CircleModel>> streamPublicCircles({
-    String? category,
-    required String userId,
-  }) {
-    // ORクエリ: 公開サークル(mix/humanOnly) OR 自分が作成したサークル
-    final query = _firestore
-        .collection('circles')
-        .where(
-          Filter.or(
-            Filter('aiMode', whereIn: ['mix', 'humanOnly']),
-            Filter('ownerId', isEqualTo: userId),
-          ),
-        );
-
-    return query.snapshots().map((snapshot) {
-      var circles = snapshot.docs
-          .map((doc) => CircleModel.fromFirestore(doc))
-          .where((c) => !c.isDeleted) // ソフトデリート済みは除外
-          .toList();
-
-      // カテゴリフィルター
-      if (category != null && category != '全て') {
-        circles = circles.where((c) => c.category == category).toList();
-      }
-
-      // 作成日でソート（降順）
-      circles.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      return circles;
-    });
-  }
-
   // サークル一覧を取得（Future版 - プル更新用）
   // セキュリティルールに合わせてORクエリを使用
   Future<List<CircleModel>> getPublicCircles({
@@ -348,21 +295,6 @@ class CircleService {
     final callable = functions.httpsCallable('leaveCircle');
 
     await callable.call({'circleId': circleId});
-  }
-
-  // ユーザーが参加しているサークル一覧
-  Stream<List<CircleModel>> streamMyCircles(String userId) {
-    return _firestore
-        .collection('circles')
-        .where('memberIds', arrayContains: userId)
-        .orderBy('recentActivity', descending: true)
-        .snapshots()
-        .map((snapshot) {
-          return snapshot.docs
-              .map((doc) => CircleModel.fromFirestore(doc))
-              .where((c) => !c.isDeleted) // ソフトデリート済みは除外
-              .toList();
-        });
   }
 
   // サークル更新（Firestore直接 — 画像URL等の非テキストフィールド用）

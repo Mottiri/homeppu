@@ -365,6 +365,7 @@ class _CircleMessages {
   String get filterHasSpace => '空きあり';
   String get loadMoreButton => 'もっと見る';
   String get circleFullError => 'このサークルは満員のため、参加できません';
+  String get joinedLimitError => '参加できるサークル数の上限に達しています';
   String get trialBannerTitle => '初回サークル体験中';
   String get trialBannerDescription =>
       'この体験では閲覧のみ可能です（作成・参加はできません）。画面遷移またはアプリ終了で体験は終了し、再度閲覧できません。';

@@ -92,6 +92,7 @@ export const CIRCLE_ERRORS = {
     FULL: "circle_full",
     DELETED: "circle_deleted",
     INVITE_ONLY: "circle_invite_only",
+    JOINED_LIMIT_REACHED: "circle_joined_limit_reached",
 } as const;
 
 // ===============================================

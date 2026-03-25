@@ -15,6 +15,9 @@ export const CLOUD_TASK_FUNCTIONS = {
   executeCircleAIPost: "executeCircleAIPost",
 } as const;
 
+// サークル参加上限
+export const MAX_JOINED_CIRCLES = 100;
+
 // AI モデル設定
 export const AI_MODELS = {
   GEMINI_DEFAULT: "gemini-2.5-flash",

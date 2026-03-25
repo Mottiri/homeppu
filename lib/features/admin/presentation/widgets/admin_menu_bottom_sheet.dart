@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -203,6 +204,47 @@ class _AdminMenuBottomSheetState extends ConsumerState<AdminMenuBottomSheet>
                 debugPrint('AdminMenuBottomSheet: AI init failed: $e');
                 if (mounted) {
                   SnackBarHelper.showError(context, AppMessages.error.general);
+                }
+              }
+            },
+          ),
+          const SizedBox(height: 12),
+          _buildMenuButton(
+            icon: Icons.sync,
+            label: 'サークルバックフィル',
+            subtitle: 'nameTokens + hasSpace を一括更新',
+            color: Colors.teal,
+            onTap: () async {
+              Navigator.pop(context);
+              try {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('バックフィル実行中...'),
+                      backgroundColor: Colors.teal,
+                      duration: Duration(seconds: 30),
+                    ),
+                  );
+                }
+                final result = await FirebaseFunctions.instanceFor(
+                  region: 'asia-northeast1',
+                ).httpsCallable(
+                  'backfillCircleNameTokens',
+                  options: HttpsCallableOptions(timeout: const Duration(minutes: 9)),
+                ).call({});
+                if (mounted) {
+                  ScaffoldMessenger.of(context).clearSnackBars();
+                  final data = result.data as Map<String, dynamic>;
+                  SnackBarHelper.showSuccess(
+                    context,
+                    'バックフィル完了: ${data['updated']}件更新 / ${data['total']}件処理',
+                  );
+                }
+              } catch (e) {
+                debugPrint('AdminMenuBottomSheet: backfill failed: $e');
+                if (mounted) {
+                  ScaffoldMessenger.of(context).clearSnackBars();
+                  SnackBarHelper.showError(context, 'バックフィル失敗: $e');
                 }
               }
             },

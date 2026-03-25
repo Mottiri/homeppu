@@ -360,6 +360,8 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
       if (mounted) {
         if (e.message == 'circle_full') {
           SnackBarHelper.showError(context, AppMessages.circle.circleFullError);
+        } else if (e.message == 'circle_joined_limit_reached') {
+          SnackBarHelper.showError(context, AppMessages.circle.joinedLimitError);
         } else {
           SnackBarHelper.showError(context, AppMessages.error.general);
         }

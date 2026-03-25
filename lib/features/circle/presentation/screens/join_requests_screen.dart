@@ -163,6 +163,8 @@ class _JoinRequestCardState extends State<_JoinRequestCard>
       if (mounted) {
         if (e is FirebaseFunctionsException && e.message == 'circle_full') {
           SnackBarHelper.showError(context, AppMessages.circle.circleFullError);
+        } else if (e is FirebaseFunctionsException && e.message == 'circle_joined_limit_reached') {
+          SnackBarHelper.showError(context, AppMessages.circle.joinedLimitError);
         } else {
           SnackBarHelper.showError(context, AppMessages.error.general);
         }
