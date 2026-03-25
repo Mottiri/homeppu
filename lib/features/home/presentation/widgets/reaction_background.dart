@@ -34,6 +34,9 @@ class _ReactionBackgroundState extends State<ReactionBackground>
   // アニメーション中のアイコン（キー: "type_index", 値: AnimationController）
   final Map<String, AnimationController> _animatingIcons = {};
 
+  // epicスパークル用のカラーパレットキャッシュ（アニメーション開始時に1回だけ計算）
+  final Map<String, List<Color>> _epicPaletteCache = {};
+
   @override
   void initState() {
     super.initState();
@@ -65,6 +68,23 @@ class _ReactionBackgroundState extends State<ReactionBackground>
     _previousReactions = Map.from(widget.reactions);
   }
 
+  /// epicスパークル用のカラーパレットを生成（1回だけ計算してキャッシュ）
+  List<Color> _getEpicPalette(String key, Color color) {
+    return _epicPaletteCache.putIfAbsent(key, () {
+      final baseHsl = HSLColor.fromColor(color);
+      return <Color>[
+        color,
+        baseHsl.withHue((baseHsl.hue + 28) % 360).toColor(),
+        baseHsl.withHue((baseHsl.hue + 62) % 360).toColor(),
+        baseHsl.withHue((baseHsl.hue + 118) % 360).toColor(),
+        baseHsl.withHue((baseHsl.hue + 182) % 360).toColor(),
+        baseHsl.withHue((baseHsl.hue + 246) % 360).toColor(),
+        baseHsl.withHue((baseHsl.hue + 300) % 360).toColor(),
+        Colors.amber,
+      ];
+    });
+  }
+
   void _startAnimation(String key, ReactionType type) {
     // 既存のアニメーションがあれば破棄
     _animatingIcons[key]?.dispose();
@@ -80,6 +100,7 @@ class _ReactionBackgroundState extends State<ReactionBackground>
       if (mounted) {
         controller.dispose();
         _animatingIcons.remove(key);
+        _epicPaletteCache.remove(key);
         setState(() {}); // アニメーション完了後に再描画
       }
     });
@@ -92,6 +113,7 @@ class _ReactionBackgroundState extends State<ReactionBackground>
     for (final controller in _animatingIcons.values) {
       controller.dispose();
     }
+    _epicPaletteCache.clear();
     super.dispose();
   }
 
@@ -212,13 +234,15 @@ class _ReactionBackgroundState extends State<ReactionBackground>
   }
 
   /// リアクションウィジェット（アセットがあれば画像、なければ絵文字）
+  /// saveLayer回避: opacity パラメータではなく color + BlendMode.modulate を使用
   Widget _buildReactionWidget(ReactionType type, double size, double opacity) {
     return Image.asset(
       type.assetPath,
       width: size,
       height: size,
       fit: BoxFit.contain,
-      opacity: AlwaysStoppedAnimation(opacity),
+      color: Colors.white.withValues(alpha: opacity),
+      colorBlendMode: BlendMode.modulate,
       errorBuilder: (context, error, stackTrace) {
         // アセットがない場合は絵文字にフォールバック
         return Text(
@@ -241,10 +265,8 @@ class _ReactionBackgroundState extends State<ReactionBackground>
   ) {
     final random = Random(iconData.seed);
 
-    // ??????? (-45? ? +45?)
     final angle = (random.nextDouble() - 0.5) * 1.5;
 
-    // ???????? (22 ? 44) + ?????
     final baseSize = 22.0 + random.nextDouble() * 22.0;
     final rarityScale = _raritySizeScale(iconData.type);
     double size = baseSize * rarityScale;
@@ -267,72 +289,77 @@ class _ReactionBackgroundState extends State<ReactionBackground>
       return Positioned(
         left: left,
         top: top,
-        child: AnimatedBuilder(
-          animation: controller,
-          builder: (context, child) {
-            final curveValue = _rarityCurve(iconData.type).transform(
-              controller.value,
-            );
-            final startScale = iconData.type.rarity == ReactionRarity.epic
-                ? 3.2
-                : iconData.type.rarity == ReactionRarity.rare
-                ? 2.6
-                : 2.2;
-            final endScale = iconData.type.rarity == ReactionRarity.epic
-                ? 1.3
-                : iconData.type.rarity == ReactionRarity.rare
-                ? 1.1
-                : 1.0;
-            final scale = startScale - (curveValue * (startScale - endScale));
+        child: RepaintBoundary(
+          child: AnimatedBuilder(
+            animation: controller,
+            builder: (context, child) {
+              final curveValue = _rarityCurve(iconData.type).transform(
+                controller.value,
+              );
+              final startScale = iconData.type.rarity == ReactionRarity.epic
+                  ? 3.2
+                  : iconData.type.rarity == ReactionRarity.rare
+                  ? 2.6
+                  : 2.2;
+              final endScale = iconData.type.rarity == ReactionRarity.epic
+                  ? 1.3
+                  : iconData.type.rarity == ReactionRarity.rare
+                  ? 1.1
+                  : 1.0;
+              final scale = startScale - (curveValue * (startScale - endScale));
 
-            final opacityScale = _rarityOpacityScale(iconData.type);
-            final animatedOpacity =
-                (1.0 - (controller.value * (1.0 - baseOpacity))) *
-                opacityScale;
+              final opacityScale = _rarityOpacityScale(iconData.type);
+              final animatedOpacity =
+                  (1.0 - (controller.value * (1.0 - baseOpacity))) *
+                  opacityScale;
 
-            final stamp = _buildReactionWidget(
-              iconData.type,
-              size,
-              (animatedOpacity * (0.5 + random.nextDouble() * 0.5))
-                  .clamp(0.0, 1.0),
-            );
+              final isEpic = iconData.type.rarity == ReactionRarity.epic;
+              // epicはstamp自体の透明度を0.78に（Opacityウィジェット不要、直接alphaで制御）
+              final stampOpacity = isEpic
+                  ? (animatedOpacity * 0.78 * (0.5 + random.nextDouble() * 0.5)).clamp(0.0, 1.0)
+                  : (animatedOpacity * (0.5 + random.nextDouble() * 0.5)).clamp(0.0, 1.0);
 
-            final isEpic = iconData.type.rarity == ReactionRarity.epic;
-            final stampWidget = Transform.rotate(
-              angle: angle,
-              child: Transform.scale(
-                scale: scale,
-                child: isEpic
-                    ? Opacity(opacity: 0.78, child: stamp)
-                    : _wrapGlow(stamp, iconData.type),
-              ),
-            );
+              final stamp = _buildReactionWidget(
+                iconData.type,
+                size,
+                stampOpacity,
+              );
 
-            if (!isEpic) {
-              return stampWidget;
-            }
-
-            final sparkleOpacity = (animatedOpacity * 0.95).clamp(0.0, 1.0);
-            return Stack(
-              clipBehavior: Clip.none,
-              alignment: Alignment.center,
-              children: [
-                stampWidget,
-                ..._buildEpicSparkles(
-                  t: controller.value,
-                  size: size,
-                  opacity: sparkleOpacity,
-                  color: iconData.type.rarityColor,
-                  seed: iconData.seed,
+              final stampWidget = Transform.rotate(
+                angle: angle,
+                child: Transform.scale(
+                  scale: scale,
+                  child: isEpic ? stamp : _wrapGlow(stamp, iconData.type),
                 ),
-              ],
-            );
-          },
+              );
+
+              if (!isEpic) {
+                return stampWidget;
+              }
+
+              final sparkleOpacity = (animatedOpacity * 0.95).clamp(0.0, 1.0);
+              return Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.center,
+                children: [
+                  stampWidget,
+                  ..._buildEpicSparkles(
+                    t: controller.value,
+                    size: size,
+                    opacity: sparkleOpacity,
+                    color: iconData.type.rarityColor,
+                    seed: iconData.seed,
+                    animationKey: iconData.animationKey,
+                  ),
+                ],
+              );
+            },
+          ),
         ),
       );
     }
 
-    // ????
+    // 静止状態
     return Positioned(
       left: left,
       top: top,
@@ -355,22 +382,15 @@ class _ReactionBackgroundState extends State<ReactionBackground>
     required double opacity,
     required Color color,
     required int seed,
+    required String animationKey,
   }) {
-    const sparkleCount = 20;
+    // パーティクル数を20→10に削減（saveLayer削減と合わせて大幅に軽量化）
+    const sparkleCount = 10;
     final widgets = <Widget>[];
     final progress = Curves.easeOut.transform(t.clamp(0.0, 1.0));
     final fade = (1.0 - progress).clamp(0.0, 1.0);
-    final baseHsl = HSLColor.fromColor(color);
-    final palette = <Color>[
-      color,
-      baseHsl.withHue((baseHsl.hue + 28) % 360).toColor(),
-      baseHsl.withHue((baseHsl.hue + 62) % 360).toColor(),
-      baseHsl.withHue((baseHsl.hue + 118) % 360).toColor(),
-      baseHsl.withHue((baseHsl.hue + 182) % 360).toColor(),
-      baseHsl.withHue((baseHsl.hue + 246) % 360).toColor(),
-      baseHsl.withHue((baseHsl.hue + 300) % 360).toColor(),
-      Colors.amber,
-    ];
+    // パレットはアニメーション開始時に1回だけ計算（キャッシュ）
+    final palette = _getEpicPalette(animationKey, color);
 
     for (var i = 0; i < sparkleCount; i++) {
       final seedOffset = ((seed >> (i % 8)) & 0xFF) / 255.0;
@@ -384,99 +404,90 @@ class _ReactionBackgroundState extends State<ReactionBackground>
           (0.85 + 0.15 * twinkle);
       final baseParticleColor = palette[i % palette.length];
       final iconColor = Color.lerp(baseParticleColor, Colors.white, 0.35)!;
+      final scaleValue = 0.55 + 0.85 * progress;
 
+      // Opacity → Icon.color.alpha に統合（saveLayer回避）
       widgets.add(
         Transform.translate(
           offset: Offset(cos(angle) * radius, sin(angle) * radius),
-          child: Opacity(
-            opacity: particleOpacity,
-            child: Transform.scale(
-              scale: 0.55 + 0.85 * progress,
-              child: Icon(
-                i.isEven ? Icons.auto_awesome_rounded : Icons.star_rounded,
-                size: iconSize,
-                color: iconColor.withValues(alpha: 0.98),
-                shadows: [
-                  Shadow(
-                    color: baseParticleColor.withValues(alpha: 0.95),
-                    blurRadius: 14,
-                  ),
-                ],
-              ),
+          child: Transform.scale(
+            scale: scaleValue,
+            child: Icon(
+              i.isEven ? Icons.auto_awesome_rounded : Icons.star_rounded,
+              size: iconSize,
+              color: iconColor.withValues(alpha: particleOpacity * 0.98),
+              shadows: [
+                Shadow(
+                  color: baseParticleColor.withValues(alpha: particleOpacity * 0.8),
+                  blurRadius: 6,
+                ),
+              ],
             ),
           ),
         ),
       );
 
-      // Secondary small sparkle layer for a denser, flashier burst.
+      // セカンダリレイヤー: Opacity → Icon.color.alpha に統合
+      final secondaryOpacity = (particleOpacity * 0.85).clamp(0.0, 1.0);
       widgets.add(
         Transform.translate(
           offset: Offset(cos(angle) * radius * 0.68, sin(angle) * radius * 0.68),
-          child: Opacity(
-            opacity: (particleOpacity * 0.85).clamp(0.0, 1.0),
-            child: Icon(
-              Icons.star_rounded,
-              size: iconSize * 0.6,
-              color: Colors.white.withValues(alpha: 0.92),
-              shadows: [
-                Shadow(
-                  color: baseParticleColor.withValues(alpha: 0.9),
-                  blurRadius: 12,
-                ),
-              ],
-            ),
+          child: Icon(
+            Icons.star_rounded,
+            size: iconSize * 0.6,
+            color: Colors.white.withValues(alpha: secondaryOpacity * 0.92),
+            shadows: [
+              Shadow(
+                color: baseParticleColor.withValues(alpha: secondaryOpacity * 0.7),
+                blurRadius: 6,
+              ),
+            ],
           ),
         ),
       );
     }
 
-    // Quick flash ring near the start for stronger "pop" feeling.
-    final ringOpacity = (opacity * (1.0 - (progress * 1.4))).clamp(0.0, 0.85);
-    if (ringOpacity > 0.01) {
+    // リング効果: Opacity → 直接alphaに統合
+    final ringAlpha = (opacity * (1.0 - (progress * 1.4))).clamp(0.0, 0.85);
+    if (ringAlpha > 0.01) {
       widgets.add(
-        Opacity(
-          opacity: ringOpacity,
-          child: Container(
-            width: size * (0.35 + progress * 1.15),
-            height: size * (0.35 + progress * 1.15),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.95),
-                width: 2.8,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: color.withValues(alpha: 0.75),
-                  blurRadius: 20,
-                  spreadRadius: 2.5,
-                ),
-              ],
+        Container(
+          width: size * (0.35 + progress * 1.15),
+          height: size * (0.35 + progress * 1.15),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: Colors.white.withValues(alpha: ringAlpha * 0.95),
+              width: 2.8,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: ringAlpha * 0.6),
+                blurRadius: 8,
+                spreadRadius: 1.5,
+              ),
+            ],
           ),
         ),
       );
     }
 
-    // Central burst flash to make the tap feel more impactful.
-    final burstOpacity = (opacity * (1.0 - (progress * 2.1))).clamp(0.0, 0.9);
-    if (burstOpacity > 0.01) {
+    // バースト効果: Opacity → gradient色のalphaに統合
+    final burstAlpha = (opacity * (1.0 - (progress * 2.1))).clamp(0.0, 0.9);
+    if (burstAlpha > 0.01) {
       widgets.add(
-        Opacity(
-          opacity: burstOpacity,
-          child: Container(
-            width: size * (0.24 + progress * 0.7),
-            height: size * (0.24 + progress * 0.7),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                colors: [
-                  Colors.white.withValues(alpha: 0.98),
-                  color.withValues(alpha: 0.78),
-                  color.withValues(alpha: 0.0),
-                ],
-                stops: const [0.0, 0.42, 1.0],
-              ),
+        Container(
+          width: size * (0.24 + progress * 0.7),
+          height: size * (0.24 + progress * 0.7),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: RadialGradient(
+              colors: [
+                Colors.white.withValues(alpha: burstAlpha * 0.98),
+                color.withValues(alpha: burstAlpha * 0.78),
+                color.withValues(alpha: 0.0),
+              ],
+              stops: const [0.0, 0.42, 1.0],
             ),
           ),
         ),

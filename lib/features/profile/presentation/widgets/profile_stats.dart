@@ -123,6 +123,8 @@ class ProfileStats extends StatelessWidget {
                 fontSize: 13,
                 color: AppColors.textSecondary,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 4),
             if (isLoading)
