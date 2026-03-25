@@ -2,8 +2,8 @@
 
 **作成日**: 2026-03-24
 **優先度**: P1
-**ステータス**: 設計書作成済み
-**次のアクション担当者**: 実行者
+**ステータス**: ✅ 実装完了（2026-03-25）
+**次のアクション担当者**: なし（デプロイ・バックフィル実行待ち）
 
 ---
 
@@ -643,9 +643,46 @@ Future<Map<String, Map<String, dynamic>>> _fetchMembersBatch(
 
 ---
 
-## 9. 次のアクション
+## 9. 実装結果（2026-03-25）
 
-- **実行者**: フェーズ1（B1 → B2）から実装開始
-  - B1: `constants.ts`, `messages.ts`, `circles.ts` の変更
-  - B2: バックフィルスクリプト作成 → `circles.ts`, `triggers/circles.ts` の変更 → インデックス追加
-- **次のアクション担当者**: 実行者
+全8項目の実装が完了。Codexレビュー3回実施、実機確認OK。
+
+### 変更ファイル一覧
+
+| ファイル | 変更内容 |
+|---------|---------|
+| `functions/src/config/constants.ts` | `MAX_JOINED_CIRCLES = 100` 追加 |
+| `functions/src/config/messages.ts` | `JOINED_LIMIT_REACHED` エラーコード追加 |
+| `functions/src/callable/circles.ts` | B1上限チェック、B2 hasSpace同期、A4キャッシュ、aiOnlyフィルタ |
+| `functions/src/helpers/search-tokens.ts` | B3 プレフィックスのみ化 |
+| `functions/src/triggers/circles.ts` | B2 humanOnlyサークルのhasSpace補完 |
+| `functions/src/callable/admin.ts` | バックフィルにhasSpace設定追加 |
+| `firebase/firestore.indexes.json` | hasSpace複合インデックス20個追加、不要5個削除（差引+15） |
+| `lib/shared/services/circle_service.dart` | A1 未使用stream3メソッド削除 |
+| `lib/features/circle/presentation/screens/circles_screen.dart` | A5 デバウンス150ms |
+| `lib/features/circle/presentation/screens/members_list_screen.dart` | A6 バッチ取得 |
+| `lib/core/constants/app_messages.dart` | joinedLimitError文言追加 |
+| `lib/features/circle/presentation/screens/circle_detail_screen.dart` | circle_joined_limit_reached UI接続 |
+| `lib/features/circle/presentation/screens/join_requests_screen.dart` | 同上 |
+| `lib/features/admin/presentation/widgets/admin_menu_bottom_sheet.dart` | バックフィル実行ボタン追加 |
+
+### Codexレビュー指摘と対応
+
+| 指摘 | 深刻度 | 対応 |
+|------|--------|------|
+| hasSpace複合インデックス未定義 | Critical | 20個追加 |
+| humanOnlyサークルにhasSpace未設定 | High | createCircle初期値 + trigger修正 |
+| 参加上限チェック非原子的 | High | ベストエフォートで許容（100件到達は稀） |
+| キャッシュ失効未連動 | Medium | start/endCircleBrowseTrialにinvalidate追加 |
+| UIに新エラーコード未接続 | Medium | 2画面で分岐追加 |
+| aiOnlyにhasSpaceフィルタ未適用 | Medium | 2箇所でフィルタ追加 |
+| joinCircle冪等性 | Medium | UIがガード済みで対応不要 |
+| サブスク購入時キャッシュ | Medium | 発生シナリオが極めて限定的で対応不要 |
+
+### デプロイ手順
+
+1. `firebase deploy --only functions`
+2. `firebase deploy --only firestore:indexes`
+3. Firebase ConsoleでhasSpaceインデックス20個がACTIVEになるまで待機
+4. 管理者メニュー → AI操作 → サークルバックフィル実行
+5. Flutterアプリ更新
