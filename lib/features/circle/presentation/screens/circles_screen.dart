@@ -66,6 +66,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   bool _filterHasSpace = false;
   bool _phase5Initialized = false;
   Timer? _filterDebounceTimer;
+  bool _trialBannerDismissed = false;
   static const int _filterDebounceMs = 150;
 
   @override
@@ -756,48 +757,59 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
                   ),
                 ),
               ),
-              if (isCircleTrialSession && !(currentUser?.isSubscriber ?? false))
+              if (isCircleTrialSession && !(currentUser?.isSubscriber ?? false) && !_trialBannerDismissed)
                 Positioned(
                   top: 8,
                   left: 12,
                   right: 12,
-                  child: IgnorePointer(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.withValues(alpha: 0.95),
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.1),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.visibility_outlined,
-                            size: 16,
-                            color: Colors.white,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              '${AppMessages.circle.trialBannerTitle}  ${AppMessages.circle.trialBannerDescription}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
+                  child: Container(
+                    padding: const EdgeInsets.only(
+                      left: 12,
+                      top: 10,
+                      bottom: 10,
+                      right: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.95),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.visibility_outlined,
+                          size: 16,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '${AppMessages.circle.trialBannerTitle}  ${AppMessages.circle.trialBannerDescription}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                        GestureDetector(
+                          onTap: () => setState(() => _trialBannerDismissed = true),
+                          child: const Padding(
+                            padding: EdgeInsets.all(8),
+                            child: Icon(
+                              Icons.close,
+                              size: 16,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
