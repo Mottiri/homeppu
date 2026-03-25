@@ -69,6 +69,10 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   bool _trialBannerDismissed = false;
   static const int _filterDebounceMs = 150;
 
+  // 申請バッジ用の一括リスナー
+  StreamSubscription<Map<String, int>>? _pendingRequestSubscription;
+  Map<String, int> _pendingRequestCounts = {};
+
   @override
   void initState() {
     super.initState();
@@ -95,10 +99,93 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   void dispose() {
     _debounceTimer?.cancel();
     _filterDebounceTimer?.cancel();
+    _pendingRequestSubscription?.cancel();
     _searchController.dispose();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     super.dispose();
+  }
+
+  /// 表示中のサークルリストから、申請バッジ表示が必要なcircleIdを収集し、
+  /// 一括リスナーを更新する。
+  void _updatePendingRequestListener() {
+    final currentUser = ref.read(currentUserProvider).valueOrNull;
+    if (currentUser == null) {
+      _pendingRequestSubscription?.cancel();
+      _pendingRequestSubscription = null;
+      return;
+    }
+    final userId = currentUser.uid;
+    final isAdmin = ref.read(isAdminProvider).valueOrNull ?? false;
+
+    // 表示中の全サークルからオーナー/副オーナー/管理者としてバッジが必要なIDを収集
+    final allCircles = [
+      ..._circles,
+      ..._privateOwnerResults,
+      ..._searchResults,
+    ];
+    final badgeCircleIds = <String>{};
+    for (final c in allCircles) {
+      if (c.ownerId == userId || c.subOwnerId == userId || isAdmin) {
+        badgeCircleIds.add(c.id);
+      }
+    }
+
+    if (badgeCircleIds.isEmpty) {
+      _pendingRequestSubscription?.cancel();
+      _pendingRequestSubscription = null;
+      if (_pendingRequestCounts.isNotEmpty) {
+        setState(() => _pendingRequestCounts = {});
+      }
+      return;
+    }
+
+    // whereIn は最大30件のため、チャンク分割してマージ
+    final idList = badgeCircleIds.toList();
+    final circleService = ref.read(circleServiceProvider);
+    final chunks = <List<String>>[];
+    for (var i = 0; i < idList.length; i += 30) {
+      chunks.add(idList.sublist(i, i + 30 > idList.length ? idList.length : i + 30));
+    }
+
+    _pendingRequestSubscription?.cancel();
+    _pendingRequestCounts = {};
+
+    if (chunks.length == 1) {
+      // 30件以下: 単一クエリ
+      _pendingRequestSubscription = circleService
+          .streamPendingRequestCounts(chunks.first)
+          .listen((counts) {
+        if (mounted) setState(() => _pendingRequestCounts = counts);
+      });
+    } else {
+      // 31件以上: 複数チャンクの結果をマージ
+      // チャンクごとの最新結果を保持し、どれか更新されたら全体をマージ
+      final chunkResults = List<Map<String, int>>.filled(chunks.length, {});
+      final subscriptions = <StreamSubscription<Map<String, int>>>[];
+      for (var i = 0; i < chunks.length; i++) {
+        final sub = circleService
+            .streamPendingRequestCounts(chunks[i])
+            .listen((counts) {
+          chunkResults[i] = counts;
+          if (mounted) {
+            final merged = <String, int>{};
+            for (final result in chunkResults) {
+              merged.addAll(result);
+            }
+            setState(() => _pendingRequestCounts = merged);
+          }
+        });
+        subscriptions.add(sub);
+      }
+      // 最初のサブスクリプションに全体のキャンセルを委ねる
+      // dispose時に _pendingRequestSubscription.cancel() で最初のものがキャンセルされるため、
+      // 残りも手動でキャンセルするラッパーを作る
+      final firstSub = subscriptions.first;
+      _pendingRequestSubscription = firstSub;
+      // dispose時に全チャンクをキャンセルするため、元のcancelを上書き
+      _pendingRequestSubscription = _CompositeSubscription(subscriptions);
+    }
   }
 
   void _onScroll() {
@@ -240,6 +327,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
           _isLoading = false;
         });
       }
+      _updatePendingRequestListener();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _updateScrollable();
       });
@@ -322,6 +410,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
           _isLoadingMore = false;
         });
       }
+      _updatePendingRequestListener();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _updateScrollable();
       });
@@ -343,6 +432,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         _searchCursor = null;
         _isLoadingMoreSearch = false;
       });
+      _updatePendingRequestListener();
       return;
     }
     _debounceTimer = Timer(const Duration(milliseconds: 300), () {
@@ -385,6 +475,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         _searchCursor = result.nextCursor;
         _isSearching = false;
       });
+      _updatePendingRequestListener();
       if (result.joinedTruncated && mounted) {
         SnackBarHelper.showInfo(
           context,
@@ -438,6 +529,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
         _searchCursor = result.nextCursor;
         _isLoadingMoreSearch = false;
       });
+      _updatePendingRequestListener();
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoadingMoreSearch = false);
@@ -545,6 +637,13 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     // サークルボタンタップでスクロールトップを監視
     ref.listen<int>(circleScrollToTopProvider, (previous, next) {
       _scrollToTop();
+    });
+
+    // admin状態変更時にバッジリスナーを再構築
+    ref.listen<AsyncValue<bool>>(isAdminProvider, (previous, next) {
+      if (previous?.valueOrNull != next.valueOrNull) {
+        _updatePendingRequestListener();
+      }
     });
 
     // ユーザーのヘッダー色を取得（設定されていればその色、なければデフォルト）
@@ -909,6 +1008,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
                 circle: allResults[index],
                 currentUserId: userId,
                 onDeleted: _loadCircles,
+                pendingRequestCount: _pendingRequestCounts[allResults[index].id] ?? 0,
               );
             }
             // 追加読み込みインジケーター（ロード中のみ表示）
@@ -1079,6 +1179,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
             circle: filteredCircles[index],
             currentUserId: userId,
             onDeleted: _loadCircles,
+            pendingRequestCount: _pendingRequestCounts[filteredCircles[index].id] ?? 0,
           );
         }, childCount: filteredCircles.length + ((_isLoadingMore || (_canLoadMore && !_isScrollable)) ? 1 : 0)),
       ),
@@ -1303,8 +1404,14 @@ class _CircleCard extends ConsumerWidget {
   final CircleModel circle;
   final String? currentUserId;
   final VoidCallback? onDeleted;
+  final int pendingRequestCount;
 
-  const _CircleCard({required this.circle, this.currentUserId, this.onDeleted});
+  const _CircleCard({
+    required this.circle,
+    this.currentUserId,
+    this.onDeleted,
+    this.pendingRequestCount = 0,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1380,43 +1487,34 @@ class _CircleCard extends ConsumerWidget {
                             ),
                     ),
                     // オーナー、副オーナー、または管理者の場合は申請バッジを表示
-                    if (isOwner || isSubOwner || isAdmin)
-                      StreamBuilder<List<Map<String, dynamic>>>(
-                        stream: ref
-                            .watch(circleServiceProvider)
-                            .streamJoinRequests(circle.id),
-                        builder: (context, snapshot) {
-                          final count = snapshot.data?.length ?? 0;
-                          if (count == 0) return const SizedBox.shrink();
-                          return Positioned(
-                            top: -4,
-                            right: -4,
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: Colors.white,
-                                  width: 2,
-                                ),
-                              ),
-                              constraints: const BoxConstraints(
-                                minWidth: 20,
-                                minHeight: 20,
-                              ),
-                              child: Text(
-                                count > 9 ? '9+' : count.toString(),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
+                    if ((isOwner || isSubOwner || isAdmin) && pendingRequestCount > 0)
+                      Positioned(
+                        top: -4,
+                        right: -4,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white,
+                              width: 2,
                             ),
-                          );
-                        },
+                          ),
+                          constraints: const BoxConstraints(
+                            minWidth: 20,
+                            minHeight: 20,
+                          ),
+                          child: Text(
+                            pendingRequestCount > 9 ? '9+' : pendingRequestCount.toString(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
                       ),
                   ],
                 ),
@@ -1714,5 +1812,50 @@ enum _SortOption {
 
   final IconData icon;
   const _SortOption(this.icon);
+}
+
+/// 複数の StreamSubscription をまとめてキャンセルするラッパー
+class _CompositeSubscription<T> implements StreamSubscription<T> {
+  final List<StreamSubscription<T>> _subscriptions;
+
+  _CompositeSubscription(this._subscriptions);
+
+  @override
+  Future<void> cancel() async {
+    await Future.wait(_subscriptions.map((s) => s.cancel()));
+  }
+
+  @override
+  void onData(void Function(T data)? handleData) =>
+      _subscriptions.first.onData(handleData);
+
+  @override
+  void onDone(void Function()? handleDone) =>
+      _subscriptions.first.onDone(handleDone);
+
+  @override
+  void onError(Function? handleError) =>
+      _subscriptions.first.onError(handleError);
+
+  @override
+  void pause([Future<void>? resumeSignal]) {
+    for (final s in _subscriptions) {
+      s.pause(resumeSignal);
+    }
+  }
+
+  @override
+  void resume() {
+    for (final s in _subscriptions) {
+      s.resume();
+    }
+  }
+
+  @override
+  bool get isPaused => _subscriptions.first.isPaused;
+
+  @override
+  Future<E> asFuture<E>([E? futureValue]) =>
+      _subscriptions.first.asFuture(futureValue);
 }
 
