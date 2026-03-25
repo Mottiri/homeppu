@@ -603,9 +603,8 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
                         SliverToBoxAdapter(
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: Container(
+                            child: DecoratedBox(
                               decoration: BoxDecoration(
-                                color: Colors.white,
                                 borderRadius: BorderRadius.circular(16),
                                 boxShadow: [
                                   BoxShadow(
@@ -615,7 +614,9 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
                                   ),
                                 ],
                               ),
-                              child: TextField(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: TextField(
                                 controller: _searchController,
                                 onChanged: _onSearchChanged,
                                 decoration: InputDecoration(
@@ -635,12 +636,15 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
                                         )
                                       : null,
                                   border: InputBorder.none,
+                                  filled: true,
+                                  fillColor: Colors.white,
                                   contentPadding: const EdgeInsets.symmetric(
                                     horizontal: 16,
                                     vertical: 14,
                                   ),
                                 ),
                               ),
+                            ),
                             ),
                           ),
                         ),
