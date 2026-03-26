@@ -147,7 +147,7 @@ enum ReactionType {
   final int? virtueCost; // ?????????rare???
 
   /// ???????assets/reactions/{assetName}.png?
-  String get assetPath => 'assets/reactions/$assetName.png';
+  String get assetPath => 'assets/reactions/$assetName.webp';
 
   String get purchaseKey => 'reaction_$value';
 

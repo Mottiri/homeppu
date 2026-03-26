@@ -947,7 +947,7 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
                     message: AppMessages.tutorial.circleOverviewGuide,
                     onMaskTap: () =>
                         ref.read(tutorialPhase5Provider.notifier).advance(),
-                    characterAssetPath: 'assets/onbord/onbord_01.png',
+                    characterAssetPath: 'assets/onbord/onbord_01.webp',
                     bubbleBottomOffset:
                         MediaQuery.of(context).padding.bottom + 96,
                   ),

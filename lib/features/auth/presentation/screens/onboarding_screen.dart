@@ -19,19 +19,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   final List<_OnboardingData> _pages = [
     _OnboardingData(
-      imageAssetPath: 'assets/onbord/onbord_01.png',
+      imageAssetPath: 'assets/onbord/onbord_01.webp',
       title: AppMessages.onboarding.page1Title,
       description: AppMessages.onboarding.page1Description,
       color: AppColors.primaryLight,
     ),
     _OnboardingData(
-      imageAssetPath: 'assets/onbord/onbord_02.png',
+      imageAssetPath: 'assets/onbord/onbord_02.webp',
       title: AppMessages.onboarding.page2Title,
       description: AppMessages.onboarding.page2Description,
       color: AppColors.accent,
     ),
     _OnboardingData(
-      imageAssetPath: 'assets/onbord/onbord_03.png',
+      imageAssetPath: 'assets/onbord/onbord_03.webp',
       title: AppMessages.onboarding.page3Title,
       description: AppMessages.onboarding.page3Description,
       color: AppColors.secondaryLight,

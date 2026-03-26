@@ -306,12 +306,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   // デフォルトヘッダー画像リスト
   static const List<String> _defaultHeaderImages = [
-    'assets/images/headers/header_wave_1.png',
-    'assets/images/headers/header_wave_2.png',
-    'assets/images/headers/header_wave_3.png',
-    'assets/images/headers/header_wave_4.png',
-    'assets/images/headers/header_wave_5.png',
-    'assets/images/headers/header_wave_6.png',
+    'assets/images/headers/header_wave_1.webp',
+    'assets/images/headers/header_wave_2.webp',
+    'assets/images/headers/header_wave_3.webp',
+    'assets/images/headers/header_wave_4.webp',
+    'assets/images/headers/header_wave_5.webp',
+    'assets/images/headers/header_wave_6.webp',
   ];
 
   // 各デフォルト画像に対応するカラーパレット [primary, secondary]

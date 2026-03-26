@@ -2,6 +2,7 @@
 const fs = require("fs");
 const path = require("path");
 const admin = require("firebase-admin");
+const { execSync } = require("child_process");
 
 const DEFAULT_RARE_COST = null;
 const BEGIN_MARKER = "// BEGIN AUTO REACTION TYPES";
@@ -12,6 +13,67 @@ const RARITY_COLORS = {
   epic: "0xFF9575CD",
 };
 const DEFAULT_EMOJI = "✨";
+
+function checkMagickAvailable() {
+  try {
+    execSync("magick --version", { stdio: "ignore" });
+  } catch {
+    throw new Error(
+      "ImageMagick is required for PNG→WebP conversion but 'magick' was not found on PATH.\n" +
+      "Install it from https://imagemagick.org/ and ensure 'magick' is available."
+    );
+  }
+}
+
+function convertPngToWebp(pngPath) {
+  if (!_magickChecked) {
+    checkMagickAvailable();
+    _magickChecked = true;
+  }
+  const alphaCheck = execSync(`magick identify -format "%A" "${pngPath}"`, { encoding: "utf-8" }).trim();
+  const hasAlpha = alphaCheck === "True" || alphaCheck === "Blend";
+
+  const webpPath = pngPath.replace(/\.png$/i, ".webp");
+  if (hasAlpha) {
+    execSync(`magick "${pngPath}" -define webp:lossless=true "${webpPath}"`);
+  } else {
+    execSync(`magick "${pngPath}" -quality 90 "${webpPath}"`);
+  }
+
+  fs.unlinkSync(pngPath);
+  console.log(`Converted: ${path.basename(pngPath)} -> ${path.basename(webpPath)}${hasAlpha ? " (lossless)" : " (lossy q90)"}`);
+  return webpPath;
+}
+
+let _magickChecked = false;
+
+function ensureWebpAssets(dir) {
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      ensureWebpAssets(path.join(dir, entry.name));
+      continue;
+    }
+    if (!entry.isFile() || !entry.name.toLowerCase().endsWith(".png")) continue;
+
+    const pngPath = path.join(dir, entry.name);
+    const webpPath = pngPath.replace(/\.png$/i, ".webp");
+
+    if (fs.existsSync(webpPath)) {
+      const pngMtime = fs.statSync(pngPath).mtimeMs;
+      const webpMtime = fs.statSync(webpPath).mtimeMs;
+      if (pngMtime > webpMtime) {
+        convertPngToWebp(pngPath);
+        console.log(`Re-converted: ${entry.name} (PNG was newer than WebP)`);
+      } else {
+        fs.unlinkSync(pngPath);
+        console.log(`Removed duplicate PNG: ${entry.name} (WebP is up-to-date)`);
+      }
+    } else {
+      convertPngToWebp(pngPath);
+    }
+  }
+}
 
 function parseArgs(argv) {
   const args = {};
@@ -190,16 +252,17 @@ async function main() {
     throw new Error(`app_constants.dart not found: ${appConstantsPath}`);
   }
 
+  ensureWebpAssets(assetsDir);
   const files = fs
     .readdirSync(assetsDir)
-    .filter((file) => file.toLowerCase().endsWith(".png"));
+    .filter((file) => file.toLowerCase().endsWith(".webp"));
 
   const parsedAssets = [];
   const skippedAssets = [];
   const seenIds = new Set();
 
   for (const file of files) {
-    const baseName = path.basename(file, ".png");
+    const baseName = path.basename(file, ".webp");
     const parsed = parseFileName(baseName);
     if (!parsed) {
       skippedAssets.push(baseName);

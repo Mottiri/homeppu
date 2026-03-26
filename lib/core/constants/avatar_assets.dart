@@ -2,7 +2,7 @@ import '../../shared/models/avatar_parts_model.dart';
 
 class AvatarAssets {
   static const String baseId = 'base_01';
-  static const String basePath = 'assets/avatars/base/base_01.png';
+  static const String basePath = 'assets/avatars/base/base_01.webp';
 
   static const List<String> hairIds = ['hair_01', 'hair_02', 'hair_03', 'hair_04', 'hair_05', 'hair_06', 'hair_07', 'hair_08', 'hair_09', 'hair_10', 'hair_11', 'hair_12', 'hair_13', 'hair_14', 'hair_15'];
   static const List<String> eyesIds = ['eyes_01', 'eyes_02', 'eyes_03', 'eyes_04', 'eyes_05', 'eyes_06', 'eyes_07', 'eyes_08', 'eyes_09', 'eyes_10', 'eyes_11', 'eyes_12', 'eyes_13', 'eyes_14', 'eyes_15', 'eyes_16'];
@@ -139,10 +139,10 @@ class AvatarAssets {
     'mouth_07': 'mouth_07_rare',
   };
 
-  static String hairPath(String id) => 'assets/avatars/hair/${partAssetNameById[id] ?? id}.png';
-  static String eyesPath(String id) => 'assets/avatars/eyes/${partAssetNameById[id] ?? id}.png';
-  static String mouthPath(String id) => 'assets/avatars/mouth/${partAssetNameById[id] ?? id}.png';
-  static String eyebrowsPath(String id) => 'assets/avatars/eyebrows/${partAssetNameById[id] ?? id}.png';
+  static String hairPath(String id) => 'assets/avatars/hair/${partAssetNameById[id] ?? id}.webp';
+  static String eyesPath(String id) => 'assets/avatars/eyes/${partAssetNameById[id] ?? id}.webp';
+  static String mouthPath(String id) => 'assets/avatars/mouth/${partAssetNameById[id] ?? id}.webp';
+  static String eyebrowsPath(String id) => 'assets/avatars/eyebrows/${partAssetNameById[id] ?? id}.webp';
 
   static AvatarParts defaultParts() {
     return AvatarParts(

@@ -14,7 +14,7 @@ class TutorialOverlay extends StatelessWidget {
     this.isActionEnabled = true,
     this.onSpotlightTap,
     this.onMaskTap,
-    this.characterAssetPath = 'assets/onbord/onbord_01.png',
+    this.characterAssetPath = 'assets/onbord/onbord_01.webp',
     this.bubbleBottomOffset,
     this.circularSpotlight = false,
     this.passThroughSpotlight = false,

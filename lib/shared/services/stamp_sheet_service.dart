@@ -31,7 +31,7 @@ class StampSheetDefinition {
   }) {
     return StampSheetDefinition(
       id: (map['id'] ?? '').toString(),
-      assetPath: (map['assetPath'] ?? '').toString(),
+      assetPath: (map['assetPath'] ?? '').toString().replaceAll('.png', '.webp'),
       rarity: (map['rarity'] ?? 'common').toString(),
       displayOrder: (map['displayOrder'] as num?)?.toInt() ?? 9999,
       isActive: map['isActive'] != false,
@@ -223,9 +223,9 @@ class StampSheetArchive {
 class StampSheetService {
   static const String defaultSheetId = 'default';
   static const String _defaultSheetAssetPath =
-      'assets/stamp_sheets/default_common.png';
+      'assets/stamp_sheets/autumn_common.webp';
   static const String _defaultLayoutAssetPath =
-      'assets/stamp_sheets/layouts/default.json';
+      'assets/stamp_sheets/layouts/autumn.json';
 
   final FirebaseFirestore _firestore;
   final FirebaseFunctions _functions;

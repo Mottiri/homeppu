@@ -5,14 +5,14 @@
 
 ## 命名規則
 
-- ファイル: `assets/stamp_sheets/<sheetId>_<rarity>.png`
+- ファイル: `assets/stamp_sheets/<sheetId>_<rarity>.webp`（入力は `.png` も可 — スクリプト実行時に自動でWebPへ変換）
 - `rarity`: `common` / `rare` / `epic`
 - レイアウトJSON: `assets/stamp_sheets/layouts/<sheetId>.json`
 
 例:
 
-- `assets/stamp_sheets/celebrate_common.png`
-- `assets/stamp_sheets/celebrate_rare.png`
+- `assets/stamp_sheets/celebrate_common.webp`
+- `assets/stamp_sheets/celebrate_rare.webp`
 - `assets/stamp_sheets/layouts/celebrate.json`
 
 ## 重要ルール
@@ -21,6 +21,7 @@
 - 同じ `sheetId` の画像は1つだけ（同時に複数レア度は不可）
 - 対応する `layouts/<sheetId>.json` がない場合、スクリプトはエラー終了
 - 画像が削除された `sheetId` は Firestore から**完全削除**
+- PNGで配置した場合、スクリプト実行時にImageMagickでWebPへ自動変換され、元のPNGは削除されます
 
 ## 実行コマンド
 

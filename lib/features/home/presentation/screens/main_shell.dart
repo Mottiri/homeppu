@@ -1007,7 +1007,7 @@ class _MainShellState extends ConsumerState<MainShell>
                   await notifier.advance();
                 }
               },
-              characterAssetPath: 'assets/onbord/onbord_01.png',
+              characterAssetPath: 'assets/onbord/onbord_01.webp',
               bubbleBottomOffset:
                   MediaQuery.of(context).padding.bottom +
                   _measuredBottomNavHeight +
@@ -1023,7 +1023,7 @@ class _MainShellState extends ConsumerState<MainShell>
               onSpotlightTap: () =>
                   ref.read(tutorialPhase5Provider.notifier).markCompleted(),
               onMaskTap: () {},
-              characterAssetPath: 'assets/onbord/onbord_01.png',
+              characterAssetPath: 'assets/onbord/onbord_01.webp',
               bubbleBottomOffset:
                   MediaQuery.of(context).padding.bottom +
                   _measuredBottomNavHeight +

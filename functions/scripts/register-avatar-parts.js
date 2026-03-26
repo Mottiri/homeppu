@@ -2,6 +2,7 @@
 const fs = require("fs");
 const path = require("path");
 const admin = require("firebase-admin");
+const { execSync } = require("child_process");
 
 const PARTS = [
   { dir: "hair", listKey: "hairIds" },
@@ -43,7 +44,68 @@ function toNumber(value, label) {
   return Math.trunc(parsed);
 }
 
-function walkPngFiles(dir) {
+function checkMagickAvailable() {
+  try {
+    execSync("magick --version", { stdio: "ignore" });
+  } catch {
+    throw new Error(
+      "ImageMagick is required for PNG→WebP conversion but 'magick' was not found on PATH.\n" +
+      "Install it from https://imagemagick.org/ and ensure 'magick' is available."
+    );
+  }
+}
+
+function convertPngToWebp(pngPath) {
+  if (!_magickChecked) {
+    checkMagickAvailable();
+    _magickChecked = true;
+  }
+  const alphaCheck = execSync(`magick identify -format "%A" "${pngPath}"`, { encoding: "utf-8" }).trim();
+  const hasAlpha = alphaCheck === "True" || alphaCheck === "Blend";
+
+  const webpPath = pngPath.replace(/\.png$/i, ".webp");
+  if (hasAlpha) {
+    execSync(`magick "${pngPath}" -define webp:lossless=true "${webpPath}"`);
+  } else {
+    execSync(`magick "${pngPath}" -quality 90 "${webpPath}"`);
+  }
+
+  fs.unlinkSync(pngPath);
+  console.log(`Converted: ${path.basename(pngPath)} -> ${path.basename(webpPath)}${hasAlpha ? " (lossless)" : " (lossy q90)"}`);
+  return webpPath;
+}
+
+let _magickChecked = false;
+
+function ensureWebpAssets(dir) {
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      ensureWebpAssets(path.join(dir, entry.name));
+      continue;
+    }
+    if (!entry.isFile() || !entry.name.toLowerCase().endsWith(".png")) continue;
+
+    const pngPath = path.join(dir, entry.name);
+    const webpPath = pngPath.replace(/\.png$/i, ".webp");
+
+    if (fs.existsSync(webpPath)) {
+      const pngMtime = fs.statSync(pngPath).mtimeMs;
+      const webpMtime = fs.statSync(webpPath).mtimeMs;
+      if (pngMtime > webpMtime) {
+        convertPngToWebp(pngPath);
+        console.log(`Re-converted: ${entry.name} (PNG was newer than WebP)`);
+      } else {
+        fs.unlinkSync(pngPath);
+        console.log(`Removed duplicate PNG: ${entry.name} (WebP is up-to-date)`);
+      }
+    } else {
+      convertPngToWebp(pngPath);
+    }
+  }
+}
+
+function walkAssetFiles(dir) {
   const results = [];
   const stack = [dir];
   while (stack.length > 0) {
@@ -55,7 +117,7 @@ function walkPngFiles(dir) {
         stack.push(fullPath);
         continue;
       }
-      if (entry.isFile() && entry.name.toLowerCase().endsWith(".png")) {
+      if (entry.isFile() && entry.name.toLowerCase().endsWith(".webp")) {
         results.push(fullPath);
       }
     }
@@ -128,20 +190,20 @@ function upsertDartMap(content, mapName, groupedEntries) {
 function replaceAvatarPathHelpers(content) {
   const replacements = [
     {
-      from: /static String hairPath\(String id\) => 'assets\/avatars\/hair\/\$id\.png';/,
-      to: "static String hairPath(String id) => 'assets/avatars/hair/${partAssetNameById[id] ?? id}.png';",
+      from: /static String hairPath\(String id\) => 'assets\/avatars\/hair\/\$id\.webp';/,
+      to: "static String hairPath(String id) => 'assets/avatars/hair/${partAssetNameById[id] ?? id}.webp';",
     },
     {
-      from: /static String eyesPath\(String id\) => 'assets\/avatars\/eyes\/\$id\.png';/,
-      to: "static String eyesPath(String id) => 'assets/avatars/eyes/${partAssetNameById[id] ?? id}.png';",
+      from: /static String eyesPath\(String id\) => 'assets\/avatars\/eyes\/\$id\.webp';/,
+      to: "static String eyesPath(String id) => 'assets/avatars/eyes/${partAssetNameById[id] ?? id}.webp';",
     },
     {
-      from: /static String mouthPath\(String id\) => 'assets\/avatars\/mouth\/\$id\.png';/,
-      to: "static String mouthPath(String id) => 'assets/avatars/mouth/${partAssetNameById[id] ?? id}.png';",
+      from: /static String mouthPath\(String id\) => 'assets\/avatars\/mouth\/\$id\.webp';/,
+      to: "static String mouthPath(String id) => 'assets/avatars/mouth/${partAssetNameById[id] ?? id}.webp';",
     },
     {
-      from: /static String eyebrowsPath\(String id\) => 'assets\/avatars\/eyebrows\/\$id\.png';/,
-      to: "static String eyebrowsPath(String id) => 'assets/avatars/eyebrows/${partAssetNameById[id] ?? id}.png';",
+      from: /static String eyebrowsPath\(String id\) => 'assets\/avatars\/eyebrows\/\$id\.webp';/,
+      to: "static String eyebrowsPath(String id) => 'assets/avatars/eyebrows/${partAssetNameById[id] ?? id}.webp';",
     },
   ];
 
@@ -313,20 +375,21 @@ async function main() {
       throw new Error(`Missing directory: ${partDir}`);
     }
 
-    const pngFiles = walkPngFiles(partDir);
-    if (pngFiles.length === 0) {
-      throw new Error(`No PNG files found in: ${partDir}`);
+    ensureWebpAssets(partDir);
+    const assetFiles = walkAssetFiles(partDir);
+    if (assetFiles.length === 0) {
+      throw new Error(`No asset files found in: ${partDir}`);
     }
 
-    for (const filePath of pngFiles) {
-      const stem = path.basename(filePath, ".png");
+    for (const filePath of assetFiles) {
+      const stem = path.basename(filePath, ".webp");
       const parsed = parseStem(stem);
 
       let id;
       let rarity;
       if (parsed?.error === "cost_suffix_not_supported") {
         throw new Error(
-          `Cost suffix is not supported for avatar assets: ${stem}.png. Use "<id>_<rarity>.png".`
+          `Cost suffix is not supported for avatar assets: ${stem}.webp. Use "<id>_<rarity>.webp".`
         );
       }
 
@@ -336,7 +399,7 @@ async function main() {
       } else {
         if (strict) {
           throw new Error(
-            `Invalid file name: ${stem}.png. Expected "<id>_<common|rare|epic>.png".`
+            `Invalid file name: ${stem}.webp. Expected "<id>_<common|rare|epic>.webp".`
           );
         }
         id = stem;

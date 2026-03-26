@@ -80,12 +80,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
 
   // ヘッダー画像のパスリスト（6種類）
   static const List<String> _headerImages = [
-    'assets/images/headers/header_wave_1.png',
-    'assets/images/headers/header_wave_2.png',
-    'assets/images/headers/header_wave_3.png',
-    'assets/images/headers/header_wave_4.png',
-    'assets/images/headers/header_wave_5.png',
-    'assets/images/headers/header_wave_6.png',
+    'assets/images/headers/header_wave_1.webp',
+    'assets/images/headers/header_wave_2.webp',
+    'assets/images/headers/header_wave_3.webp',
+    'assets/images/headers/header_wave_4.webp',
+    'assets/images/headers/header_wave_5.webp',
+    'assets/images/headers/header_wave_6.webp',
   ];
 
   // 各ヘッダー画像に対応するカラーパレット [primaryAccent, secondaryAccent]
@@ -781,7 +781,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                       message: AppMessages.tutorial.profileOverviewGuide,
                       onMaskTap: () =>
                           ref.read(tutorialPhase6Provider.notifier).advance(),
-                      characterAssetPath: 'assets/onbord/onbord_01.png',
+                      characterAssetPath: 'assets/onbord/onbord_01.webp',
                       bubbleBottomOffset: phase6OverviewBubbleBottomOffset,
                     ),
                   ),
@@ -799,7 +799,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                       onMaskTap: () => ref
                           .read(tutorialPhase6Provider.notifier)
                           .advance(),
-                      characterAssetPath: 'assets/onbord/onbord_01.png',
+                      characterAssetPath: 'assets/onbord/onbord_01.webp',
                       bubbleBottomOffset: phase6VirtueBubbleBottomOffset,
                       characterKey: _phase6CharacterKey,
                       bubbleKey: _phase6BubbleKey,
@@ -823,7 +823,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                             .read(tutorialPhase6Provider.notifier)
                             .markCompleted();
                       },
-                      characterAssetPath: 'assets/onbord/onbord_01.png',
+                      characterAssetPath: 'assets/onbord/onbord_01.webp',
                       bubbleBottomOffset: phase6FavoritesBubbleBottomOffset,
                       characterKey: _phase6CharacterKey,
                       bubbleKey: _phase6BubbleKey,

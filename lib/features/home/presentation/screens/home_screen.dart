@@ -153,7 +153,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 message: AppMessages.tutorial.homeOverview,
                 onMaskTap: () =>
                     ref.read(tutorialPhase1Provider.notifier).advance(),
-                characterAssetPath: 'assets/onbord/onbord_01.png',
+                characterAssetPath: 'assets/onbord/onbord_01.webp',
                 bubbleBottomOffset: MediaQuery.of(context).padding.bottom + 64,
               ),
             if (isTutorialHomeLongPress)
@@ -161,7 +161,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 message: AppMessages.tutorial.homeLongPress,
                 spotlightRect: _firstPostCardRect,
                 passThroughSpotlight: true,
-                characterAssetPath: 'assets/onbord/onbord_01.png',
+                characterAssetPath: 'assets/onbord/onbord_01.webp',
                 bubbleBottomOffset: MediaQuery.of(context).padding.bottom + 64,
               ),
           ],
@@ -311,7 +311,7 @@ class _LogoAndNotificationRow extends StatelessWidget {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            Image.asset('assets/icons/logo.png', width: 72, height: 72)
+            Image.asset('assets/icons/logo.webp', width: 72, height: 72)
                 .animate(onPlay: (controller) => controller.repeat())
                 .shimmer(
                   duration: 3000.ms,

@@ -11,8 +11,8 @@ import '../../../../core/constants/app_colors.dart';
 /// 2. キャラクター（ゆらゆら浮遊 + タップでjellyアニメ + パーティクル）
 /// 3. セリフ吹き出し（時間帯別 + 定期切り替え）
 class WaitingCharacterOverlay extends StatefulWidget {
-  static const String normalAssetPath = 'assets/onbord/taiki.png';
-  static const String happyAssetPath = 'assets/onbord/taiki_1.png';
+  static const String normalAssetPath = 'assets/onbord/taiki.webp';
+  static const String happyAssetPath = 'assets/onbord/taiki_1.webp';
 
   final VoidCallback? onTap;
 

@@ -8,18 +8,19 @@
 
 ## ファイル命名ルール
 ```
-<id>_<rarity>.png
-<id>_<rarity>_<cost>.png
+<id>_<rarity>.webp
+<id>_<rarity>_<cost>.webp
 ```
 
 - `rarity`: `common` / `rare` / `epic`
 - `cost`: rare のときのみ必要（例: 100）
+- 入力は `.png` も可 — スクリプト実行時にImageMagickでWebPへ自動変換され、元のPNGは削除されます
 
 例:
 ```
-clap_common.png
-sparkle_epic.png
-cracker_rare_120.png
+clap_common.webp
+sparkle_epic.webp
+cracker_rare_120.webp
 ```
 
 ## スクリプト実行
@@ -53,4 +54,4 @@ Done.
 - `assets/reactions` に存在するものだけを登録対象にします。
 - 既存スタンプは **スキップ** されます。
 - ただし、同じ `id` で **ファイル名が変わった場合**は更新対象になります。
-  - 例: `clap_common.png` → `clap_rare_100.png` に変更した場合、`clap` が rare として更新されます。
+  - 例: `clap_common.webp` → `clap_rare_100.webp` に変更した場合、`clap` が rare として更新されます。

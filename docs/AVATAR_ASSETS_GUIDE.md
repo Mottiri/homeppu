@@ -12,17 +12,18 @@
 `assets/avatars` 配下は再帰走査されるため、上記フォルダ配下のサブフォルダに置いても対象になります。
 
 ## 命名規則
-- 形式: `<id>_<rarity>.png`
+- 形式: `<id>_<rarity>.webp`（入力は `.png` も可 — スクリプト実行時に自動でWebPへ変換）
 - `rarity`: `common` / `rare` / `epic`
 - 例:
-  - `eyebrows_01_common.png`
-  - `eyebrows_02_rare.png`
-  - `eyebrows_03_epic.png`
+  - `eyebrows_01_common.webp`
+  - `eyebrows_02_rare.webp`
+  - `eyebrows_03_epic.webp`
 
 注意:
 - アバターはレア度別価格統一運用のため、`_rare_100` のような価格付きファイル名は**エラー**になります。
 - 同じ `<id>` が複数ファイルで重複すると**エラー**になります。
 - `<id>` はパーツ接頭辞を必須とします（例: eyebrows フォルダなら `eyebrows_...`）。
+- PNGで配置した場合、スクリプト実行時にImageMagickでWebPへ自動変換され、元のPNGは削除されます。
 
 ## 実行コマンド
 まず差分確認:
