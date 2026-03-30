@@ -233,6 +233,8 @@ export const PREFIX_PARTS: NamePart[] = [
   { id: "pre_23", text: "神に愛された", category: "legendary", rarity: "epic", order: 23 },
   { id: "pre_24", text: "運命の", category: "legendary", rarity: "epic", order: 24 },
   { id: "pre_25", text: "永遠の", category: "legendary", rarity: "epic", order: 25 },
+  { id: "pre_26", text: "プレミアム", category: "legendary", rarity: "epic", order: 26 },
+  { id: "pre_27", text: "初期の", category: "funny", rarity: "rare", order: 27 },
 ];
 
 // 名詞パーツ（後半）のマスタデータ
@@ -274,6 +276,7 @@ export const SUFFIX_PARTS: NamePart[] = [
   { id: "suf_28", text: "🐉ドラゴン", category: "legendary", rarity: "epic", order: 28 },
   { id: "suf_29", text: "🔥不死鳥", category: "legendary", rarity: "epic", order: 29 },
   { id: "suf_30", text: "覇王", category: "legendary", rarity: "epic", order: 30 },
+  { id: "suf_31", text: "課金者", category: "legendary", rarity: "epic", order: 31 },
 ];
 
 // AIペルソナの型定義

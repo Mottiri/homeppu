@@ -19,7 +19,7 @@
 
 - `sheetId` は英数字と `_` のみ
 - 同じ `sheetId` の画像は1つだけ（同時に複数レア度は不可）
-- 対応する `layouts/<sheetId>.json` がない場合、スクリプトはエラー終了
+- 対応する `layouts/<sheetId>.json` がない場合、デフォルトレイアウト（5×4グリッド、20スロット）が自動生成される
 - 画像が削除された `sheetId` は Firestore から**完全削除**
 - PNGで配置した場合、スクリプト実行時にImageMagickでWebPへ自動変換され、元のPNGは削除されます
 

@@ -4,7 +4,7 @@ class AvatarAssets {
   static const String baseId = 'base_01';
   static const String basePath = 'assets/avatars/base/base_01.webp';
 
-  static const List<String> hairIds = ['hair_01', 'hair_02', 'hair_03', 'hair_04', 'hair_05', 'hair_06', 'hair_07', 'hair_08', 'hair_09', 'hair_10', 'hair_11', 'hair_12', 'hair_13', 'hair_14', 'hair_15'];
+  static const List<String> hairIds = ['hair_01', 'hair_02', 'hair_03', 'hair_04', 'hair_05', 'hair_06', 'hair_07', 'hair_08', 'hair_09', 'hair_10', 'hair_11', 'hair_12', 'hair_13', 'hair_14', 'hair_15', 'hair_16'];
   static const List<String> eyesIds = ['eyes_01', 'eyes_02', 'eyes_03', 'eyes_04', 'eyes_05', 'eyes_06', 'eyes_07', 'eyes_08', 'eyes_09', 'eyes_10', 'eyes_11', 'eyes_12', 'eyes_13', 'eyes_14', 'eyes_15', 'eyes_16'];
   static const List<String> mouthIds = ['mouth_01', 'mouth_02', 'mouth_03', 'mouth_04', 'mouth_05', 'mouth_06', 'mouth_07'];
   static const List<String> eyebrowsIds = ['eyebrows_01', 'eyebrows_02', 'eyebrows_03', 'eyebrows_04', 'eyebrows_05', 'eyebrows_06', 'eyebrows_07', 'eyebrows_08', 'eyebrows_09', 'eyebrows_10', 'eyebrows_11', 'eyebrows_12', 'eyebrows_13', 'eyebrows_14', 'eyebrows_15', 'eyebrows_16', 'eyebrows_17', 'eyebrows_18', 'eyebrows_19', 'eyebrows_20', 'eyebrows_21'];
@@ -25,6 +25,7 @@ class AvatarAssets {
     'hair_13': 'epic',
     'hair_14': 'epic',
     'hair_15': 'epic',
+    'hair_16': 'rare',
     // eyebrows
     'eyebrows_01': 'common',
     'eyebrows_02': 'common',
@@ -90,6 +91,7 @@ class AvatarAssets {
     'hair_13': 'hair_13_epic',
     'hair_14': 'hair_14_epic',
     'hair_15': 'hair_15_epic',
+    'hair_16': 'hair_16_rare',
     // eyebrows
     'eyebrows_01': 'eyebrows_01',
     'eyebrows_02': 'eyebrows_02',

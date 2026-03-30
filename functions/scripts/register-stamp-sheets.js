@@ -110,6 +110,37 @@ function isValidId(id) {
   return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(id);
 }
 
+function generateDefaultLayout(sheetId) {
+  const cols = 5;
+  const rows = 4;
+  const slotW = 0.16;
+  const slotH = 0.106;
+  const startX = 0.06;
+  const startY = 0.27;
+  const gapX = 0.177;
+  const gapY = 0.116;
+  const slots = [];
+  let idx = 1;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      slots.push({
+        slotId: `slot_${String(idx).padStart(2, "0")}`,
+        x: Math.round((startX + c * gapX) * 1000) / 1000,
+        y: Math.round((startY + r * gapY) * 1000) / 1000,
+        w: slotW,
+        h: slotH,
+      });
+      idx++;
+    }
+  }
+  return {
+    sheetId,
+    version: 3,
+    aspectRatio: 0.6666667,
+    slots,
+  };
+}
+
 function parseStem(stem) {
   const match = stem.match(FILE_PATTERN);
   if (!match) return null;
@@ -345,7 +376,9 @@ async function main() {
 
     const layoutFile = path.join(layoutsDir, `${parsed.id}.json`);
     if (!fs.existsSync(layoutFile)) {
-      throw new Error(`Missing layout JSON: ${layoutFile}`);
+      const defaultLayout = generateDefaultLayout(parsed.id);
+      fs.writeFileSync(layoutFile, JSON.stringify(defaultLayout, null, 2) + "\n", "utf-8");
+      console.log(`Generated default layout: layouts/${parsed.id}.json (5x4 grid, 20 slots)`);
     }
 
     // Extract validSlotIds from layout JSON

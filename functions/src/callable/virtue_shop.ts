@@ -37,6 +37,7 @@ const AVATAR_PART_RARITY: Record<string, string> = {
     hair_13: "epic",
     hair_14: "epic",
     hair_15: "epic",
+    hair_16: "rare",
     // eyebrows
     eyebrows_01: "common",
     eyebrows_02: "common",
