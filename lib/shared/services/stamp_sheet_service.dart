@@ -11,6 +11,7 @@ class StampSheetDefinition {
   final int displayOrder;
   final bool isActive;
   final String layoutAssetPath;
+  final String displayName;
 
   const StampSheetDefinition({
     required this.id,
@@ -19,6 +20,7 @@ class StampSheetDefinition {
     required this.displayOrder,
     required this.isActive,
     required this.layoutAssetPath,
+    required this.displayName,
   });
 
   String get unlockKey => 'sheet_$id';
@@ -29,13 +31,15 @@ class StampSheetDefinition {
     Map<String, dynamic> map, {
     required String layoutAssetPath,
   }) {
+    final id = (map['id'] ?? '').toString();
     return StampSheetDefinition(
-      id: (map['id'] ?? '').toString(),
+      id: id,
       assetPath: (map['assetPath'] ?? '').toString().replaceAll('.png', '.webp'),
       rarity: (map['rarity'] ?? 'common').toString(),
       displayOrder: (map['displayOrder'] as num?)?.toInt() ?? 9999,
       isActive: map['isActive'] != false,
       layoutAssetPath: layoutAssetPath,
+      displayName: (map['displayName'] ?? id).toString(),
     );
   }
 }
@@ -292,6 +296,7 @@ class StampSheetService {
           displayOrder: 0,
           isActive: true,
           layoutAssetPath: _defaultLayoutAssetPath,
+          displayName: defaultSheetId,
         ),
       ];
     }

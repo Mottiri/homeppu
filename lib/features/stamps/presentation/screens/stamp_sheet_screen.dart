@@ -626,7 +626,7 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                                     ),
                                   ),
                                   title: Text(
-                                    sheet.id,
+                                    sheet.displayName,
                                     style: Theme.of(
                                       context,
                                     ).textTheme.titleMedium,

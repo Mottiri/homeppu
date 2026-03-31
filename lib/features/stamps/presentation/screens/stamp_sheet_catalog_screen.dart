@@ -70,7 +70,7 @@ class _StampSheetCatalogScreenState extends ConsumerState<StampSheetCatalogScree
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(sheet.id),
+        title: Text(sheet.displayName),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
