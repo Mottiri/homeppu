@@ -43,6 +43,7 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
   void initState() {
     super.initState();
     _loadNameParts();
+    Future.microtask(() => ref.invalidate(virtueShopConfigProvider));
   }
 
   Future<void> _loadNameParts() async {
@@ -228,9 +229,21 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
     List<NamePartModel> parts,
     bool isPrefix,
   ) {
+    final configAsync = ref.watch(virtueShopConfigProvider);
+    if (configAsync.isLoading && !configAsync.hasValue) {
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.primary),
+      );
+    }
+    final shopConfig = configAsync.valueOrNull;
+    final filteredParts = parts.where((part) {
+      if (part.unlocked) return true;
+      return !(shopConfig?.isNonPurchasable('name_part', part.id) ?? false);
+    }).toList();
+
     // カテゴリでグループ化
     final Map<String, List<NamePartModel>> grouped = {};
-    for (final part in parts) {
+    for (final part in filteredParts) {
       grouped.putIfAbsent(part.category, () => []).add(part);
     }
 
@@ -737,10 +750,16 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
       return true;
     } on FirebaseFunctionsException catch (e) {
       if (mounted) {
-        final message = e.message == AppMessages.error.notEnoughVirtue
-            ? AppMessages.error.notEnoughVirtue
-            : AppMessages.error.general;
-        SnackBarHelper.showError(context, message);
+        final reason = (e.details is Map) ? e.details['reason'] : null;
+        if (reason == AppMessages.reasonItemNotPurchasable) {
+          SnackBarHelper.showError(context, AppMessages.error.itemNotPurchasable);
+          ref.invalidate(virtueShopConfigProvider);
+        } else {
+          final message = e.message == AppMessages.error.notEnoughVirtue
+              ? AppMessages.error.notEnoughVirtue
+              : AppMessages.error.general;
+          SnackBarHelper.showError(context, message);
+        }
       }
       return false;
     } catch (_) {

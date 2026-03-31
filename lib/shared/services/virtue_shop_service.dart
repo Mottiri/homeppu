@@ -6,12 +6,14 @@ class VirtueShopConfig {
   final Map<String, int> avatarPartCostsByRarity;
   final Map<String, int> reactionCostsById;
   final Map<String, int> stampSheetCostsByRarity;
+  final Set<String> nonPurchasableItems;
 
   const VirtueShopConfig({
     required this.namePartCostsByRarity,
     required this.avatarPartCostsByRarity,
     required this.reactionCostsById,
     required this.stampSheetCostsByRarity,
+    this.nonPurchasableItems = const {},
   });
 
   factory VirtueShopConfig.fromMap(Map<String, dynamic> map) {
@@ -25,6 +27,16 @@ class VirtueShopConfig {
       )..removeWhere((key, value) => value <= 0);
     }
 
+    final nonPurchasableRaw = map['nonPurchasableItems'];
+    final nonPurchasableItems = <String>{};
+    if (nonPurchasableRaw is List) {
+      for (final item in nonPurchasableRaw) {
+        if (item is String && item.contains(':')) {
+          nonPurchasableItems.add(item);
+        }
+      }
+    }
+
     final namePartCostsByRarity = toIntMap(map['namePartCostsByRarity']);
     final avatarPartCostsByRarity = map['avatarPartCostsByRarity'] != null
         ? toIntMap(map['avatarPartCostsByRarity'])
@@ -34,6 +46,7 @@ class VirtueShopConfig {
       avatarPartCostsByRarity: avatarPartCostsByRarity,
       reactionCostsById: toIntMap(map['reactionCostsById']),
       stampSheetCostsByRarity: toIntMap(map['stampSheetCostsByRarity']),
+      nonPurchasableItems: nonPurchasableItems,
     );
   }
 
@@ -41,6 +54,10 @@ class VirtueShopConfig {
   int? costForAvatarPart(String rarity) => avatarPartCostsByRarity[rarity];
   int? costForReaction(String reactionId) => reactionCostsById[reactionId];
   int? costForStampSheet(String rarity) => stampSheetCostsByRarity[rarity];
+
+  bool isNonPurchasable(String itemType, String itemId) {
+    return nonPurchasableItems.contains('$itemType:$itemId');
+  }
 }
 
 class VirtueShopService {

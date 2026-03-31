@@ -10,12 +10,14 @@ import { db, FieldValue } from "../helpers/firebase";
 import { requireAuth } from "../helpers/auth";
 import { COLLECTIONS } from "../config/collections";
 import { LOCATION } from "../config/constants";
+import { VIRTUE_MESSAGES } from "../config/messages";
 
 type VirtueShopConfig = {
     namePartCostsByRarity: Record<string, number>;
     avatarPartCostsByRarity: Record<string, number>;
     reactionCostsById: Record<string, number>;
     stampSheetCostsByRarity: Record<string, number>;
+    nonPurchasableItems: Set<string>;
 };
 
 const SETTINGS_DOC_ID = "virtueShop";
@@ -98,6 +100,27 @@ function toNumberMap(value: unknown): Record<string, number> {
     return result;
 }
 
+const VALID_ITEM_TYPES = new Set(["name_part", "avatar_part", "reaction_stamp", "stamp_sheet"]);
+
+function readNonPurchasableItems(value: unknown): Set<string> {
+    if (!value || typeof value !== "object") return new Set();
+    const result = new Set<string>();
+    for (const [key, flag] of Object.entries(value as Record<string, unknown>)) {
+        if (flag !== true) continue;
+        const sepIndex = key.indexOf(":");
+        if (sepIndex <= 0 || sepIndex === key.length - 1) continue;
+        if (sepIndex !== key.lastIndexOf(":")) continue;
+        const itemType = key.slice(0, sepIndex);
+        if (!VALID_ITEM_TYPES.has(itemType)) continue;
+        result.add(key);
+    }
+    return result;
+}
+
+function toNonPurchasableKey(itemType: string, itemId: string): string {
+    return `${itemType}:${itemId}`;
+}
+
 function readVirtueShopConfig(data: Record<string, unknown> | undefined): VirtueShopConfig {
     const namePartCostsByRarity = toNumberMap(data?.namePartCostsByRarity);
     const avatarPartCostsByRarity = Object.keys(
@@ -111,11 +134,13 @@ function readVirtueShopConfig(data: Record<string, unknown> | undefined): Virtue
     ).length
         ? toNumberMap(data?.stampSheetCostsByRarity)
         : namePartCostsByRarity;
+    const nonPurchasableItems = readNonPurchasableItems(data?.nonPurchasableItems);
     return {
         namePartCostsByRarity,
         avatarPartCostsByRarity,
         reactionCostsById,
         stampSheetCostsByRarity,
+        nonPurchasableItems,
     };
 }
 
@@ -134,6 +159,7 @@ export const getVirtueShopConfig = onCall(
             avatarPartCostsByRarity: config.avatarPartCostsByRarity,
             reactionCostsById: config.reactionCostsById,
             stampSheetCostsByRarity: config.stampSheetCostsByRarity,
+            nonPurchasableItems: Array.from(config.nonPurchasableItems),
         };
     }
 );
@@ -282,6 +308,21 @@ export const purchaseVirtueItem = onCall(
                     alreadyUnlocked: true,
                     virtue: userData.virtue ?? 0,
                 };
+            }
+
+            const nonPurchasableKey = toNonPurchasableKey(itemType, itemId);
+            if (config.nonPurchasableItems.has(nonPurchasableKey)) {
+                logger.info("purchaseVirtueItem blocked: non-purchasable", {
+                    userId,
+                    itemType,
+                    itemId,
+                    nonPurchasableKey,
+                });
+                throw new HttpsError(
+                    "failed-precondition",
+                    VIRTUE_MESSAGES.ITEM_NOT_PURCHASABLE,
+                    { reason: "ITEM_NOT_PURCHASABLE" }
+                );
             }
 
             const currentVirtue = userData.virtue ?? 0;

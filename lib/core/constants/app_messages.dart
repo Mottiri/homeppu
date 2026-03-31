@@ -63,6 +63,9 @@ class AppMessages {
 
   // ===== 徳ポイント関連 =====
   static const virtue = _VirtueMessages();
+
+  // ===== サーバーエラー reason 定数 =====
+  static const String reasonItemNotPurchasable = 'ITEM_NOT_PURCHASABLE';
 }
 
 /// 成功メッセージ
@@ -117,6 +120,7 @@ class _ErrorMessages {
   String get banned => 'アカウントが制限されているため、この操作はできません';
   String get accountSuspended => 'アカウントが停止されています';
   String get notEnoughVirtue => '徳ポイントが足りません。';
+  String get itemNotPurchasable => 'このアイテムは期間限定アイテムです。現在期限が過ぎているため購入できません。';
   String get notFoundTitle => 'あれ？ページが見つからないよ';
   String get notFoundDescription => '大丈夫、ホームに戻ろう！';
   String get purchaseFailedTitle => '購入に失敗しました';

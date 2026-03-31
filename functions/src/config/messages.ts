@@ -254,6 +254,7 @@ export const VIRTUE_MESSAGES = {
     COMMENT_THANKS_GIVEN_GRANT_REASON: "コメントにいいね！した",
     COMMENT_THANKS_RECEIVED_GRANT_REASON: "コメントがいいね！された",
     ADMIN_DELETE_POST_PENALTY_REASON: "運営削除（通報対応）",
+    ITEM_NOT_PURCHASABLE: "このアイテムは期間限定アイテムです。現在期限が過ぎているため購入できません。",
 } as const;
 
 // ===============================================

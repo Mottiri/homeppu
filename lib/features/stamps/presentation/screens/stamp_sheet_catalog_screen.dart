@@ -1,3 +1,4 @@
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -28,6 +29,7 @@ class _StampSheetCatalogScreenState extends ConsumerState<StampSheetCatalogScree
   void initState() {
     super.initState();
     _catalogFuture = _sheetService.fetchCatalog();
+    Future.microtask(() => ref.invalidate(virtueShopConfigProvider));
   }
 
   bool _isSheetUnlocked(StampSheetDefinition sheet, UserModel? user) {
@@ -152,6 +154,14 @@ class _StampSheetCatalogScreenState extends ConsumerState<StampSheetCatalogScree
                     navigator.pop();
                   }
                   _toast(AppMessages.success.purchaseCompleted);
+                } on FirebaseFunctionsException catch (e) {
+                  final reason = (e.details is Map) ? e.details['reason'] : null;
+                  if (reason == AppMessages.reasonItemNotPurchasable) {
+                    _toast(AppMessages.error.itemNotPurchasable, error: true);
+                    ref.invalidate(virtueShopConfigProvider);
+                  } else {
+                    _toast(AppMessages.error.purchaseFailedTitle, error: true);
+                  }
                 } catch (_) {
                   _toast(AppMessages.error.purchaseFailedTitle, error: true);
                 }
@@ -225,7 +235,18 @@ class _StampSheetCatalogScreenState extends ConsumerState<StampSheetCatalogScree
                 child: CircularProgressIndicator(color: AppColors.primary),
               );
             }
-            final sheets = snapshot.data!;
+            final allSheets = snapshot.data!;
+            final configAsync = ref.watch(virtueShopConfigProvider);
+            if (configAsync.isLoading && !configAsync.hasValue) {
+              return const Center(
+                child: CircularProgressIndicator(color: AppColors.primary),
+              );
+            }
+            final shopConfig = configAsync.valueOrNull;
+            final sheets = allSheets.where((sheet) {
+              if (_isSheetUnlocked(sheet, user)) return true;
+              return !(shopConfig?.isNonPurchasable('stamp_sheet', sheet.id) ?? false);
+            }).toList();
             final sortedSheets = [...sheets]..sort((a, b) {
               final rarityCompare =
                   _rarityRank(a.rarity).compareTo(_rarityRank(b.rarity));

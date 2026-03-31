@@ -43,6 +43,7 @@ class _AvatarEditScreenState extends ConsumerState<AvatarEditScreen> {
   void initState() {
     super.initState();
     _parts = _normalizePartsForAllowedRarities(widget.initialParts);
+    Future.microtask(() => ref.invalidate(virtueShopConfigProvider));
   }
 
   List<String> get _currentIds {
@@ -629,10 +630,16 @@ class _AvatarEditScreenState extends ConsumerState<AvatarEditScreen> {
         'itemId=$id code=${e.code} message=${e.message} details=${e.details}',
       );
       if (mounted) {
-        final message = e.message == AppMessages.error.notEnoughVirtue
-            ? AppMessages.error.notEnoughVirtue
-            : AppMessages.error.general;
-        SnackBarHelper.showError(context, message);
+        final reason = (e.details is Map) ? e.details['reason'] : null;
+        if (reason == AppMessages.reasonItemNotPurchasable) {
+          SnackBarHelper.showError(context, AppMessages.error.itemNotPurchasable);
+          ref.invalidate(virtueShopConfigProvider);
+        } else {
+          final message = e.message == AppMessages.error.notEnoughVirtue
+              ? AppMessages.error.notEnoughVirtue
+              : AppMessages.error.general;
+          SnackBarHelper.showError(context, message);
+        }
       }
       return false;
     } catch (_) {
@@ -708,7 +715,26 @@ class _AvatarEditScreenState extends ConsumerState<AvatarEditScreen> {
     final isAdmin = ref.watch(isAdminProvider).valueOrNull ?? false;
     final isSubscriber = user?.isSubscriber ?? false;
     final unlockedAvatarParts = user?.unlockedAvatarParts ?? const <String>[];
-    final ids = _currentIds;
+    final configAsync = ref.watch(virtueShopConfigProvider);
+    if (configAsync.isLoading && !configAsync.hasValue) {
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.primary),
+      );
+    }
+    final shopConfig = configAsync.valueOrNull;
+    final ids = _currentIds.where((id) {
+      if (isAdmin) return true;
+      final rarity = _rarityForId(id);
+      final isOwned = _isUnlocked(
+        id: id,
+        rarity: rarity,
+        isAdmin: isAdmin,
+        isSubscriber: isSubscriber,
+        unlockedAvatarParts: unlockedAvatarParts,
+      );
+      if (isOwned) return true;
+      return !(shopConfig?.isNonPurchasable('avatar_part', id) ?? false);
+    }).toList();
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(borderRadius: BorderRadius.circular(18)),

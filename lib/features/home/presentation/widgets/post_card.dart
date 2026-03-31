@@ -923,9 +923,27 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
     // 残りを追加
     ordered.addAll(allStamps);
 
+    // 購入不可かつ未所有のスタンプを除外
+    final shopConfig = ref.read(virtueShopConfigProvider).valueOrNull;
+    final user = ref.read(currentUserProvider).valueOrNull;
+    final unlockedStamps = user?.unlockedReactionStamps.toSet() ?? <String>{};
+    final isSubscriber = user?.isSubscriber ?? false;
+    final rewardedUnlocks = widget.rewardedUnlocks;
+    final now = DateTime.now();
+    final filtered = ordered.where((stamp) {
+      final isOwned = stamp.isUnlocked(
+        isSubscriber: isSubscriber,
+        unlockedItems: unlockedStamps,
+        rewardedUnlocks: rewardedUnlocks,
+        now: now,
+      );
+      if (isOwned) return true;
+      return !(shopConfig?.isNonPurchasable('reaction_stamp', stamp.value) ?? false);
+    }).toList();
+
     if (mounted) {
       setState(() {
-        _orderedStamps = ordered;
+        _orderedStamps = filtered;
       });
       _initAnimations();
     }
@@ -1585,10 +1603,16 @@ class _ReactionOverlayDialogState extends ConsumerState<_ReactionOverlayDialog>
       return true;
     } on FirebaseFunctionsException catch (e) {
       if (mounted) {
-        final message = e.message == AppMessages.error.notEnoughVirtue
-            ? AppMessages.error.notEnoughVirtue
-            : AppMessages.error.general;
-        _showOverlayToast(message, isError: true);
+        final reason = (e.details is Map) ? e.details['reason'] : null;
+        if (reason == AppMessages.reasonItemNotPurchasable) {
+          _showOverlayToast(AppMessages.error.itemNotPurchasable, isError: true);
+          ref.invalidate(virtueShopConfigProvider);
+        } else {
+          final message = e.message == AppMessages.error.notEnoughVirtue
+              ? AppMessages.error.notEnoughVirtue
+              : AppMessages.error.general;
+          _showOverlayToast(message, isError: true);
+        }
       }
       return false;
     } catch (_) {

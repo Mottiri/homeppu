@@ -13,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/constants/app_messages.dart';
+import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/models/user_model.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/providers/moderation_provider.dart';
@@ -660,25 +661,40 @@ class _StampSheetScreenState extends ConsumerState<StampSheetScreen>
                                           onPressed: isSelectingSheet
                                               ? null
                                               : () async {
-                                                  await _virtueShopService
-                                                      .purchaseVirtueItem(
-                                                        itemType: 'stamp_sheet',
-                                                        itemId: sheet.id,
-                                                      );
-                                                  ref.invalidate(
-                                                    currentUserProvider,
-                                                  );
-                                                  ref.invalidate(
-                                                    virtueStatusProvider,
-                                                  );
-                                                  ref.invalidate(
-                                                    virtueHistoryProvider,
-                                                  );
-                                                  ref.invalidate(
-                                                    virtueShopConfigProvider,
-                                                  );
-                                                  if (context.mounted) {
-                                                    Navigator.of(context).pop();
+                                                  try {
+                                                    await _virtueShopService
+                                                        .purchaseVirtueItem(
+                                                          itemType: 'stamp_sheet',
+                                                          itemId: sheet.id,
+                                                        );
+                                                    ref.invalidate(
+                                                      currentUserProvider,
+                                                    );
+                                                    ref.invalidate(
+                                                      virtueStatusProvider,
+                                                    );
+                                                    ref.invalidate(
+                                                      virtueHistoryProvider,
+                                                    );
+                                                    ref.invalidate(
+                                                      virtueShopConfigProvider,
+                                                    );
+                                                    if (context.mounted) {
+                                                      Navigator.of(context).pop();
+                                                    }
+                                                  } on FirebaseFunctionsException catch (e) {
+                                                    if (!context.mounted) return;
+                                                    final reason = (e.details is Map) ? e.details['reason'] : null;
+                                                    if (reason == AppMessages.reasonItemNotPurchasable) {
+                                                      SnackBarHelper.showError(context, AppMessages.error.itemNotPurchasable);
+                                                      ref.invalidate(virtueShopConfigProvider);
+                                                    } else {
+                                                      SnackBarHelper.showError(context, AppMessages.error.purchaseFailedTitle);
+                                                    }
+                                                  } catch (_) {
+                                                    if (context.mounted) {
+                                                      SnackBarHelper.showError(context, AppMessages.error.purchaseFailedTitle);
+                                                    }
                                                   }
                                                 },
                                           child: Text(
