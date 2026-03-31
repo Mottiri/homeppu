@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_messages.dart';
@@ -59,10 +61,23 @@ class _CampaignDialog extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
 
-                    // 本文
-                    Text(
-                      campaign.body,
-                      style: theme.bodyMedium,
+                    // 本文（Markdown対応）
+                    MarkdownBody(
+                      data: campaign.body,
+                      styleSheet: MarkdownStyleSheet.fromTheme(
+                        Theme.of(context),
+                      ).copyWith(
+                        p: theme.bodyMedium,
+                        a: theme.bodyMedium?.copyWith(
+                          color: AppColors.primary,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                      onTapLink: (_, href, title) {
+                        if (href != null) {
+                          launchUrl(Uri.parse(href));
+                        }
+                      },
                     ),
                     const SizedBox(height: 16),
 
