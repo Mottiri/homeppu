@@ -232,11 +232,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Public settings consumed by stamp sheet UI
+    // Public settings consumed by client UI
     match /settings/{docId} {
       allow read: if isAuthenticated() && (
         docId == "stampSheetCatalog" ||
-        docId == "stampSheetLayoutCatalog"
+        docId == "stampSheetLayoutCatalog" ||
+        docId == "campaigns"
       );
       allow write: if false;
     }

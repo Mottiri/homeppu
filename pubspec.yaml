@@ -104,6 +104,7 @@ flutter:
     - assets/stamp_sheets/
     - assets/stamp_sheets/layouts/
     - assets/onbord/
+    - assets/campaigns/
     - docs/HELP.md
     - docs/TERMS_OF_SERVICE.md
     - docs/PRIVACY_POLICY.md

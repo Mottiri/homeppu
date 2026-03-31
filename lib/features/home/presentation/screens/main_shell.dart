@@ -16,6 +16,9 @@ import '../../../../shared/providers/tutorial_phase6_provider.dart';
 import '../../../../shared/providers/ui_overlay_provider.dart';
 import '../../../../shared/widgets/tutorial_overlay.dart';
 import '../../../../shared/services/circle_service.dart';
+import '../../../../shared/providers/campaign_provider.dart';
+import '../../../../shared/services/campaign_service.dart';
+import '../../../../shared/widgets/campaign_popup_dialog.dart';
 
 import '../../../circle/presentation/screens/circles_screen.dart';
 import 'home_screen.dart';
@@ -60,6 +63,7 @@ class _MainShellState extends ConsumerState<MainShell>
   ProviderSubscription<AsyncValue<UserModel?>>? _userSubscription;
   bool _isForcingNavigation = false;
   bool _isForcingBanRedirect = false;
+  bool _campaignPopupsShown = false;
 
   bool _isRectNearlyEqual(Rect? a, Rect? b, {double tolerance = 0.5}) {
     if (a == null || b == null) return a == b;
@@ -329,6 +333,56 @@ class _MainShellState extends ConsumerState<MainShell>
       _resolveBottomNavHeightOnce();
     }
     // 強制遷移は build() 内でルート変化にも反応するよう処理
+
+    // キャンペーンポップアップ: Phase1初回完了時
+    if (prev != null &&
+        prev != TutorialPhase1Step.inactive &&
+        next == TutorialPhase1Step.inactive &&
+        !_campaignPopupsShown) {
+      _campaignPopupsShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showCampaignPopupsIfNeeded();
+      });
+    }
+  }
+
+  bool _canShowCampaignPopups() {
+    final user = ref.read(currentUserProvider).valueOrNull;
+    if (user == null) return false;
+    if (!user.tutorialPhase1Completed) return false;
+    if (_campaignPopupsShown) return false;
+    return true;
+  }
+
+  Future<void> _showCampaignPopupsIfNeeded() async {
+    if (!mounted) {
+      _campaignPopupsShown = false;
+      return;
+    }
+
+    try {
+      final service = ref.read(campaignServiceProvider);
+      final campaigns = await service.getUnreadCampaigns();
+
+      if (!mounted || campaigns.isEmpty) {
+        _campaignPopupsShown = false;
+        return;
+      }
+
+      final displayLimit = CampaignService.maxDisplayPerSession;
+      for (var i = 0; i < campaigns.length && i < displayLimit; i++) {
+        if (!mounted) return;
+
+        await showCampaignDialog(
+          context: context,
+          campaign: campaigns[i],
+          service: service,
+        );
+      }
+    } catch (e) {
+      debugPrint('キャンペーン表示エラー: $e');
+      _campaignPopupsShown = false;
+    }
   }
 
   void _onPhase5StepChanged(TutorialPhase5Step? prev, TutorialPhase5Step next) {
@@ -539,6 +593,14 @@ class _MainShellState extends ConsumerState<MainShell>
           }
         });
       }
+    }
+
+    // キャンペーンポップアップ（既存ユーザー経路）
+    if (_canShowCampaignPopups()) {
+      _campaignPopupsShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showCampaignPopupsIfNeeded();
+      });
     }
 
     _clearCircleTrialIfNeeded(

@@ -64,6 +64,9 @@ class AppMessages {
   // ===== 徳ポイント関連 =====
   static const virtue = _VirtueMessages();
 
+  // ===== キャンペーン関連 =====
+  static String campaignEndDate(int month, int day) => '〜$month/$dayまで';
+
   // ===== サーバーエラー reason 定数 =====
   static const String reasonItemNotPurchasable = 'ITEM_NOT_PURCHASABLE';
 }
