@@ -222,6 +222,16 @@ class _BanAppealScreenState extends ConsumerState<BanAppealScreen> {
     }
   }
 
+  String _formatDeletionDate(DateTime? date) {
+    if (date == null) {
+      return '180日経過時';
+    }
+    final year = date.year.toString().padLeft(4, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '$year/$month/$day';
+  }
+
   @override
   Widget build(BuildContext context) {
     // ユーザー情報取得（状態が変わっている可能性があるためwatch）
@@ -286,7 +296,11 @@ class _BanAppealScreenState extends ConsumerState<BanAppealScreen> {
                             Expanded(
                               child: Text(
                                 user.banStatus == 'permanent'
-                                    ? AppMessages.admin.appealPermanentNotice
+                                    ? AppMessages.admin.appealPermanentNotice(
+                                        _formatDeletionDate(
+                                          user.permanentBanScheduledDeletionAt,
+                                        ),
+                                      )
                                     : AppMessages.admin.appealTemporaryNotice,
                                 style: const TextStyle(fontSize: 12),
                               ),

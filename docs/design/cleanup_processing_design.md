@@ -303,7 +303,7 @@ if (ghostWarningNotifiedAt < deleteThreshold) {
 ## 4. `cleanupBannedUsers` - 永久BANユーザー削除
 
 ### 処理概要
-永久BANされたユーザーを、事前に設定されたスケジュール日時に完全削除します。Firebase Authenticationからのユーザー削除とFirestoreのユーザードキュメント削除を行います。
+永久BANされたユーザーを、事前に設定されたスケジュール日時にアプリデータ削除します。Firebase Authenticationのレコードは残しつつ `disabled: true` に更新し、Firestore / Storage / 関連データを削除します。
 
 ### 実行タイミング
 - **スケジュール**: `0 4 * * *` （毎日午前4時 JST）
@@ -311,7 +311,7 @@ if (ghostWarningNotifiedAt < deleteThreshold) {
 
 ### 保持期間
 - **可変**: `permanentBanScheduledDeletionAt` フィールドに設定された日時
-- 通常、永久BAN執行時点から一定期間（例: 30日）後に設定される
+- 現在は永久BAN執行時点から **180日後**
 
 ### 検出方法
 
@@ -334,20 +334,15 @@ const snapshot = await db.collection("users")
 
 各ユーザーについて、以下の順序で削除を実行します：
 
-1. **Firebase Authentication削除**: `admin.auth().deleteUser(uid)` でAuthからユーザーを削除（ログイン不可になる）
-2. **Firestoreドキュメント削除**: `users` コレクションからユーザードキュメントを削除
+1. **Firebase Authentication無効化**: `admin.auth().updateUser(uid, { disabled: true })`
+2. **Storage削除**: `users/{uid}/profile/`, `headers/{uid}.*`, `posts/{uid}/`, `inquiries/{uid}/`
+3. **所有サークル削除**: 所有サークル配下の投稿・コメント・リアクション・参加申請・画像・生成AIを削除
+4. **本人データ削除**: 本人投稿、問い合わせ、`inquiry_archives`、参加申請、banAppeals、virtueHistory
+5. **参照整合**: follow / follower、circle memberIds / subOwnerId を除去
+6. **ユーザー配下サブコレクション削除**: notifications, categories, stampSheet, stampSheetArchives, purchases, virtueDaily
+7. **Firestore本体削除**: `users/{uid}` を削除（`publicUsers/{uid}` は trigger で削除）
 
-```typescript
-// 1. Auth削除（失敗しても続行）
-await admin.auth().deleteUser(uid).catch(e => {
-  console.warn(`Auth delete failed for ${uid}:`, e);
-});
-
-// 2. Firestore削除
-await db.collection("users").doc(uid).delete();
-```
-
-> **注意**: ユーザーの投稿やコメントなどの関連データは、この処理では削除されません。それらは別途 `cleanupOrphanedMedia` などで孤立データとして処理されます。
+> **注意**: Firebase Authentication レコードは残すため、同一メールアドレスでの再登録は防止されます。一方で 180日経過後はアプリデータを復旧しません。過去に他ユーザー投稿へ残したコメント・リアクションは履歴として保持します。
 
 ### 必要なインデックス
 

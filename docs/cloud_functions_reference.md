@@ -46,7 +46,7 @@ functions/src/
 | ファイル | 機能 | スケジュール |
 |---------|------|-------------|
 | `circles.ts` | サークル管理 | `checkGhostCircles`（毎日3:30）、`evolveCircleAIs`（毎月1日10時）、`triggerEvolveCircleAIs`（手動トリガー用） |
-| `cleanup.ts` | クリーンアップ | `cleanupOrphanedMedia`（毎日3時）、`cleanupResolvedInquiries`、`cleanupReports`、`cleanupBannedUsers`、`cleanupUnverifiedUsers` |
+| `cleanup.ts` | クリーンアップ | `cleanupOrphanedMedia`（毎日3時）、`cleanupResolvedInquiries`、`cleanupReports`、`cleanupBannedUsers`（永久BAN 180日後に Auth を保持したままアプリデータ削除）、`cleanupUnverifiedUsers` |
 | `reminders.ts` | タスク/目標リマインダー通知 | `executeTaskReminder`, `executeGoalReminder`（Cloud Tasks HTTP） |
 | `ai-posts.ts` | AI投稿 | `scheduleAIPosts`（現在無効化中） |
 

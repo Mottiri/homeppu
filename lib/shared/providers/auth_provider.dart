@@ -30,6 +30,7 @@ final authStateProvider = StreamProvider<User?>((ref) {
 final currentUserProvider = StreamProvider<UserModel?>((ref) {
   final authState = ref.watch(authStateProvider);
   final firestore = ref.watch(firestoreProvider);
+  final auth = ref.watch(firebaseAuthProvider);
 
   return authState.when(
     data: (user) {
@@ -41,6 +42,14 @@ final currentUserProvider = StreamProvider<UserModel?>((ref) {
           .asyncMap((doc) async {
             if (doc.exists) {
               return UserModel.fromFirestore(doc);
+            }
+            final idTokenResult = await user.getIdTokenResult(true);
+            final isPermanentlyBanned =
+                idTokenResult.claims?['banned'] == true &&
+                idTokenResult.claims?['banStatus'] == 'permanent';
+            if (isPermanentlyBanned) {
+              await auth.signOut();
+              return null;
             }
             // Self-heal: auth user exists but users/{uid} is missing.
             await _bootstrapMissingUserDoc(firestore, user);

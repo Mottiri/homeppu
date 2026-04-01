@@ -61,6 +61,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   double _fabScrollAccumulator = 0;
   int _fabScrollDirection = 0; // 1: down, -1: up
   bool _isVirtueLoading = false;
+  bool _isHandlingMissingUserRedirect = false;
   final GlobalKey _tutorialOverlayStackKey = GlobalKey();
   final GlobalKey _settingsIconKey = GlobalKey();
   Rect? _settingsIconRect;
@@ -430,14 +431,32 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           setState(() {
             _isLoading = false;
           });
+          _handleMissingUser();
         }
       } catch (e) {
         debugPrint('ProfileScreen: Error loading user: $e');
         setState(() {
           _isLoading = false;
         });
+        if (mounted) {
+          SnackBarHelper.showError(context, AppMessages.error.network);
+        }
       }
     }
+  }
+
+  void _handleMissingUser() {
+    if (!mounted || _isOwnProfile || _isHandlingMissingUserRedirect) return;
+    _isHandlingMissingUserRedirect = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      SnackBarHelper.showInfo(context, AppMessages.error.deletedUserUnavailable);
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go('/home');
+      }
+    });
   }
 
   Future<void> _toggleFollow() async {
@@ -520,6 +539,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
 
   Widget _buildProfile(UserModel? user) {
     if (user == null) {
+      if (!_isOwnProfile) {
+        return const SizedBox.shrink();
+      }
       return AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.dark,
         child: Scaffold(

@@ -521,6 +521,399 @@ export const cleanupReports = onSchedule(
     }
 );
 
+const CLEANUP_QUERY_BATCH_SIZE = 100;
+const CLEANUP_DELETE_BATCH_SIZE = 400;
+const BANNED_USER_SUBCOLLECTIONS = [
+    "notifications",
+    "categories",
+    "stampSheet",
+    "stampSheetArchives",
+    "purchases",
+    "virtueDaily",
+];
+
+async function commitDeleteBatch(
+    refs: FirebaseFirestore.DocumentReference[]
+): Promise<void> {
+    for (let i = 0; i < refs.length; i += CLEANUP_DELETE_BATCH_SIZE) {
+        const batch = db.batch();
+        refs.slice(i, i + CLEANUP_DELETE_BATCH_SIZE).forEach((ref) => batch.delete(ref));
+        await batch.commit();
+    }
+}
+
+async function deleteStoragePrefix(prefix: string): Promise<number> {
+    const bucket = admin.storage().bucket();
+    const [files] = await bucket.getFiles({ prefix });
+    let deleted = 0;
+
+    for (const file of files) {
+        try {
+            await file.delete();
+            deleted++;
+        } catch (error) {
+            console.warn(`Failed to delete storage file ${file.name}:`, error);
+        }
+    }
+
+    return deleted;
+}
+
+async function deleteUserSubcollection(userId: string, subcollection: string): Promise<number> {
+    let deleted = 0;
+
+    while (true) {
+        const snapshot = await db
+            .collection("users")
+            .doc(userId)
+            .collection(subcollection)
+            .limit(CLEANUP_QUERY_BATCH_SIZE)
+            .get();
+
+        if (snapshot.empty) {
+            return deleted;
+        }
+
+        await commitDeleteBatch(snapshot.docs.map((doc) => doc.ref));
+        deleted += snapshot.size;
+    }
+}
+
+async function deletePostDocument(
+    postDoc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot
+): Promise<void> {
+    if (!postDoc.exists) return;
+
+    const postData = postDoc.data() || {};
+    const postId = postDoc.id;
+
+    while (true) {
+        const commentsSnapshot = await db
+            .collection("comments")
+            .where("postId", "==", postId)
+            .limit(CLEANUP_QUERY_BATCH_SIZE)
+            .get();
+        if (commentsSnapshot.empty) break;
+        await commitDeleteBatch(commentsSnapshot.docs.map((doc) => doc.ref));
+    }
+
+    while (true) {
+        const reactionsSnapshot = await db
+            .collection("reactions")
+            .where("postId", "==", postId)
+            .limit(CLEANUP_QUERY_BATCH_SIZE)
+            .get();
+        if (reactionsSnapshot.empty) break;
+        await commitDeleteBatch(reactionsSnapshot.docs.map((doc) => doc.ref));
+    }
+
+    const mediaItems = Array.isArray(postData.mediaItems) ? postData.mediaItems : [];
+    for (const media of mediaItems) {
+        if (typeof media?.url === "string" && media.url.length > 0) {
+            await deleteStorageFileFromUrl(media.url);
+        }
+        if (typeof media?.thumbnailUrl === "string" && media.thumbnailUrl.length > 0) {
+            await deleteStorageFileFromUrl(media.thumbnailUrl);
+        }
+    }
+
+    await postDoc.ref.delete().catch((error) => {
+        console.warn(`Failed to delete post ${postId}:`, error);
+    });
+}
+
+async function deletePostsByUser(userId: string): Promise<number> {
+    let deleted = 0;
+
+    while (true) {
+        const postsSnapshot = await db
+            .collection("posts")
+            .where("userId", "==", userId)
+            .limit(20)
+            .get();
+
+        if (postsSnapshot.empty) {
+            return deleted;
+        }
+
+        for (const postDoc of postsSnapshot.docs) {
+            await deletePostDocument(postDoc);
+            deleted++;
+        }
+    }
+}
+
+async function deleteUserInquiries(userId: string): Promise<number> {
+    let deleted = 0;
+
+    while (true) {
+        const inquiriesSnapshot = await db
+            .collection("inquiries")
+            .where("userId", "==", userId)
+            .limit(10)
+            .get();
+
+        if (inquiriesSnapshot.empty) {
+            return deleted;
+        }
+
+        for (const inquiryDoc of inquiriesSnapshot.docs) {
+            while (true) {
+                const messagesSnapshot = await inquiryDoc.ref
+                    .collection("messages")
+                    .limit(CLEANUP_QUERY_BATCH_SIZE)
+                    .get();
+
+                if (messagesSnapshot.empty) break;
+
+                for (const messageDoc of messagesSnapshot.docs) {
+                    const imageUrl = messageDoc.data().imageUrl;
+                    if (typeof imageUrl === "string" && imageUrl.length > 0) {
+                        await deleteStorageFileFromUrl(imageUrl);
+                    }
+                }
+
+                await commitDeleteBatch(messagesSnapshot.docs.map((doc) => doc.ref));
+            }
+
+            await inquiryDoc.ref.delete();
+            deleted++;
+        }
+    }
+}
+
+async function deleteDocsByField(
+    collectionName: string,
+    fieldName: string,
+    value: string
+): Promise<number> {
+    let deleted = 0;
+
+    while (true) {
+        const snapshot = await db
+            .collection(collectionName)
+            .where(fieldName, "==", value)
+            .limit(CLEANUP_QUERY_BATCH_SIZE)
+            .get();
+
+        if (snapshot.empty) {
+            return deleted;
+        }
+
+        await commitDeleteBatch(snapshot.docs.map((doc) => doc.ref));
+        deleted += snapshot.size;
+    }
+}
+
+async function updateUserArrayReferences(
+    arrayField: "following" | "followers",
+    countField: "followingCount" | "followersCount",
+    targetUserId: string
+): Promise<number> {
+    let updated = 0;
+
+    while (true) {
+        const snapshot = await db
+            .collection("users")
+            .where(arrayField, "array-contains", targetUserId)
+            .limit(CLEANUP_QUERY_BATCH_SIZE)
+            .get();
+
+        if (snapshot.empty) {
+            return updated;
+        }
+
+        for (const userDoc of snapshot.docs) {
+            const values = Array.isArray(userDoc.data()[arrayField])
+                ? (userDoc.data()[arrayField] as string[])
+                : [];
+            const nextValues = values.filter((id) => id !== targetUserId);
+            await userDoc.ref.update({
+                [arrayField]: nextValues,
+                [countField]: nextValues.length,
+            });
+            updated++;
+        }
+    }
+}
+
+async function cleanupCircleById(circleId: string): Promise<void> {
+    const circleDoc = await db.collection("circles").doc(circleId).get();
+    if (!circleDoc.exists) return;
+
+    while (true) {
+        const postsSnapshot = await db
+            .collection("posts")
+            .where("circleId", "==", circleId)
+            .limit(20)
+            .get();
+
+        if (postsSnapshot.empty) break;
+
+        for (const postDoc of postsSnapshot.docs) {
+            await deletePostDocument(postDoc);
+        }
+    }
+
+    while (true) {
+        const joinRequestsSnapshot = await db
+            .collection("circleJoinRequests")
+            .where("circleId", "==", circleId)
+            .limit(CLEANUP_QUERY_BATCH_SIZE)
+            .get();
+
+        if (joinRequestsSnapshot.empty) break;
+        await commitDeleteBatch(joinRequestsSnapshot.docs.map((doc) => doc.ref));
+    }
+
+    await deleteStoragePrefix(`circles/${circleId}/`);
+
+    const generatedAIs = Array.isArray(circleDoc.data()?.generatedAIs) ? circleDoc.data()?.generatedAIs : [];
+    for (const ai of generatedAIs) {
+        const aiId = typeof ai?.id === "string" ? ai.id : "";
+        if (!aiId.startsWith("circle_ai_")) continue;
+
+        await deleteUserSubcollection(aiId, "notifications");
+        await db.collection("users").doc(aiId).delete().catch(() => { });
+    }
+
+    await circleDoc.ref.delete().catch((error) => {
+        console.warn(`Failed to delete circle ${circleId}:`, error);
+    });
+}
+
+async function deleteOwnedCircles(userId: string): Promise<number> {
+    let deleted = 0;
+
+    while (true) {
+        const circlesSnapshot = await db
+            .collection("circles")
+            .where("ownerId", "==", userId)
+            .limit(10)
+            .get();
+
+        if (circlesSnapshot.empty) {
+            return deleted;
+        }
+
+        for (const circleDoc of circlesSnapshot.docs) {
+            await cleanupCircleById(circleDoc.id);
+            deleted++;
+        }
+    }
+}
+
+async function removeUserFromCircles(userId: string): Promise<number> {
+    let updated = 0;
+
+    while (true) {
+        const circlesSnapshot = await db
+            .collection("circles")
+            .where("memberIds", "array-contains", userId)
+            .limit(CLEANUP_QUERY_BATCH_SIZE)
+            .get();
+
+        if (circlesSnapshot.empty) break;
+
+        for (const circleDoc of circlesSnapshot.docs) {
+            const data = circleDoc.data();
+            if (data.ownerId === userId) continue;
+
+            const memberIds = Array.isArray(data.memberIds) ? data.memberIds as string[] : [];
+            const nextMemberIds = memberIds.filter((memberId) => memberId !== userId);
+            const maxMembers = Number(data.maxMembers ?? 20);
+            const updateData: Record<string, unknown> = {
+                memberIds: nextMemberIds,
+                memberCount: nextMemberIds.length,
+                hasSpace: nextMemberIds.length < maxMembers,
+            };
+            if (data.subOwnerId === userId) {
+                updateData.subOwnerId = null;
+            }
+
+            await circleDoc.ref.update(updateData);
+            updated++;
+        }
+    }
+
+    while (true) {
+        const subOwnerSnapshot = await db
+            .collection("circles")
+            .where("subOwnerId", "==", userId)
+            .limit(CLEANUP_QUERY_BATCH_SIZE)
+            .get();
+
+        if (subOwnerSnapshot.empty) {
+            return updated;
+        }
+
+        for (const circleDoc of subOwnerSnapshot.docs) {
+            if (circleDoc.data().ownerId === userId) continue;
+            await circleDoc.ref.update({ subOwnerId: null });
+            updated++;
+        }
+    }
+}
+
+async function disableBannedAuthUser(userId: string): Promise<void> {
+    try {
+        await admin.auth().updateUser(userId, { disabled: true });
+    } catch (error) {
+        console.warn(`Auth disable failed for ${userId}:`, error);
+    }
+}
+
+async function cleanupBannedUserAppData(
+    userDoc: FirebaseFirestore.QueryDocumentSnapshot
+): Promise<void> {
+    const userId = userDoc.id;
+    const userData = userDoc.data();
+
+    console.log(`cleanupBannedUserAppData START: ${userId}`);
+
+    await disableBannedAuthUser(userId);
+
+    if (typeof userData.profileImageStoragePath === "string" && userData.profileImageStoragePath.length > 0) {
+        await admin.storage().bucket().file(userData.profileImageStoragePath).delete().catch(() => { });
+    }
+    if (typeof userData.profileImageUrl === "string" && userData.profileImageUrl.length > 0) {
+        await deleteStorageFileFromUrl(userData.profileImageUrl);
+    }
+    if (typeof userData.headerImageUrl === "string" && userData.headerImageUrl.length > 0) {
+        await deleteStorageFileFromUrl(userData.headerImageUrl);
+    }
+
+    await deleteStoragePrefix(`users/${userId}/profile/`);
+    await deleteStoragePrefix(`headers/${userId}.`);
+    await deleteStoragePrefix(`posts/${userId}/`);
+    await deleteStoragePrefix(`inquiries/${userId}/`);
+
+    const deletedOwnedCircles = await deleteOwnedCircles(userId);
+    const deletedPosts = await deletePostsByUser(userId);
+    const deletedInquiries = await deleteUserInquiries(userId);
+    const deletedInquiryArchives = await deleteDocsByField("inquiry_archives", "userId", userId);
+    const deletedJoinRequests = await deleteDocsByField("circleJoinRequests", "userId", userId);
+    const deletedBanAppeals = await deleteDocsByField("banAppeals", "bannedUserId", userId);
+    const deletedVirtueHistory = await deleteDocsByField("virtueHistory", "userId", userId);
+    const followingRefsUpdated = await updateUserArrayReferences("following", "followingCount", userId);
+    const followerRefsUpdated = await updateUserArrayReferences("followers", "followersCount", userId);
+    const circlesUpdated = await removeUserFromCircles(userId);
+
+    for (const subcollection of BANNED_USER_SUBCOLLECTIONS) {
+        await deleteUserSubcollection(userId, subcollection);
+    }
+
+    await userDoc.ref.delete();
+
+    console.log(
+        `cleanupBannedUserAppData COMPLETE: ${userId} ` +
+        `ownedCircles=${deletedOwnedCircles} posts=${deletedPosts} inquiries=${deletedInquiries} ` +
+        `inquiryArchives=${deletedInquiryArchives} joinRequests=${deletedJoinRequests} ` +
+        `banAppeals=${deletedBanAppeals} virtueHistory=${deletedVirtueHistory} ` +
+        `followingRefs=${followingRefsUpdated} followerRefs=${followerRefsUpdated} circlesUpdated=${circlesUpdated}`
+    );
+}
+
 /**
  * 永久BANユーザーのデータ削除クリーンアップ（毎日午前4時）
  */
@@ -550,16 +943,7 @@ export const cleanupBannedUsers = onSchedule(
 
         for (const doc of snapshot.docs) {
             try {
-                const uid = doc.id;
-                console.log(`Deleting banned user: ${uid}`);
-
-                await admin.auth().deleteUser(uid).catch(e => {
-                    console.warn(`Auth delete failed for ${uid}:`, e);
-                });
-
-                // ユーザードキュメント削除
-                await db.collection("users").doc(uid).delete();
-
+                await cleanupBannedUserAppData(doc);
             } catch (error) {
                 console.error(`Error deleting user ${doc.id}:`, error);
             }

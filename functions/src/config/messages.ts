@@ -15,6 +15,11 @@ export const AUTH_ERRORS = {
     BANNED: "アカウントが制限されているため、この機能は利用できません。異議申し立て画面から運営へお問い合わせください。",
 } as const;
 
+export const BAN_MESSAGES = {
+    permanentBanNotificationBody: (reason: string, scheduledDeletionDate: string) =>
+        `違反行為のため、アカウントを永久停止しました。理由: ${reason}\n異議申し立ては可能ですが、${scheduledDeletionDate}までに解除されない場合、アプリデータは自動削除され復旧できません。`,
+} as const;
+
 // ===============================================
 // 権限エラー (PERMISSION_ERRORS)
 // ===============================================

@@ -122,6 +122,7 @@ class _ErrorMessages {
   String get permissionDenied => 'この操作はできないみたい';
   String get banned => 'アカウントが制限されているため、この操作はできません';
   String get accountSuspended => 'アカウントが停止されています';
+  String get deletedUserUnavailable => 'このユーザーは既に削除されています';
   String get notEnoughVirtue => '徳ポイントが足りません。';
   String get itemNotPurchasable => 'このアイテムは期間限定アイテムです。現在期限が過ぎているため購入できません。';
   String get notFoundTitle => 'あれ？ページが見つからないよ';
@@ -660,8 +661,8 @@ class _AdminMessages {
   String get appealCloseFailed => '削除に失敗しました';
   String get appealSendFailed => '送信に失敗しました';
   String get appealLoginRequired => 'ログインしていません';
-  String get appealPermanentNotice =>
-      'アカウントは永久停止されています。\n解除の申し立てはここから管理者へ連絡できます。';
+  String appealPermanentNotice(String scheduledDeletionDate) =>
+      'アカウントは永久停止されています。\n解除の申し立てはここから管理者へ連絡できます。\n$scheduledDeletionDateまでに解除されない場合、アプリデータは自動削除され、復旧できません。';
   String get appealTemporaryNotice =>
       'アカウントは一時的に制限されています。\n解除の申し立てや詳細はここから管理者へ連絡できます。';
   String get appealIntroTitle => '異議申し立て・お問い合わせ';

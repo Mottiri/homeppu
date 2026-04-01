@@ -20,11 +20,21 @@ import {
     RESOURCE_ERRORS,
     VALIDATION_ERRORS,
     SYSTEM_ERRORS,
+    BAN_MESSAGES,
     NOTIFICATION_TITLES,
     NOTIFICATION_BODIES,
     VIRTUE_MESSAGES,
     SUCCESS_MESSAGES,
 } from "../config/messages";
+
+function formatJstDate(date: Date): string {
+    return new Intl.DateTimeFormat("ja-JP", {
+        timeZone: "Asia/Tokyo",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+    }).format(date);
+}
 
 /**
  * 管理用: 全ユーザーのフォローリストを掃除する
@@ -418,6 +428,7 @@ export const permanentBanUser = onCall(
 
         const deletionDate = new Date();
         deletionDate.setDate(deletionDate.getDate() + 180);
+        const scheduledDeletionDate = formatJstDate(deletionDate);
 
         batch.update(db.collection("users").doc(userId), {
             banStatus: "permanent",
@@ -438,6 +449,9 @@ export const permanentBanUser = onCall(
         });
 
         await batch.commit();
+        await notificationRef.update({
+            body: BAN_MESSAGES.permanentBanNotificationBody(reason, scheduledDeletionDate),
+        });
 
         try {
             // ログインは許可するため、disabledは設定しない
