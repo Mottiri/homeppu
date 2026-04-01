@@ -1,5 +1,6 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/constants/app_messages.dart';
 import '../models/post_model.dart';
 
 /// モデレーション結果
@@ -169,6 +170,25 @@ class ModerationService {
     } on FirebaseFunctionsException catch (e) {
       throw ModerationException(
         message: e.message ?? 'ネガティブな内容が検出されました',
+        code: e.code,
+      );
+    }
+  }
+
+  Future<void> deleteComment({
+    required String commentId,
+  }) async {
+    try {
+      final callable = _functions.httpsCallable(
+        'deleteComment',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
+      );
+      await callable.call({
+        'commentId': commentId,
+      });
+    } on FirebaseFunctionsException catch (e) {
+      throw ModerationException(
+        message: e.message ?? AppMessages.error.commentDeleteFailed,
         code: e.code,
       );
     }

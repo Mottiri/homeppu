@@ -25,6 +25,7 @@ import {
     NOTIFICATION_BODIES,
     VIRTUE_MESSAGES,
     SUCCESS_MESSAGES,
+    COMMENT_MESSAGES,
 } from "../config/messages";
 
 function formatJstDate(date: Date): string {
@@ -663,6 +664,119 @@ export const adminDeletePostWithPenalty = onCall(
  * カウントのドリフト（不整合）が発生した場合に管理者が実行する運用ツール。
  * targetUserId指定で特定ユーザー、省略で全ユーザーを対象とする。
  */
+export const adminDeleteCommentWithPenalty = onCall(
+    { region: LOCATION, enforceAppCheck: true },
+    async (request) => {
+        const adminId = await requireAdmin(request);
+        const { commentId, targetUserId, reportIds } = request.data || {};
+
+        if (!commentId || typeof commentId !== "string") {
+            throw new HttpsError("invalid-argument", VALIDATION_ERRORS.MISSING_REQUIRED);
+        }
+
+        const virtuePolicy = await getVirtuePolicy();
+        const penaltyPoints = virtuePolicy.adminDeletePenaltyPoints;
+        const commentRef = db.collection("comments").doc(commentId);
+
+        const reportIdList = Array.isArray(reportIds)
+            ? reportIds.filter((id): id is string => typeof id === "string" && id.length > 0)
+            : [];
+        let commentOwnerId = "";
+        let postId = "";
+        let newVirtue = 0;
+
+        await db.runTransaction(async (transaction) => {
+            const commentDoc = await transaction.get(commentRef);
+            if (!commentDoc.exists) {
+                throw new HttpsError("not-found", COMMENT_MESSAGES.COMMENT_NOT_FOUND);
+            }
+
+            const commentData = commentDoc.data() || {};
+            commentOwnerId = (typeof targetUserId === "string" && targetUserId.length > 0)
+                ? targetUserId
+                : (commentData.userId as string | undefined) || "";
+            postId = (commentData.postId as string | undefined) || "";
+
+            if (!commentOwnerId || !postId) {
+                throw new HttpsError("failed-precondition", SYSTEM_ERRORS.PROCESSING_ERROR);
+            }
+
+            const userRef = db.collection("users").doc(commentOwnerId);
+            const userDoc = await transaction.get(userRef);
+            if (!userDoc.exists) {
+                throw new HttpsError("not-found", RESOURCE_ERRORS.USER_NOT_FOUND);
+            }
+
+            const currentVirtueRaw = Number(userDoc.data()?.virtue ?? 100);
+            const currentVirtue = Number.isFinite(currentVirtueRaw) ? currentVirtueRaw : 100;
+            newVirtue = Math.max(0, currentVirtue - penaltyPoints);
+            const now = admin.firestore.FieldValue.serverTimestamp();
+
+            const postRef = db.collection("posts").doc(postId);
+            const postDoc = await transaction.get(postRef);
+            if (postDoc.exists) {
+                const currentCountRaw = Number(postDoc.data()?.commentCount ?? 0);
+                const currentCount = Number.isFinite(currentCountRaw)
+                    ? Math.max(0, Math.trunc(currentCountRaw))
+                    : 0;
+                if (currentCount > 0) {
+                    transaction.update(postRef, {
+                        commentCount: admin.firestore.FieldValue.increment(-1),
+                    });
+                }
+            }
+
+            transaction.delete(commentRef);
+
+            for (const reportId of reportIdList) {
+                const reportRef = db.collection("reports").doc(reportId);
+                transaction.set(reportRef, {
+                    status: "resolved",
+                    reviewedAt: now,
+                    action: "deleted",
+                    reviewedBy: adminId,
+                }, { merge: true });
+            }
+
+            transaction.update(userRef, {
+                virtue: newVirtue,
+                updatedAt: now,
+            });
+
+            const historyRef = db.collection("virtueHistory").doc();
+            transaction.set(historyRef, {
+                userId: commentOwnerId,
+                change: -penaltyPoints,
+                reason: VIRTUE_MESSAGES.ADMIN_DELETE_COMMENT_PENALTY_REASON,
+                source: "admin_delete_comment",
+                targetId: commentId,
+                newVirtue,
+                createdAt: now,
+            });
+
+            const notificationRef = userRef.collection("notifications").doc();
+            transaction.set(notificationRef, {
+                userId: commentOwnerId,
+                type: "comment_deleted",
+                title: NOTIFICATION_TITLES.COMMENT_DELETED_BY_ADMIN,
+                body: NOTIFICATION_BODIES.COMMENT_DELETED_BY_ADMIN,
+                postId,
+                isRead: false,
+                createdAt: now,
+            });
+        });
+
+        return {
+            success: true,
+            commentId,
+            userId: commentOwnerId,
+            postId,
+            penaltyPoints,
+            newVirtue,
+        };
+    }
+);
+
 export const recalculateUnreadCounts = onCall(
     {
         region: LOCATION,

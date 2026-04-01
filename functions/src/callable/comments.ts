@@ -7,11 +7,13 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 
 import { db, FieldValue, Timestamp } from "../helpers/firebase";
 import { requireAuth } from "../helpers/auth";
+import { isAdmin } from "../helpers/admin";
 import { geminiApiKey, openaiApiKey } from "../config/secrets";
 import { LOCATION } from "../config/constants";
 import { createAIProviderFactory } from "../ai/provider";
 import {
     AUTH_ERRORS,
+    COMMENT_MESSAGES,
     COMMENT_THANKS_MESSAGES,
     NOTIFICATION_BODIES,
     NOTIFICATION_TITLES,
@@ -584,6 +586,62 @@ export const removeUserReaction = onCall(
  * - 同一コメントへは1回のみ
  * - 付与されたコメント作成者に対してではなく、付与した投稿主の credits を +1
  */
+export const deleteComment = onCall(
+    { region: LOCATION, enforceAppCheck: true },
+    async (request) => {
+        const commentId = request.data?.commentId as string | undefined;
+        const userId = requireAuth(request, AUTH_ERRORS.USER_MUST_BE_LOGGED_IN);
+
+        if (!commentId || typeof commentId !== "string") {
+            throw new HttpsError("invalid-argument", COMMENT_MESSAGES.COMMENT_ID_REQUIRED);
+        }
+
+        const userIsAdmin = await isAdmin(userId);
+        const commentRef = db.collection("comments").doc(commentId);
+
+        return db.runTransaction(async (transaction) => {
+            const commentSnap = await transaction.get(commentRef);
+            if (!commentSnap.exists) {
+                throw new HttpsError("not-found", COMMENT_MESSAGES.COMMENT_NOT_FOUND);
+            }
+
+            const commentData = commentSnap.data() || {};
+            const commentOwnerId = commentData.userId as string | undefined;
+            const postId = commentData.postId as string | undefined;
+            if (!commentOwnerId || !postId) {
+                throw new HttpsError("failed-precondition", COMMENT_MESSAGES.COMMENT_NOT_FOUND);
+            }
+
+            if (!userIsAdmin && commentOwnerId !== userId) {
+                throw new HttpsError("permission-denied", COMMENT_MESSAGES.COMMENT_DELETE_NOT_ALLOWED);
+            }
+
+            const postRef = db.collection("posts").doc(postId);
+            const postSnap = await transaction.get(postRef);
+            if (postSnap.exists) {
+                const currentCountRaw = Number(postSnap.data()?.commentCount ?? 0);
+                const currentCount = Number.isFinite(currentCountRaw)
+                    ? Math.max(0, Math.trunc(currentCountRaw))
+                    : 0;
+                if (currentCount > 0) {
+                    transaction.update(postRef, {
+                        commentCount: FieldValue.increment(-1),
+                    });
+                }
+            }
+
+            transaction.delete(commentRef);
+
+            return {
+                success: true,
+                commentId,
+                postId,
+                message: COMMENT_MESSAGES.COMMENT_DELETED,
+            };
+        });
+    }
+);
+
 export const likeCommentAsPostOwner = onCall(
     { region: LOCATION, enforceAppCheck: true },
     async (request) => {

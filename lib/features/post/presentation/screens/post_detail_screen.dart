@@ -10,6 +10,8 @@ import 'dart:async';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/constants/app_messages.dart';
+import '../../../../core/utils/dialog_helper.dart';
+import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/models/post_model.dart';
 import '../../../../shared/models/comment_model.dart';
 import '../../../../shared/models/user_model.dart';
@@ -192,6 +194,8 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     required List<CommentModel> comments,
     required PostModel post,
     required bool isOwnPost,
+    required String? currentUserId,
+    required bool isAdmin,
     required TutorialPhase2Step? tutorialStep,
   }) {
     // b) ターゲットコメントIDの固定
@@ -328,6 +332,15 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
       CommentModel comment,
       bool isTutorialTarget,
     ) {
+      final isPendingComment = comment.id.startsWith('optimistic_');
+      final canDelete =
+          !isPendingComment &&
+          currentUserId != null &&
+          (comment.userId == currentUserId || isAdmin);
+      final canReport =
+          !isPendingComment &&
+          currentUserId != null &&
+          comment.userId != currentUserId;
       // f) フォールバック時は全非オーナーコメントに
       //    onThanksCompletedを付与
       final isNonOwnerComment =
@@ -349,6 +362,22 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         spotlightCardKey: isTutorialTarget &&
                 !_tutorialScrollFallback
             ? _tutorialTargetCommentKey
+            : null,
+        canDelete: canDelete,
+        canReport: canReport,
+        onDeleteSelected: canDelete
+            ? () => _deleteCommentOptimistically(comment)
+            : null,
+        onReportSelected: canReport
+            ? () async {
+                await ReportDialog.show(
+                  context: context,
+                  contentId: comment.id,
+                  contentType: 'comment',
+                  targetUserId: comment.userId,
+                  contentPreview: comment.content,
+                );
+              }
             : null,
         onThanksCompleted: shouldAttachCallback
             ? () async {
@@ -488,6 +517,53 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
       if (mounted) {
         setState(() => _isSending = false);
       }
+    }
+  }
+
+  Future<void> _deleteCommentOptimistically(CommentModel comment) async {
+    final confirmed = await DialogHelper.showConfirmDialog(
+      context: context,
+      title: AppMessages.confirm.deleteTitle,
+      message: AppMessages.confirm.deleteComment(),
+      confirmText: AppMessages.label.delete,
+      isDangerous: true,
+      barrierDismissible: false,
+    );
+    if (!confirmed || !mounted) return;
+
+    final originalIndex = _comments.indexWhere((c) => c.id == comment.id);
+    if (originalIndex < 0) return;
+
+    setState(() {
+      _comments.removeAt(originalIndex);
+    });
+
+    try {
+      final moderationService = ref.read(moderationServiceProvider);
+      await moderationService.deleteComment(commentId: comment.id);
+      if (!mounted) return;
+      SnackBarHelper.showSuccess(context, AppMessages.success.commentDeleted);
+    } on ModerationException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        if (!_comments.any((c) => c.id == comment.id)) {
+          final safeIndex = originalIndex.clamp(0, _comments.length) as int;
+          _comments.insert(safeIndex, comment);
+        }
+      });
+      SnackBarHelper.showError(
+        context,
+        e.message.isNotEmpty ? e.message : AppMessages.error.commentDeleteFailed,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        if (!_comments.any((c) => c.id == comment.id)) {
+          final safeIndex = originalIndex.clamp(0, _comments.length) as int;
+          _comments.insert(safeIndex, comment);
+        }
+      });
+      SnackBarHelper.showError(context, AppMessages.error.commentDeleteFailed);
     }
   }
 
@@ -799,6 +875,8 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                   comments: _comments,
                                   post: post,
                                   isOwnPost: isOwnPost,
+                                  currentUserId: currentUserId,
+                                  isAdmin: isAdmin,
                                   tutorialStep: tutorialStep,
                                 ),
                               if (_isLoadingOlder)
@@ -1033,10 +1111,16 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
 }
 
 /// コメントタイル
+enum _CommentMenuAction { delete, report }
+
 class _CommentTile extends StatefulWidget {
   final CommentModel comment;
   final String postOwnerId;
   final bool disableTapActions;
+  final bool canDelete;
+  final bool canReport;
+  final Future<void> Function()? onDeleteSelected;
+  final Future<void> Function()? onReportSelected;
   final Future<void> Function()? onThanksCompleted;
   final Key? spotlightCardKey;
 
@@ -1045,6 +1129,10 @@ class _CommentTile extends StatefulWidget {
     required this.comment,
     required this.postOwnerId,
     this.disableTapActions = false,
+    this.canDelete = false,
+    this.canReport = false,
+    this.onDeleteSelected,
+    this.onReportSelected,
     this.onThanksCompleted,
     this.spotlightCardKey,
   });
@@ -1072,6 +1160,8 @@ class _CommentTileState extends State<_CommentTile> {
         currentUserId == widget.postOwnerId &&
         widget.comment.userId != currentUserId;
     final showThanksStatus = canThanks && _isThanked;
+    final hasMenu =
+        (widget.canDelete || widget.canReport) && !widget.disableTapActions;
 
     Future<void> handleThanksTap() async {
       if (!canThanks || _isThanked) return;
@@ -1187,6 +1277,53 @@ class _CommentTileState extends State<_CommentTile> {
                           timeago.format(widget.comment.createdAt, locale: 'ja'),
                           style: Theme.of(context).textTheme.labelSmall,
                         ),
+                        const Spacer(),
+                        if (hasMenu)
+                          PopupMenuButton<_CommentMenuAction>(
+                            icon: Icon(
+                              Icons.more_horiz,
+                              color: AppColors.textHint,
+                              size: 20,
+                            ),
+                            onSelected: (value) async {
+                              if (value == _CommentMenuAction.delete) {
+                                await widget.onDeleteSelected?.call();
+                              } else if (value == _CommentMenuAction.report) {
+                                await widget.onReportSelected?.call();
+                              }
+                            },
+                            itemBuilder: (context) => [
+                              if (widget.canDelete)
+                                PopupMenuItem<_CommentMenuAction>(
+                                  value: _CommentMenuAction.delete,
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.delete_outline,
+                                        size: 18,
+                                        color: Colors.red,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        AppMessages.label.delete,
+                                        style: const TextStyle(color: Colors.red),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              if (widget.canReport)
+                                PopupMenuItem<_CommentMenuAction>(
+                                  value: _CommentMenuAction.report,
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.flag_outlined, size: 18),
+                                      const SizedBox(width: 8),
+                                      Text(AppMessages.label.report),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
                       ],
                     ),
                     const SizedBox(height: 4),

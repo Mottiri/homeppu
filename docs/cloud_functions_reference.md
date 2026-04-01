@@ -28,11 +28,11 @@ functions/src/
 
 | ファイル | 機能 | 主な関数 |
 |---------|------|---------|
-| `admin.ts` | 管理者機能 | `cleanUpUserFollows`, `deleteAllAIUsers`, `cleanupOrphanedCircleAIs`, `backfillPublicUsers`, `backfillCircleNameTokens`, `adminDeletePostWithPenalty`, `setAdminRole`, `removeAdminRole`, `banUser`, `permanentBanUser`, `unbanUser` |
+| `admin.ts` | 管理者機能 | `cleanUpUserFollows`, `deleteAllAIUsers`, `cleanupOrphanedCircleAIs`, `backfillPublicUsers`, `backfillCircleNameTokens`, `adminDeletePostWithPenalty`, `adminDeleteCommentWithPenalty`, `setAdminRole`, `removeAdminRole`, `banUser`, `permanentBanUser`, `unbanUser` |
 | `users.ts` | ユーザー機能 | `followUser`, `unfollowUser`, `getFollowStatus`, `getVirtueHistory`, `getVirtueStatus`, `checkPasswordResetTarget` |
 | `virtue_shop.ts` | 徳ポイントショップ | `getVirtueShopConfig`, `purchaseVirtueItem` |
 | `posts.ts` | 投稿作成 | `createPostWithRateLimit`, `createPostWithModeration` |
-| `comments.ts` | コメント・リアクション | `createCommentWithModeration`, `addUserReaction`, `removeUserReaction` |
+| `comments.ts` | コメント・リアクション | `createCommentWithModeration`, `deleteComment`, `addUserReaction`, `removeUserReaction` |
 | `rewarded_reactions.ts` | リワード解放 | `grantRewardedReactionUnlock` |
 | `circles.ts` | サークル管理 | `deleteCircle`, `cleanupDeletedCircle`, `startCircleBrowseTrial`, `endCircleBrowseTrial`, `approveJoinRequest`, `rejectJoinRequest`, `sendJoinRequest`, `joinCircle`, `leaveCircle`, `searchCircles` |
 | `tasks.ts` | タスク管理 | `createTask`, `getTasks` |
@@ -232,6 +232,12 @@ functions/src/
 ## 追記: Stamp Sheet / Comment Thanks (2026-02-09)
 
 ### Callable
+- `deleteComment`
+  - 入力: `{ commentId }`
+  - コメント主本人または管理者のみ実行可。コメント本体を削除し、`posts/{postId}.commentCount` を安全に減算。
+- `adminDeleteCommentWithPenalty`
+  - 入力: `{ commentId, targetUserId, reportIds }`
+  - 管理者のみ実行可。通報対応としてコメントを削除し、対象ユーザーへ通知、徳ポイント減算、関連 `reports` を `resolved` 化。
 - `likeCommentAsPostOwner`
   - 入力: `{ commentId }`
   - 投稿主のみ実行可。対象コメントに `thanksLikedByPostOwner=true` を設定し、投稿主の `thanksStampCredits` を `+1`。

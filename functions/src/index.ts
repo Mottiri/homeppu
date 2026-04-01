@@ -18,6 +18,7 @@ export {
 } from "./callable/inquiries";
 export {
     createCommentWithModeration,
+    deleteComment,
     addUserReaction,
     removeUserReaction,
     likeCommentAsPostOwner,
@@ -59,6 +60,7 @@ export {
     backfillPublicUsers,
     recalculateUnreadCounts,
     adminDeletePostWithPenalty,
+    adminDeleteCommentWithPenalty,
     setAdminRole,
     removeAdminRole,
     banUser,

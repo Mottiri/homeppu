@@ -141,6 +141,7 @@ export const NOTIFICATION_TITLES = {
 
     POST_HIDDEN: "投稿が非表示になりました",
     POST_DELETED_BY_ADMIN: "投稿が削除されました",
+    COMMENT_DELETED_BY_ADMIN: "コメントが削除されました",
     NEW_REPORT: "新しい通報を受信",
     REVIEW_NEEDED: "要審査投稿",
 
@@ -154,6 +155,7 @@ export const NOTIFICATION_TITLES = {
 export const NOTIFICATION_BODIES = {
     POST_HIDDEN_BY_REPORTS: "複数の通報があったため、投稿を一時的に非表示にしました。内容をご確認ください。",
     POST_DELETED_BY_ADMIN: "運営による確認の結果、投稿が削除されました。",
+    COMMENT_DELETED_BY_ADMIN: "運営による確認の結果、コメントが削除されました。",
     COMMENT_THANKED: "あなたのコメントがいいね！されました。",
     REPORT_SUBMITTED: "通報内容を運営チームで確認します。ご協力ありがとうございます。",
     flaggedPost: (reason: string) => `フラグ付き投稿があります: ${reason}`,
@@ -259,6 +261,7 @@ export const VIRTUE_MESSAGES = {
     COMMENT_THANKS_GIVEN_GRANT_REASON: "コメントにいいね！した",
     COMMENT_THANKS_RECEIVED_GRANT_REASON: "コメントがいいね！された",
     ADMIN_DELETE_POST_PENALTY_REASON: "運営削除（通報対応）",
+    ADMIN_DELETE_COMMENT_PENALTY_REASON: "運営削除（コメント通報対応）",
     ITEM_NOT_PURCHASABLE: "このアイテムは期間限定アイテムです。現在期限が過ぎているため購入できません。",
 } as const;
 
@@ -275,6 +278,15 @@ export const ERROR_MESSAGES = {
 // ===============================================
 // Comment Thanks Stamp
 // ===============================================
+export const COMMENT_MESSAGES = {
+    COMMENT_ID_REQUIRED: "commentId is required",
+    COMMENT_NOT_FOUND: "comment not found",
+    COMMENT_DELETE_NOT_ALLOWED: "comment delete not allowed",
+    COMMENT_DELETED: "comment deleted",
+    COMMENT_DELETED_BY_ADMIN_TITLE: "comment deleted by admin",
+    COMMENT_DELETED_BY_ADMIN_BODY: "comment deleted by admin after review",
+} as const;
+
 export const COMMENT_THANKS_MESSAGES = {
     COMMENT_ID_REQUIRED: "commentId is required",
     COMMENT_NOT_FOUND: "comment not found",

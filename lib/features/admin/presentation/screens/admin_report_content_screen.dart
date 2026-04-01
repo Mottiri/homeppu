@@ -27,7 +27,9 @@ class AdminReportContentScreen extends ConsumerStatefulWidget {
 class _AdminReportContentScreenState
     extends ConsumerState<AdminReportContentScreen> {
   final _firestore = FirebaseFirestore.instance;
-  final _functions = FirebaseFunctions.instanceFor(region: AppConstants.functionsRegion);
+  final _functions = FirebaseFunctions.instanceFor(
+    region: AppConstants.functionsRegion,
+  );
   bool _isProcessing = false;
 
   @override
@@ -63,18 +65,14 @@ class _AdminReportContentScreenState
 
             return Column(
               children: [
-                // 投稿内容セクション
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // 投稿プレビュー
                         _buildContentPreview(contentType, targetUserId),
                         const SizedBox(height: 24),
-
-                        // 通報者一覧ヘッダー
                         Row(
                           children: [
                             const Text(
@@ -106,8 +104,6 @@ class _AdminReportContentScreenState
                           ],
                         ),
                         const SizedBox(height: 12),
-
-                        // 通報者リスト
                         ...reports.map((report) {
                           final data = report.data() as Map<String, dynamic>;
                           return _buildReporterCard(data);
@@ -116,8 +112,6 @@ class _AdminReportContentScreenState
                     ),
                   ),
                 ),
-
-                // アクションボタン
                 _buildActionButtons(contentType, targetUserId, reports),
               ],
             );
@@ -150,7 +144,6 @@ class _AdminReportContentScreenState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ユーザー情報
                     InkWell(
                       onTap: () => context.push('/profile/$targetUserId'),
                       child: Row(
@@ -209,8 +202,6 @@ class _AdminReportContentScreenState
                       ),
                     ),
                     const Divider(height: 24),
-
-                    // 非表示ステータス
                     if (isHidden)
                       Container(
                         padding: const EdgeInsets.all(8),
@@ -234,8 +225,6 @@ class _AdminReportContentScreenState
                           ],
                         ),
                       ),
-
-                    // コンテンツ
                     if (contentData != null)
                       InkWell(
                         onTap: contentType == 'post'
@@ -251,14 +240,10 @@ class _AdminReportContentScreenState
                         '(削除済みまたは取得できません)',
                         style: TextStyle(color: AppColors.textSecondary),
                       ),
-
-                    // 技術情報
                     const SizedBox(height: 16),
                     GestureDetector(
                       onTap: () {
-                        Clipboard.setData(
-                          ClipboardData(text: widget.contentId),
-                        );
+                        Clipboard.setData(ClipboardData(text: widget.contentId));
                         SnackBarHelper.showSuccess(
                           context,
                           AppMessages.admin.idCopied,
@@ -363,7 +348,6 @@ class _AdminReportContentScreenState
                       ],
                     ),
                   ),
-                  // 累計通報回数
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
@@ -400,7 +384,6 @@ class _AdminReportContentScreenState
     String targetUserId,
     List<QueryDocumentSnapshot> reports,
   ) {
-    // 未対応の通報があるかチェック
     final hasPending = reports.any((r) {
       final data = r.data() as Map<String, dynamic>;
       return data['status'] == 'pending';
@@ -432,7 +415,6 @@ class _AdminReportContentScreenState
       child: SafeArea(
         child: Row(
           children: [
-            // 問題なし（再表示）ボタン
             Expanded(
               child: ElevatedButton.icon(
                 onPressed: _isProcessing ? null : () => _handleResolve(reports),
@@ -446,14 +428,17 @@ class _AdminReportContentScreenState
               ),
             ),
             const SizedBox(width: 12),
-            // 投稿削除ボタン
             Expanded(
               child: ElevatedButton.icon(
                 onPressed: _isProcessing
                     ? null
                     : () => _handleDelete(contentType, targetUserId, reports),
                 icon: const Icon(Icons.delete),
-                label: const Text('投稿削除'),
+                label: Text(
+                  contentType == 'post'
+                      ? AppMessages.admin.deletePostTitle
+                      : AppMessages.admin.deleteCommentTitle,
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.error,
                   foregroundColor: Colors.white,
@@ -472,7 +457,9 @@ class _AdminReportContentScreenState
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('問題なしとして処理'),
-        content: const Text('この投稿を問題なしとして処理し、再表示しますか？\nすべての通報が対応済みになります。'),
+        content: const Text(
+          'この投稿を問題なしとして処理し、再表示しますか？\nすべての通報が対応済みになります。',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -493,7 +480,6 @@ class _AdminReportContentScreenState
       final now = FieldValue.serverTimestamp();
       final batch = _firestore.batch();
 
-      // 投稿を再表示
       final firstData = reports.first.data() as Map<String, dynamic>;
       if (firstData['contentType'] == 'post') {
         final postRef = _firestore.collection('posts').doc(widget.contentId);
@@ -504,7 +490,6 @@ class _AdminReportContentScreenState
         });
       }
 
-      // すべての通報を resolved に
       for (final report in reports) {
         final data = report.data() as Map<String, dynamic>;
         if (data['status'] == 'pending') {
@@ -539,10 +524,15 @@ class _AdminReportContentScreenState
     String targetUserId,
     List<QueryDocumentSnapshot> reports,
   ) async {
+    final isPost = contentType == 'post';
     final confirmed = await DialogHelper.showConfirmDialog(
       context: context,
-      title: AppMessages.admin.deletePostTitle,
-      message: AppMessages.admin.deletePostWithNotifyMessage,
+      title: isPost
+          ? AppMessages.admin.deletePostTitle
+          : AppMessages.admin.deleteCommentTitle,
+      message: isPost
+          ? AppMessages.admin.deletePostWithNotifyMessage
+          : AppMessages.admin.deleteCommentWithNotifyMessage,
       confirmText: AppMessages.label.delete,
       cancelText: AppMessages.label.cancel,
       isDangerous: true,
@@ -553,7 +543,7 @@ class _AdminReportContentScreenState
 
     setState(() => _isProcessing = true);
     try {
-      if (contentType == 'post') {
+      if (isPost) {
         final callable = _functions.httpsCallable('adminDeletePostWithPenalty');
         await callable.call(<String, dynamic>{
           'postId': widget.contentId,
@@ -561,22 +551,21 @@ class _AdminReportContentScreenState
           'reportIds': reports.map((report) => report.id).toList(),
         });
       } else {
-        final now = FieldValue.serverTimestamp();
-        final batch = _firestore.batch();
-
-        // すべての通報を resolved に
-        for (final report in reports) {
-          batch.update(report.reference, {
-            'status': 'resolved',
-            'reviewedAt': now,
-          });
-        }
-
-        await batch.commit();
+        final callable = _functions.httpsCallable(
+          'adminDeleteCommentWithPenalty',
+        );
+        await callable.call(<String, dynamic>{
+          'commentId': widget.contentId,
+          'targetUserId': targetUserId,
+          'reportIds': reports.map((report) => report.id).toList(),
+        });
       }
 
       if (mounted) {
-        SnackBarHelper.showSuccess(context, AppMessages.admin.postDeleted);
+        SnackBarHelper.showSuccess(
+          context,
+          isPost ? AppMessages.admin.postDeleted : AppMessages.admin.commentDeleted,
+        );
         context.pop();
       }
     } catch (e) {

@@ -79,6 +79,7 @@ class _SuccessMessages {
   String get postCreated => '投稿できたよ！みんなに届くのを待っててね✨';
   String get postDeleted => '投稿を削除したよ！';
   String get commentCreated => 'コメントを送ったよ！';
+  String get commentDeleted => 'コメントを削除したよ';
   String get favoriteAdded => 'お気に入りに追加しました';
   String get favoriteRemoved => 'お気に入りから削除しました';
 
@@ -138,6 +139,7 @@ class _ErrorMessages {
   // 投稿関連
   String get postFailed => '投稿できなかったみたい。もう一度試してみてね';
   String get deleteFailed => '削除できなかったみたい';
+  String get commentDeleteFailed => 'コメントを削除できなかったみたい';
   String get moderationBlocked => 'この内容は投稿できないみたい😢';
   String get postDeletedNotice => 'この投稿は削除されました';
   String get reportFailed => '通報に失敗しました。もう一度お試しください。';
@@ -241,6 +243,7 @@ class _LabelMessages {
   String get done => '完了';
   String get edit => '編集';
   String get create => '作成';
+  String get report => '通報';
   String get logout => 'ログアウト';
   String get relogin => 'ログインし直す';
   String get add => '追加';
@@ -633,11 +636,15 @@ class _AdminMessages {
   // 通報/審査
   String get postApproved => '投稿を承認しました';
   String get postDeleted => '投稿を削除しました';
+  String get commentDeleted => 'コメントを削除しました';
   String get approveFailed => '承認に失敗しました';
   String get deleteFailed => '削除に失敗しました';
   String get deletePostTitle => '投稿を削除';
+  String get deleteCommentTitle => 'コメントを削除';
   String get deletePostMessage => 'この投稿を削除しますか？\nこの操作は取り消せません。';
   String get deletePostWithNotifyMessage => 'この投稿を削除しますか？\n投稿者に通知が送信されます。';
+  String get deleteCommentWithNotifyMessage =>
+      'このコメントを削除しますか？\nコメント投稿者に通知が送信されます。';
   String reportBatchResolved(int count) => '$count件の通報を処理しました';
   String get falseReportDismissed => '虚偽判定しました';
   String get reportResolved => '問題なしとして処理しました';
