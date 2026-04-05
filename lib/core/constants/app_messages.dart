@@ -138,6 +138,12 @@ class _ErrorMessages {
 
   // 投稿関連
   String get postFailed => '投稿できなかったみたい。もう一度試してみてね';
+  String get postResultUnknown =>
+      '投稿結果を確認できませんでした。\nしばらく待ってから再送してね';
+  String get postResultChecking =>
+      '投稿処理を確認中です。\n少し待ってからもう一度試してね';
+  String get postRetryReady =>
+      '投稿結果を確認できませんでした。同じ内容を再送できます。';
   String get deleteFailed => '削除できなかったみたい';
   String get commentDeleteFailed => 'コメントを削除できなかったみたい';
   String get moderationBlocked => 'この内容は投稿できないみたい😢';
@@ -232,6 +238,7 @@ class _LabelMessages {
   String get send => '送信';
   String get close => '閉じる';
   String get retry => '再試行';
+  String get postSubmit => '投稿する';
   String get back => '戻る';
   String get backToHome => 'ホームへ戻る';
   String get yes => 'はい';

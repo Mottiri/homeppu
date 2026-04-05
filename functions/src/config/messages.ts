@@ -85,6 +85,7 @@ export const VALIDATION_ERRORS = {
     RATE_LIMITED: "投稿が多すぎます。少し待ってから再度投稿してください",
     RATE_LIMITED_PER_MINUTE: "短時間での投稿が多すぎます。少し待ってから再度投稿してください",
     RATE_LIMITED_DAILY_15: "1日に投稿できる回数は15回までです。明日また投稿してください",
+    POST_REQUEST_IN_PROGRESS: "投稿処理を確認中です。少し待ってから再度お試しください",
     COMMENT_RATE_LIMITED_PER_MINUTE: "コメントは60秒で2回までです。少し待ってから再度送信してください",
 
     reactionLimitExceeded: (max: number) => `1つの投稿に対するリアクションは${max}回までです`,

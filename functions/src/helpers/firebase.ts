@@ -11,6 +11,7 @@ if (admin.apps.length === 0) {
 }
 
 // 共有インスタンスをエクスポート
+export { admin };
 export const db = admin.firestore();
 export const auth = admin.auth();
 export const storage = admin.storage();

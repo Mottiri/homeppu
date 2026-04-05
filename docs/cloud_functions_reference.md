@@ -46,7 +46,7 @@ functions/src/
 | ファイル | 機能 | スケジュール |
 |---------|------|-------------|
 | `circles.ts` | サークル管理 | `checkGhostCircles`（毎日3:30）、`evolveCircleAIs`（毎月1日10時）、`triggerEvolveCircleAIs`（手動トリガー用） |
-| `cleanup.ts` | クリーンアップ | `cleanupOrphanedMedia`（毎日3時）、`cleanupResolvedInquiries`、`cleanupReports`、`cleanupBannedUsers`（永久BAN 180日後に Auth を保持したままアプリデータ削除）、`cleanupUnverifiedUsers` |
+| `cleanup.ts` | クリーンアップ | `cleanupOrphanedMedia`（毎日3時。`pendingMedia` の期限切れ未確定メディアのみを対象に削除/解決）、`cleanupResolvedInquiries`、`cleanupReports`、`cleanupBannedUsers`（永久BAN 180日後に Auth を保持したままアプリデータ削除）、`cleanupUnverifiedUsers` |
 | `reminders.ts` | タスク/目標リマインダー通知 | `executeTaskReminder`, `executeGoalReminder`（Cloud Tasks HTTP） |
 | `ai-posts.ts` | AI投稿 | `scheduleAIPosts`（現在無効化中） |
 
@@ -112,7 +112,8 @@ functions/src/
 | `virtue.ts` | 徳ポイント計算 `VIRTUE_CONFIG` |
 | `virtue-policy.ts` | 徳ポイント方針取得/加点処理（`settings/virtuePolicy`） |
 | `notification.ts` | プッシュ通知送信 `sendPushNotification`, `sendPushOnly` |
-| `storage.ts` | Storageファイル削除 `deleteStorageFileFromUrl` |
+| `storage.ts` | Storageファイル削除 `deleteStorageFileFromUrl`, `deleteStorageFileByPath`, `extractStoragePathFromUrl` |
+| `pending-media.ts` | pendingMedia管理 `getMediaStoragePath`, `getMediaStoragePaths`, `deletePendingMediaByStoragePaths` |
 | `moderation.ts` | メディアモデレーション `moderateMedia` |
 | `media-analysis.ts` | メディア分析 `analyzeMediaForComment` |
 | `cloud-tasks.ts` | Cloud Tasks操作 `scheduleHttpTask` |
@@ -247,6 +248,15 @@ functions/src/
 - `applyStampToSheetSlot`
   - 入力: `{ sheetId, slotId, stampId }`
   - 空枠の初回押印のみ `thanksStampCredits` を `-1`。既存枠差し替えは消費なし。
+
+## 追記: Post Create Retry Handling (2026-04-04)
+
+### Callable
+- `createPostWithModeration`
+  - 入力: `{ content, userDisplayName, userAvatarIndex, postMode, circleId?, mediaItems?, clientRequestId? }`
+  - `clientRequestId` を付けると、同一リクエストの再送時に二重投稿せず既存 `postId` を返す。
+  - サーバー側は `users/{uid}/postRequests/{clientRequestId}` で `processing / succeeded / rejected` を保持し、曖昧失敗後の再送を吸収する。
+  - terminal な失敗 (`invalid-argument` など) では、アップロード済みメディアと `pendingMedia` をサーバー側でも後始末する。
 
 ### 関連データ
 - `users/{uid}.thanksStampCredits`

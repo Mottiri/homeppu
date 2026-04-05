@@ -118,6 +118,7 @@ class ModerationService {
     required String postMode,
     String? circleId,
     List<MediaItem>? mediaItems,
+    String? clientRequestId,
   }) async {
     try {
       final callable = _functions.httpsCallable(
@@ -132,6 +133,7 @@ class ModerationService {
         'postMode': postMode,
         'circleId': circleId,
         'mediaItems': mediaItems?.map((item) => item.toMap()).toList(),
+        if (clientRequestId != null) 'clientRequestId': clientRequestId,
       });
 
       return result.data['postId'] as String;

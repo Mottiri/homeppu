@@ -36,4 +36,5 @@ export interface MediaItem {
   mimeType?: string;
   fileSize?: number;
   thumbnailUrl?: string;
+  storagePath?: string;
 }

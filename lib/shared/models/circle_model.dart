@@ -8,22 +8,24 @@ class CircleModel {
   final String description;
   final String category;
   final String ownerId;
-  final String? subOwnerId; // 副オーナーUID（null = 未設定）
+  final String? subOwnerId;
   final List<String> memberIds;
   final CircleAIMode aiMode;
-  final List<Map<String, dynamic>> generatedAIs; // AI persona data
+  final List<Map<String, dynamic>> generatedAIs;
   final bool isPublic;
   final int maxMembers;
   final DateTime createdAt;
   final DateTime? recentActivity;
-  final DateTime? lastHumanPostAt; // 人間ユーザーの最終投稿日時
+  final DateTime? lastHumanPostAt;
   final String goal;
   final String? coverImageUrl;
+  final String? coverImageStoragePath;
   final String? iconImageUrl;
+  final String? iconImageStoragePath;
   final int memberCount;
   final int postCount;
-  final String? rules; // サークルルール（300文字以内）
-  final bool isDeleted; // ソフトデリート済み
+  final String? rules;
+  final bool isDeleted;
 
   CircleModel({
     required this.id,
@@ -42,7 +44,9 @@ class CircleModel {
     this.lastHumanPostAt,
     required this.goal,
     this.coverImageUrl,
+    this.coverImageStoragePath,
     this.iconImageUrl,
+    this.iconImageStoragePath,
     this.memberCount = 0,
     this.postCount = 0,
     this.rules,
@@ -71,7 +75,9 @@ class CircleModel {
       lastHumanPostAt: (data['lastHumanPostAt'] as Timestamp?)?.toDate(),
       goal: data['goal'] ?? '',
       coverImageUrl: data['coverImageUrl'],
+      coverImageStoragePath: data['coverImageStoragePath'],
       iconImageUrl: data['iconImageUrl'],
+      iconImageStoragePath: data['iconImageStoragePath'],
       memberCount: data['memberCount'] ?? 0,
       postCount: data['postCount'] ?? 0,
       rules: data['rules'],
@@ -100,7 +106,9 @@ class CircleModel {
           : null,
       'goal': goal,
       'coverImageUrl': coverImageUrl,
+      'coverImageStoragePath': coverImageStoragePath,
       'iconImageUrl': iconImageUrl,
+      'iconImageStoragePath': iconImageStoragePath,
       'memberCount': memberCount,
       'postCount': postCount,
       'rules': rules,
@@ -125,7 +133,9 @@ class CircleModel {
     DateTime? lastHumanPostAt,
     String? goal,
     String? coverImageUrl,
+    String? coverImageStoragePath,
     String? iconImageUrl,
+    String? iconImageStoragePath,
     int? memberCount,
     int? postCount,
     String? rules,
@@ -148,7 +158,10 @@ class CircleModel {
       lastHumanPostAt: lastHumanPostAt ?? this.lastHumanPostAt,
       goal: goal ?? this.goal,
       coverImageUrl: coverImageUrl ?? this.coverImageUrl,
+      coverImageStoragePath:
+          coverImageStoragePath ?? this.coverImageStoragePath,
       iconImageUrl: iconImageUrl ?? this.iconImageUrl,
+      iconImageStoragePath: iconImageStoragePath ?? this.iconImageStoragePath,
       memberCount: memberCount ?? this.memberCount,
       postCount: postCount ?? this.postCount,
       rules: rules ?? this.rules,

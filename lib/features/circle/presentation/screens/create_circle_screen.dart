@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -93,6 +94,21 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen>
     }
   }
 
+  bool _shouldRollbackAfterAttachFailure(Object error) {
+    if (error is FirebaseException) {
+      const ambiguousCodes = {
+        'aborted',
+        'cancelled',
+        'deadline-exceeded',
+        'internal',
+        'unavailable',
+        'unknown',
+      };
+      return !ambiguousCodes.contains(error.code);
+    }
+    return true;
+  }
+
   Future<void> _createCircle() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -100,9 +116,11 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen>
     if (currentUser == null) return;
 
     await runWithLoading(() async {
+      final uploadedImages = <UploadedStorageItem>[];
+      var attachAttempted = false;
+      final mediaService = MediaService();
       try {
         final circleService = ref.read(circleServiceProvider);
-        final mediaService = MediaService();
         final moderationService = ImageModerationService();
 
         // 画像のモデレーションを先に実行（並列）
@@ -136,7 +154,9 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen>
 
         // 画像をアップロード（並列）— 失敗してもサークルは作成済み
         String? iconUrl;
+        String? iconStoragePath;
         String? coverUrl;
+        String? coverStoragePath;
         bool uploadFailed = false;
 
         if (_iconImage != null || _coverImage != null) {
@@ -144,20 +164,39 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen>
               ? mediaService.uploadCircleImage(
                   filePath: _iconImage!.path,
                   circleId: circleId,
+                  ownerId: currentUser.uid,
                   imageType: 'icon',
-                ).then<String?>((v) => v).catchError((e) { debugPrint('Icon upload error: $e'); return null as String?; })
-              : Future<String?>.value(null);
+                ).then<UploadedStorageItem?>((v) => v).catchError((e) {
+                    debugPrint('Icon upload error: $e');
+                    return null as UploadedStorageItem?;
+                  })
+              : Future<UploadedStorageItem?>.value(null);
           final coverResult = _coverImage != null
               ? mediaService.uploadCircleImage(
                   filePath: _coverImage!.path,
                   circleId: circleId,
+                  ownerId: currentUser.uid,
                   imageType: 'cover',
-                ).then<String?>((v) => v).catchError((e) { debugPrint('Cover upload error: $e'); return null as String?; })
-              : Future<String?>.value(null);
+                ).then<UploadedStorageItem?>((v) => v).catchError((e) {
+                    debugPrint('Cover upload error: $e');
+                    return null as UploadedStorageItem?;
+                  })
+              : Future<UploadedStorageItem?>.value(null);
 
           final results = await Future.wait([iconResult, coverResult]);
-          iconUrl = results[0];
-          coverUrl = results[1];
+          final uploadedIcon = results[0];
+          final uploadedCover = results[1];
+          iconUrl = uploadedIcon?.downloadUrl;
+          iconStoragePath = uploadedIcon?.storagePath;
+          coverUrl = uploadedCover?.downloadUrl;
+          coverStoragePath = uploadedCover?.storagePath;
+
+          if (uploadedIcon != null) {
+            uploadedImages.add(uploadedIcon);
+          }
+          if (uploadedCover != null) {
+            uploadedImages.add(uploadedCover);
+          }
 
           // 期待した画像のURLが取得できなかった場合は部分失敗
           if ((_iconImage != null && iconUrl == null) ||
@@ -169,10 +208,15 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen>
 
         // 画像 URLを更新
         if (iconUrl != null || coverUrl != null) {
+          attachAttempted = true;
           await circleService.updateCircle(circleId, {
             if (iconUrl != null) 'iconImageUrl': iconUrl,
+            if (iconStoragePath != null) 'iconImageStoragePath': iconStoragePath,
             if (coverUrl != null) 'coverImageUrl': coverUrl,
+            if (coverStoragePath != null)
+              'coverImageStoragePath': coverStoragePath,
           });
+          await mediaService.resolvePendingStorageItems(uploadedImages);
         }
 
         if (mounted) {
@@ -188,6 +232,10 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen>
           context.push('/circle/$circleId');
         }
       } catch (e) {
+        if (uploadedImages.isNotEmpty &&
+            (!attachAttempted || _shouldRollbackAfterAttachFailure(e))) {
+          await mediaService.rollbackUploadedStorageItems(uploadedImages);
+        }
         if (mounted) {
           if (e is FirebaseFunctionsException) {
             if (e.code == 'resource-exhausted') {

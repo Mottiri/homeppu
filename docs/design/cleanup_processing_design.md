@@ -13,7 +13,7 @@
 
 | 関数名 | 実行時刻 (JST) | 対象 | 保持期間 | ソースコード |
 |--------|--------------|------|---------|-------------|
-| `cleanupOrphanedMedia` | 毎日 03:00 | 孤立メディアファイル | 24時間 | [L6579](functions/src/index.ts#L6579) |
+| `cleanupOrphanedMedia` | 毎日 03:00 | `pendingMedia` に残った未確定メディア | 24時間 | [L6579](functions/src/index.ts#L6579) |
 | `cleanupResolvedInquiries` | 毎日 03:00 | 解決済み問い合わせ | 7日間 | [L7764](functions/src/index.ts#L7764) |
 | `checkGhostCircles` | 毎日 03:30 | ゴースト/放置サークル | 365日/30日 + 7日猶予 | [L8491](functions/src/index.ts#L8491) |
 | `cleanupBannedUsers` | 毎日 04:00 | 永久BANユーザー | スケジュール日時到達時 | [L8435](functions/src/index.ts#L8435) |
@@ -21,125 +21,72 @@
 
 ---
 
-## 1. `cleanupOrphanedMedia` - 孤立メディアクリーンアップ
+## 1. `cleanupOrphanedMedia` - 未確定メディアクリーンアップ
 
 ### 処理概要
-Firebase Storage上に存在するが、Firestoreのどのドキュメントからも参照されていないファイル（孤立メディア）を検出し、削除します。アップロード失敗、投稿削除、編集時の差し替えなどで発生する不要ファイルを自動的にクリーンアップし、ストレージコストを削減します。
+`cleanupOrphanedMedia` は Firebase Storage 全体を走査せず、Firestore の `pendingMedia` コレクションに残っている未確定メディアだけを対象にクリーンアップします。
+
+- 投稿画像アップロード時に `type: post_image`
+- サークルアイコンアップロード時に `type: circle_icon`
+- サークルヘッダーアップロード時に `type: circle_cover`
+
+の pending レコードを作成し、投稿/サークルへの紐付け完了時に pending を削除します。
+クライアント離脱や途中失敗で pending が残った場合のみ、定期ジョブが後始末を行います。
 
 ### 実行タイミング
 - **スケジュール**: `0 3 * * *` （毎日午前3時 JST）
 - **タイムアウト**: 600秒（10分）
 
 ### 保持期間
-- **24時間**: アップロードから24時間以上経過した孤立メディアが削除対象
+- **24時間**: `createdAt` から 24 時間以上経過した pending が削除対象
 
-### 対象と検出・削除ロジック
+### 対象と判定ロジック
 
-この処理では**4種類の対象**を処理します。
+対象は `pendingMedia` のみです。各ドキュメントは少なくとも以下を持ちます。
 
----
+- `type`
+- `ownerId`
+- `storagePath`
+- `circleId`（サークル画像のみ）
+- `createdAt`
 
-#### 1-1. 投稿メディア (`posts/`)
+ジョブは `createdAt <= now - 24h` の pending を取得し、`type` に応じて「すでに本体へ紐付いたか」を確認します。
 
-##### 検出方法
-メディアをアップロードする際、ファイルのメタデータに `postId` を埋め込んでいます。クリーンアップ処理では、このメタデータを読み取り、以下の条件で孤立を判定します：
+#### 1-1. 投稿画像 (`post_image`)
 
-1. **`postId` が `"PENDING"`**: 投稿が完了する前にユーザーが離脱したケース
-2. **`postId` に対応する投稿ドキュメントが存在しない**: 投稿が削除されたケース
+- `posts` コレクションの `mediaStoragePaths` に `storagePath` が含まれていれば **添付済み**
+- 添付済みなら pending ドキュメントだけ削除
+- 添付されていなければ Storage ファイルと pending ドキュメントを削除
 
-##### 削除方法
-孤立と判定されたファイルは、`file.delete()` でStorage から直接削除します。関連するFirestoreデータ（投稿ドキュメント等）は既に存在しないため、追加の削除処理は不要です。
+#### 1-2. サークルアイコン (`circle_icon`)
 
-```typescript
-if (postId === "PENDING") {
-  shouldDelete = true;  // 投稿前に離脱
-} else {
-  const postDoc = await db.collection("posts").doc(postId).get();
-  if (!postDoc.exists) {
-    shouldDelete = true;  // 投稿が削除済み
-  }
-}
-if (shouldDelete) await file.delete();
-```
+- `circles.iconImageStoragePath == storagePath` なら **添付済み**
+- 添付済みなら pending ドキュメントだけ削除
+- 添付されていなければ Storage ファイルと pending ドキュメントを削除
 
----
+#### 1-3. サークルヘッダー (`circle_cover`)
 
-#### 1-2. サークル画像 (`circles/`)
+- `circles.coverImageStoragePath == storagePath` なら **添付済み**
+- 添付済みなら pending ドキュメントだけ削除
+- 添付されていなければ Storage ファイルと pending ドキュメントを削除
 
-##### 検出方法
-サークル画像は `circles/{circleId}/icon/{fileName}` というパス構造でStorageに保存されています。ファイルパスを `/` で分割し、2番目の要素として `circleId` を抽出します。その後、Firestoreの `circles` コレクションに該当のドキュメントが存在するか確認します。
+### 旧方式からの変更点
 
-##### 削除方法
-サークルドキュメントが存在しない場合、画像ファイルを `file.delete()` で削除します。
+2026-04-02 時点で、以下の旧ロジックは廃止されています。
 
-```typescript
-const pathParts = file.name.split("/");
-const circleId = pathParts[1];
-const circleDoc = await db.collection("circles").doc(circleId).get();
-if (!circleDoc.exists) await file.delete();
-```
+- `posts/` や `circles/` の Storage 全件列挙
+- 投稿メタデータ `postId: PENDING` を見た孤立判定
+- `comments` / `reactions` / サークル投稿の全走査 cleanup
 
----
+理由は、データ量増加に対して Storage list / Firestore read コストが線形に膨らみやすく、保守ジョブとしてスケールしにくかったためです。
 
-#### 1-3. タスク添付ファイル (`task_attachments/`)
+### 現在の設計上の役割
 
-##### 検出方法
-タスク添付ファイルは `task_attachments/{userId}/{taskId}/{fileName}` というパス構造です。ファイルパスを分割し、3番目の要素として `taskId` を抽出します。Firestoreの `tasks` コレクションに該当のドキュメントが存在するか確認します。
+- **主系統**: アップロード失敗時ロールバックと、投稿/サークル保存成功時の pending 解消
+- **保険**: それでも残った pending のみを 1 日 1 回掃除
 
-##### 削除方法
-タスクドキュメントが存在しない場合、添付ファイルを削除します。
-
-```typescript
-const pathParts = file.name.split("/");
-const taskId = pathParts[2];
-const taskDoc = await db.collection("tasks").doc(taskId).get();
-if (!taskDoc.exists) await file.delete();
-```
-
----
-
-#### 1-4. 孤立サークル投稿（Firestoreデータ）
-
-##### 検出方法
-Firestoreの `posts` コレクションから `circleId` フィールドが設定されている投稿（サークル投稿）を取得します。各投稿の `circleId` に対応するサークルがFirestoreに存在するか確認します。
-
-> **注意**: この処理はStorageではなくFirestoreのデータを対象としています。
-
-##### 削除方法
-サークルが存在しない場合、以下の関連データを全て削除します：
-
-1. **コメント**: `comments` コレクションから `postId` が一致するドキュメントを削除
-2. **リアクション**: `reactions` コレクションから `postId` が一致するドキュメントを削除
-3. **投稿本体**: 投稿ドキュメントを削除
-4. **メディアファイル**: 投稿に含まれる `mediaItems` のURLからStorageファイルを削除
-
-```typescript
-// バッチ削除で効率化
-const batch = db.batch();
-comments.docs.forEach(c => batch.delete(c.ref));
-reactions.docs.forEach(r => batch.delete(r.ref));
-batch.delete(postDoc.ref);
-await batch.commit();
-
-// メディアファイルも削除
-for (const item of postData.mediaItems) {
-  await deleteStorageFile(item.url);
-}
-```
-
-### 検出ロジックまとめ
-
-| 対象 | 検出方法 | 孤立条件 | 削除対象 |
-|------|---------|---------|---------|
-| 投稿メディア | メタデータの `postId` | `PENDING` or 投稿が存在しない | Storageファイルのみ |
-| サークル画像 | パスから `circleId` 抽出 | サークルが存在しない | Storageファイルのみ |
-| タスク添付 | パスから `taskId` 抽出 | タスクが存在しない | Storageファイルのみ |
-| サークル投稿 | Firestoreの `circleId` | サークルが存在しない | Firestore + Storage |
-
-### ソースコード
-
-**ファイル**: `functions/src/index.ts`  
-**行番号**: L6575-L6780
+> [!NOTE]
+> 旧 full-scan cleanup の詳細記述は履歴資料として扱ってください。現行コードの truth は `functions/src/scheduled/cleanup.ts` です。
 
 ---
 

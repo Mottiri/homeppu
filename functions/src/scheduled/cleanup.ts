@@ -7,7 +7,7 @@ import * as admin from "firebase-admin";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 
 import { db } from "../helpers/firebase";
-import { deleteStorageFileFromUrl } from "../helpers/storage";
+import { deleteStorageFileByPath, deleteStorageFileFromUrl } from "../helpers/storage";
 import { LOCATION } from "../config/constants";
 import { NOTIFICATION_TITLES } from "../config/messages";
 
@@ -25,229 +25,73 @@ export const cleanupOrphanedMedia = onSchedule(
     },
     async () => {
         console.log("=== cleanupOrphanedMedia START ===");
-        const bucket = admin.storage().bucket();
         const now = Date.now();
         const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+        const threshold = admin.firestore.Timestamp.fromMillis(now - TWENTY_FOUR_HOURS);
+        const pendingSnapshot = await db.collection("pendingMedia")
+            .where("createdAt", "<=", threshold)
+            .get();
 
         let deletedCount = 0;
         let checkedCount = 0;
+        let resolvedCount = 0;
 
-        // ===============================================
-        // 1. 投稿メディアのクリーンアップ
-        // ===============================================
-        console.log("Checking posts media...");
-        const [postFiles] = await bucket.getFiles({ prefix: "posts/" });
-
-        for (const file of postFiles) {
+        for (const pendingDoc of pendingSnapshot.docs) {
             checkedCount++;
             try {
-                const [metadata] = await file.getMetadata();
-                const customMetadata = metadata.metadata || {};
-                const uploadedAtStr = customMetadata.uploadedAt;
-                const uploadedAt = uploadedAtStr ? parseInt(String(uploadedAtStr)) : 0;
-                const postId = customMetadata.postId ? String(customMetadata.postId) : null;
+                const pendingData = pendingDoc.data();
+                const storagePath = typeof pendingData.storagePath === "string" ? pendingData.storagePath : "";
+                const type = typeof pendingData.type === "string" ? pendingData.type : "";
 
-                // 24時間以上経過していないならスキップ
-                if (now - uploadedAt < TWENTY_FOUR_HOURS) continue;
-
-                // postId未設定（古いファイル）はスキップ
-                if (!postId) continue;
-
-                let shouldDelete = false;
-
-                if (postId === "PENDING") {
-                    // 投稿前に離脱したケース
-                    shouldDelete = true;
-                    console.log(`Orphan (PENDING): ${file.name}`);
-                } else {
-                    // 投稿が存在するか確認
-                    const postDoc = await db.collection("posts").doc(postId).get();
-                    if (!postDoc.exists) {
-                        shouldDelete = true;
-                        console.log(`Orphan (post deleted): ${file.name}`);
-                    }
+                if (!storagePath || !type) {
+                    console.warn(`pendingMedia ${pendingDoc.id} is missing required fields`);
+                    await pendingDoc.ref.delete();
+                    resolvedCount++;
+                    continue;
                 }
 
-                if (shouldDelete) {
-                    await file.delete();
-                    deletedCount++;
+                let isAttached = false;
+                switch (type) {
+                case "post_image": {
+                    const postSnapshot = await db.collection("posts")
+                        .where("mediaStoragePaths", "array-contains", storagePath)
+                        .limit(1)
+                        .get();
+                    isAttached = !postSnapshot.empty;
+                    break;
                 }
+                case "circle_icon": {
+                    const circleSnapshot = await db.collection("circles")
+                        .where("iconImageStoragePath", "==", storagePath)
+                        .limit(1)
+                        .get();
+                    isAttached = !circleSnapshot.empty;
+                    break;
+                }
+                case "circle_cover": {
+                    const circleSnapshot = await db.collection("circles")
+                        .where("coverImageStoragePath", "==", storagePath)
+                        .limit(1)
+                        .get();
+                    isAttached = !circleSnapshot.empty;
+                    break;
+                }
+                default:
+                    console.warn(`Unknown pendingMedia type: ${type}`);
+                    break;
+                }
+
+                if (isAttached) {
+                    await pendingDoc.ref.delete();
+                    resolvedCount++;
+                    continue;
+                }
+
+                await deleteStorageFileByPath(storagePath);
+                await pendingDoc.ref.delete();
+                deletedCount++;
             } catch (error) {
-                console.error(`Error checking ${file.name}:`, error);
-            }
-        }
-
-        // ===============================================
-        // 2. サークル画像のクリーンアップ
-        // ===============================================
-        console.log("Checking circles media...");
-        const [circleFiles] = await bucket.getFiles({ prefix: "circles/" });
-
-        for (const file of circleFiles) {
-            checkedCount++;
-            try {
-                const [metadata] = await file.getMetadata();
-                const timeCreated = metadata.timeCreated;
-                const createdAt = timeCreated ? new Date(timeCreated).getTime() : 0;
-
-                // 24時間以上経過していないならスキップ
-                if (now - createdAt < TWENTY_FOUR_HOURS) continue;
-
-                // パスからcircleIdを抽出: circles/{circleId}/icon/{fileName}
-                const pathParts = file.name.split("/");
-                if (pathParts.length >= 2) {
-                    const circleId = pathParts[1];
-                    const circleDoc = await db.collection("circles").doc(circleId).get();
-
-                    if (!circleDoc.exists) {
-                        console.log(`Orphan (circle deleted): ${file.name}`);
-                        await file.delete();
-                        deletedCount++;
-                    }
-                }
-            } catch (error) {
-                console.error(`Error checking ${file.name}:`, error);
-            }
-        }
-
-        // ===============================================
-        // 3. 孤立サークル投稿のクリーンアップ（Firestore）
-        // ===============================================
-        console.log("Checking orphaned circle posts...");
-        let orphanedPostsDeleted = 0;
-
-        const circlePostsSnapshot = await db.collection("posts")
-            .where("circleId", "!=", null)
-            .limit(500)
-            .get();
-
-        const circleExistsCache: Map<string, boolean> = new Map();
-
-        for (const postDoc of circlePostsSnapshot.docs) {
-            try {
-                const postData = postDoc.data();
-                const circleId = postData.circleId;
-
-                if (!circleId) continue;
-
-                let circleExists = circleExistsCache.get(circleId);
-                if (circleExists === undefined) {
-                    const circleDoc = await db.collection("circles").doc(circleId).get();
-                    circleExists = circleDoc.exists;
-                    circleExistsCache.set(circleId, circleExists);
-                }
-
-                if (!circleExists) {
-                    console.log(`Orphaned circle post found: ${postDoc.id} (circleId: ${circleId})`);
-
-                    const deleteRefs: FirebaseFirestore.DocumentReference[] = [];
-
-                    // コメント削除
-                    const comments = await db.collection("comments").where("postId", "==", postDoc.id).get();
-                    comments.docs.forEach((c) => deleteRefs.push(c.ref));
-
-                    // リアクション削除
-                    const reactions = await db.collection("reactions").where("postId", "==", postDoc.id).get();
-                    reactions.docs.forEach((r) => deleteRefs.push(r.ref));
-
-                    // 投稿自体を削除
-                    deleteRefs.push(postDoc.ref);
-
-                    // バッチ削除
-                    const batch = db.batch();
-                    deleteRefs.forEach((ref) => batch.delete(ref));
-                    await batch.commit();
-
-                    // メディアも削除
-                    const mediaItems = postData.mediaItems || [];
-                    for (const media of mediaItems) {
-                        if (media.url && media.url.includes("firebasestorage.googleapis.com")) {
-                            try {
-                                const urlParts = media.url.split("/o/")[1];
-                                if (urlParts) {
-                                    const filePath = decodeURIComponent(urlParts.split("?")[0]);
-                                    await bucket.file(filePath).delete().catch(() => { });
-                                }
-                            } catch (e) {
-                                console.error(`Media delete failed:`, e);
-                            }
-                        }
-                    }
-
-                    orphanedPostsDeleted++;
-                }
-            } catch (error) {
-                console.error(`Error checking post ${postDoc.id}:`, error);
-            }
-        }
-
-        // ===============================================
-        // 4. 孤立コメントのクリーンアップ（Firestore）
-        // ===============================================
-        console.log("Checking orphaned comments...");
-        let orphanedCommentsDeleted = 0;
-
-        const commentsSnapshot = await db.collection("comments")
-            .limit(1000)
-            .get();
-
-        const postExistsCache: Map<string, boolean> = new Map();
-
-        for (const commentDoc of commentsSnapshot.docs) {
-            try {
-                const commentData = commentDoc.data();
-                const postId = commentData.postId;
-
-                if (!postId) continue;
-
-                let postExists = postExistsCache.get(postId);
-                if (postExists === undefined) {
-                    const postDocRef = await db.collection("posts").doc(postId).get();
-                    postExists = postDocRef.exists;
-                    postExistsCache.set(postId, postExists);
-                }
-
-                if (!postExists) {
-                    console.log(`Orphaned comment found: ${commentDoc.id} (postId: ${postId})`);
-                    await commentDoc.ref.delete();
-                    orphanedCommentsDeleted++;
-                }
-            } catch (error) {
-                console.error(`Error checking comment ${commentDoc.id}:`, error);
-            }
-        }
-
-        // ===============================================
-        // 5. 孤立リアクションのクリーンアップ（Firestore）
-        // ===============================================
-        console.log("Checking orphaned reactions...");
-        let orphanedReactionsDeleted = 0;
-
-        const reactionsSnapshot = await db.collection("reactions")
-            .limit(1000)
-            .get();
-
-        for (const reactionDoc of reactionsSnapshot.docs) {
-            try {
-                const reactionData = reactionDoc.data();
-                const postId = reactionData.postId;
-
-                if (!postId) continue;
-
-                let postExists = postExistsCache.get(postId);
-                if (postExists === undefined) {
-                    const postDocRef = await db.collection("posts").doc(postId).get();
-                    postExists = postDocRef.exists;
-                    postExistsCache.set(postId, postExists);
-                }
-
-                if (!postExists) {
-                    console.log(`Orphaned reaction found: ${reactionDoc.id} (postId: ${postId})`);
-                    await reactionDoc.ref.delete();
-                    orphanedReactionsDeleted++;
-                }
-            } catch (error) {
-                console.error(`Error checking reaction ${reactionDoc.id}:`, error);
+                console.error(`Error checking pending media ${pendingDoc.id}:`, error);
             }
         }
 
@@ -283,7 +127,10 @@ export const cleanupOrphanedMedia = onSchedule(
             console.log(`Deleted ${aiHistoryDeleted} old aiPostHistory documents`);
         }
 
-        console.log(`=== cleanupOrphanedMedia COMPLETE: checked=${checkedCount}, deleted=${deletedCount}, orphanedPosts=${orphanedPostsDeleted}, orphanedComments=${orphanedCommentsDeleted}, orphanedReactions=${orphanedReactionsDeleted} ===`);
+        console.log(
+            `=== cleanupOrphanedMedia COMPLETE: checked=${checkedCount}, ` +
+            `deleted=${deletedCount}, resolved=${resolvedCount} ===`
+        );
     }
 );
 

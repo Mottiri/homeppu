@@ -1,16 +1,15 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// メディアタイプ
 enum MediaType { image, video, file }
 
-/// メディアアイテム
 class MediaItem {
   final String url;
   final MediaType type;
   final String? fileName;
   final String? mimeType;
-  final int? fileSize; // バイト
-  final String? thumbnailUrl; // 動画のサムネイル画像URL
+  final int? fileSize;
+  final String? thumbnailUrl;
+  final String? storagePath;
 
   MediaItem({
     required this.url,
@@ -19,6 +18,7 @@ class MediaItem {
     this.mimeType,
     this.fileSize,
     this.thumbnailUrl,
+    this.storagePath,
   });
 
   factory MediaItem.fromMap(Map<String, dynamic> data) {
@@ -32,6 +32,7 @@ class MediaItem {
       mimeType: data['mimeType'],
       fileSize: data['fileSize'],
       thumbnailUrl: data['thumbnailUrl'],
+      storagePath: data['storagePath'],
     );
   }
 
@@ -43,28 +44,28 @@ class MediaItem {
       'mimeType': mimeType,
       'fileSize': fileSize,
       'thumbnailUrl': thumbnailUrl,
+      'storagePath': storagePath,
     };
   }
 }
 
-/// 投稿モデル
 class PostModel {
   final String id;
   final String userId;
   final String userDisplayName;
   final int userAvatarIndex;
   final String content;
-  final String? imageUrl; // 後方互換性のため残す
-  final List<MediaItem> mediaItems; // 新しいメディアリスト
-  final String postMode; // 'ai', 'mix', 'human'
-  final String? circleId; // サークル投稿の場合
+  final String? imageUrl;
+  final List<MediaItem> mediaItems;
+  final String postMode;
+  final String? circleId;
   final DateTime createdAt;
-  final Map<String, int> reactions; // {'love': 5, 'praise': 3, ...}
+  final Map<String, int> reactions;
   final int commentCount;
   final bool isVisible;
-  final bool isPinned; // ピン留め
-  final bool isPinnedTop; // トップ表示ピン
-  final bool isFavorite; // お気に入り
+  final bool isPinned;
+  final bool isPinnedTop;
+  final bool isFavorite;
 
   PostModel({
     required this.id,
@@ -88,8 +89,7 @@ class PostModel {
   factory PostModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
 
-    // メディアアイテムのパース
-    List<MediaItem> mediaItems = [];
+    var mediaItems = <MediaItem>[];
     if (data['mediaItems'] != null) {
       mediaItems = (data['mediaItems'] as List)
           .map((item) => MediaItem.fromMap(Map<String, dynamic>.from(item)))
@@ -136,7 +136,6 @@ class PostModel {
     };
   }
 
-  /// リアクションの合計数
   int get totalReactions {
     return reactions.values.fold(0, (acc, value) => acc + value);
   }
@@ -179,10 +178,8 @@ class PostModel {
     );
   }
 
-  /// すべてのメディア（後方互換性も含めて）
   List<MediaItem> get allMedia {
     if (mediaItems.isNotEmpty) {
-      // ファイル添付は未サポートのため表示対象から除外する
       return mediaItems.where((m) => m.type != MediaType.file).toList();
     }
     if (imageUrl != null && imageUrl!.isNotEmpty) {
@@ -191,15 +188,12 @@ class PostModel {
     return [];
   }
 
-  /// 画像のみ
   List<MediaItem> get images =>
       allMedia.where((m) => m.type == MediaType.image).toList();
 
-  /// 動画のみ（レガシーデータ用。新規投稿では動画は添付不可）
   List<MediaItem> get videos =>
       allMedia.where((m) => m.type == MediaType.video).toList();
 
-  /// ファイルのみ
   List<MediaItem> get files =>
       allMedia.where((m) => m.type == MediaType.file).toList();
 }

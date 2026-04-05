@@ -6,11 +6,13 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_core/firebase_core.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_messages.dart';
 import '../../../../core/mixins/loading_state_mixin.dart';
 import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/models/circle_model.dart';
+import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/services/circle_service.dart';
 import '../../../../shared/services/media_service.dart';
 import '../../../../shared/services/image_moderation_service.dart';
@@ -45,7 +47,9 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen>
   File? _iconImage;
   File? _coverImage;
   String? _iconImageUrl;
+  String? _iconImageStoragePath;
   String? _coverImageUrl;
+  String? _coverImageStoragePath;
 
   @override
   void initState() {
@@ -59,7 +63,9 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen>
     _selectedCategory = widget.circle.category;
     _isPublic = widget.circle.isPublic;
     _iconImageUrl = widget.circle.iconImageUrl;
+    _iconImageStoragePath = widget.circle.iconImageStoragePath;
     _coverImageUrl = widget.circle.coverImageUrl;
+    _coverImageStoragePath = widget.circle.coverImageStoragePath;
   }
 
   @override
@@ -116,13 +122,80 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen>
     }
   }
 
+  bool _shouldRollbackAfterAttachFailure(Object error) {
+    if (error is FirebaseException) {
+      const ambiguousCodes = {
+        'aborted',
+        'cancelled',
+        'deadline-exceeded',
+        'internal',
+        'unavailable',
+        'unknown',
+      };
+      return !ambiguousCodes.contains(error.code);
+    }
+    return true;
+  }
+
+  Future<void> _deletePreviousCircleImage({
+    required MediaService mediaService,
+    required String pendingType,
+    required String ownerId,
+    required String circleId,
+    required String? previousUrl,
+    required String? previousStoragePath,
+    required String? nextUrl,
+    required String? nextStoragePath,
+  }) async {
+    final pathChanged = previousStoragePath != nextStoragePath;
+    final urlChanged = previousUrl != nextUrl;
+    if (!pathChanged && !urlChanged) return;
+
+    final cleanupStoragePath =
+        previousStoragePath ??
+        (previousUrl != null && previousUrl.isNotEmpty
+            ? mediaService.getStoragePathFromUrl(previousUrl)
+            : null);
+
+    if (cleanupStoragePath != null && cleanupStoragePath.isNotEmpty) {
+      var registeredForCleanup = false;
+      try {
+        await mediaService.registerPendingMedia(
+          type: pendingType,
+          ownerId: ownerId,
+          storagePath: cleanupStoragePath,
+          circleId: circleId,
+        );
+        registeredForCleanup = true;
+      } catch (error, stackTrace) {
+        debugPrint('Failed to register previous circle image for cleanup: $error');
+        debugPrint('$stackTrace');
+      }
+      final deleted = await mediaService.deleteMediaByStoragePath(
+        cleanupStoragePath,
+      );
+      if (deleted && registeredForCleanup) {
+        await mediaService.resolvePendingMediaByStoragePath(cleanupStoragePath);
+      }
+      return;
+    }
+    if (previousUrl != null && previousUrl.isNotEmpty) {
+      await mediaService.deleteMedia(previousUrl);
+    }
+  }
+
   Future<void> _saveChanges() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final currentUser = ref.read(currentUserProvider).valueOrNull;
+    if (currentUser == null) return;
+
     await runWithLoading(() async {
+      final uploadedImages = <UploadedStorageItem>[];
+      var attachAttempted = false;
+      final mediaService = MediaService();
       try {
         final circleService = ref.read(circleServiceProvider);
-        final mediaService = MediaService();
         final moderationService = ImageModerationService();
 
         // 新しい画像のモデレーションを先に実行（並列）
@@ -154,8 +227,14 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen>
         );
 
         // 画像アップロード — テキスト更新成功後に実行
+        final previousIconUrl = _iconImageUrl;
+        final previousIconStoragePath = _iconImageStoragePath;
+        final previousCoverUrl = _coverImageUrl;
+        final previousCoverStoragePath = _coverImageStoragePath;
         String? newIconUrl = _iconImageUrl;
+        String? newIconStoragePath = _iconImageStoragePath;
         String? newCoverUrl = _coverImageUrl;
+        String? newCoverStoragePath = _coverImageStoragePath;
         bool uploadFailed = false;
 
         if (_iconImage != null || _coverImage != null) {
@@ -163,32 +242,81 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen>
               ? mediaService.uploadCircleImage(
                   filePath: _iconImage!.path,
                   circleId: widget.circleId,
+                  ownerId: currentUser.uid,
                   imageType: 'icon',
-                ).catchError((e) { debugPrint('Icon upload error: $e'); return null as String?; })
-              : Future<String?>.value(null);
+                ).catchError((e) {
+                  debugPrint('Icon upload error: $e');
+                  return null as UploadedStorageItem?;
+                })
+              : Future<UploadedStorageItem?>.value(null);
           final coverResult = _coverImage != null
               ? mediaService.uploadCircleImage(
                   filePath: _coverImage!.path,
                   circleId: widget.circleId,
+                  ownerId: currentUser.uid,
                   imageType: 'cover',
-                ).catchError((e) { debugPrint('Cover upload error: $e'); return null as String?; })
-              : Future<String?>.value(null);
+                ).catchError((e) {
+                  debugPrint('Cover upload error: $e');
+                  return null as UploadedStorageItem?;
+                })
+              : Future<UploadedStorageItem?>.value(null);
 
           final results = await Future.wait([iconResult, coverResult]);
-          if (_iconImage != null) newIconUrl = results[0] ?? _iconImageUrl;
-          if (_coverImage != null) newCoverUrl = results[1] ?? _coverImageUrl;
+          final uploadedIcon = results[0];
+          final uploadedCover = results[1];
+          if (_iconImage != null) {
+            newIconUrl = uploadedIcon?.downloadUrl ?? _iconImageUrl;
+            newIconStoragePath =
+                uploadedIcon?.storagePath ?? _iconImageStoragePath;
+          }
+          if (_coverImage != null) {
+            newCoverUrl = uploadedCover?.downloadUrl ?? _coverImageUrl;
+            newCoverStoragePath =
+                uploadedCover?.storagePath ?? _coverImageStoragePath;
+          }
 
-          if ((_iconImage != null && results[0] == null) ||
-              (_coverImage != null && results[1] == null)) {
+          if (uploadedIcon != null) {
+            uploadedImages.add(uploadedIcon);
+          }
+          if (uploadedCover != null) {
+            uploadedImages.add(uploadedCover);
+          }
+
+          if ((_iconImage != null && uploadedIcon == null) ||
+              (_coverImage != null && uploadedCover == null)) {
             uploadFailed = true;
           }
         }
 
         // 画像URLを更新（Firestore直接）
+        attachAttempted = true;
         await circleService.updateCircle(widget.circleId, {
           'iconImageUrl': newIconUrl,
+          'iconImageStoragePath': newIconStoragePath,
           'coverImageUrl': newCoverUrl,
+          'coverImageStoragePath': newCoverStoragePath,
         });
+        await mediaService.resolvePendingStorageItems(uploadedImages);
+        await _deletePreviousCircleImage(
+          mediaService: mediaService,
+          pendingType: 'circle_icon',
+          ownerId: currentUser.uid,
+          circleId: widget.circleId,
+          previousUrl: previousIconUrl,
+          previousStoragePath: previousIconStoragePath,
+          nextUrl: newIconUrl,
+          nextStoragePath: newIconStoragePath,
+        );
+        await _deletePreviousCircleImage(
+          mediaService: mediaService,
+          pendingType: 'circle_cover',
+          ownerId: currentUser.uid,
+          circleId: widget.circleId,
+          previousUrl: previousCoverUrl,
+          previousStoragePath: previousCoverStoragePath,
+          nextUrl: newCoverUrl,
+          nextStoragePath: newCoverStoragePath,
+        );
 
         if (mounted) {
           if (uploadFailed) {
@@ -202,6 +330,10 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen>
           context.pop();
         }
       } catch (e) {
+        if (uploadedImages.isNotEmpty &&
+            (!attachAttempted || _shouldRollbackAfterAttachFailure(e))) {
+          await mediaService.rollbackUploadedStorageItems(uploadedImages);
+        }
         if (mounted) {
           if (e is FirebaseFunctionsException) {
             if (e.code == 'invalid-argument' && e.message != null && e.message!.isNotEmpty) {
@@ -309,6 +441,7 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen>
                                 onTap: () => setState(() {
                                   _iconImage = null;
                                   _iconImageUrl = null;
+                                  _iconImageStoragePath = null;
                                 }),
                                 child: Container(
                                   padding: const EdgeInsets.all(4),
@@ -386,6 +519,7 @@ class _EditCircleScreenState extends ConsumerState<EditCircleScreen>
                                   onTap: () => setState(() {
                                     _coverImage = null;
                                     _coverImageUrl = null;
+                                    _coverImageStoragePath = null;
                                   }),
                                   child: Container(
                                     padding: const EdgeInsets.all(4),

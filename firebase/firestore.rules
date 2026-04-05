@@ -158,6 +158,34 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Pending media cleanup queue
+    match /pendingMedia/{mediaId} {
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.ownerId == request.auth.uid
+      );
+      allow create: if isAuthenticated() &&
+                    isNotBanned() &&
+                    request.resource.data.ownerId == request.auth.uid &&
+                    request.resource.data.keys().hasOnly([
+                      'type',
+                      'ownerId',
+                      'storagePath',
+                      'circleId',
+                      'createdAt'
+                    ]) &&
+                    request.resource.data.type in [
+                      'post_image',
+                      'circle_icon',
+                      'circle_cover'
+                    ];
+      allow update: if false;
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.ownerId == request.auth.uid
+      );
+    }
+
     // Circles
     match /circles/{circleId} {
       allow read: if isAuthenticated() && (
@@ -174,11 +202,14 @@ service cloud.firestore {
       allow update: if isAuthenticated() && (
         (isCircleOwnerOrSubOwner(circleId) && isNotBanned() &&
          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-           'iconImageUrl', 'coverImageUrl'
+           'iconImageUrl', 'coverImageUrl',
+           'iconImageStoragePath', 'coverImageStoragePath'
          ])) ||
         (isOwner(resource.data.ownerId) && isNotBanned() &&
          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-           'iconImageUrl', 'coverImageUrl', 'subOwnerId'
+           'iconImageUrl', 'coverImageUrl',
+           'iconImageStoragePath', 'coverImageStoragePath',
+           'subOwnerId'
          ])) ||
         isAdmin()
       );

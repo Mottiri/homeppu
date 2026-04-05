@@ -1,5 +1,6 @@
-﻿import 'dart:io';
+import 'dart:io';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
@@ -8,8 +9,19 @@ import 'package:uuid/uuid.dart';
 
 import '../models/post_model.dart';
 
+class UploadedStorageItem {
+  final String downloadUrl;
+  final String storagePath;
+
+  const UploadedStorageItem({
+    required this.downloadUrl,
+    required this.storagePath,
+  });
+}
+
 class MediaService {
   final FirebaseStorage _storage = FirebaseStorage.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final ImagePicker _imagePicker = ImagePicker();
   final Uuid _uuid = const Uuid();
 
@@ -23,6 +35,9 @@ class MediaService {
     'gif',
     'webp',
   ];
+
+  CollectionReference<Map<String, dynamic>> get _pendingMediaCollection =>
+      _firestore.collection('pendingMedia');
 
   Future<List<XFile>> pickImages({int maxCount = 4}) async {
     final images = await _imagePicker.pickMultiImage(
@@ -82,12 +97,26 @@ class MediaService {
     final snapshot = await uploadTask;
     final downloadUrl = await snapshot.ref.getDownloadURL();
 
+    try {
+      await registerPendingMedia(
+        type: 'post_image',
+        ownerId: userId,
+        storagePath: storagePath,
+      );
+    } catch (error, stackTrace) {
+      debugPrint('Failed to register pending post media: $error');
+      debugPrint('$stackTrace');
+      await deleteMediaByStoragePath(storagePath);
+      rethrow;
+    }
+
     return MediaItem(
       url: downloadUrl,
       type: type,
       fileName: fileName ?? path.basename(filePath),
       mimeType: _getMimeType(extension),
       fileSize: fileSize,
+      storagePath: storagePath,
     );
   }
 
@@ -99,7 +128,7 @@ class MediaService {
   }) async {
     final results = <MediaItem>[];
 
-    for (int i = 0; i < filePaths.length; i++) {
+    for (var i = 0; i < filePaths.length; i++) {
       final item = await uploadFile(
         filePath: filePaths[i],
         userId: userId,
@@ -113,9 +142,10 @@ class MediaService {
     return results;
   }
 
-  Future<String> uploadCircleImage({
+  Future<UploadedStorageItem> uploadCircleImage({
     required String filePath,
     required String circleId,
+    required String ownerId,
     required String imageType,
     Function(double)? onProgress,
   }) async {
@@ -146,7 +176,27 @@ class MediaService {
     }
 
     final snapshot = await uploadTask;
-    return snapshot.ref.getDownloadURL();
+    final downloadUrl = await snapshot.ref.getDownloadURL();
+    final pendingType = imageType == 'icon' ? 'circle_icon' : 'circle_cover';
+
+    try {
+      await registerPendingMedia(
+        type: pendingType,
+        ownerId: ownerId,
+        storagePath: storagePath,
+        circleId: circleId,
+      );
+    } catch (error, stackTrace) {
+      debugPrint('Failed to register pending circle media: $error');
+      debugPrint('$stackTrace');
+      await deleteMediaByStoragePath(storagePath);
+      rethrow;
+    }
+
+    return UploadedStorageItem(
+      downloadUrl: downloadUrl,
+      storagePath: storagePath,
+    );
   }
 
   Future<String> uploadInquiryImage(File file, {required String userId}) async {
@@ -172,17 +222,113 @@ class MediaService {
     return snapshot.ref.getDownloadURL();
   }
 
-  Future<void> deleteMedia(String url) async {
+  Future<void> registerPendingMedia({
+    required String type,
+    required String ownerId,
+    required String storagePath,
+    String? circleId,
+  }) async {
+    await _pendingMediaCollection.doc(_pendingMediaDocId(storagePath)).set({
+      'type': type,
+      'ownerId': ownerId,
+      'storagePath': storagePath,
+      if (circleId != null) 'circleId': circleId,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> resolvePendingMediaByStoragePath(String? storagePath) async {
+    if (storagePath == null || storagePath.isEmpty) return;
+
     try {
-      final ref = _storage.refFromURL(url);
-      await ref.delete();
-    } on FirebaseException catch (e) {
-      debugPrint('MediaService.deleteMedia FirebaseException: ${e.code} ${e.message}');
-    } catch (e, stackTrace) {
-      debugPrint('MediaService.deleteMedia error: $e');
+      await _pendingMediaCollection.doc(_pendingMediaDocId(storagePath)).delete();
+    } catch (error, stackTrace) {
+      debugPrint('Failed to resolve pending media: $storagePath $error');
       debugPrint('$stackTrace');
     }
   }
+
+  Future<void> resolvePendingMediaItems(Iterable<MediaItem> mediaItems) async {
+    for (final item in mediaItems) {
+      await resolvePendingMediaByStoragePath(item.storagePath);
+    }
+  }
+
+  Future<void> resolvePendingStorageItems(
+    Iterable<UploadedStorageItem> items,
+  ) async {
+    for (final item in items) {
+      await resolvePendingMediaByStoragePath(item.storagePath);
+    }
+  }
+
+  Future<void> rollbackUploadedMediaItems(Iterable<MediaItem> mediaItems) async {
+    for (final item in mediaItems) {
+      if (item.storagePath != null && item.storagePath!.isNotEmpty) {
+        await deleteMediaByStoragePath(item.storagePath!);
+        await resolvePendingMediaByStoragePath(item.storagePath);
+      } else {
+        await deleteMedia(item.url);
+      }
+    }
+  }
+
+  Future<void> rollbackUploadedStorageItems(
+    Iterable<UploadedStorageItem> items,
+  ) async {
+    for (final item in items) {
+      await deleteMediaByStoragePath(item.storagePath);
+      await resolvePendingMediaByStoragePath(item.storagePath);
+    }
+  }
+
+  String? getStoragePathFromUrl(String url) {
+    try {
+      return _storage.refFromURL(url).fullPath;
+    } catch (e, stackTrace) {
+      debugPrint('MediaService.getStoragePathFromUrl error: $e');
+      debugPrint('$stackTrace');
+      return null;
+    }
+  }
+
+  Future<bool> deleteMedia(String url) async {
+    try {
+      final ref = _storage.refFromURL(url);
+      await ref.delete();
+      return true;
+    } on FirebaseException catch (e) {
+      if (e.code != 'object-not-found') {
+        debugPrint('MediaService.deleteMedia FirebaseException: ${e.code} ${e.message}');
+      }
+      return false;
+    } catch (e, stackTrace) {
+      debugPrint('MediaService.deleteMedia error: $e');
+      debugPrint('$stackTrace');
+      return false;
+    }
+  }
+
+  Future<bool> deleteMediaByStoragePath(String storagePath) async {
+    try {
+      await _storage.ref().child(storagePath).delete();
+      return true;
+    } on FirebaseException catch (e) {
+      if (e.code != 'object-not-found') {
+        debugPrint(
+          'MediaService.deleteMediaByStoragePath FirebaseException: ${e.code} ${e.message}',
+        );
+      }
+      return false;
+    } catch (e, stackTrace) {
+      debugPrint('MediaService.deleteMediaByStoragePath error: $e');
+      debugPrint('$stackTrace');
+      return false;
+    }
+  }
+
+  String _pendingMediaDocId(String storagePath) =>
+      Uri.encodeComponent(storagePath);
 
   String _getMimeType(String extension) {
     final ext = extension.toLowerCase().replaceAll('.', '');

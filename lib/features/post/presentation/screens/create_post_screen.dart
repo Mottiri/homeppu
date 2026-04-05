@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
@@ -38,6 +39,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   final _contentController = TextEditingController();
   final _mediaService = MediaService();
   final _postAdPolicyService = PostAdPolicyService();
+  final _uuid = const Uuid();
   final ValueNotifier<bool> _waitingCharacterVisible = ValueNotifier<bool>(
     false,
   );
@@ -48,9 +50,13 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   double _uploadProgress = 0;
   bool _phase4Initialized = false;
   Rect? _phase4SpotlightRect;
+  String? _pendingPostRequestId;
+  List<MediaItem> _pendingUploadedMedia = [];
 
   // 選択されたメディア
   final List<_SelectedMedia> _selectedMedia = [];
+
+  bool get _hasPendingPostRetry => _pendingPostRequestId != null;
 
   @override
   void initState() {
@@ -387,6 +393,39 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     });
   }
 
+  bool _isAmbiguousPostRequestError(ModerationException error) {
+    const ambiguousCodes = {
+      'aborted',
+      'cancelled',
+      'deadline-exceeded',
+      'internal',
+      'unavailable',
+      'unknown',
+    };
+    return ambiguousCodes.contains(error.code);
+  }
+
+  bool _isPostRequestStillProcessing(ModerationException error) {
+    return error.code == 'aborted';
+  }
+
+  bool _shouldRollbackUploadedMedia(ModerationException error) {
+    return !_isAmbiguousPostRequestError(error);
+  }
+
+  void _setPendingPostRetry({
+    required String clientRequestId,
+    required List<MediaItem> uploadedMedia,
+  }) {
+    _pendingPostRequestId = clientRequestId;
+    _pendingUploadedMedia = List<MediaItem>.from(uploadedMedia);
+  }
+
+  void _clearPendingPostRetry() {
+    _pendingPostRequestId = null;
+    _pendingUploadedMedia = [];
+  }
+
   /// エラーを表示
   void _showError(String message) {
     if (mounted) {
@@ -399,7 +438,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     setState(() => _isLoading = true);
 
     final content = _contentController.text.trim();
-    if (content.isEmpty && _selectedMedia.isEmpty) {
+    if (content.isEmpty &&
+        _selectedMedia.isEmpty &&
+        _pendingUploadedMedia.isEmpty) {
       if (mounted) setState(() => _isLoading = false);
       return;
     }
@@ -410,20 +451,25 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       return;
     }
 
-    if (kDebugMode) {
+    final isRetry = _hasPendingPostRetry;
+    final clientRequestId = _pendingPostRequestId ?? _uuid.v4();
+
+    if (!isRetry && kDebugMode) {
       final debugState = await _postAdPolicyService.debugState(user.uid);
       debugPrint(
         '[PostAd] before submit: isSubscriber=${user.isSubscriber} $debugState',
       );
     }
 
-    if (!user.isSubscriber &&
+    if (!isRetry &&
+        !user.isSubscriber &&
         await _postAdPolicyService.shouldShowNoticeDialog(user.uid) &&
         mounted) {
       await _showPostAdNoticeDialog(user.uid);
     }
 
     final shouldTryPostAd =
+        !isRetry &&
         !user.isSubscriber &&
         await _postAdPolicyService.shouldShowAdOnThisPost(user.uid);
     if (kDebugMode) {
@@ -436,12 +482,12 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     ModerationException? moderationError;
     String? generalErrorMessage;
     var postCreated = false;
+    var createPostRequested = false;
+    final uploadedMedia = List<MediaItem>.from(_pendingUploadedMedia);
     Future<bool>? adFuture;
 
     try {
-      // メディアをアップロード
-      List<MediaItem> uploadedMedia = [];
-      if (_selectedMedia.isNotEmpty) {
+      if (!isRetry && _selectedMedia.isNotEmpty) {
         setState(() {
           _isUploading = true;
           _uploadProgress = 0;
@@ -471,12 +517,14 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
       // モデレーション付き投稿作成（Cloud Functions経由）
       final moderationService = ref.read(moderationServiceProvider);
+      createPostRequested = true;
       await moderationService.createPostWithModeration(
         content: content,
         userDisplayName: user.displayName,
         userAvatarIndex: user.avatarIndex,
         postMode: user.postMode,
         mediaItems: uploadedMedia,
+        clientRequestId: clientRequestId,
         circleId: widget.circleId, // サークルIDを渡す
       );
 
@@ -493,14 +541,24 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         ref.invalidate(virtueStatusProvider);
       }
       postCreated = true;
+      _clearPendingPostRetry();
     } on ModerationException catch (e) {
       moderationError = e;
+      if (_isAmbiguousPostRequestError(e)) {
+        _setPendingPostRetry(
+          clientRequestId: clientRequestId,
+          uploadedMedia: uploadedMedia,
+        );
+      } else {
+        _clearPendingPostRetry();
+      }
       ref.invalidate(virtueStatusProvider);
     } catch (e) {
       debugPrint('Error creating post: $e');
       generalErrorMessage = e.toString().contains('ファイルサイズ')
           ? e.toString().replaceFirst('Exception: ', '')
           : AppMessages.error.general;
+      _clearPendingPostRetry();
     }
 
     if (adFuture != null) {
@@ -519,6 +577,20 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       InterstitialAdService.instance.preload();
     }
 
+    if (!postCreated && uploadedMedia.isNotEmpty) {
+      final shouldRollback =
+          !createPostRequested ||
+          (moderationError != null &&
+              _shouldRollbackUploadedMedia(moderationError));
+      if (shouldRollback) {
+        await _mediaService.rollbackUploadedMediaItems(uploadedMedia);
+      } else if (kDebugMode) {
+        debugPrint(
+          '[CreatePost] Skip immediate rollback due to ambiguous post creation failure.',
+        );
+      }
+    }
+
     if (!mounted) return;
     setState(() {
       _isLoading = false;
@@ -533,6 +605,20 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     }
 
     if (moderationError != null) {
+      if (_isPostRequestStillProcessing(moderationError)) {
+        SnackBarHelper.showWarning(context, AppMessages.error.postResultChecking);
+        return;
+      }
+      if (_isAmbiguousPostRequestError(moderationError)) {
+        SnackBarHelper.showWarning(context, AppMessages.error.postResultUnknown);
+        return;
+      }
+      if (moderationError.code == 'resource-exhausted' ||
+          moderationError.code == 'permission-denied' ||
+          moderationError.code == 'not-found') {
+        SnackBarHelper.showError(context, moderationError.message);
+        return;
+      }
       final isShortWindowRateLimit =
           moderationError.code == 'resource-exhausted' &&
           moderationError.message.contains('短時間での投稿が多すぎます');
@@ -575,6 +661,10 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
     final remainingChars =
         AppConstants.maxPostLength - _contentController.text.length;
+    final canSubmit =
+        _hasPendingPostRetry ||
+        _contentController.text.trim().isNotEmpty ||
+        _selectedMedia.isNotEmpty;
 
     // ユーザーのヘッダー色を取得
     final primaryColor = user?.headerPrimaryColor != null
@@ -625,12 +715,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                         const Spacer(),
                         ElevatedButton(
                           key: _postButtonKey,
-                          onPressed:
-                              (_contentController.text.trim().isEmpty &&
-                                      _selectedMedia.isEmpty) ||
-                                  _isLoading
-                              ? null
-                              : _createPost,
+                          onPressed: !canSubmit || _isLoading ? null : _createPost,
                           style: ElevatedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(horizontal: 20),
                           ),
@@ -643,7 +728,11 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                                     color: Colors.white,
                                   ),
                                 )
-                              : const Text('投稿する'),
+                              : Text(
+                                  _hasPendingPostRetry
+                                      ? AppMessages.label.retry
+                                      : AppMessages.label.postSubmit,
+                                ),
                         ),
                       ],
                     ),
@@ -708,9 +797,33 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
                           const SizedBox(height: 20),
 
+                          if (_hasPendingPostRetry) ...[
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: AppColors.warning.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: AppColors.warning.withValues(alpha: 0.4),
+                                ),
+                              ),
+                              child: Text(
+                                AppMessages.error.postRetryReady,
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
+                                      color: AppColors.textPrimary,
+                                      height: 1.4,
+                                    ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+
                           // 投稿入力
                           TextField(
                             controller: _contentController,
+                            enabled: !_hasPendingPostRetry && !_isLoading,
                             autofocus: true, // 画面表示時に自動フォーカス
                             maxLines: null,
                             minLines: 6,
@@ -783,6 +896,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                                   final media = _selectedMedia[index];
                                   return _MediaPreview(
                                     media: media,
+                                    canRemove:
+                                        !_hasPendingPostRetry && !_isLoading,
                                     onRemove: () => _removeMedia(index),
                                   );
                                 },
@@ -812,7 +927,10 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                         children: [
                           // メディア追加ボタン
                           IconButton(
-                            onPressed: _isLoading ? null : _showMediaPicker,
+                            onPressed:
+                                (_isLoading || _hasPendingPostRetry)
+                                    ? null
+                                    : _showMediaPicker,
                             icon: Badge(
                               isLabelVisible: _selectedMedia.isNotEmpty,
                               label: Text('${_selectedMedia.length}'),
@@ -931,9 +1049,14 @@ class _MediaPickerOption extends StatelessWidget {
 /// メディアプレビュー
 class _MediaPreview extends StatelessWidget {
   final _SelectedMedia media;
+  final bool canRemove;
   final VoidCallback onRemove;
 
-  const _MediaPreview({required this.media, required this.onRemove});
+  const _MediaPreview({
+    required this.media,
+    required this.canRemove,
+    required this.onRemove,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -952,22 +1075,23 @@ class _MediaPreview extends StatelessWidget {
             child: _buildThumbnail(),
           ),
           // 削除ボタン
-          Positioned(
-            top: 4,
-            right: 4,
-            child: GestureDetector(
-              onTap: onRemove,
-              child: Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.6),
-                  shape: BoxShape.circle,
+          if (canRemove)
+            Positioned(
+              top: 4,
+              right: 4,
+              child: GestureDetector(
+                onTap: onRemove,
+                child: Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.6),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.close, size: 16, color: Colors.white),
                 ),
-                child: const Icon(Icons.close, size: 16, color: Colors.white),
               ),
             ),
-          ),
           // 動画アイコン
           if (media.type == MediaType.video)
             const Center(
