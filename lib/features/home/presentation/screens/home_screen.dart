@@ -539,7 +539,7 @@ class _ChunkedPostsListState extends ConsumerState<_ChunkedPostsList>
     );
     _homeScrollTopSubscription = ref.listenManual<int>(
       homeScrollToTopProvider,
-      (_, __) => _scrollToTop(),
+      (_, unusedNext) => _scrollToTop(),
     );
   }
 
@@ -1137,7 +1137,7 @@ class _PostsListState extends ConsumerState<_PostsList>
     );
     _homeScrollTopSubscription = ref.listenManual<int>(
       homeScrollToTopProvider,
-      (_, __) => _scrollToTop(),
+      (_, unusedNext) => _scrollToTop(),
     );
   }
 

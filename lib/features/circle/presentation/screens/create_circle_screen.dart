@@ -160,27 +160,34 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen>
         bool uploadFailed = false;
 
         if (_iconImage != null || _coverImage != null) {
+          Future<UploadedStorageItem?> uploadCircleImageOrNull({
+            required String filePath,
+            required String imageType,
+          }) async {
+            try {
+              return await mediaService.uploadCircleImage(
+                filePath: filePath,
+                circleId: circleId,
+                ownerId: currentUser.uid,
+                imageType: imageType,
+              );
+            } catch (e) {
+              debugPrint('$imageType upload error: $e');
+              return null;
+            }
+          }
+
           final iconResult = _iconImage != null
-              ? mediaService.uploadCircleImage(
+              ? uploadCircleImageOrNull(
                   filePath: _iconImage!.path,
-                  circleId: circleId,
-                  ownerId: currentUser.uid,
                   imageType: 'icon',
-                ).then<UploadedStorageItem?>((v) => v).catchError((e) {
-                    debugPrint('Icon upload error: $e');
-                    return null as UploadedStorageItem?;
-                  })
+                )
               : Future<UploadedStorageItem?>.value(null);
           final coverResult = _coverImage != null
-              ? mediaService.uploadCircleImage(
+              ? uploadCircleImageOrNull(
                   filePath: _coverImage!.path,
-                  circleId: circleId,
-                  ownerId: currentUser.uid,
                   imageType: 'cover',
-                ).then<UploadedStorageItem?>((v) => v).catchError((e) {
-                    debugPrint('Cover upload error: $e');
-                    return null as UploadedStorageItem?;
-                  })
+                )
               : Future<UploadedStorageItem?>.value(null);
 
           final results = await Future.wait([iconResult, coverResult]);

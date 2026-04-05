@@ -547,7 +547,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
       if (!mounted) return;
       setState(() {
         if (!_comments.any((c) => c.id == comment.id)) {
-          final safeIndex = originalIndex.clamp(0, _comments.length) as int;
+          final safeIndex = originalIndex.clamp(0, _comments.length);
           _comments.insert(safeIndex, comment);
         }
       });
@@ -559,7 +559,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
       if (!mounted) return;
       setState(() {
         if (!_comments.any((c) => c.id == comment.id)) {
-          final safeIndex = originalIndex.clamp(0, _comments.length) as int;
+          final safeIndex = originalIndex.clamp(0, _comments.length);
           _comments.insert(safeIndex, comment);
         }
       });
