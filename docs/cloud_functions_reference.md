@@ -267,4 +267,13 @@ functions/src/
 - `comments/{commentId}.thanksLikedAt`
 - `comments/{commentId}.thanksLikedBy`
 
+## 追記: AI / Cloud Tasks Logging Hygiene (2026-04-05)
+
+- `http/ai-generation.ts`
+  - AIコメント/投稿ワーカーのログは、本文やプロンプト全文ではなく `length + hash` ベースの要約ログを出す。
+- `ai/provider.ts`
+  - Gemini / OpenAI のレスポンスログは、本文そのものではなく `finishReason`, token usage, `contentSummary` のみを記録する。
+- `helpers/cloud-tasks-auth.ts`
+  - Cloud Tasks OIDC 検証ログは、JWT payload の `email` や `aud` 実値を出さず、存在有無と audience 一致有無のみを記録する。
+
 

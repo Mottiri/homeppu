@@ -6,6 +6,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import * as admin from "firebase-admin";
 import { AI_MODELS } from "../config/constants";
+import { summarizeErrorForLog, summarizeTextForLog } from "../helpers/logging";
 
 // ===============================================
 // Types & Interfaces
@@ -71,9 +72,13 @@ export class GeminiProvider implements AIProvider {
         const candidate = response.candidates?.[0];
         console.log("[GEMINI DEBUG]", JSON.stringify({
             finishReason: candidate?.finishReason,
-            contentLength: text?.length || 0,
-            usageMetadata: response.usageMetadata,
-            safetyRatings: candidate?.safetyRatings?.map(r => ({ category: r.category, probability: r.probability })),
+            contentSummary: summarizeTextForLog(text),
+            usage: {
+                promptTokenCount: response.usageMetadata?.promptTokenCount,
+                candidatesTokenCount: response.usageMetadata?.candidatesTokenCount,
+                totalTokenCount: response.usageMetadata?.totalTokenCount,
+            },
+            safetyRatingCount: candidate?.safetyRatings?.length || 0,
         }));
 
         // finish_reasonがMAX_TOKENSの場合は警告
@@ -167,11 +172,14 @@ export class OpenAIProvider implements AIProvider {
         const data = await response.json() as { choices: Array<{ message: { content: string }, finish_reason?: string }>, usage?: { prompt_tokens: number, completion_tokens: number } };
 
         // Debug: Log the full response to analyze empty comments
-        console.log("OpenAI response:", JSON.stringify({
+        console.log("[OPENAI DEBUG]", JSON.stringify({
             hasChoices: !!data.choices?.length,
             finishReason: data.choices?.[0]?.finish_reason,
-            contentLength: data.choices?.[0]?.message?.content?.length || 0,
-            usage: data.usage,
+            contentSummary: summarizeTextForLog(data.choices?.[0]?.message?.content || ""),
+            usage: {
+                promptTokens: data.usage?.prompt_tokens,
+                completionTokens: data.usage?.completion_tokens,
+            },
         }));
 
         return data.choices[0]?.message?.content || "";
@@ -267,7 +275,7 @@ export class AIProviderFactory {
             this.settingsLoadedAt = now;
             return this.settings;
         } catch (error) {
-            console.error("Failed to load AI settings:", error);
+            console.error("Failed to load AI settings:", summarizeErrorForLog(error));
             // エラー時はデフォルト設定
             return {
                 primaryProvider: "gemini",
@@ -302,7 +310,7 @@ export class AIProviderFactory {
                 const text = await primary.generateText(prompt, options);
                 return { text, provider: primaryName, usedFallback: false };
             } catch (error) {
-                console.error(`Primary provider (${primaryName}) failed:`, error);
+                console.error(`Primary provider (${primaryName}) failed:`, summarizeErrorForLog(error));
                 if (!fallback) throw error;
             }
         }
@@ -314,7 +322,7 @@ export class AIProviderFactory {
                 const text = await fallback.generateText(prompt, options);
                 return { text, provider: fallbackName, usedFallback: true };
             } catch (error) {
-                console.error(`Fallback provider (${fallbackName}) failed:`, error);
+                console.error(`Fallback provider (${fallbackName}) failed:`, summarizeErrorForLog(error));
                 throw error;
             }
         }
@@ -344,7 +352,7 @@ export class AIProviderFactory {
                 const text = await primary.generateWithImage(prompt, imageBase64, mimeType, options);
                 return { text, provider: primaryName, usedFallback: false };
             } catch (error) {
-                console.error(`Primary provider (${primaryName}) failed:`, error);
+                console.error(`Primary provider (${primaryName}) failed:`, summarizeErrorForLog(error));
                 if (!fallback) throw error;
             }
         }
@@ -356,7 +364,7 @@ export class AIProviderFactory {
                 const text = await fallback.generateWithImage(prompt, imageBase64, mimeType, options);
                 return { text, provider: fallbackName, usedFallback: true };
             } catch (error) {
-                console.error(`Fallback provider (${fallbackName}) failed:`, error);
+                console.error(`Fallback provider (${fallbackName}) failed:`, summarizeErrorForLog(error));
                 throw error;
             }
         }

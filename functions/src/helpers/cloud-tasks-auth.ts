@@ -7,9 +7,6 @@ const authClient = new OAuth2Client();
 // エミュレータ判定
 const IS_EMULATOR = process.env.FUNCTIONS_EMULATOR === "true";
 
-/**
- * JWTトークンのペイロードをデコード（検証なし、デバッグ用）
- */
 function decodeJwtPayload(token: string): Record<string, unknown> | null {
   try {
     const parts = token.split(".");
@@ -50,22 +47,18 @@ export async function verifyCloudTasksRequest(
 
   const token = authHeader.split("Bearer ")[1];
 
-  // デバッグ: トークンのペイロードを確認
   const payload = decodeJwtPayload(token);
   if (payload) {
-    console.log(`[Auth] ${functionName}: Token payload:`, JSON.stringify({
-      iss: payload.iss,        // 発行者
-      aud: payload.aud,        // audience（これが一致する必要あり）
-      email: payload.email,    // サービスアカウントのメール
-      exp: payload.exp,        // 有効期限
+    const tokenAudience = typeof payload.aud === "string" ? payload.aud : null;
+    console.log(`[Auth] ${functionName}: Token metadata:`, JSON.stringify({
+      hasIssuer: typeof payload.iss === "string",
+      hasAudience: tokenAudience !== null,
+      hasExpiry: typeof payload.exp === "number",
+      audienceMatchesExpected: tokenAudience === expectedAudience,
     }));
-    console.log(`[Auth] ${functionName}: Expected audience: ${expectedAudience}`);
 
-    // audience不一致の事前チェック
-    if (payload.aud !== expectedAudience) {
-      console.error(`[Auth] ${functionName}: AUDIENCE MISMATCH!`);
-      console.error(`  Token aud: ${payload.aud}`);
-      console.error(`  Expected:  ${expectedAudience}`);
+    if (tokenAudience !== null && tokenAudience !== expectedAudience) {
+      console.error(`[Auth] ${functionName}: AUDIENCE MISMATCH`);
     }
   }
 
