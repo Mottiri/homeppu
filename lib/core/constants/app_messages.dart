@@ -151,6 +151,9 @@ class _ErrorMessages {
   String get reportFailed => '通報に失敗しました。もう一度お試しください。';
   String get reactionOwnPost => '自分の投稿にはリアクションできません';
   String get reactionLimitReached => 'この投稿へのリアクションは5回までです';
+  String mediaLimitReached(int max) => '画像は最大$max枚まで添付できます';
+  String get imagePickFailed => '画像の選択に失敗しました';
+  String get photoCaptureFailed => '撮影に失敗しました';
 
   // 動画再生
   String get videoPlaybackFailedTitle => '動画を再生できません';
@@ -255,6 +258,10 @@ class _LabelMessages {
   String get relogin => 'ログインし直す';
   String get add => '追加';
   String get dontShowAgain => '今後表示しない';
+  String get selectPhoto => '写真を選択';
+  String get takePhoto => '写真を撮影';
+  String mediaSelectionLimit(int max) =>
+      '添付できる画像は$max枚までです。超過分は追加されません';
 }
 
 /// ローディングメッセージ

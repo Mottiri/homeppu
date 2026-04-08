@@ -44,6 +44,7 @@ class MediaService {
       imageQuality: 85,
       maxWidth: 1920,
       maxHeight: 1920,
+      limit: maxCount,
     );
     return images.take(maxCount).toList();
   }

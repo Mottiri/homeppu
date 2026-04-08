@@ -276,7 +276,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     if (_selectedMedia.length >= MediaService.maxMediaCount) {
       SnackBarHelper.showWarning(
         context,
-        '最大${MediaService.maxMediaCount}つまで添付できます',
+        AppMessages.error.mediaLimitReached(MediaService.maxMediaCount),
       );
       return;
     }
@@ -303,14 +303,14 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-              const Text(
-                'メディアを追加',
+              Text(
+                AppMessages.inquiry.attachImage,
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 20),
               _MediaPickerOption(
                 icon: Icons.photo_library,
-                label: '写真を選択',
+                label: AppMessages.label.selectPhoto,
                 color: Colors.blue,
                 onTap: () {
                   Navigator.pop(context);
@@ -319,7 +319,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
               ),
               _MediaPickerOption(
                 icon: Icons.camera_alt,
-                label: '写真を撮影',
+                label: AppMessages.label.takePhoto,
                 color: Colors.green,
                 onTap: () {
                   Navigator.pop(context);
@@ -352,7 +352,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         _addMedia(image.path, MediaType.image);
       }
     } catch (e) {
-      _showError('画像の選択に失敗しました');
+      _showError(AppMessages.error.imagePickFailed);
     }
   }
 
@@ -373,7 +373,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         _addMedia(photo.path, MediaType.image);
       }
     } catch (e) {
-      _showError('撮影に失敗しました');
+      _showError(AppMessages.error.photoCaptureFailed);
     }
   }
 
@@ -923,36 +923,52 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                       ],
                     ),
                     child: SafeArea(
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          // メディア追加ボタン
-                          IconButton(
-                            onPressed:
-                                (_isLoading || _hasPendingPostRetry)
-                                    ? null
-                                    : _showMediaPicker,
-                            icon: Badge(
-                              isLabelVisible: _selectedMedia.isNotEmpty,
-                              label: Text('${_selectedMedia.length}'),
-                              child: const Icon(
-                                Icons.add_photo_alternate_outlined,
+                          Row(
+                            children: [
+                              // メディア追加ボタン
+                              IconButton(
+                                onPressed:
+                                    (_isLoading || _hasPendingPostRetry)
+                                        ? null
+                                        : _showMediaPicker,
+                                icon: Badge(
+                                  isLabelVisible: _selectedMedia.isNotEmpty,
+                                  label: Text('${_selectedMedia.length}'),
+                                  child: const Icon(
+                                    Icons.add_photo_alternate_outlined,
+                                  ),
+                                ),
+                                color: _selectedMedia.isNotEmpty
+                                    ? AppColors.primary
+                                    : AppColors.textSecondary,
                               ),
-                            ),
-                            color: _selectedMedia.isNotEmpty
-                                ? AppColors.primary
-                                : AppColors.textSecondary,
+                              const Spacer(),
+                              // 文字数
+                              Text(
+                                '$remainingChars',
+                                style: TextStyle(
+                                  color: remainingChars < 20
+                                      ? AppColors.warning
+                                      : AppColors.textHint,
+                                  fontWeight: remainingChars < 20
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                ),
+                              ),
+                            ],
                           ),
-                          const Spacer(),
-                          // 文字数
+                          const SizedBox(height: 4),
                           Text(
-                            '$remainingChars',
-                            style: TextStyle(
-                              color: remainingChars < 20
-                                  ? AppColors.warning
-                                  : AppColors.textHint,
-                              fontWeight: remainingChars < 20
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
+                            AppMessages.label.mediaSelectionLimit(
+                              MediaService.maxMediaCount,
+                            ),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textHint,
                             ),
                           ),
                         ],
