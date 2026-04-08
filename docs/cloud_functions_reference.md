@@ -45,7 +45,7 @@ functions/src/
 
 | ファイル | 機能 | スケジュール |
 |---------|------|-------------|
-| `circles.ts` | サークル管理 | `checkGhostCircles`（毎日3:30）、`evolveCircleAIs`（毎月1日10時）、`triggerEvolveCircleAIs`（手動トリガー用） |
+| `circles.ts` | サークル管理 | `checkGhostCircles`（毎日21:00。`nextGhostCheckAt` 到来分のみ処理。既存データには `scripts/backfill-circle-scheduling.js` を先に実行）、`evolveCircleAIs`（毎月1日10時）、`triggerEvolveCircleAIs`（手動トリガー用） |
 | `cleanup.ts` | クリーンアップ | `cleanupOrphanedMedia`（毎日3時。`pendingMedia` の期限切れ未確定メディアのみを対象に削除/解決）、`cleanupResolvedInquiries`、`cleanupReports`、`cleanupBannedUsers`（永久BAN 180日後に Auth を保持したままアプリデータ削除）、`cleanupUnverifiedUsers` |
 | `reminders.ts` | タスク/目標リマインダー通知 | `executeTaskReminder`, `executeGoalReminder`（Cloud Tasks HTTP） |
 | `ai-posts.ts` | AI投稿 | `scheduleAIPosts`（現在無効化中） |
@@ -78,7 +78,7 @@ functions/src/
 
 | ファイル | 機能 | 主な関数 |
 |---------|------|---------|
-| `posts.ts` | サークルAI投稿 | `generateCircleAIPosts`, `executeCircleAIPost`, `triggerCircleAIPosts` |
+| `posts.ts` | サークルAI投稿 | `generateCircleAIPosts`（`nextCircleAIPostAt` 到来分のみ処理。既存データには `scripts/backfill-circle-scheduling.js` を先に実行）, `executeCircleAIPost`（`requestId` ベースで冪等）, `triggerCircleAIPosts` |
 | `generator.ts` | サークルAIペルソナ生成 | `generateCircleAIPersona` |
 
 ### ai/ - AI関連
@@ -114,6 +114,7 @@ functions/src/
 | `notification.ts` | プッシュ通知送信 `sendPushNotification`, `sendPushOnly` |
 | `storage.ts` | Storageファイル削除 `deleteStorageFileFromUrl`, `deleteStorageFileByPath`, `extractStoragePathFromUrl` |
 | `pending-media.ts` | pendingMedia管理 `getMediaStoragePath`, `getMediaStoragePaths`, `deletePendingMediaByStoragePaths` |
+| `circle-scheduling.ts` | サークル定期処理の due-at 計算 `computeNextGhostCheckAt`, `computeNextCircleAIPostAt` |
 | `moderation.ts` | メディアモデレーション `moderateMedia` |
 | `media-analysis.ts` | メディア分析 `analyzeMediaForComment` |
 | `cloud-tasks.ts` | Cloud Tasks操作 `scheduleHttpTask` |
@@ -222,6 +223,7 @@ functions/src/
 | ファイル | 用途 |
 |---------|------|
 | `backfill-email-verified.js` | 既存ユーザーのemailVerifiedを一括更新 |
+| `backfill-circle-scheduling.js` | 既存サークルへ `nextGhostCheckAt` / `aiPostingEnabled` / `generatedAICount` / `nextCircleAIPostAt` / `isDeleted` を補完し、過去日時の AI due も将来へ再配置 |
 | `backfill-public-users.js` | publicUsersコレクションの一括更新 |
 | `check_admin_claims.js` | 管理者カスタムクレームの確認 |
 | `migrate-name-parts-rarity.js` | 名前パーツのレアリティ移行 |

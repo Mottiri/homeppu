@@ -126,7 +126,7 @@
 |--------|--------|------|
 | `cleanupOrphanedMedia` | Scheduled | 毎日3時に孤立メディア・データをクリーンアップ |
 | `cleanupReports` | Scheduled | 毎日0時に1ヶ月以上前の解決済み通報を自動削除 |
-| `checkGhostCircles` | Scheduled | 毎日3:30にゴースト・放置サークルを検出し警告通知、7日後に自動削除 |
+| `checkGhostCircles` | Scheduled | 毎日21:00にゴースト・放置サークルを検出し警告通知、7日後に自動削除 |
 | `onPostDeleted` | Firestore Trigger | 投稿削除時にコメント・リアクション・通知・メディアをカスケード削除 |
 
 ---

@@ -99,14 +99,12 @@ class _HomeppuAppState extends ConsumerState<HomeppuApp> {
         break;
       case 'circle_settings_changed':
       case 'circle_ghost_warning':
+      case 'circle_ghost_deleted':
         if (payload.circleId != null) {
           router.push('/circle/${payload.circleId}');
         } else {
           router.go('/circles');
         }
-        break;
-      case 'circle_ghost_deleted':
-        router.go('/circles');
         break;
 
       case 'inquiry_reply':

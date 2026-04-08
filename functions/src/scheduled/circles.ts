@@ -1,36 +1,38 @@
 /**
- * サークル関連のスケジュール実行関数
- * - checkGhostCircles: ゴースト・放置サークルの検出と削除
- * - evolveCircleAIs: サークルAI成長システム（月1回）
- * - triggerEvolveCircleAIs: 手動トリガー（管理者用）
+ * サークル関連の定期処理
+ * - checkGhostCircles: ゴースト/放置サークルの警告と削除
+ * - evolveCircleAIs: サークルAIの月次進化
+ * - triggerEvolveCircleAIs: 管理者向け手動トリガー
  */
 
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as functionsV1 from "firebase-functions/v1";
 import { scheduleHttpTask } from "../helpers/cloud-tasks";
-import { db, FieldValue } from "../helpers/firebase";
+import { db, FieldValue, Timestamp } from "../helpers/firebase";
 import { isAdmin } from "../helpers/admin";
+import {
+  GHOST_THRESHOLD_DAYS,
+  EMPTY_THRESHOLD_DAYS,
+  DELETE_GRACE_DAYS,
+  computeNextGhostCheckAt,
+} from "../helpers/circle-scheduling";
 import { PROJECT_ID, LOCATION } from "../config/constants";
 import {
   AUTH_ERRORS,
   NOTIFICATION_TITLES,
+  NOTIFICATION_BODIES,
   LABELS,
   SUCCESS_MESSAGES,
 } from "../config/messages";
 
-// サークル定期クリーンアップ定数
-const GHOST_THRESHOLD_DAYS = 365; // 人間投稿なしの日数
-const EMPTY_THRESHOLD_DAYS = 30;  // 投稿0サークルの猶予日数
-const DELETE_GRACE_DAYS = 7;      // 通知から削除までの猶予
-
 /**
- * ゴースト・放置サークルをチェックして通知・削除
- * 毎日午前3時30分に実行
+ * ゴースト/放置サークルの warning/delete を due-at ベースで処理
+ * 毎日 21:00 JST に実行
  */
 export const checkGhostCircles = onSchedule(
   {
-    schedule: "30 3 * * *", // 毎日午前3時30分 JST
+    schedule: "0 21 * * *",
     timeZone: "Asia/Tokyo",
     region: LOCATION,
     timeoutSeconds: 540,
@@ -38,66 +40,99 @@ export const checkGhostCircles = onSchedule(
   },
   async () => {
     console.log("=== checkGhostCircles START ===");
-    const now = Date.now();
-    const ghostThreshold = new Date(now - GHOST_THRESHOLD_DAYS * 24 * 60 * 60 * 1000);
-    const emptyThreshold = new Date(now - EMPTY_THRESHOLD_DAYS * 24 * 60 * 60 * 1000);
-    const deleteThreshold = new Date(now - DELETE_GRACE_DAYS * 24 * 60 * 60 * 1000);
+
+    const now = new Date();
+    const nowMs = now.getTime();
+    const ghostThreshold = new Date(nowMs - GHOST_THRESHOLD_DAYS * 24 * 60 * 60 * 1000);
+    const emptyThreshold = new Date(nowMs - EMPTY_THRESHOLD_DAYS * 24 * 60 * 60 * 1000);
+    const deleteThreshold = new Date(nowMs - DELETE_GRACE_DAYS * 24 * 60 * 60 * 1000);
 
     let notifiedCount = 0;
     let deletedCount = 0;
+    let rescheduledCount = 0;
 
     try {
-      // 削除済みでないサークルを取得
       const circlesSnapshot = await db.collection("circles")
-        .where("isDeleted", "!=", true)
+        .where("isDeleted", "==", false)
+        .where("nextGhostCheckAt", "<=", Timestamp.fromDate(now))
+        .orderBy("nextGhostCheckAt", "asc")
+        .limit(200)
         .get();
 
-      console.log(`Checking ${circlesSnapshot.size} circles...`);
+      console.log(`Checking ${circlesSnapshot.size} due circles...`);
 
       for (const circleDoc of circlesSnapshot.docs) {
         const circleId = circleDoc.id;
         const circleData = circleDoc.data();
-        const circleName = circleData.name || "サークル";
+        const circleName = circleData.name || LABELS.CIRCLE;
         const ownerId = circleData.ownerId;
-        const createdAt = circleData.createdAt?.toDate?.() || new Date();
-        const lastHumanPostAt = circleData.lastHumanPostAt?.toDate?.();
-        const ghostWarningNotifiedAt = circleData.ghostWarningNotifiedAt?.toDate?.();
+        const createdAt = circleData.createdAt?.toDate?.() || now;
+        const lastHumanPostAt = circleData.lastHumanPostAt?.toDate?.() || null;
+        const ghostWarningNotifiedAt = circleData.ghostWarningNotifiedAt?.toDate?.() || null;
 
-        // 判定: ゴーストサークル or 放置サークル
-        let isGhost = false;
-        let isEmpty = false;
-
-        if (lastHumanPostAt && lastHumanPostAt < ghostThreshold) {
-          isGhost = true;
-        }
-        // 放置サークル: 人間の投稿が1個もない + 作成から30日経過
-        if (!lastHumanPostAt && createdAt < emptyThreshold) {
-          isEmpty = true;
-        }
+        const isGhost = !!lastHumanPostAt && lastHumanPostAt < ghostThreshold;
+        const isEmpty = !lastHumanPostAt && createdAt < emptyThreshold;
 
         if (!isGhost && !isEmpty) {
-          continue; // 対象外
+          const resetData: Record<string, unknown> = {
+            nextGhostCheckAt: Timestamp.fromDate(
+              computeNextGhostCheckAt({
+                createdAt,
+                lastHumanPostAt,
+                ghostWarningNotifiedAt: null,
+              })
+            ),
+          };
+          if (ghostWarningNotifiedAt) {
+            resetData.ghostWarningNotifiedAt = FieldValue.delete();
+          }
+          await circleDoc.ref.update(resetData);
+          rescheduledCount++;
+          continue;
         }
 
-        const warningType = isGhost ? "ゴースト" : "放置";
+        const warningType = isGhost ? LABELS.WARNING_TYPE_GHOST : LABELS.WARNING_TYPE_ABANDONED;
         console.log(`Found ${warningType} circle: ${circleName} (${circleId})`);
 
         if (!ghostWarningNotifiedAt) {
-          // 未通知 → オーナーに警告通知を送信
-          const ownerDoc = await db.collection("users").doc(ownerId).get();
-          if (!ownerDoc.exists) {
-            console.log(`Owner ${ownerId} not found, skipping notification`);
+          if (typeof ownerId !== "string" || ownerId.length === 0) {
+            await circleDoc.ref.update({
+              ghostWarningNotifiedAt: FieldValue.serverTimestamp(),
+              nextGhostCheckAt: Timestamp.fromDate(
+                computeNextGhostCheckAt({
+                  createdAt,
+                  lastHumanPostAt,
+                  ghostWarningNotifiedAt: now,
+                })
+              ),
+            });
+            rescheduledCount++;
+            console.log(`Circle ${circleName} has no valid ownerId, started deletion grace period`);
             continue;
           }
 
-          const reasonText = isGhost
-            ? LABELS.WARNING_GHOST
-            : LABELS.WARNING_ABANDONED;
+          const ownerDoc = await db.collection("users").doc(ownerId).get();
+          if (!ownerDoc.exists) {
+            await circleDoc.ref.update({
+              ghostWarningNotifiedAt: FieldValue.serverTimestamp(),
+              nextGhostCheckAt: Timestamp.fromDate(
+                computeNextGhostCheckAt({
+                  createdAt,
+                  lastHumanPostAt,
+                  ghostWarningNotifiedAt: now,
+                })
+              ),
+            });
+            rescheduledCount++;
+            console.log(`Owner ${ownerId} not found, started deletion grace period for ${circleName}`);
+            continue;
+          }
 
+          const reasonText = isGhost ? LABELS.WARNING_GHOST : LABELS.WARNING_ABANDONED;
           await db.collection("users").doc(ownerId).collection("notifications").add({
             type: "circle_ghost_warning",
             title: NOTIFICATION_TITLES.CIRCLE_DELETE_WARNING,
-            body: `「${circleName}」は${reasonText}ため、1週間後に自動削除されます。継続する場合は投稿してください。`,
+            body: NOTIFICATION_BODIES.circleDeleteWarning(circleName, reasonText),
             circleId,
             circleName,
             isRead: false,
@@ -106,16 +141,23 @@ export const checkGhostCircles = onSchedule(
 
           await circleDoc.ref.update({
             ghostWarningNotifiedAt: FieldValue.serverTimestamp(),
+            nextGhostCheckAt: Timestamp.fromDate(
+              computeNextGhostCheckAt({
+                createdAt,
+                lastHumanPostAt,
+                ghostWarningNotifiedAt: now,
+              })
+            ),
           });
 
           console.log(`Sent warning notification to owner of ${circleName}`);
           notifiedCount++;
+          continue;
+        }
 
-        } else if (ghostWarningNotifiedAt < deleteThreshold) {
-          // 通知から7日経過 → 削除実行
+        if (ghostWarningNotifiedAt < deleteThreshold) {
           console.log(`Deleting ghost circle: ${circleName} (notified at ${ghostWarningNotifiedAt.toISOString()})`);
 
-          // ソフトデリートマーク
           await circleDoc.ref.update({
             isDeleted: true,
             deletedAt: FieldValue.serverTimestamp(),
@@ -123,7 +165,6 @@ export const checkGhostCircles = onSchedule(
             deleteReason: isGhost ? LABELS.DELETE_REASON_GHOST : LABELS.DELETE_REASON_ABANDONED,
           });
 
-          // Cloud Tasksでバックグラウンド削除をスケジュール
           const project = process.env.GCLOUD_PROJECT || PROJECT_ID;
           const targetUrl = `https://${LOCATION}-${project}.cloudfunctions.net/cleanupDeletedCircle`;
 
@@ -136,24 +177,46 @@ export const checkGhostCircles = onSchedule(
             location: LOCATION,
           });
 
-          // オーナーに削除完了通知
-          await db.collection("users").doc(ownerId).collection("notifications").add({
-            type: "circle_ghost_deleted",
-            title: NOTIFICATION_TITLES.CIRCLE_AUTO_DELETED,
-            body: `「${circleName}」は活動がなかったため、自動削除されました。`,
-            circleName,
-            isRead: false,
-            createdAt: FieldValue.serverTimestamp(),
-          });
+          if (typeof ownerId === "string" && ownerId.length > 0) {
+            const ownerDoc = await db.collection("users").doc(ownerId).get();
+            if (ownerDoc.exists) {
+              await db.collection("users").doc(ownerId).collection("notifications").add({
+                type: "circle_ghost_deleted",
+                title: NOTIFICATION_TITLES.CIRCLE_AUTO_DELETED,
+                body: NOTIFICATION_BODIES.circleAutoDeleted(circleName),
+                circleId,
+                circleName,
+                isRead: false,
+                createdAt: FieldValue.serverTimestamp(),
+              });
+            }
+          }
 
           console.log(`Scheduled cleanup for ${circleName}`);
           deletedCount++;
-        } else {
-          console.log(`Circle ${circleName} is waiting for deletion (notified ${Math.floor((now - ghostWarningNotifiedAt.getTime()) / (24 * 60 * 60 * 1000))} days ago)`);
+          continue;
         }
+
+        await circleDoc.ref.update({
+          nextGhostCheckAt: Timestamp.fromDate(
+            computeNextGhostCheckAt({
+              createdAt,
+              lastHumanPostAt,
+              ghostWarningNotifiedAt,
+            })
+          ),
+        });
+        rescheduledCount++;
+        console.log(
+          `Circle ${circleName} is waiting for deletion ` +
+          `(notified ${Math.floor((nowMs - ghostWarningNotifiedAt.getTime()) / (24 * 60 * 60 * 1000))} days ago)`
+        );
       }
 
-      console.log(`=== checkGhostCircles COMPLETE: notified=${notifiedCount}, deleted=${deletedCount} ===`);
+      console.log(
+        `=== checkGhostCircles COMPLETE: notified=${notifiedCount}, ` +
+        `deleted=${deletedCount}, rescheduled=${rescheduledCount} ===`
+      );
     } catch (error) {
       console.error("=== checkGhostCircles ERROR:", error);
     }
@@ -161,8 +224,8 @@ export const checkGhostCircles = onSchedule(
 );
 
 /**
- * サークルAIの成長イベント（毎月1日に実行）
- * growthLevel: 0=初心者, 1-2=初級, 3-4=中級初め, 5=中級（上限）
+ * サークルAIの月次進化イベント
+ * growthLevel: 0=初期, 1-2=初級, 3-4=中級, 5=中級+
  */
 export const evolveCircleAIs = functionsV1.region(LOCATION).runWith({
   timeoutSeconds: 300,
@@ -171,7 +234,6 @@ export const evolveCircleAIs = functionsV1.region(LOCATION).runWith({
   console.log("=== evolveCircleAIs START (Monthly Growth Event) ===");
 
   try {
-    // growthLevel < 5 のサークルAIを取得
     const aiUsersSnapshot = await db.collection("users")
       .where("isAI", "==", true)
       .where("circleId", "!=", null)
@@ -186,26 +248,22 @@ export const evolveCircleAIs = functionsV1.region(LOCATION).runWith({
       const currentLevel = userData.growthLevel || 0;
       const lastGrowthAt = userData.lastGrowthAt?.toDate() || new Date(0);
 
-      // 30日以上経過していない場合はスキップ
       const daysSinceLastGrowth = Math.floor((now.getTime() - lastGrowthAt.getTime()) / (1000 * 60 * 60 * 24));
       if (daysSinceLastGrowth < 30) {
         console.log(`${userData.displayName}: Only ${daysSinceLastGrowth} days since last growth, skipping`);
         continue;
       }
 
-      // 上限チェック（中級者=5で成長停止）
       if (currentLevel >= 5) {
         console.log(`${userData.displayName}: Already at max level (${currentLevel}), skipping`);
         continue;
       }
 
-      // 成長ロジック：80%の確率で成長（運も演出）
       if (Math.random() > 0.8) {
         console.log(`${userData.displayName}: Unlucky this month, no growth`);
         continue;
       }
 
-      // レベルアップ
       const newLevel = currentLevel + 1;
       batch.update(userDoc.ref, {
         growthLevel: newLevel,
@@ -222,19 +280,17 @@ export const evolveCircleAIs = functionsV1.region(LOCATION).runWith({
     }
 
     console.log(`=== evolveCircleAIs COMPLETE: ${evolvedCount} AIs evolved ===`);
-
   } catch (error) {
     console.error("=== evolveCircleAIs ERROR:", error);
   }
 });
 
 /**
- * サークルAI成長を手動トリガー（テスト用）
+ * サークルAI進化の手動トリガー（テスト用）
  */
 export const triggerEvolveCircleAIs = onCall(
   { region: LOCATION, timeoutSeconds: 120, enforceAppCheck: true },
   async (request) => {
-    // セキュリティ: 管理者権限チェック
     if (!request.auth) {
       throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
     }
@@ -260,7 +316,6 @@ export const triggerEvolveCircleAIs = onCall(
 
         if (currentLevel >= 5) continue;
 
-        // テスト用：100%成長
         const newLevel = currentLevel + 1;
         batch.update(userDoc.ref, {
           growthLevel: newLevel,
@@ -280,7 +335,6 @@ export const triggerEvolveCircleAIs = onCall(
         message: SUCCESS_MESSAGES.circleAIsEvolved(evolvedCount),
         evolvedCount,
       };
-
     } catch (error) {
       console.error("triggerEvolveCircleAIs ERROR:", error);
       return { success: false, message: `エラー: ${error}` };

@@ -159,6 +159,10 @@ export const NOTIFICATION_BODIES = {
     COMMENT_DELETED_BY_ADMIN: "運営による確認の結果、コメントが削除されました。",
     COMMENT_THANKED: "あなたのコメントがいいね！されました。",
     REPORT_SUBMITTED: "通報内容を運営チームで確認します。ご協力ありがとうございます。",
+    circleDeleteWarning: (circleName: string, reasonText: string) =>
+        `「${circleName}」は7日後に自動削除予定です。継続する場合は投稿してください。`,
+    circleAutoDeleted: (circleName: string) =>
+        `「${circleName}」は活動がなかったため、自動削除されました。`,
     flaggedPost: (reason: string) => `フラグ付き投稿があります: ${reason}`,
 } as const;
 

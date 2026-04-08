@@ -15,7 +15,7 @@
 |--------|--------------|------|---------|-------------|
 | `cleanupOrphanedMedia` | 毎日 03:00 | `pendingMedia` に残った未確定メディア | 24時間 | [L6579](functions/src/index.ts#L6579) |
 | `cleanupResolvedInquiries` | 毎日 03:00 | 解決済み問い合わせ | 7日間 | [L7764](functions/src/index.ts#L7764) |
-| `checkGhostCircles` | 毎日 03:30 | ゴースト/放置サークル | 365日/30日 + 7日猶予 | [L8491](functions/src/index.ts#L8491) |
+| `checkGhostCircles` | 毎日 21:00 | ゴースト/放置サークル | 365日/30日 + 7日猶予 | [L8491](functions/src/index.ts#L8491) |
 | `cleanupBannedUsers` | 毎日 04:00 | 永久BANユーザー | スケジュール日時到達時 | [L8435](functions/src/index.ts#L8435) |
 | `cleanupReports` | 毎日 00:00 | 対処済みレポート | 1ヶ月 | [L7939](functions/src/index.ts#L7939) |
 
@@ -374,7 +374,7 @@ await batch.commit();
 03:00 JST ─┬─ cleanupOrphanedMedia   ── 孤立メディア削除
            └─ cleanupResolvedInquiries ── 解決済み問い合わせ削除
   │
-03:30 JST ─── checkGhostCircles      ── ゴースト/放置サークル検出・削除
+21:00 JST ─── checkGhostCircles      ── ゴースト/放置サークル検出・削除
   │
 04:00 JST ─── cleanupBannedUsers     ── 永久BANユーザー削除
 ```

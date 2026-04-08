@@ -285,8 +285,7 @@ class _NotificationTile extends ConsumerWidget {
           return;
         }
 
-        if ((notification.type == NotificationType.circleDeleted ||
-                notification.type == NotificationType.circleGhostDeleted) &&
+        if (notification.type == NotificationType.circleDeleted &&
             context.mounted) {
           context.go('/circles');
           return;
@@ -314,11 +313,10 @@ class _NotificationTile extends ConsumerWidget {
             context.push('/admin/reports');
           }
         } else if (notification.circleId != null && context.mounted) {
-          // 拒否/削除通知は遷移しない
+          // 参加拒否通知のみ遷移しない
           final noNavigateTypes = [
             NotificationType.joinRequestRejected,
             NotificationType.circleDeleted,
-            NotificationType.circleGhostDeleted,
           ];
           if (!noNavigateTypes.contains(notification.type)) {
             context.push('/circle/${notification.circleId}');
@@ -327,6 +325,7 @@ class _NotificationTile extends ConsumerWidget {
           final circleFallbackTypes = [
             NotificationType.circleSettingsChanged,
             NotificationType.circleGhostWarning,
+            NotificationType.circleGhostDeleted,
           ];
           if (circleFallbackTypes.contains(notification.type)) {
             context.go('/circles');

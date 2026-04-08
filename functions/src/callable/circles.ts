@@ -17,6 +17,7 @@ import { requireAuth } from "../helpers/auth";
 import { isAdmin } from "../helpers/admin";
 import { deleteStorageFileFromUrl } from "../helpers/storage";
 import { generateNameTokens } from "../helpers/search-tokens";
+import { computeInitialGhostCheckAt } from "../helpers/circle-scheduling";
 import { PROJECT_ID, LOCATION, MAX_JOINED_CIRCLES } from "../config/constants";
 import { geminiApiKey, openaiApiKey } from "../config/secrets";
 import { moderateText } from "../helpers/text-moderation";
@@ -1242,11 +1243,16 @@ export const createCircle = onCall(
       memberIds: [userId],
       aiMode,
       generatedAIs: [],
+      generatedAICount: 0,
+      aiPostingEnabled: false,
       isPublic: aiMode === "aiOnly" ? false : isPublic !== false,
       maxMembers: 20,
       createdAt: Timestamp.now(),
       recentActivity: null,
       lastHumanPostAt: null,
+      nextGhostCheckAt: Timestamp.fromDate(computeInitialGhostCheckAt()),
+      nextCircleAIPostAt: null,
+      ghostWarningNotifiedAt: null,
       goal: (goal || "").trim(),
       coverImageUrl: null,
       iconImageUrl: null,

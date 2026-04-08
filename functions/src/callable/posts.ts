@@ -5,7 +5,7 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 
-import { admin, db, FieldValue } from "../helpers/firebase";
+import { admin, db, FieldValue, Timestamp } from "../helpers/firebase";
 import { requireAuth } from "../helpers/auth";
 import { geminiApiKey, openaiApiKey } from "../config/secrets";
 import { isAdmin, getAdminUids } from "../helpers/admin";
@@ -19,6 +19,9 @@ import {
     getMediaStoragePaths,
 } from "../helpers/pending-media";
 import { deleteStorageFileByPath } from "../helpers/storage";
+import {
+    computeNextGhostCheckAt,
+} from "../helpers/circle-scheduling";
 import { LOCATION } from "../config/constants";
 import { createAIProviderFactory } from "../ai/provider";
 import {
@@ -511,10 +514,17 @@ export const createPostWithModeration = onCall(
 
             if (circleId) {
                 try {
+                    const now = new Date();
                     await db.collection("circles").doc(circleId).update({
                         postCount: FieldValue.increment(1),
                         recentActivity: FieldValue.serverTimestamp(),
                         lastHumanPostAt: FieldValue.serverTimestamp(),
+                        ghostWarningNotifiedAt: FieldValue.delete(),
+                        nextGhostCheckAt: Timestamp.fromDate(computeNextGhostCheckAt({
+                            createdAt: now,
+                            lastHumanPostAt: now,
+                            ghostWarningNotifiedAt: null,
+                        })),
                     });
                 } catch (error) {
                     console.error("Failed to update circle counters:", error);

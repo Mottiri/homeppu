@@ -12,6 +12,7 @@ import { db, FieldValue, Timestamp } from "../helpers/firebase";
 import { deleteStorageFileFromUrl } from "../helpers/storage";
 import { generateCircleAIPersona } from "../circle-ai/generator";
 import { generateNameTokens } from "../helpers/search-tokens";
+import { computeInitialCircleAIPostAt } from "../helpers/circle-scheduling";
 import { LOCATION } from "../config/constants";
 import { NOTIFICATION_TITLES, LABELS } from "../config/messages";
 
@@ -57,6 +58,9 @@ export const onCircleCreated = onDocumentCreated(
       const maxMembers: number = circleData.maxMembers ?? 20;
       const currentMemberIds = circleData.memberIds || [];
       await db.collection("circles").doc(circleId).update({
+        generatedAICount: 0,
+        aiPostingEnabled: false,
+        nextCircleAIPostAt: null,
         hasSpace: currentMemberIds.length < maxMembers,
       });
       return;
@@ -111,8 +115,12 @@ export const onCircleCreated = onDocumentCreated(
       const updatedMemberIds = [...currentMemberIds, ...aiMemberIds];
 
       const maxMembers: number = circleData.maxMembers ?? 20;
+      const createdAt = circleData.createdAt?.toDate?.() || new Date();
       await db.collection("circles").doc(circleId).update({
         generatedAIs: generatedAIs,
+        generatedAICount: generatedAIs.length,
+        aiPostingEnabled: generatedAIs.length > 0,
+        nextCircleAIPostAt: Timestamp.fromDate(computeInitialCircleAIPostAt(createdAt)),
         memberIds: updatedMemberIds,
         memberCount: updatedMemberIds.length,
         hasSpace: updatedMemberIds.length < maxMembers,

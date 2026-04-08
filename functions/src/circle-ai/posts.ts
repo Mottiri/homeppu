@@ -1,7 +1,7 @@
-﻿/**
+/**
  * サークルAI投稿機能
  * - generateCircleAIPosts: 定期実行（Cloud Scheduler）
- * - executeCircleAIPost: Cloud Tasksワーカー
+ * - executeCircleAIPost: Cloud Tasks ワーカー
  * - triggerCircleAIPosts: 手動トリガー（管理者用）
  */
 
@@ -10,17 +10,40 @@ import * as functionsV1 from "firebase-functions/v1";
 import { scheduleHttpTask } from "../helpers/cloud-tasks";
 import { db, FieldValue, Timestamp } from "../helpers/firebase";
 import { isAdmin } from "../helpers/admin";
+import {
+  computeCircleAIPostRetryAt,
+  computeNextCircleAIPostAt,
+} from "../helpers/circle-scheduling";
 import { PROJECT_ID, LOCATION } from "../config/constants";
 import { geminiApiKey, openaiApiKey } from "../config/secrets";
 import { createAIProviderFactory } from "../ai/provider";
 import { AUTH_ERRORS, SYSTEM_ERRORS } from "../config/messages";
 
-// テスト用：本番は100
+// テスト用: 本番は 100
 const MAX_CIRCLES_PER_RUN = 3;
+const AI_POST_REQUEST_STALE_MS = 2 * 60 * 1000;
 
-/**
- * サークルAIの投稿を生成するシステムプロンプト
- */
+type GeneratedAI = {
+  id: string;
+  name: string;
+  avatarIndex: number;
+};
+
+type CircleAITarget = {
+  circleId: string;
+  circleName: string;
+  circleDescription: string;
+  circleCategory: string;
+  circleRules: string;
+  circleGoal: string;
+  generatedAIs: GeneratedAI[];
+  nextCircleAIPostAt: Date | null;
+};
+
+type AIPostRequestBeginResult =
+  | { kind: "continue"; ref: FirebaseFirestore.DocumentReference }
+  | { kind: "succeeded"; postId: string };
+
 function getCircleAIPostPrompt(
   aiName: string,
   circleName: string,
@@ -28,7 +51,7 @@ function getCircleAIPostPrompt(
   category: string,
   circleRules: string,
   circleGoal: string,
-  recentPosts: string[] = [] // 過去の投稿内容（重複回避用）
+  recentPosts: string[] = []
 ): string {
   const recentPostsSection = recentPosts.length > 0
     ? `
@@ -71,255 +94,460 @@ ${recentPostsSection}
 `;
 }
 
-/**
- * サークルAI投稿を定期実行（Cloud Scheduler用）
- * 毎日朝9時と夜20時に実行を想定
- *
- * 最適化版（2025-12-26）:
- * - 全サークル走査ではなくランダムに最大100件選択
- * - 前日に投稿したサークルは除外
- * - コスト削減のため処理数を制限
- */
+function normalizeGeneratedAIs(value: unknown): GeneratedAI[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is GeneratedAI =>
+      !!item &&
+      typeof item === "object" &&
+      typeof (item as GeneratedAI).id === "string" &&
+      typeof (item as GeneratedAI).name === "string" &&
+      typeof (item as GeneratedAI).avatarIndex === "number"
+    );
+}
+
+function toCircleAITarget(
+  doc: FirebaseFirestore.QueryDocumentSnapshot
+): CircleAITarget | null {
+  const data = doc.data();
+  if (data.isDeleted === true) return null;
+
+  const generatedAIs = normalizeGeneratedAIs(data.generatedAIs);
+  if (generatedAIs.length === 0) return null;
+
+  return {
+    circleId: doc.id,
+    circleName: data.name || "サークル",
+    circleDescription: data.description || "",
+    circleCategory: data.category || "その他",
+    circleRules: data.rules || "",
+    circleGoal: data.goal || "",
+    generatedAIs,
+    nextCircleAIPostAt: data.nextCircleAIPostAt?.toDate?.() || null,
+  };
+}
+
+function getAIPostRequestRef(
+  circleId: string,
+  requestId: string
+): FirebaseFirestore.DocumentReference {
+  return db.collection("circles").doc(circleId).collection("aiPostRequests").doc(requestId);
+}
+
+async function beginAIPostRequest(
+  circleId: string,
+  requestId: string
+): Promise<AIPostRequestBeginResult> {
+  const requestRef = getAIPostRequestRef(circleId, requestId);
+  const postRef = db.collection("posts").doc(requestId);
+  const now = Timestamp.now();
+
+  return db.runTransaction(async (transaction): Promise<AIPostRequestBeginResult> => {
+    const [requestSnap, postSnap] = await Promise.all([
+      transaction.get(requestRef),
+      transaction.get(postRef),
+    ]);
+
+    if (requestSnap.exists) {
+      const requestData = requestSnap.data() || {};
+      const status = typeof requestData.status === "string" ? requestData.status : "";
+      const storedPostId = typeof requestData.postId === "string" ? requestData.postId : "";
+      const updatedAt = requestData.updatedAt instanceof Timestamp ?
+        requestData.updatedAt.toMillis() :
+        0;
+
+      if (status === "succeeded" && storedPostId) {
+        return { kind: "succeeded", postId: storedPostId };
+      }
+
+      if (status === "processing" && now.toMillis() - updatedAt < AI_POST_REQUEST_STALE_MS && !postSnap.exists) {
+        throw new Error(`AI post request is still processing: ${requestId}`);
+      }
+    }
+
+    transaction.set(requestRef, {
+      status: "processing",
+      updatedAt: now,
+      createdAt: requestSnap.exists ? requestSnap.data()?.createdAt ?? now : now,
+      postId: FieldValue.delete(),
+    }, { merge: true });
+
+    if (postSnap.exists) {
+      return { kind: "continue", ref: requestRef };
+    }
+
+    return { kind: "continue", ref: requestRef };
+  });
+}
+
+async function finalizeAIPostRequest(params: {
+  circleId: string;
+  requestRef: FirebaseFirestore.DocumentReference;
+  postId: string;
+}): Promise<"finalized" | "already-finalized"> {
+  const circleRef = db.collection("circles").doc(params.circleId);
+  return db.runTransaction(async (transaction) => {
+    const requestSnap = await transaction.get(params.requestRef);
+    const requestData = requestSnap.data() || {};
+    const status = typeof requestData.status === "string" ? requestData.status : "";
+
+    if (status === "succeeded") {
+      return "already-finalized";
+    }
+
+    transaction.update(circleRef, {
+      postCount: FieldValue.increment(1),
+      recentActivity: FieldValue.serverTimestamp(),
+    });
+    transaction.set(params.requestRef, {
+      status: "succeeded",
+      postId: params.postId,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return "finalized";
+  });
+}
+
+function buildAIPostRequestId(params: {
+  circleId: string;
+  aiId: string;
+  requestAt: Date;
+}): string {
+  return `circle-ai-${params.circleId}-${params.aiId}-${params.requestAt.getTime()}`;
+}
+
+async function loadCircleAIPostTargets(params: {
+  limit: number;
+  dueOnly: boolean;
+}): Promise<CircleAITarget[]> {
+  let query: FirebaseFirestore.Query = db.collection("circles")
+    .where("isDeleted", "==", false)
+    .where("aiPostingEnabled", "==", true);
+
+  if (params.dueOnly) {
+    query = query.where("nextCircleAIPostAt", "<=", Timestamp.fromDate(new Date()));
+  }
+
+  query = query
+    .orderBy("nextCircleAIPostAt", "asc")
+    .limit(params.limit);
+
+  const snapshot = await query.get();
+  const targets: CircleAITarget[] = [];
+
+  for (const doc of snapshot.docs) {
+    const target = toCircleAITarget(doc);
+    if (target) {
+      targets.push(target);
+      continue;
+    }
+
+    await doc.ref.update({
+      aiPostingEnabled: false,
+      generatedAICount: 0,
+      nextCircleAIPostAt: null,
+    }).catch((error) => {
+      console.warn(`Failed to disable invalid AI posting circle ${doc.id}:`, error);
+    });
+  }
+
+  return targets;
+}
+
+async function rescheduleCircleAIPost(circleId: string, nextAt: Date): Promise<void> {
+  await db.collection("circles").doc(circleId).update({
+    nextCircleAIPostAt: Timestamp.fromDate(nextAt),
+  });
+}
+
+async function hasAIPostCapacityToday(
+  circleId: string,
+  todayTimestamp: FirebaseFirestore.Timestamp
+): Promise<boolean> {
+  const todayPosts = await db.collection("posts")
+    .where("circleId", "==", circleId)
+    .where("createdAt", ">=", todayTimestamp)
+    .limit(2)
+    .get();
+  return todayPosts.size < 2;
+}
+
+async function getRecentCirclePosts(circleId: string): Promise<string[]> {
+  const recentPostsSnapshot = await db.collection("posts")
+    .where("circleId", "==", circleId)
+    .orderBy("createdAt", "desc")
+    .limit(5)
+    .get();
+
+  return recentPostsSnapshot.docs
+    .map((doc) => doc.data().content as string)
+    .filter(Boolean);
+}
+
+function sanitizeGeneratedPost(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+  return trimmed.replace(/#[^\s#]+/g, "").trim();
+}
+
+async function createCircleAIPost(params: {
+  target: CircleAITarget;
+  ai: GeneratedAI;
+  aiFactory: ReturnType<typeof createAIProviderFactory>;
+  requestId: string;
+}): Promise<"posted" | "skipped-empty" | "already-posted"> {
+  const beginResult = await beginAIPostRequest(params.target.circleId, params.requestId);
+  if (beginResult.kind === "succeeded") {
+    console.log(`AI post request already succeeded: ${params.requestId}`);
+    return "already-posted";
+  }
+
+  const postRef = db.collection("posts").doc(params.requestId);
+  const existingPost = await postRef.get();
+  if (existingPost.exists) {
+    await finalizeAIPostRequest({
+      circleId: params.target.circleId,
+      requestRef: beginResult.ref,
+      postId: postRef.id,
+    });
+    console.log(`Recovered AI post request finalization: ${params.requestId}`);
+    return "already-posted";
+  }
+
+  const recentPostContents = await getRecentCirclePosts(params.target.circleId);
+  console.log(`Found ${recentPostContents.length} recent posts for deduplication`);
+
+  const prompt = getCircleAIPostPrompt(
+    params.ai.name,
+    params.target.circleName,
+    params.target.circleDescription,
+    params.target.circleCategory,
+    params.target.circleRules,
+    params.target.circleGoal,
+    recentPostContents
+  );
+  const result = await params.aiFactory.generateText(prompt);
+  const postContent = sanitizeGeneratedPost(result.text);
+
+  if (!postContent) {
+    console.log(`Empty post generated for circle ${params.target.circleId}`);
+    await beginResult.ref.delete().catch(() => undefined);
+    return "skipped-empty";
+  }
+
+  await postRef.set({
+    userId: params.ai.id,
+    userDisplayName: params.ai.name,
+    userAvatarIndex: params.ai.avatarIndex,
+    content: postContent,
+    postMode: "mix",
+    circleId: params.target.circleId,
+    isVisible: true,
+    reactions: {},
+    commentCount: 0,
+    aiRequestId: params.requestId,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  await finalizeAIPostRequest({
+    circleId: params.target.circleId,
+    requestRef: beginResult.ref,
+    postId: postRef.id,
+  });
+
+  console.log(`Created AI post in circle ${params.target.circleName}: ${postContent.substring(0, 50)}...`);
+  return "posted";
+}
+
+function pickRandomAI(generatedAIs: GeneratedAI[]): GeneratedAI {
+  return generatedAIs[Math.floor(Math.random() * generatedAIs.length)];
+}
+
+function buildTaskPayload(target: CircleAITarget, ai: GeneratedAI) {
+  const requestId = buildAIPostRequestId({
+    circleId: target.circleId,
+    aiId: ai.id,
+    requestAt: target.nextCircleAIPostAt || new Date(),
+  });
+  return {
+    circleId: target.circleId,
+    aiId: ai.id,
+    aiName: ai.name,
+    aiAvatarIndex: ai.avatarIndex,
+    requestId,
+  };
+}
+
+async function loadTargetCircleForExecution(circleId: string): Promise<CircleAITarget | null> {
+  const circleDoc = await db.collection("circles").doc(circleId).get();
+  if (!circleDoc.exists || circleDoc.data()?.isDeleted === true) {
+    return null;
+  }
+  const data = circleDoc.data();
+  const generatedAIs = normalizeGeneratedAIs(data?.generatedAIs);
+  if (generatedAIs.length === 0) {
+    return null;
+  }
+
+  return {
+    circleId,
+    circleName: data?.name || "サークル",
+    circleDescription: data?.description || "",
+    circleCategory: data?.category || "その他",
+    circleRules: data?.rules || "",
+    circleGoal: data?.goal || "",
+    generatedAIs,
+    nextCircleAIPostAt: data?.nextCircleAIPostAt?.toDate?.() || null,
+  };
+}
+
 export const generateCircleAIPosts = functionsV1.region(LOCATION).runWith({
   secrets: ["GEMINI_API_KEY", "OPENAI_API_KEY"],
   timeoutSeconds: 120,
   memory: "256MB",
 }).pubsub.schedule("0 9,20 * * *").timeZone("Asia/Tokyo").onRun(async () => {
-  console.log("=== generateCircleAIPosts START (Scheduler - Optimized) ===");
+  console.log("=== generateCircleAIPosts START ===");
 
   try {
     const project = process.env.GCLOUD_PROJECT || PROJECT_ID;
     const queue = "generate-circle-ai-posts";
     const location = LOCATION;
-
-    // 昨日の日付を取得（除外用）
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split("T")[0]; // "YYYY-MM-DD"
-
-    // 昨日投稿したサークルIDリストを取得
-    const historyDoc = await db.collection("circleAIPostHistory").doc(yesterdayStr).get();
-    const excludedCircleIds: string[] = historyDoc.exists ? (historyDoc.data()?.circleIds || []) : [];
-    console.log(`Excluding ${excludedCircleIds.length} circles from yesterday`);
-
-    // 全サークルを取得（isDeletedフィールドがないサークルも含める）
-    const circlesSnapshot = await db.collection("circles").get();
-
-    // AIがいて、削除されていないサークルのみフィルタリング
-    const eligibleCircles = circlesSnapshot.docs.filter(doc => {
-      const data = doc.data();
-      // isDeletedがtrue（明示的に削除済み）の場合は除外
-      // isDeletedがfalseまたは未設定の場合は対象
-      if (data.isDeleted === true) return false;
-      const generatedAIs = data.generatedAIs as Array<{ id: string; name: string; avatarIndex: number }> || [];
-      // AIがいない、または昨日投稿済みのサークルは除外
-      return generatedAIs.length > 0 && !excludedCircleIds.includes(doc.id);
-    });
-
-    console.log(`Eligible circles: ${eligibleCircles.length} (after exclusion)`);
-
-    // ランダムに最大100件選択
-    const shuffled = eligibleCircles.sort(() => Math.random() - 0.5);
-    const selectedCircles = shuffled.slice(0, MAX_CIRCLES_PER_RUN);
-
-    console.log(`Selected ${selectedCircles.length} circles for processing`);
-
-    let scheduledCount = 0;
-    const postedCircleIds: string[] = [];
-
-    // 今日の日付
+    const now = new Date();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayTimestamp = Timestamp.fromDate(today);
-    const todayStr = new Date().toISOString().split("T")[0];
 
-    for (const circleDoc of selectedCircles) {
-      const circleData = circleDoc.data();
-      const circleId = circleDoc.id;
+    const targets = await loadCircleAIPostTargets({
+      limit: MAX_CIRCLES_PER_RUN * 4,
+      dueOnly: true,
+    });
+    console.log(`Loaded ${targets.length} due circles for scheduler`);
 
-      const generatedAIs = circleData.generatedAIs as Array<{
-        id: string;
-        name: string;
-        avatarIndex: number;
-      }>;
+    let scheduledCount = 0;
+    for (const target of targets) {
+      if (scheduledCount >= MAX_CIRCLES_PER_RUN) break;
 
-      // すでに今日投稿があるかチェック
-      const todayPosts = await db.collection("posts")
-        .where("circleId", "==", circleId)
-        .where("createdAt", ">=", todayTimestamp)
-        .get();
-
-      // 今日すでに2件以上投稿があればスキップ
-      if (todayPosts.size >= 2) {
-        console.log(`Circle ${circleId} already has ${todayPosts.size} posts today, skipping`);
+      if (!await hasAIPostCapacityToday(target.circleId, todayTimestamp)) {
+        await rescheduleCircleAIPost(target.circleId, computeNextCircleAIPostAt(now));
         continue;
       }
 
-      // ランダムにAIを1体選択
-      const randomAI = generatedAIs[Math.floor(Math.random() * generatedAIs.length)];
-
-      // 0〜3時間後のランダムな時間にスケジュール（分単位で分散）
-      const delayMinutes = Math.floor(Math.random() * 180); // 0〜180分（3時間）
+      const randomAI = pickRandomAI(target.generatedAIs);
+      const delayMinutes = Math.floor(Math.random() * 180);
       const scheduleTime = new Date(Date.now() + delayMinutes * 60 * 1000);
-
-      // Cloud Tasksにタスクを登録
+      const nextScheduledAt = computeNextCircleAIPostAt(scheduleTime);
       const targetUrl = `https://${location}-${project}.cloudfunctions.net/executeCircleAIPost`;
 
-      const payload = {
-        circleId,
-        circleName: circleData.name,
-        circleDescription: circleData.description || "",
-        circleCategory: circleData.category || "その他",
-        circleRules: circleData.rules || "",
-        circleGoal: circleData.goal || "",
-        aiId: randomAI.id,
-        aiName: randomAI.name,
-        aiAvatarIndex: randomAI.avatarIndex,
-      };
-
       try {
-        await scheduleHttpTask({
+        await rescheduleCircleAIPost(target.circleId, nextScheduledAt);
+        const taskPayload = buildTaskPayload(target, randomAI);
+        const enqueueResult = await scheduleHttpTask({
           queue,
           url: targetUrl,
-          payload,
+          payload: taskPayload,
           scheduleTime,
           projectId: project,
           location,
+          taskId: `circle-ai-post-${target.circleId}`,
         });
-        console.log(`Scheduled post for ${circleData.name} at ${scheduleTime.toISOString()} (delay: ${delayMinutes}min)`);
+
+        console.log(
+          `Scheduled post for ${target.circleName} at ${scheduleTime.toISOString()} ` +
+          `(delay: ${delayMinutes}min, result: ${enqueueResult.result}, requestId: ${taskPayload.requestId})`
+        );
         scheduledCount++;
-        postedCircleIds.push(circleId);
       } catch (error) {
-        console.error(`Error scheduling task for circle ${circleId}:`, error);
+        await rescheduleCircleAIPost(
+          target.circleId,
+          computeCircleAIPostRetryAt(now)
+        ).catch(() => undefined);
+        console.error(`Error scheduling task for circle ${target.circleId}:`, error);
       }
     }
 
-    // 今日の投稿履歴を保存（明日の除外用）
-    if (postedCircleIds.length > 0) {
-      const historyRef = db.collection("circleAIPostHistory").doc(todayStr);
-      const existingHistory = await historyRef.get();
-      const existingIds: string[] = existingHistory.exists ? (existingHistory.data()?.circleIds || []) : [];
-      const mergedIds = [...new Set([...existingIds, ...postedCircleIds])];
-
-      await historyRef.set({
-        date: todayStr,
-        circleIds: mergedIds,
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-      console.log(`Saved ${mergedIds.length} circle IDs to history for ${todayStr}`);
-    }
-
-    console.log(`=== generateCircleAIPosts COMPLETE: Scheduled ${scheduledCount} posts ===`);
-
+    console.log(`=== generateCircleAIPosts COMPLETE: scheduled=${scheduledCount} ===`);
   } catch (error) {
     console.error("=== generateCircleAIPosts ERROR:", error);
   }
 });
 
-
-/**
- * サークルAI投稿を実行するワーカー（Cloud Tasksから呼び出し）
- */
 export const executeCircleAIPost = functionsV1.region(LOCATION).runWith({
   secrets: ["GEMINI_API_KEY", "OPENAI_API_KEY"],
   timeoutSeconds: 60,
 }).https.onRequest(async (request, response) => {
-  // Cloud Tasks からのリクエストを OIDC トークンで検証（動的インポート）
   const { verifyCloudTasksRequest } = await import("../helpers/cloud-tasks-auth");
   if (!await verifyCloudTasksRequest(request, "executeCircleAIPost")) {
     response.status(403).send("Unauthorized");
     return;
   }
 
+  const retryCircleId = typeof request.body?.circleId === "string" ?
+    request.body.circleId :
+    null;
+
   try {
     const {
       circleId,
-      circleName,
-      circleDescription,
-      circleCategory,
-      circleRules,
-      circleGoal,
       aiId,
       aiName,
       aiAvatarIndex,
+      requestId,
     } = request.body;
 
-    console.log(`Executing AI post for circle ${circleName} by ${aiName}`);
+    console.log(`Executing AI post for circle ${circleId} by ${aiName}`);
 
-    // サークルが削除されていないか確認
-    const circleDoc = await db.collection("circles").doc(circleId).get();
-    if (!circleDoc.exists || circleDoc.data()?.isDeleted) {
+    const target = await loadTargetCircleForExecution(circleId);
+    if (!target) {
       console.log(`Circle ${circleId} is deleted or not found, skipping AI post`);
       response.status(200).send("Circle deleted, skipping");
       return;
     }
 
-    // 過去の投稿を取得（重複回避用）
-    const recentPostsSnapshot = await db.collection("posts")
-      .where("circleId", "==", circleId)
-      .orderBy("createdAt", "desc")
-      .limit(5)
-      .get();
-
-    const recentPostContents = recentPostsSnapshot.docs.map(doc => doc.data().content as string).filter(Boolean);
-    console.log(`Found ${recentPostContents.length} recent posts for deduplication`);
-
-    const aiFactory = createAIProviderFactory();
-
-    // AIで投稿内容を生成（過去投稿を渡して重複回避）
-    const prompt = getCircleAIPostPrompt(aiName, circleName, circleDescription, circleCategory, circleRules, circleGoal, recentPostContents);
-    const result = await aiFactory.generateText(prompt);
-    let postContent = result.text.trim();
-
-    // ハッシュタグが含まれていたら削除
-    if (postContent) {
-      postContent = postContent.replace(/#[^\s#]+/g, "").trim();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayTimestamp = Timestamp.fromDate(today);
+    if (!await hasAIPostCapacityToday(circleId, todayTimestamp)) {
+      console.log(`Circle ${circleId} already reached today's AI post limit, skipping`);
+      response.status(200).send("Circle reached daily limit");
+      return;
     }
 
-    if (!postContent) {
-      console.log(`Empty post generated for circle ${circleId}`);
+    const aiFactory = createAIProviderFactory();
+    const outcome = await createCircleAIPost({
+      target,
+      ai: { id: aiId, name: aiName, avatarIndex: aiAvatarIndex },
+      aiFactory,
+      requestId,
+    });
+
+    if (outcome === "skipped-empty") {
       response.status(200).send("Empty post, skipping");
       return;
     }
 
-    // 投稿を作成
-    const postRef = db.collection("posts").doc();
-    await postRef.set({
-      userId: aiId,
-      userDisplayName: aiName,
-      userAvatarIndex: aiAvatarIndex,
-      content: postContent,
-      postMode: "mix",
-      circleId: circleId,
-      isVisible: true,
-      reactions: {},
-      commentCount: 0,
-      createdAt: FieldValue.serverTimestamp(),
-    });
+    if (outcome === "already-posted") {
+      response.status(200).send("Post already created");
+      return;
+    }
 
-    // サークルの投稿数を更新
-    await db.collection("circles").doc(circleId).update({
-      postCount: FieldValue.increment(1),
-      recentActivity: FieldValue.serverTimestamp(),
-    });
-
-    console.log(`Created AI post in circle ${circleName}: ${postContent.substring(0, 50)}...`);
     response.status(200).send("Post created");
-
   } catch (error) {
+    if (retryCircleId) {
+      await rescheduleCircleAIPost(
+        retryCircleId,
+        computeCircleAIPostRetryAt(new Date())
+      ).catch((rescheduleError) => {
+        console.error(`Failed to reschedule AI post retry for ${retryCircleId}:`, rescheduleError);
+      });
+    }
     console.error("executeCircleAIPost ERROR:", error);
     response.status(500).send(`Error: ${error}`);
   }
 });
 
-/**
- * サークルAI投稿を手動トリガー（テスト用）
- * 最適化版：generateCircleAIPostsと同じロジックを使用
- */
 export const triggerCircleAIPosts = onCall(
   { region: LOCATION, secrets: [geminiApiKey, openaiApiKey], timeoutSeconds: 300, enforceAppCheck: true },
   async (request) => {
-    // セキュリティ: 管理者権限チェック
     if (!request.auth) {
       throw new HttpsError("unauthenticated", AUTH_ERRORS.UNAUTHENTICATED);
     }
@@ -328,9 +556,8 @@ export const triggerCircleAIPosts = onCall(
       throw new HttpsError("permission-denied", AUTH_ERRORS.ADMIN_REQUIRED);
     }
 
-    console.log("=== triggerCircleAIPosts (manual - optimized) START ===");
+    console.log("=== triggerCircleAIPosts START ===");
 
-    // APIキーが1つも利用できない場合はエラー
     const geminiKey = geminiApiKey.value() || "";
     const openaiKey = openaiApiKey.value() || "";
     if (!geminiKey && !openaiKey) {
@@ -339,139 +566,54 @@ export const triggerCircleAIPosts = onCall(
     }
 
     const aiFactory = createAIProviderFactory();
-
-    let totalPosts = 0;
-    const postedCircleIds: string[] = [];
+    const now = new Date();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayTimestamp = Timestamp.fromDate(today);
 
     try {
-      // 昨日の日付を取得（除外用）
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split("T")[0];
-
-      // 昨日投稿したサークルIDリストを取得
-      const historyDoc = await db.collection("circleAIPostHistory").doc(yesterdayStr).get();
-      const excludedCircleIds: string[] = historyDoc.exists ? (historyDoc.data()?.circleIds || []) : [];
-      console.log(`Excluding ${excludedCircleIds.length} circles from yesterday`);
-
-      // 全サークルを取得（isDeletedフィールドがないサークルも含める）
-      const circlesSnapshot = await db.collection("circles").get();
-
-      // AIがいて、削除されていないサークルのみフィルタリング
-      const eligibleCircles = circlesSnapshot.docs.filter(doc => {
-        const data = doc.data();
-        // isDeletedがtrue（明示的に削除済み）の場合は除外
-        if (data.isDeleted === true) return false;
-        const generatedAIs = data.generatedAIs as Array<{ id: string; name: string; avatarIndex: number }> || [];
-        return generatedAIs.length > 0 && !excludedCircleIds.includes(doc.id);
+      const targets = await loadCircleAIPostTargets({
+        limit: MAX_CIRCLES_PER_RUN * 4,
+        dueOnly: false,
       });
+      console.log(`Loaded ${targets.length} circles for manual trigger`);
 
-      console.log(`Eligible circles: ${eligibleCircles.length} (after exclusion)`);
+      let totalPosts = 0;
+      for (const target of targets) {
+        if (totalPosts >= MAX_CIRCLES_PER_RUN) break;
 
-      // ランダムに最大MAX_CIRCLES_PER_RUN件選択
-      const shuffled = eligibleCircles.sort(() => Math.random() - 0.5);
-      const selectedCircles = shuffled.slice(0, MAX_CIRCLES_PER_RUN);
-
-      console.log(`Selected ${selectedCircles.length} circles for processing`);
-
-      // 今日の日付
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayTimestamp = Timestamp.fromDate(today);
-      const todayStr = new Date().toISOString().split("T")[0];
-
-      for (const circleDoc of selectedCircles) {
-        const circleData = circleDoc.data();
-        const circleId = circleDoc.id;
-
-        const generatedAIs = circleData.generatedAIs as Array<{
-          id: string;
-          name: string;
-          avatarIndex: number;
-        }>;
-
-        // すでに今日投稿があるかチェック
-        const todayPosts = await db.collection("posts")
-          .where("circleId", "==", circleId)
-          .where("createdAt", ">=", todayTimestamp)
-          .get();
-
-        if (todayPosts.size >= 2) {
-          console.log(`Circle ${circleId} already has ${todayPosts.size} posts today, skipping`);
+        if (!await hasAIPostCapacityToday(target.circleId, todayTimestamp)) {
+          await rescheduleCircleAIPost(target.circleId, computeNextCircleAIPostAt(now));
           continue;
         }
 
-        const randomAI = generatedAIs[Math.floor(Math.random() * generatedAIs.length)];
-
-        // 過去の投稿を取得（重複回避用）
-        const recentPostsSnapshot = await db.collection("posts")
-          .where("circleId", "==", circleId)
-          .orderBy("createdAt", "desc")
-          .limit(5)
-          .get();
-        const recentPostContents = recentPostsSnapshot.docs.map(doc => doc.data().content as string).filter(Boolean);
-
-        const prompt = getCircleAIPostPrompt(
-          randomAI.name,
-          circleData.name,
-          circleData.description || "",
-          circleData.category || "その他",
-          circleData.rules || "",
-          circleData.goal || "",
-          recentPostContents
-        );
+        const randomAI = pickRandomAI(target.generatedAIs);
+        const nextScheduledAt = computeNextCircleAIPostAt(now);
+        const requestId = buildAIPostRequestId({
+          circleId: target.circleId,
+          aiId: randomAI.id,
+          requestAt: nextScheduledAt,
+        });
 
         try {
-          const result = await aiFactory.generateText(prompt);
-          let postContent = result.text.trim();
+          await rescheduleCircleAIPost(target.circleId, nextScheduledAt);
+          const outcome = await createCircleAIPost({
+            target,
+            ai: randomAI,
+            aiFactory,
+            requestId,
+          });
 
-          if (postContent) {
-            postContent = postContent.replace(/#[^\s#]+/g, "").trim();
+          if (outcome === "posted" || outcome === "already-posted") {
+            totalPosts++;
           }
 
-          if (!postContent) continue;
-
-          const postRef = db.collection("posts").doc();
-          await postRef.set({
-            userId: randomAI.id,
-            userDisplayName: randomAI.name,
-            userAvatarIndex: randomAI.avatarIndex,
-            content: postContent,
-            postMode: "mix",
-            circleId: circleId,
-            isVisible: true,
-            reactions: {},
-            commentCount: 0,
-            createdAt: FieldValue.serverTimestamp(),
-          });
-
-          await db.collection("circles").doc(circleId).update({
-            postCount: FieldValue.increment(1),
-            recentActivity: FieldValue.serverTimestamp(),
-          });
-
-          totalPosts++;
-          postedCircleIds.push(circleId);
           await new Promise((resolve) => setTimeout(resolve, 500));
-
         } catch (error) {
-          console.error(`Error generating post for circle ${circleId}:`, error);
+          await rescheduleCircleAIPost(target.circleId, computeCircleAIPostRetryAt(now))
+            .catch(() => undefined);
+          console.error(`Error generating post for circle ${target.circleId}:`, error);
         }
-      }
-
-      // 今日の投稿履歴を保存（明日の除外用）
-      if (postedCircleIds.length > 0) {
-        const historyRef = db.collection("circleAIPostHistory").doc(todayStr);
-        const existingHistory = await historyRef.get();
-        const existingIds: string[] = existingHistory.exists ? (existingHistory.data()?.circleIds || []) : [];
-        const mergedIds = [...new Set([...existingIds, ...postedCircleIds])];
-
-        await historyRef.set({
-          date: todayStr,
-          circleIds: mergedIds,
-          updatedAt: FieldValue.serverTimestamp(),
-        });
-        console.log(`Saved ${mergedIds.length} circle IDs to history for ${todayStr}`);
       }
 
       return {
@@ -479,7 +621,6 @@ export const triggerCircleAIPosts = onCall(
         message: `サークルAI投稿を${totalPosts}件作成しました（最大${MAX_CIRCLES_PER_RUN}件処理）`,
         totalPosts,
       };
-
     } catch (error) {
       console.error("triggerCircleAIPosts ERROR:", error);
       return { success: false, message: `エラー: ${error}` };
