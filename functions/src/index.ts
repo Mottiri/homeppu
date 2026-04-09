@@ -32,6 +32,7 @@ export {
     executePostModeration,
     checkPostModerationTimeout,
     cleanupRejectedPost,
+    deleteRejectedPost,
     approveReviewedPost,
 } from "./callable/posts";
 export { initializeAIAccounts, generateAIPosts } from "./callable/ai";

@@ -29,6 +29,7 @@ export const PERMISSION_ERRORS = {
     CIRCLE_APPROVE_OWNER_ONLY: "オーナー、サブオーナー、または管理者のみ承認できます",
     CIRCLE_REJECT_OWNER_ONLY: "オーナー、サブオーナー、または管理者のみ拒否できます",
     INQUIRY_ACCESS_DENIED: "この問い合わせにはアクセスできません",
+    POST_DELETE_PERMISSION_DENIED: "この投稿を削除する権限がありません",
     PARTS_NOT_UNLOCKED: "アンロックしていないパーツは使用できません",
     EPIC_REACTION_REQUIRES_SUBSCRIPTION: "サブスクまたは一時解除が必要です",
 } as const;
@@ -86,6 +87,7 @@ export const VALIDATION_ERRORS = {
     RATE_LIMITED_PER_MINUTE: "短時間での投稿が多すぎます。少し待ってから再度投稿してください",
     RATE_LIMITED_DAILY_15: "1日に投稿できる回数は15回までです。明日また投稿してください",
     POST_REQUEST_IN_PROGRESS: "投稿処理を確認中です。少し待ってから再度お試しください",
+    POST_NOT_REJECTED: "公開されなかった投稿のみ削除できます",
     COMMENT_RATE_LIMITED_PER_MINUTE: "コメントは60秒で2回までです。少し待ってから再度送信してください",
 
     reactionLimitExceeded: (max: number) => `1つの投稿に対するリアクションは${max}回までです`,

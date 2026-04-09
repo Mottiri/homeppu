@@ -277,6 +277,9 @@ functions/src/
   - Cloud Tasks retry を使い切った後でも、owner-only 投稿が `processing` のまま固着しないようにする。
 - `cleanupRejectedPost`
   - `rejected` 投稿を 24 時間後に削除する cleanup worker。
+- `deleteRejectedPost`
+  - 投稿者本人または管理者が、`rejected` 投稿を即時削除する callable。
+  - 投稿ドキュメントだけでなく、未参照の Storage メディアも一緒に後始末する。
 - `approveReviewedPost`
   - 管理者レビューで `review_needed` 投稿を公開側へ昇格させる。
 

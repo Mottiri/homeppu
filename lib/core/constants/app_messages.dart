@@ -148,6 +148,8 @@ class _ErrorMessages {
   String get postRetryReady =>
       '投稿結果を確認できませんでした。同じ内容を再送できます。';
   String get deleteFailed => '削除できなかったみたい';
+  String get rejectedPostDeleteFailed =>
+      '公開されなかった投稿を削除できなかったみたい';
   String get commentDeleteFailed => 'コメントを削除できなかったみたい';
   String get moderationBlocked => 'この内容は投稿できないみたい😢';
   String get postDeletedNotice => 'この投稿は削除されました';
@@ -190,6 +192,7 @@ class _ConfirmMessages {
 
   // 削除確認
   String deletePost() => 'この投稿を削除する？\nこの操作は取り消せないよ';
+  String deleteRejectedPost() => 'この公開されなかった投稿を削除する？';
   String deleteCircle(String name) => '「$name」を削除する？\nメンバー全員がアクセスできなくなるよ';
   String deleteComment() => 'このコメントを削除する？';
   String get deleteTitle => '削除の確認';
@@ -405,12 +408,8 @@ class _PostMessages {
   const _PostMessages();
 
   String get processingStatus => '審査中';
-  String get processingDescription => '確認が終わるまで他の人には表示されません';
   String get reviewNeededStatus => '確認中';
-  String get reviewNeededDescription => '運営が内容を確認しています';
   String get rejectedStatus => '公開されませんでした';
-  String get rejectedDescription => 'タップして理由を確認できます';
-  String get ownerOnlyHint => 'この投稿は今のところ自分にだけ表示されています';
   String get repostAction => '編集して再投稿';
 }
 

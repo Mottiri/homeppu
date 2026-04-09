@@ -199,6 +199,25 @@ class ModerationService {
   }
 
   /// コンテンツを通報
+  Future<void> deleteRejectedPost({
+    required String postId,
+  }) async {
+    try {
+      final callable = _functions.httpsCallable(
+        'deleteRejectedPost',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
+      );
+      await callable.call({
+        'postId': postId,
+      });
+    } on FirebaseFunctionsException catch (e) {
+      throw ModerationException(
+        message: e.message ?? AppMessages.error.rejectedPostDeleteFailed,
+        code: e.code,
+      );
+    }
+  }
+
   Future<void> approveReviewedPost({
     required String postId,
     required String reviewId,

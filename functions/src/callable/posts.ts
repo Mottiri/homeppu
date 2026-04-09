@@ -29,6 +29,7 @@ import { LOCATION, PROJECT_ID, QUEUE_NAME, CLOUD_TASK_FUNCTIONS } from "../confi
 import { createAIProviderFactory } from "../ai/provider";
 import {
     AUTH_ERRORS,
+    PERMISSION_ERRORS,
     VALIDATION_ERRORS,
     SYSTEM_ERRORS,
     NOTIFICATION_TITLES,
@@ -715,7 +716,10 @@ async function finalizeReviewNeededPost(params: {
     });
 }
 
-async function cleanupRejectedPostDocument(postId: string): Promise<void> {
+async function cleanupRejectedPostDocument(
+    postId: string,
+    options?: { ignoreOwnerVisibleUntil?: boolean }
+): Promise<void> {
     const postRef = db.collection("posts").doc(postId);
     const postSnap = await postRef.get();
     if (!postSnap.exists) {
@@ -730,7 +734,9 @@ async function cleanupRejectedPostDocument(postId: string): Promise<void> {
     const ownerVisibleUntil = postData.ownerVisibleUntil instanceof Timestamp ?
         postData.ownerVisibleUntil.toDate() :
         null;
-    if (ownerVisibleUntil && ownerVisibleUntil.getTime() > Date.now()) {
+    if (!options?.ignoreOwnerVisibleUntil &&
+        ownerVisibleUntil &&
+        ownerVisibleUntil.getTime() > Date.now()) {
         return;
     }
 
@@ -751,6 +757,50 @@ async function cleanupRejectedPostDocument(postId: string): Promise<void> {
     await deletePendingMediaByStoragePaths(storagePaths);
     await postRef.delete();
 }
+
+export const deleteRejectedPost = onCall(
+    {
+        region: LOCATION,
+        timeoutSeconds: 60,
+        memory: "512MiB",
+        enforceAppCheck: true,
+    },
+    async (request) => {
+        const userId = await requireAuth(request);
+        const { postId } = request.data || {};
+
+        if (!postId || typeof postId !== "string") {
+            throw new HttpsError("invalid-argument", VALIDATION_ERRORS.MISSING_REQUIRED);
+        }
+
+        const postRef = db.collection("posts").doc(postId);
+        const postSnap = await postRef.get();
+        if (!postSnap.exists) {
+            throw new HttpsError("not-found", RESOURCE_ERRORS.POST_NOT_FOUND);
+        }
+
+        const postData = postSnap.data() || {};
+        const ownerId = typeof postData.userId === "string" ? postData.userId : "";
+        if (!ownerId) {
+            throw new HttpsError("not-found", RESOURCE_ERRORS.POST_NOT_FOUND);
+        }
+
+        const requesterIsAdmin = await isAdmin(userId);
+        if (ownerId !== userId && !requesterIsAdmin) {
+            throw new HttpsError("permission-denied", PERMISSION_ERRORS.POST_DELETE_PERMISSION_DENIED);
+        }
+
+        if (postData.moderationStatus !== POST_MODERATION_STATUS_REJECTED) {
+            throw new HttpsError("failed-precondition", VALIDATION_ERRORS.POST_NOT_REJECTED);
+        }
+
+        await cleanupRejectedPostDocument(postId, {
+            ignoreOwnerVisibleUntil: true,
+        });
+
+        return { success: true, postId };
+    }
+);
 
 /**
  * モデレーション付き投稿作成
