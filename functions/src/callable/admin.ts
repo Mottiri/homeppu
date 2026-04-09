@@ -782,7 +782,7 @@ export const recalculateUnreadCounts = onCall(
         region: LOCATION,
         timeoutSeconds: 540,
         memory: "256MiB",
-        enforceAppCheck: false,
+        enforceAppCheck: true,
     },
     async (request) => {
         await requireAdmin(request);

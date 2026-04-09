@@ -28,7 +28,7 @@ functions/src/
 
 | ファイル | 機能 | 主な関数 |
 |---------|------|---------|
-| `admin.ts` | 管理者機能 | `cleanUpUserFollows`, `deleteAllAIUsers`, `cleanupOrphanedCircleAIs`, `backfillPublicUsers`, `backfillCircleNameTokens`, `adminDeletePostWithPenalty`, `adminDeleteCommentWithPenalty`, `setAdminRole`, `removeAdminRole`, `banUser`, `permanentBanUser`, `unbanUser` |
+| `admin.ts` | 管理者機能 | `cleanUpUserFollows`, `deleteAllAIUsers`, `cleanupOrphanedCircleAIs`, `backfillPublicUsers`, `backfillCircleNameTokens`, `adminDeletePostWithPenalty`, `adminDeleteCommentWithPenalty`, `setAdminRole`, `removeAdminRole`, `banUser`, `permanentBanUser`, `unbanUser`, `recalculateUnreadCounts` |
 | `users.ts` | ユーザー機能 | `followUser`, `unfollowUser`, `getFollowStatus`, `getVirtueHistory`, `getVirtueStatus`, `checkPasswordResetTarget` |
 | `virtue_shop.ts` | 徳ポイントショップ | `getVirtueShopConfig`, `purchaseVirtueItem` |
 | `posts.ts` | 投稿作成 | `createPostWithRateLimit`, `createPostWithModeration` |
