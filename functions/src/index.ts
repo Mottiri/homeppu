@@ -27,7 +27,13 @@ export {
     syncStampSheetSnapshot,
 } from "./callable/comments";
 export { grantRewardedReactionUnlock } from "./callable/rewarded_reactions";
-export { createPostWithModeration } from "./callable/posts";
+export {
+    createPostWithModeration,
+    executePostModeration,
+    checkPostModerationTimeout,
+    cleanupRejectedPost,
+    approveReviewedPost,
+} from "./callable/posts";
 export { initializeAIAccounts, generateAIPosts } from "./callable/ai";
 export {
     deleteCircle,

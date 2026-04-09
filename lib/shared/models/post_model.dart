@@ -2,6 +2,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum MediaType { image, video, file }
 
+enum PostModerationStatus {
+  processing,
+  approved,
+  rejected,
+  reviewNeeded,
+}
+
 class MediaItem {
   final String url;
   final MediaType type;
@@ -57,6 +64,7 @@ class PostModel {
   final String content;
   final String? imageUrl;
   final List<MediaItem> mediaItems;
+  final List<String> mediaStoragePaths;
   final String postMode;
   final String? circleId;
   final DateTime createdAt;
@@ -66,6 +74,15 @@ class PostModel {
   final bool isPinned;
   final bool isPinnedTop;
   final bool isFavorite;
+  final PostModerationStatus moderationStatus;
+  final String moderationReason;
+  final DateTime? moderationCompletedAt;
+  final DateTime? ownerVisibleUntil;
+  final bool needsReview;
+  final String needsReviewReason;
+  final bool publishSideEffectsPending;
+  final bool grantVirtueOnPublish;
+  final String? clientRequestId;
 
   PostModel({
     required this.id,
@@ -75,6 +92,7 @@ class PostModel {
     required this.content,
     this.imageUrl,
     this.mediaItems = const [],
+    this.mediaStoragePaths = const [],
     required this.postMode,
     this.circleId,
     required this.createdAt,
@@ -84,14 +102,23 @@ class PostModel {
     this.isPinned = false,
     this.isPinnedTop = false,
     this.isFavorite = false,
+    this.moderationStatus = PostModerationStatus.approved,
+    this.moderationReason = '',
+    this.moderationCompletedAt,
+    this.ownerVisibleUntil,
+    this.needsReview = false,
+    this.needsReviewReason = '',
+    this.publishSideEffectsPending = false,
+    this.grantVirtueOnPublish = false,
+    this.clientRequestId,
   });
 
   factory PostModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
 
-    var mediaItems = <MediaItem>[];
+    var parsedMediaItems = <MediaItem>[];
     if (data['mediaItems'] != null) {
-      mediaItems = (data['mediaItems'] as List)
+      parsedMediaItems = (data['mediaItems'] as List)
           .map((item) => MediaItem.fromMap(Map<String, dynamic>.from(item)))
           .toList();
     }
@@ -103,16 +130,27 @@ class PostModel {
       userAvatarIndex: data['userAvatarIndex'] ?? 0,
       content: data['content'] ?? '',
       imageUrl: data['imageUrl'],
-      mediaItems: mediaItems,
+      mediaItems: parsedMediaItems,
+      mediaStoragePaths: List<String>.from(data['mediaStoragePaths'] ?? const []),
       postMode: data['postMode'] ?? 'mix',
       circleId: data['circleId'],
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      reactions: Map<String, int>.from(data['reactions'] ?? {}),
+      reactions: Map<String, int>.from(data['reactions'] ?? const {}),
       commentCount: data['commentCount'] ?? 0,
       isVisible: data['isVisible'] ?? true,
       isPinned: data['isPinned'] ?? false,
       isPinnedTop: data['isPinnedTop'] ?? false,
       isFavorite: data['isFavorite'] ?? false,
+      moderationStatus: _parseModerationStatus(data['moderationStatus']),
+      moderationReason: data['moderationReason'] ?? '',
+      moderationCompletedAt:
+          (data['moderationCompletedAt'] as Timestamp?)?.toDate(),
+      ownerVisibleUntil: (data['ownerVisibleUntil'] as Timestamp?)?.toDate(),
+      needsReview: data['needsReview'] ?? false,
+      needsReviewReason: data['needsReviewReason'] ?? '',
+      publishSideEffectsPending: data['publishSideEffectsPending'] ?? false,
+      grantVirtueOnPublish: data['grantVirtueOnPublish'] ?? false,
+      clientRequestId: data['clientRequestId'],
     );
   }
 
@@ -124,6 +162,7 @@ class PostModel {
       'content': content,
       'imageUrl': imageUrl,
       'mediaItems': mediaItems.map((item) => item.toMap()).toList(),
+      'mediaStoragePaths': mediaStoragePaths,
       'postMode': postMode,
       'circleId': circleId,
       'createdAt': Timestamp.fromDate(createdAt),
@@ -133,11 +172,51 @@ class PostModel {
       'isPinned': isPinned,
       'isPinnedTop': isPinnedTop,
       'isFavorite': isFavorite,
+      'moderationStatus': moderationStatus.name,
+      'moderationReason': moderationReason,
+      'moderationCompletedAt':
+          moderationCompletedAt != null
+              ? Timestamp.fromDate(moderationCompletedAt!)
+              : null,
+      'ownerVisibleUntil':
+          ownerVisibleUntil != null
+              ? Timestamp.fromDate(ownerVisibleUntil!)
+              : null,
+      'needsReview': needsReview,
+      'needsReviewReason': needsReviewReason,
+      'publishSideEffectsPending': publishSideEffectsPending,
+      'grantVirtueOnPublish': grantVirtueOnPublish,
+      'clientRequestId': clientRequestId,
     };
   }
 
   int get totalReactions {
     return reactions.values.fold(0, (acc, value) => acc + value);
+  }
+
+  bool get isProcessing => moderationStatus == PostModerationStatus.processing;
+
+  bool get isApproved => moderationStatus == PostModerationStatus.approved;
+
+  bool get isRejected => moderationStatus == PostModerationStatus.rejected;
+
+  bool get isReviewNeeded => moderationStatus == PostModerationStatus.reviewNeeded;
+
+  bool get isOwnerVisibleModerationPost =>
+      !isVisible &&
+      (isProcessing || isRejected || isReviewNeeded);
+
+  bool isOwnerVisibleModerationPostFor(
+    String? viewerUserId, {
+    bool isAdmin = false,
+    DateTime? now,
+  }) {
+    if (!isOwnerVisibleModerationPost) return false;
+    if (!isAdmin && viewerUserId != userId) return false;
+    if (isRejected && ownerVisibleUntil != null) {
+      return ownerVisibleUntil!.isAfter(now ?? DateTime.now());
+    }
+    return true;
   }
 
   PostModel copyWith({
@@ -148,6 +227,7 @@ class PostModel {
     String? content,
     String? imageUrl,
     List<MediaItem>? mediaItems,
+    List<String>? mediaStoragePaths,
     String? postMode,
     String? circleId,
     DateTime? createdAt,
@@ -157,6 +237,15 @@ class PostModel {
     bool? isPinned,
     bool? isPinnedTop,
     bool? isFavorite,
+    PostModerationStatus? moderationStatus,
+    String? moderationReason,
+    DateTime? moderationCompletedAt,
+    DateTime? ownerVisibleUntil,
+    bool? needsReview,
+    String? needsReviewReason,
+    bool? publishSideEffectsPending,
+    bool? grantVirtueOnPublish,
+    String? clientRequestId,
   }) {
     return PostModel(
       id: id ?? this.id,
@@ -166,6 +255,7 @@ class PostModel {
       content: content ?? this.content,
       imageUrl: imageUrl ?? this.imageUrl,
       mediaItems: mediaItems ?? this.mediaItems,
+      mediaStoragePaths: mediaStoragePaths ?? this.mediaStoragePaths,
       postMode: postMode ?? this.postMode,
       circleId: circleId ?? this.circleId,
       createdAt: createdAt ?? this.createdAt,
@@ -175,6 +265,18 @@ class PostModel {
       isPinned: isPinned ?? this.isPinned,
       isPinnedTop: isPinnedTop ?? this.isPinnedTop,
       isFavorite: isFavorite ?? this.isFavorite,
+      moderationStatus: moderationStatus ?? this.moderationStatus,
+      moderationReason: moderationReason ?? this.moderationReason,
+      moderationCompletedAt:
+          moderationCompletedAt ?? this.moderationCompletedAt,
+      ownerVisibleUntil: ownerVisibleUntil ?? this.ownerVisibleUntil,
+      needsReview: needsReview ?? this.needsReview,
+      needsReviewReason: needsReviewReason ?? this.needsReviewReason,
+      publishSideEffectsPending:
+          publishSideEffectsPending ?? this.publishSideEffectsPending,
+      grantVirtueOnPublish:
+          grantVirtueOnPublish ?? this.grantVirtueOnPublish,
+      clientRequestId: clientRequestId ?? this.clientRequestId,
     );
   }
 
@@ -196,4 +298,18 @@ class PostModel {
 
   List<MediaItem> get files =>
       allMedia.where((m) => m.type == MediaType.file).toList();
+
+  static PostModerationStatus _parseModerationStatus(dynamic raw) {
+    switch (raw) {
+      case 'processing':
+        return PostModerationStatus.processing;
+      case 'rejected':
+        return PostModerationStatus.rejected;
+      case 'review_needed':
+        return PostModerationStatus.reviewNeeded;
+      case 'approved':
+      default:
+        return PostModerationStatus.approved;
+    }
+  }
 }

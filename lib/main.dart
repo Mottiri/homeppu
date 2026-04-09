@@ -18,6 +18,8 @@ import 'shared/services/notification_service.dart';
 import 'shared/services/subscription_service.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
+    GlobalKey<ScaffoldMessengerState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -60,9 +62,31 @@ class _HomeppuAppState extends ConsumerState<HomeppuApp> {
   }
 
   void _setupNotificationCallback() {
-    NotificationService().setNotificationTapCallback((payload) {
+    final notificationService = NotificationService();
+    notificationService.setNotificationTapCallback((payload) {
       final router = ref.read(appRouterProvider);
       _handleNotificationNavigation(router, payload);
+    });
+    notificationService.setForegroundNotificationCallback((
+      payload,
+      title,
+      body,
+    ) {
+      if (payload.type != 'post_rejected') return;
+      final messengerState = scaffoldMessengerKey.currentState;
+      if (messengerState == null) return;
+      messengerState
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              [title, body].where((text) => text.isNotEmpty).join('\n'),
+            ),
+            duration: const Duration(seconds: 8),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
     });
   }
 
@@ -137,6 +161,7 @@ class _HomeppuAppState extends ConsumerState<HomeppuApp> {
         router.go('/notifications');
         break;
       case 'post_hidden':
+      case 'post_rejected':
         if (payload.postId != null) {
           router.push('/post/${payload.postId}');
         }
@@ -157,6 +182,7 @@ class _HomeppuAppState extends ConsumerState<HomeppuApp> {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       routerConfig: router,
+      scaffoldMessengerKey: scaffoldMessengerKey,
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,

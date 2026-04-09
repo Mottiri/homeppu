@@ -27,6 +27,7 @@ const TYPE_TO_CATEGORY: Record<string, NotificationCategory> = {
     review_needed: "support",
     post_deleted: "support",
     post_hidden: "support",
+    post_rejected: "support",
     user_banned: "support",
     user_unbanned: "support",
 };

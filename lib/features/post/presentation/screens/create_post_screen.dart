@@ -28,8 +28,17 @@ import '../widgets/waiting_character_overlay.dart';
 /// 投稿作成画面
 class CreatePostScreen extends ConsumerStatefulWidget {
   final String? circleId; // サークルへの投稿の場合はcircleIdを受け取る
+  final String? initialContent;
+  final List<MediaItem>? initialMediaItems;
+  final String? sourcePostId;
 
-  const CreatePostScreen({super.key, this.circleId});
+  const CreatePostScreen({
+    super.key,
+    this.circleId,
+    this.initialContent,
+    this.initialMediaItems,
+    this.sourcePostId,
+  });
 
   @override
   ConsumerState<CreatePostScreen> createState() => _CreatePostScreenState();
@@ -61,6 +70,14 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialContent != null && widget.initialContent!.isNotEmpty) {
+      _contentController.text = widget.initialContent!;
+    }
+    if (widget.initialMediaItems != null) {
+      _selectedMedia.addAll(
+        widget.initialMediaItems!.map(_SelectedMedia.existing),
+      );
+    }
     InterstitialAdService.instance.preload();
   }
 
@@ -382,7 +399,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     if (_selectedMedia.length >= MediaService.maxMediaCount) return;
 
     setState(() {
-      _selectedMedia.add(_SelectedMedia(path: path, type: type));
+      _selectedMedia.add(_SelectedMedia.local(path: path, type: type));
     });
   }
 
@@ -431,6 +448,62 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     if (mounted) {
       SnackBarHelper.showError(context, message);
     }
+  }
+
+  Future<List<MediaItem>> _uploadSelectedMediaInParallel(String userId) async {
+    final localMedia = _selectedMedia.where((media) => media.isLocal).toList();
+    if (localMedia.isEmpty) {
+      return const [];
+    }
+
+    final progressByIndex = List<double>.filled(localMedia.length, 0);
+    final uploadResults = await Future.wait(
+      List.generate(localMedia.length, (index) async {
+        final media = localMedia[index];
+        try {
+          final item = await _mediaService.uploadFile(
+            filePath: media.localPath!,
+            userId: userId,
+            type: media.type,
+            onProgress: (progress) {
+              if (!mounted) return;
+              progressByIndex[index] = progress.clamp(0, 1);
+              final totalProgress =
+                  progressByIndex.fold<double>(0, (sum, value) => sum + value) /
+                  localMedia.length;
+              setState(() {
+                _uploadProgress = totalProgress;
+              });
+            },
+          );
+          return (item: item, error: null as Object?);
+        } catch (error) {
+          return (item: null as MediaItem?, error: error);
+        }
+      }),
+    );
+
+    final uploadedItems =
+        uploadResults
+            .map((result) => result.item)
+            .whereType<MediaItem>()
+            .toList(growable: false);
+    Object? firstError;
+    for (final result in uploadResults) {
+      if (result.error != null) {
+        firstError = result.error;
+        break;
+      }
+    }
+
+    if (firstError != null) {
+      if (uploadedItems.isNotEmpty) {
+        await _mediaService.rollbackUploadedMediaItems(uploadedItems);
+      }
+      throw firstError;
+    }
+
+    return uploadedItems;
   }
 
   Future<void> _createPost() async {
@@ -484,6 +557,11 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     var postCreated = false;
     var createPostRequested = false;
     final uploadedMedia = List<MediaItem>.from(_pendingUploadedMedia);
+    final existingMedia =
+        _selectedMedia
+            .where((media) => media.isExisting)
+            .map((media) => media.existingItem!)
+            .toList(growable: false);
     Future<bool>? adFuture;
 
     try {
@@ -493,20 +571,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           _uploadProgress = 0;
         });
 
-        for (int i = 0; i < _selectedMedia.length; i++) {
-          final media = _selectedMedia[i];
-          final item = await _mediaService.uploadFile(
-            filePath: media.path,
-            userId: user.uid,
-            type: media.type,
-            onProgress: (progress) {
-              setState(() {
-                _uploadProgress = (i + progress) / _selectedMedia.length;
-              });
-            },
-          );
-          uploadedMedia.add(item);
-        }
+        final uploadResults = await _uploadSelectedMediaInParallel(user.uid);
+        uploadedMedia.addAll(uploadResults);
 
         setState(() => _isUploading = false);
       }
@@ -523,8 +589,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         userDisplayName: user.displayName,
         userAvatarIndex: user.avatarIndex,
         postMode: user.postMode,
-        mediaItems: uploadedMedia,
+        mediaItems: [...existingMedia, ...uploadedMedia],
         clientRequestId: clientRequestId,
+        sourcePostId: widget.sourcePostId,
         circleId: widget.circleId, // サークルIDを渡す
       );
 
@@ -1024,10 +1091,38 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 }
 
 class _SelectedMedia {
-  final String path;
+  final String? localPath;
+  final MediaItem? existingItem;
   final MediaType type;
 
-  _SelectedMedia({required this.path, required this.type});
+  const _SelectedMedia._({
+    required this.localPath,
+    required this.existingItem,
+    required this.type,
+  });
+
+  factory _SelectedMedia.local({
+    required String path,
+    required MediaType type,
+  }) {
+    return _SelectedMedia._(
+      localPath: path,
+      existingItem: null,
+      type: type,
+    );
+  }
+
+  factory _SelectedMedia.existing(MediaItem item) {
+    return _SelectedMedia._(
+      localPath: null,
+      existingItem: item,
+      type: item.type,
+    );
+  }
+
+  bool get isExisting => existingItem != null;
+
+  bool get isLocal => localPath != null;
 }
 
 /// メディア選択オプション
@@ -1125,11 +1220,27 @@ class _MediaPreview extends StatelessWidget {
   Widget _buildThumbnail() {
     switch (media.type) {
       case MediaType.image:
-        return Image.file(
-          File(media.path),
+        if (media.isLocal) {
+          return Image.file(
+            File(media.localPath!),
+            width: 120,
+            height: 120,
+            fit: BoxFit.cover,
+          );
+        }
+        return Image.network(
+          media.existingItem!.thumbnailUrl ?? media.existingItem!.url,
           width: 120,
           height: 120,
           fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => Container(
+            width: 120,
+            height: 120,
+            color: Colors.grey.shade200,
+            child: const Center(
+              child: Icon(Icons.broken_image_outlined, color: Colors.grey),
+            ),
+          ),
         );
       case MediaType.video:
         return Container(

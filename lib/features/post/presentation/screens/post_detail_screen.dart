@@ -23,6 +23,7 @@ import '../../../../shared/services/comment_thanks_service.dart';
 import '../../../../shared/widgets/public_user_avatar.dart';
 import '../../../../shared/widgets/report_dialog.dart';
 import '../../../../shared/widgets/ad_banner.dart';
+import '../../../../shared/widgets/post_moderation_card.dart';
 import '../../../../shared/providers/tutorial_phase2_provider.dart';
 import '../../../../shared/widgets/tutorial_overlay.dart';
 
@@ -61,6 +62,9 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
   bool? _lastLoggedPhase2OverlayVisible;
   bool? _lastLoggedHasTutorialTarget;
   int? _lastLoggedCommentCount;
+  String? _shownRejectedDialogSignature;
+  bool _hideCommentComposer = false;
+  bool _didSchedulePostExit = false;
 
   bool _isRectNearlyEqual(Rect? a, Rect? b, {double tolerance = 0.5}) {
     if (a == null || b == null) return a == b;
@@ -567,6 +571,54 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     }
   }
 
+  void _maybeShowRejectedDialog(PostModel post) {
+    if (!post.isRejected || post.moderationReason.isEmpty) return;
+    final signature =
+        '${post.id}:${post.moderationCompletedAt?.millisecondsSinceEpoch ?? 0}:${post.moderationReason}';
+    if (_shownRejectedDialogSignature == signature) return;
+    _shownRejectedDialogSignature = signature;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await NegativeContentDialog.show(
+        context: context,
+        message: post.moderationReason,
+      );
+    });
+  }
+
+  Future<void> _openRepostDraft(PostModel post) async {
+    await context.push(
+      '/create-post',
+      extra: {
+        'circleId': post.circleId,
+        'initialContent': post.content,
+        'initialMediaItems': post.allMedia,
+        'sourcePostId': post.id,
+      },
+    );
+  }
+
+  void _schedulePostExit({
+    required String message,
+    required bool isError,
+  }) {
+    if (_didSchedulePostExit) return;
+    _didSchedulePostExit = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (isError) {
+        SnackBarHelper.showError(context, message);
+      } else {
+        SnackBarHelper.showWarning(context, message);
+      }
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go('/home');
+      }
+    });
+  }
+
   Future<void> _resolveTutorialCommentRect() async {
     debugPrint('[TUTORIAL_PHASE2] resolve rect requested');
     final rect = await resolveRectWithRetry(
@@ -704,6 +756,13 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                 child: StreamBuilder<DocumentSnapshot>(
                   stream: _postStream,
                   builder: (context, postSnapshot) {
+                    void popAsDeleted() {
+                      _schedulePostExit(
+                        message: AppMessages.error.postDeletedNotice,
+                        isError: false,
+                      );
+                    }
+
                     if (postSnapshot.connectionState ==
                         ConnectionState.waiting) {
                       return const Center(
@@ -713,19 +772,21 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                       );
                     }
 
+                    if (postSnapshot.hasError) {
+                      _schedulePostExit(
+                        message: AppMessages.error.general,
+                        isError: true,
+                      );
+                      return const Center(
+                        child: CircularProgressIndicator(
+                          color: AppColors.primary,
+                        ),
+                      );
+                    }
+
                     if (!postSnapshot.hasData || !postSnapshot.data!.exists) {
                       // 投稿が存在しない場合、トーストを表示して戻る
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(AppMessages.error.postDeletedNotice),
-                              backgroundColor: Colors.orange,
-                            ),
-                          );
-                          context.pop();
-                        }
-                      });
+                      popAsDeleted();
                       return const Center(
                         child: CircularProgressIndicator(
                           color: AppColors.primary,
@@ -737,6 +798,19 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                     final currentUserId = currentUser?.uid;
                     final isOwnPost =
                         currentUserId != null && currentUserId == post.userId;
+                    final canViewOwnerOnlyModerationPost =
+                        post.isOwnerVisibleModerationPostFor(
+                          currentUserId,
+                          isAdmin: isAdmin,
+                        );
+                    final showsModerationCard =
+                        !post.isVisible && canViewOwnerOnlyModerationPost;
+                    if (_hideCommentComposer != showsModerationCard) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!mounted) return;
+                        setState(() => _hideCommentComposer = showsModerationCard);
+                      });
+                    }
 
                     if (isOwnPost &&
                         currentUser != null &&
@@ -751,23 +825,17 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                     }
 
                     // 非表示の投稿（削除済み）の場合、トーストを表示して戻る
-                    if (!post.isVisible) {
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(AppMessages.error.postDeletedNotice),
-                              backgroundColor: Colors.orange,
-                            ),
-                          );
-                          context.pop();
-                        }
-                      });
+                    if (!post.isVisible && !canViewOwnerOnlyModerationPost) {
+                      popAsDeleted();
                       return const Center(
                         child: CircularProgressIndicator(
                           color: AppColors.primary,
                         ),
                       );
+                    }
+
+                    if (showsModerationCard && post.isRejected) {
+                      _maybeShowRejectedDialog(post);
                     }
 
                     return Stack(
@@ -799,6 +867,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                             SliverToBoxAdapter(
                               child: _buildPostCard(post, currentUser, isAdmin),
                             ),
+                            if (!showsModerationCard) ...[
 
                             // コメントヘッダー
                             SliverToBoxAdapter(
@@ -889,6 +958,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                   ),
                                 ),
                             ],
+                            ],
                           ],
                         ),
                         ),
@@ -966,7 +1036,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
               ),
 
               // コメント入力エリア
-              Container(
+              if (!_hideCommentComposer) Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: AppColors.surface,
@@ -1076,6 +1146,19 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     UserModel? currentUser,
     bool isAdmin,
   ) {
+    final canViewModerationPost = post.isOwnerVisibleModerationPostFor(
+      currentUser?.uid,
+      isAdmin: isAdmin,
+    );
+    if (!post.isVisible && canViewModerationPost) {
+      return PostModerationCard(
+        post: post,
+        margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        onTap: () {},
+        onRepost: post.isRejected ? () => _openRepostDraft(post) : null,
+      );
+    }
+
     if (post.circleId == null) {
       return PostCard(post: post, isDetailView: true);
     }

@@ -10,6 +10,7 @@ import '../../../../core/constants/app_messages.dart';
 import '../../../../core/utils/dialog_helper.dart';
 import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../shared/models/post_model.dart';
+import '../../../../shared/providers/moderation_provider.dart';
 
 /// 管理者用：要審査投稿一覧画面
 class AdminReviewScreen extends ConsumerStatefulWidget {
@@ -222,16 +223,11 @@ class _AdminReviewScreenState extends ConsumerState<AdminReviewScreen> {
   Future<void> _approvePost(String postId, String reviewId) async {
     try {
       // 投稿のneedsReviewをfalseに更新
-      await _firestore.collection('posts').doc(postId).update({
-        'needsReview': false,
-      });
-
-      // pendingReviewsをreviewedに更新
-      await _firestore.collection('pendingReviews').doc(reviewId).update({
-        'reviewed': true,
-        'reviewedAt': FieldValue.serverTimestamp(),
-        'action': 'approved',
-      });
+      final moderationService = ref.read(moderationServiceProvider);
+      await moderationService.approveReviewedPost(
+        postId: postId,
+        reviewId: reviewId,
+      );
 
       if (mounted) {
         SnackBarHelper.showSuccess(context, AppMessages.admin.postApproved);

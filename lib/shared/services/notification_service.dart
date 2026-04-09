@@ -1,11 +1,11 @@
 import 'dart:convert';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
-/// 通知タップ時のペイロード
 class NotificationPayload {
   final String type;
   final String? postId;
@@ -50,11 +50,11 @@ class NotificationPayload {
   static NotificationPayload? decode(String? payload) {
     if (payload == null || payload.isEmpty) return null;
     try {
-      // JSON形式かどうかを確認
       if (payload.startsWith('{')) {
-        return NotificationPayload.fromJson(jsonDecode(payload));
+        return NotificationPayload.fromJson(
+          jsonDecode(payload) as Map<String, dynamic>,
+        );
       }
-      // 旧形式（postIdのみ）への互換性対応
       return NotificationPayload(type: 'comment', postId: payload);
     } catch (e) {
       debugPrint('Failed to decode payload: $e');
@@ -63,13 +63,15 @@ class NotificationPayload {
   }
 }
 
-/// 通知タップ時のコールバック型
 typedef NotificationTapCallback = void Function(NotificationPayload payload);
+typedef ForegroundNotificationCallback =
+    void Function(NotificationPayload payload, String title, String body);
 
-/// プッシュ通知サービス
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
+
   factory NotificationService() => _instance;
+
   NotificationService._internal();
 
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
@@ -78,34 +80,33 @@ class NotificationService {
 
   bool _isInitialized = false;
   NotificationTapCallback? _onNotificationTap;
+  ForegroundNotificationCallback? _onForegroundNotification;
 
-  /// 通知タップ時のコールバックを登録
   void setNotificationTapCallback(NotificationTapCallback callback) {
     _onNotificationTap = callback;
   }
 
-  /// 初期化
+  void setForegroundNotificationCallback(
+    ForegroundNotificationCallback callback,
+  ) {
+    _onForegroundNotification = callback;
+  }
+
   Future<void> initialize() async {
     if (_isInitialized) return;
 
-    // 通知許可をリクエスト
     final settings = await _messaging.requestPermission(
       alert: true,
       badge: true,
       sound: true,
     );
 
-    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      debugPrint('通知許可: 許可されました');
-    } else if (settings.authorizationStatus ==
-        AuthorizationStatus.provisional) {
-      debugPrint('通知許可: 仮許可されました');
-    } else {
-      debugPrint('通知許可: 拒否されました');
+    if (settings.authorizationStatus != AuthorizationStatus.authorized &&
+        settings.authorizationStatus != AuthorizationStatus.provisional) {
+      debugPrint('Notification permission denied');
       return;
     }
 
-    // ローカル通知の初期化
     const androidSettings = AndroidInitializationSettings(
       '@drawable/ic_notification',
     );
@@ -124,22 +125,13 @@ class NotificationService {
       onDidReceiveNotificationResponse: _onNotificationTapped,
     );
 
-    // FCMトークンを取得してFirestoreに保存
     await _updateFcmToken();
-
-    // トークンリフレッシュを監視
     _messaging.onTokenRefresh.listen(_saveFcmToken);
-
-    // フォアグラウンドでのメッセージ受信
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-
-    // バックグラウンドからアプリを開いた時
     FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationOpen);
 
-    // アプリが終了状態から起動された場合の通知を確認
     final initialMessage = await _messaging.getInitialMessage();
     if (initialMessage != null) {
-      // 少し遅延させてルーターの準備を待つ
       Future.delayed(const Duration(milliseconds: 500), () {
         _handleNotificationOpen(initialMessage);
       });
@@ -148,7 +140,6 @@ class NotificationService {
     _isInitialized = true;
   }
 
-  /// FCMトークンを更新
   Future<void> _updateFcmToken() async {
     try {
       final token = await _messaging.getToken();
@@ -156,11 +147,10 @@ class NotificationService {
         await _saveFcmToken(token);
       }
     } catch (e) {
-      debugPrint('FCMトークン取得エラー: $e');
+      debugPrint('Failed to refresh FCM token: $e');
     }
   }
 
-  /// FCMトークンをFirestoreに保存
   Future<void> _saveFcmToken(String token) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -169,17 +159,17 @@ class NotificationService {
       'fcmToken': token,
       'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
     });
-    debugPrint('FCMトークンを保存しました');
+    debugPrint('Saved FCM token');
   }
 
-  /// フォアグラウンドメッセージ処理
   Future<void> _handleForegroundMessage(RemoteMessage message) async {
-    debugPrint('フォアグラウンド通知受信: ${message.notification?.title}');
+    debugPrint(
+      'Foreground push received: ${message.notification?.title}',
+    );
 
     final notification = message.notification;
     if (notification == null) return;
 
-    // ペイロードを作成
     final payload = NotificationPayload(
       type: message.data['type'] as String? ?? 'system',
       postId: message.data['postId'] as String?,
@@ -189,7 +179,12 @@ class NotificationService {
       contentId: message.data['contentId'] as String?,
     );
 
-    // ローカル通知として表示
+    _onForegroundNotification?.call(
+      payload,
+      notification.title ?? '',
+      notification.body ?? '',
+    );
+
     await _showLocalNotification(
       title: notification.title ?? '',
       body: notification.body ?? '',
@@ -197,7 +192,6 @@ class NotificationService {
     );
   }
 
-  /// ローカル通知を表示
   Future<void> _showLocalNotification({
     required String title,
     required String body,
@@ -205,7 +199,7 @@ class NotificationService {
   }) async {
     const androidDetails = AndroidNotificationDetails(
       'default_channel',
-      'デフォルト',
+      'デフォルト通知',
       channelDescription: '一般的な通知',
       importance: Importance.high,
       priority: Priority.high,
@@ -232,18 +226,16 @@ class NotificationService {
     );
   }
 
-  /// 通知タップ時の処理（ローカル通知用）
   void _onNotificationTapped(NotificationResponse response) {
     final payload = NotificationPayload.decode(response.payload);
     if (payload != null) {
-      debugPrint('通知タップ: type=${payload.type}, postId=${payload.postId}');
+      debugPrint('Notification tapped: type=${payload.type}');
       _onNotificationTap?.call(payload);
     }
   }
 
-  /// バックグラウンドから開いた時の処理（FCM通知用）
   void _handleNotificationOpen(RemoteMessage message) {
-    debugPrint('通知から起動: data=${message.data}');
+    debugPrint('Push opened: data=${message.data}');
 
     final payload = NotificationPayload(
       type: message.data['type'] as String? ?? 'system',
@@ -257,7 +249,6 @@ class NotificationService {
     _onNotificationTap?.call(payload);
   }
 
-  /// FCMトークンをクリア（ログアウト時）
   Future<void> clearFcmToken() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -268,8 +259,9 @@ class NotificationService {
   }
 }
 
-/// バックグラウンドメッセージハンドラー（トップレベル関数）
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  debugPrint('バックグラウンド通知受信: ${message.notification?.title}');
+  debugPrint(
+    'Background push received: ${message.notification?.title}',
+  );
 }

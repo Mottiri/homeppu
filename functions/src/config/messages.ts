@@ -247,6 +247,7 @@ export const SUCCESS_MESSAGES = {
 // モデレーション関連
 // ===============================================
 export const MODERATION_MESSAGES = {
+    POST_REVIEW_TIMEOUT: "自動確認に時間がかかっているため、運営確認に切り替えました。",
     NG_WORD_USED: "NGワードが含まれているため投稿できません",
     INAPPROPRIATE_CONTENT_DETECTED: "不適切な内容が検出されました",
     TEST_ADMIN_MEDIA: "【テスト】管理者の添付付き投稿",
@@ -326,4 +327,12 @@ export const STAMP_SHEET_MESSAGES = {
     CURRENT_SHEET_ID_REQUIRED: "currentSheetId is required",
     NEXT_SHEET_ID_REQUIRED: "nextSheetId is required",
     CURRENT_SHEET_NOT_FULL: "current sheet is not full",
+} as const;
+
+// ===============================================
+// 非同期投稿モデレーション通知
+// ===============================================
+export const POST_MODERATION_NOTIFICATION_MESSAGES = {
+    REJECTED_TITLE: "投稿が公開されませんでした",
+    REJECTED_BODY: "投稿内容の確認が完了しました。公開されなかった投稿を確認してください。",
 } as const;

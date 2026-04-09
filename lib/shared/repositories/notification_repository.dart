@@ -205,6 +205,7 @@ class NotificationRepository {
           'review_needed',
           'post_deleted',
           'post_hidden',
+          'post_rejected',
           'user_banned',
           'user_unbanned',
         ];

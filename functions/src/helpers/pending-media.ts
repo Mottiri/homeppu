@@ -32,7 +32,9 @@ export async function deletePendingMediaByStoragePath(storagePath: string): Prom
 }
 
 export async function deletePendingMediaByStoragePaths(storagePaths: string[]): Promise<void> {
-  for (const storagePath of storagePaths) {
-    await deletePendingMediaByStoragePath(storagePath);
-  }
+  await Promise.all(
+    [...new Set(storagePaths)]
+      .filter((storagePath) => Boolean(storagePath))
+      .map((storagePath) => deletePendingMediaByStoragePath(storagePath))
+  );
 }

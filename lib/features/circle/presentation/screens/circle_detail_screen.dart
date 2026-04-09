@@ -17,6 +17,7 @@ import '../../../../core/utils/dialog_helper.dart';
 import '../../../../core/constants/app_messages.dart';
 import '../../../../shared/widgets/infinite_scroll_listener.dart';
 import '../../../../shared/widgets/load_more_footer.dart';
+import '../../../../shared/widgets/post_moderation_card.dart';
 import '../widgets/circle_actions.dart';
 import '../widgets/circle_header.dart';
 import '../widgets/circle_posts_list.dart';
@@ -44,10 +45,12 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
 
   // 投稿リスト用の状態変数（プル更新方式）
   List<PostModel> _posts = [];
+  List<PostModel> _ownerModerationPosts = [];
   DocumentSnapshot? _lastDocument;
   bool _hasMorePosts = true;
   bool _isLoadingPosts = true;
   bool _isLoadingMorePosts = false;
+  String? _lastModerationUserId;
   bool _isScrollable = false; // レイアウト後に再評価
   final ScrollController _scrollController = ScrollController();
   bool _showScrollToTopFab = false;
@@ -107,6 +110,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
     setState(() => _isLoadingPosts = true);
 
     try {
+      final currentUserId = ref.read(currentUserProvider).valueOrNull?.uid;
       final snapshot = await FirebaseFirestore.instance
           .collection('posts')
           .where('circleId', isEqualTo: widget.circleId)
@@ -115,12 +119,36 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
           .limit(AppConstants.postsPerPage)
           .get();
 
+      final moderationSnapshot =
+          currentUserId == null
+              ? null
+              : await FirebaseFirestore.instance
+                  .collection('posts')
+                  .where('userId', isEqualTo: currentUserId)
+                  .orderBy('createdAt', descending: true)
+                  .limit(50)
+                  .get();
+
       final posts = snapshot.docs
           .map((doc) => PostModel.fromFirestore(doc))
           .toList();
+      final moderationPosts =
+          moderationSnapshot?.docs
+              .map((doc) => PostModel.fromFirestore(doc))
+              .where(
+                (post) =>
+                    post.circleId == widget.circleId &&
+                    post.isOwnerVisibleModerationPostFor(currentUserId),
+              )
+              .toList() ??
+          <PostModel>[];
+      moderationPosts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
       if (invalidateAvatarCache) {
-        final userIds = posts.map((post) => post.userId).toSet();
+        final userIds = {
+          ...posts.map((post) => post.userId),
+          ...moderationPosts.map((post) => post.userId),
+        };
         for (final userId in userIds) {
           ref.invalidate(publicUserDocProvider(userId));
         }
@@ -129,6 +157,8 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
       if (mounted) {
         setState(() {
           _posts = posts;
+          _ownerModerationPosts = moderationPosts;
+          _lastModerationUserId = currentUserId;
           _lastDocument = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
           _hasMorePosts = snapshot.docs.length == AppConstants.postsPerPage;
           _isLoadingPosts = false;
@@ -781,6 +811,12 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
   Widget build(BuildContext context) {
     final currentUser = ref.watch(currentUserProvider).valueOrNull;
     final circleService = ref.watch(circleServiceProvider);
+    if (currentUser?.uid != _lastModerationUserId) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _loadPosts();
+      });
+    }
 
     return StreamBuilder<CircleModel?>(
       stream: circleService.streamCircle(widget.circleId),
@@ -1080,6 +1116,22 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                   ),
 
                   // サークル内の投稿（プル更新方式）
+                  if (_ownerModerationPosts.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: Column(
+                        children:
+                            _ownerModerationPosts
+                                .map(
+                                  (post) => PostModerationCard(
+                                    key: ValueKey('circle_moderation_${post.id}'),
+                                    post: post,
+                                    onTap: () => context.push('/post/${post.id}'),
+                                  ),
+                                )
+                                .toList(growable: false),
+                      ),
+                    ),
+
                   CirclePostsList(
                     posts: _posts,
                     isLoading: _isLoadingPosts,

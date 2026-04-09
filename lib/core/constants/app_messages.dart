@@ -31,6 +31,9 @@ class AppMessages {
   // ===== サークル関連 =====
   static const circle = _CircleMessages();
 
+  // ===== 投稿関連 =====
+  static const post = _PostMessages();
+
   // ===== ホーム関連 =====
   static const home = _HomeMessages();
 
@@ -395,6 +398,20 @@ class _CircleMessages {
   String get trialBannerDescription =>
       'この体験では閲覧のみ可能です（作成・参加はできません）。画面遷移またはアプリ終了で体験は終了し、再度閲覧できません。';
   String get trialChecking => 'サークル機能の利用可否を確認中...';
+}
+
+/// 投稿状態関連メッセージ
+class _PostMessages {
+  const _PostMessages();
+
+  String get processingStatus => '審査中';
+  String get processingDescription => '確認が終わるまで他の人には表示されません';
+  String get reviewNeededStatus => '確認中';
+  String get reviewNeededDescription => '運営が内容を確認しています';
+  String get rejectedStatus => '公開されませんでした';
+  String get rejectedDescription => 'タップして理由を確認できます';
+  String get ownerOnlyHint => 'この投稿は今のところ自分にだけ表示されています';
+  String get repostAction => '編集して再投稿';
 }
 
 /// ホーム関連メッセージ

@@ -119,6 +119,7 @@ class ModerationService {
     String? circleId,
     List<MediaItem>? mediaItems,
     String? clientRequestId,
+    String? sourcePostId,
   }) async {
     try {
       final callable = _functions.httpsCallable(
@@ -134,6 +135,7 @@ class ModerationService {
         'circleId': circleId,
         'mediaItems': mediaItems?.map((item) => item.toMap()).toList(),
         if (clientRequestId != null) 'clientRequestId': clientRequestId,
+        if (sourcePostId != null) 'sourcePostId': sourcePostId,
       });
 
       return result.data['postId'] as String;
@@ -197,6 +199,27 @@ class ModerationService {
   }
 
   /// コンテンツを通報
+  Future<void> approveReviewedPost({
+    required String postId,
+    required String reviewId,
+  }) async {
+    try {
+      final callable = _functions.httpsCallable(
+        'approveReviewedPost',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
+      );
+      await callable.call({
+        'postId': postId,
+        'reviewId': reviewId,
+      });
+    } on FirebaseFunctionsException catch (e) {
+      throw ModerationException(
+        message: e.message ?? AppMessages.admin.approveFailed,
+        code: e.code,
+      );
+    }
+  }
+
   Future<void> reportContent({
     required String contentId,
     required String contentType, // "post" | "comment"

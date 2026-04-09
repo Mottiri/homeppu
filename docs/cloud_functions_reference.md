@@ -259,6 +259,42 @@ functions/src/
   - `clientRequestId` を付けると、同一リクエストの再送時に二重投稿せず既存 `postId` を返す。
   - サーバー側は `users/{uid}/postRequests/{clientRequestId}` で `processing / succeeded / rejected` を保持し、曖昧失敗後の再送を吸収する。
   - terminal な失敗 (`invalid-argument` など) では、アップロード済みメディアと `pendingMedia` をサーバー側でも後始末する。
+  - 画像付き投稿では、クライアント upload・サーバー側の画像モデレーション・Storage metadata 更新を可能な範囲で並列化し、待機時間を短縮している。
+
+## 追記: Async Post Moderation Flow (2026-04-08)
+
+### Callable / HTTP
+- `createPostWithModeration`
+  - 投稿を即時に `posts/{postId}` へ作成するが、初期状態は `moderationStatus=processing` / `isVisible=false`。
+  - 投稿者本人にだけ見える pending 投稿として扱い、バックグラウンドで `executePostModeration` を予約する。
+  - 再投稿で同じ `postId` を再利用する場合でも、各審査実行には `moderationAttemptId` を発行し、Cloud Tasks の重複 taskId と stale worker を避ける。
+- `executePostModeration`
+  - Cloud Tasks から呼ばれる投稿モデレーション worker。
+  - テキスト/画像モデレーション結果に応じて、投稿を `approved / rejected / review_needed` へ遷移させる。
+  - `rejected / review_needed` への遷移後も side effect 完了までは pending フラグを残し、retry 時に cleanup task / pendingReviews / 通知の欠落を回復する。
+- `checkPostModerationTimeout`
+  - `processing` のまま一定時間経過した投稿を `review_needed` へ切り替える fallback worker。
+  - Cloud Tasks retry を使い切った後でも、owner-only 投稿が `processing` のまま固着しないようにする。
+- `cleanupRejectedPost`
+  - `rejected` 投稿を 24 時間後に削除する cleanup worker。
+- `approveReviewedPost`
+  - 管理者レビューで `review_needed` 投稿を公開側へ昇格させる。
+
+### 投稿状態
+- `processing`
+  - 作成直後。投稿者本人にのみ表示。公開 TL には出ない。
+- `approved`
+  - 公開済み。通常の投稿として扱う。
+- `rejected`
+  - AI モデレーション NG。投稿者本人にのみ 24 時間表示し、その後 cleanup。
+- `review_needed`
+  - 自動判定保留。投稿者本人にのみ表示し、管理レビュー待ち。
+
+### rejected / review_needed 時の扱い
+- `rejected` / `review_needed` 投稿は `isVisible=false` のまま保持し、owner-only UI から確認する。
+- `rejected` では `post_rejected` 通知を送信し、通知タップで該当投稿詳細へ遷移できる。
+- 投稿詳細では NG 理由を確認し、そのまま編集・再投稿できる想定。
+- `rejected` 投稿からの再投稿は、既存の `postId` を再利用して `processing` へ戻す。`createdAt` は更新され、差し替え前の未使用メディアは削除する。
 
 ### 関連データ
 - `users/{uid}.thanksStampCredits`

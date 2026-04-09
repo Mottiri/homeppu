@@ -22,6 +22,7 @@ enum NotificationType {
   reviewNeeded,
   postDeleted,
   postHidden,
+  postRejected,
   userBanned,
   userUnbanned,
 }
@@ -57,6 +58,7 @@ NotificationCategory getCategoryFromType(NotificationType type) {
     case NotificationType.reviewNeeded:
     case NotificationType.postDeleted:
     case NotificationType.postHidden:
+    case NotificationType.postRejected:
     case NotificationType.userBanned:
     case NotificationType.userUnbanned:
       return NotificationCategory.support;
@@ -180,6 +182,8 @@ class NotificationModel {
         return NotificationType.postDeleted;
       case 'post_hidden':
         return NotificationType.postHidden;
+      case 'post_rejected':
+        return NotificationType.postRejected;
       case 'user_banned':
         return NotificationType.userBanned;
       case 'user_unbanned':

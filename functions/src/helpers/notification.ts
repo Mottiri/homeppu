@@ -104,17 +104,21 @@ export async function sendPushNotification(
     body: string,
     data: { [key: string]: string } = {},
     options?: {
-        type: "comment" | "reaction" | "system";
+        type: string;
         senderId: string;
         senderName: string;
         senderAvatarUrl?: string;
         idempotencyKey?: string;
+        throwOnError?: boolean;
     }
 ): Promise<void> {
     try {
         if (options) {
             // deterministic通知ID: {type}-{sourceId}-{recipientId}
-            const notificationId = `${type}-${sourceId}-${userId}`;
+            const notificationIdSuffix = options.idempotencyKey ?
+                `-${options.idempotencyKey}` :
+                "";
+            const notificationId = `${type}-${sourceId}-${userId}${notificationIdSuffix}`;
             const notifRef = db.collection("users").doc(userId)
                 .collection("notifications").doc(notificationId);
 
@@ -137,9 +141,13 @@ export async function sendPushNotification(
             });
             console.log(`Notification saved to Firestore for user: ${userId} (FCM will be sent by onNotificationCreated)`);
         } else {
-            console.warn(`sendPushNotification called without options - notification will NOT be created for user: ${userId}`);
+            const message = `sendPushNotification called without options - notification will NOT be created for user: ${userId}`;
+            console.warn(message);
         }
     } catch (error) {
         console.error(`Failed to save notification for ${userId}: `, error);
+        if (options?.throwOnError) {
+            throw error;
+        }
     }
 }

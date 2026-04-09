@@ -15,6 +15,7 @@ import '../../../../shared/repositories/notification_repository.dart';
 import '../../../../shared/providers/public_user_provider.dart';
 import '../../../../shared/widgets/ad_banner.dart';
 import '../../../../shared/widgets/native_feed_ad_card.dart';
+import '../../../../shared/widgets/post_moderation_card.dart';
 import '../../../../shared/providers/tutorial_phase1_provider.dart';
 import '../../../../shared/widgets/tutorial_overlay.dart';
 import '../widgets/post_card.dart';
@@ -24,6 +25,24 @@ import '../../../../shared/widgets/infinite_scroll_listener.dart';
 final timelineRefreshProvider = StateProvider<int>((ref) => 0);
 
 final homeScrollToTopProvider = StateProvider<int>((ref) => 0);
+
+List<PostModel> _extractOwnerModerationPosts(
+  QuerySnapshot? snapshot, {
+  required String currentUserId,
+}) {
+  if (snapshot == null) return const [];
+  final posts =
+      snapshot.docs
+          .map((doc) => PostModel.fromFirestore(doc))
+          .where(
+            (post) =>
+                (post.circleId == null || post.circleId!.isEmpty) &&
+                post.isOwnerVisibleModerationPostFor(currentUserId),
+          )
+          .toList(growable: false);
+  posts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  return posts;
+}
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -398,8 +417,10 @@ class _TimelineTab extends StatelessWidget {
 
   String? get currentUserId => currentUser?.uid;
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildTimelineBody(
+    BuildContext context, {
+    required List<PostModel> ownerModerationPosts,
+  }) {
 
     if (isFollowingOnly && currentUser != null) {
       return StreamBuilder<DocumentSnapshot>(
@@ -418,7 +439,20 @@ class _TimelineTab extends StatelessWidget {
           final followingIds = List<String>.from(userData?['following'] ?? []);
 
           if (followingIds.isEmpty) {
-            return _EmptyFollowingState();
+            if (ownerModerationPosts.isEmpty) {
+              return _EmptyFollowingState();
+            }
+            return RefreshIndicator(
+              onRefresh: () async {},
+              color: AppColors.primary,
+              child: ListView(
+                padding: const EdgeInsets.only(bottom: 120),
+                children: [
+                  _OwnerModerationCards(posts: ownerModerationPosts),
+                  const _EmptyFollowingMessage(),
+                ],
+              ),
+            );
           }
 
           return _ChunkedPostsList(
@@ -426,6 +460,7 @@ class _TimelineTab extends StatelessWidget {
             isAIViewer: currentUser!.isAI,
             currentUserId: currentUserId,
             refreshKey: refreshKey,
+            ownerModerationPosts: ownerModerationPosts,
             onFirstPostCardRectChanged: onFirstPostCardRectChanged,
             tutorialOverlayAncestorKey: tutorialOverlayAncestorKey,
           );
@@ -442,8 +477,35 @@ class _TimelineTab extends StatelessWidget {
       isAIViewer: currentUser?.isAI ?? false,
       currentUserId: currentUserId,
       refreshKey: refreshKey,
+      ownerModerationPosts: ownerModerationPosts,
       onFirstPostCardRectChanged: onFirstPostCardRectChanged,
       tutorialOverlayAncestorKey: tutorialOverlayAncestorKey,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (currentUserId == null) {
+      return _buildTimelineBody(context, ownerModerationPosts: const []);
+    }
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('posts')
+          .where('userId', isEqualTo: currentUserId)
+          .orderBy('createdAt', descending: true)
+          .limit(50)
+          .snapshots(),
+      builder: (context, snapshot) {
+        final ownerModerationPosts = _extractOwnerModerationPosts(
+          snapshot.data,
+          currentUserId: currentUserId!,
+        );
+        return _buildTimelineBody(
+          context,
+          ownerModerationPosts: ownerModerationPosts,
+        );
+      },
     );
   }
 }
@@ -458,6 +520,7 @@ class _ChunkedPostsList extends ConsumerStatefulWidget {
   final bool isAIViewer;
   final String? currentUserId;
   final int refreshKey;
+  final List<PostModel> ownerModerationPosts;
   final ValueChanged<Rect?>? onFirstPostCardRectChanged;
   final GlobalKey? tutorialOverlayAncestorKey;
 
@@ -466,6 +529,7 @@ class _ChunkedPostsList extends ConsumerStatefulWidget {
     this.isAIViewer = false,
     this.currentUserId,
     this.refreshKey = 0,
+    this.ownerModerationPosts = const [],
     this.onFirstPostCardRectChanged,
     this.tutorialOverlayAncestorKey,
   });
@@ -881,6 +945,8 @@ class _ChunkedPostsListState extends ConsumerState<_ChunkedPostsList>
     final tutorialStep = ref.watch(tutorialPhase1Provider);
     final isTutorialHomeLongPress =
         tutorialStep == TutorialPhase1Step.homeLongPress;
+    final hasModerationHeader = widget.ownerModerationPosts.isNotEmpty;
+    const moderationHeaderCount = 1;
 
     if (_isLoading) {
       return Center(
@@ -913,7 +979,7 @@ class _ChunkedPostsListState extends ConsumerState<_ChunkedPostsList>
       );
     }
 
-    if (_posts.isEmpty) {
+    if (_posts.isEmpty && !hasModerationHeader) {
       return RefreshIndicator(
         onRefresh: _refreshPosts,
         color: AppColors.primary,
@@ -954,7 +1020,9 @@ class _ChunkedPostsListState extends ConsumerState<_ChunkedPostsList>
           child: Builder(
             builder: (context) {
               final contentCount =
-                  _posts.length + _nativeAdCountForPosts(_posts.length);
+                  _posts.length +
+                  _nativeAdCountForPosts(_posts.length) +
+                  (hasModerationHeader ? moderationHeaderCount : 0);
               final totalCount = contentCount + (_isLoadingMore ? 1 : 0);
               final list = NotificationListener<ScrollNotification>(
                 onNotification: _handleScrollNotification,
@@ -965,6 +1033,12 @@ class _ChunkedPostsListState extends ConsumerState<_ChunkedPostsList>
                   padding: const EdgeInsets.only(bottom: 120),
                   itemCount: totalCount,
                   itemBuilder: (context, index) {
+                    if (hasModerationHeader && index == 0) {
+                      return _OwnerModerationCards(
+                        posts: widget.ownerModerationPosts,
+                      );
+                    }
+
                     if (_isLoadingMore && index == contentCount) {
                       return const Padding(
                         padding: EdgeInsets.all(16),
@@ -976,13 +1050,16 @@ class _ChunkedPostsListState extends ConsumerState<_ChunkedPostsList>
                       );
                     }
 
-                    if (_isNativeAdIndex(index)) {
+                    final adjustedIndex =
+                        index - (hasModerationHeader ? moderationHeaderCount : 0);
+
+                    if (_isNativeAdIndex(adjustedIndex)) {
                       return NativeFeedAdCard(
-                        key: ValueKey('native_ad_slot_$index'),
+                        key: ValueKey('native_ad_slot_$adjustedIndex'),
                       );
                     }
 
-                    final postIndex = _postIndexFromDisplayIndex(index);
+                    final postIndex = _postIndexFromDisplayIndex(adjustedIndex);
                     final post = _posts[postIndex];
                     final isTutorialTargetCard =
                         postIndex == 0 && isTutorialHomeLongPress;
@@ -1074,6 +1151,7 @@ class _PostsList extends ConsumerStatefulWidget {
   final bool isAIViewer;
   final String? currentUserId;
   final int refreshKey;
+  final List<PostModel> ownerModerationPosts;
   final ValueChanged<Rect?>? onFirstPostCardRectChanged;
   final GlobalKey? tutorialOverlayAncestorKey;
 
@@ -1082,6 +1160,7 @@ class _PostsList extends ConsumerStatefulWidget {
     this.isAIViewer = false,
     this.currentUserId,
     this.refreshKey = 0,
+    this.ownerModerationPosts = const [],
     this.onFirstPostCardRectChanged,
     this.tutorialOverlayAncestorKey,
   });
@@ -1395,6 +1474,8 @@ class _PostsListState extends ConsumerState<_PostsList>
     final tutorialStep = ref.watch(tutorialPhase1Provider);
     final isTutorialHomeLongPress =
         tutorialStep == TutorialPhase1Step.homeLongPress;
+    final hasModerationHeader = widget.ownerModerationPosts.isNotEmpty;
+    const moderationHeaderCount = 1;
 
     if (_isLoading) {
       return Center(
@@ -1427,7 +1508,7 @@ class _PostsListState extends ConsumerState<_PostsList>
       );
     }
 
-    if (_posts.isEmpty) {
+    if (_posts.isEmpty && !hasModerationHeader) {
       return RefreshIndicator(
         onRefresh: _refreshPosts,
         color: AppColors.primary,
@@ -1468,7 +1549,9 @@ class _PostsListState extends ConsumerState<_PostsList>
           child: Builder(
             builder: (context) {
               final contentCount =
-                  _posts.length + _nativeAdCountForPosts(_posts.length);
+                  _posts.length +
+                  _nativeAdCountForPosts(_posts.length) +
+                  (hasModerationHeader ? moderationHeaderCount : 0);
               final totalCount = contentCount + (_isLoadingMore ? 1 : 0);
               final list = NotificationListener<ScrollNotification>(
                 onNotification: _handleScrollNotification,
@@ -1479,6 +1562,12 @@ class _PostsListState extends ConsumerState<_PostsList>
                   padding: const EdgeInsets.only(bottom: 120),
                   itemCount: totalCount,
                   itemBuilder: (context, index) {
+                    if (hasModerationHeader && index == 0) {
+                      return _OwnerModerationCards(
+                        posts: widget.ownerModerationPosts,
+                      );
+                    }
+
                     if (_isLoadingMore && index == contentCount) {
                       return const Padding(
                         padding: EdgeInsets.all(16),
@@ -1490,13 +1579,16 @@ class _PostsListState extends ConsumerState<_PostsList>
                       );
                     }
 
-                    if (_isNativeAdIndex(index)) {
+                    final adjustedIndex =
+                        index - (hasModerationHeader ? moderationHeaderCount : 0);
+
+                    if (_isNativeAdIndex(adjustedIndex)) {
                       return NativeFeedAdCard(
-                        key: ValueKey('native_ad_slot_$index'),
+                        key: ValueKey('native_ad_slot_$adjustedIndex'),
                       );
                     }
 
-                    final postIndex = _postIndexFromDisplayIndex(index);
+                    final postIndex = _postIndexFromDisplayIndex(adjustedIndex);
                     final post = _posts[postIndex];
                     final isTutorialTargetCard =
                         postIndex == 0 && isTutorialHomeLongPress;
@@ -1584,30 +1676,59 @@ class _PostsListState extends ConsumerState<_PostsList>
 class _EmptyFollowingState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('??', style: TextStyle(fontSize: 64)),
-            const SizedBox(height: 16),
-            Text(
-              AppMessages.home.emptyFollowingTitle,
-              style: Theme.of(context).textTheme.titleLarge,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              AppMessages.home.emptyFollowingDescription,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
+    return const Center(child: _EmptyFollowingMessage());
+  }
+}
+
+class _EmptyFollowingMessage extends StatelessWidget {
+  const _EmptyFollowingMessage();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text('👀', style: TextStyle(fontSize: 64)),
+          const SizedBox(height: 16),
+          Text(
+            AppMessages.home.emptyFollowingTitle,
+            style: Theme.of(context).textTheme.titleLarge,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            AppMessages.home.emptyFollowingDescription,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
+    );
+  }
+}
+
+class _OwnerModerationCards extends StatelessWidget {
+  final List<PostModel> posts;
+
+  const _OwnerModerationCards({required this.posts});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children:
+          posts
+              .map(
+                (post) => PostModerationCard(
+                  key: ValueKey('moderation_${post.id}'),
+                  post: post,
+                  onTap: () => context.push('/post/${post.id}'),
+                ),
+              )
+              .toList(growable: false),
     );
   }
 }

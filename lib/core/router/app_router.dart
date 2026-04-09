@@ -23,6 +23,7 @@ import '../../features/circle/presentation/screens/circle_detail_screen.dart';
 import '../../features/circle/presentation/screens/edit_circle_screen.dart';
 import '../../features/circle/presentation/screens/create_circle_screen.dart';
 import '../../shared/models/circle_model.dart';
+import '../../shared/models/post_model.dart';
 import '../../features/circle/presentation/screens/join_requests_screen.dart';
 import '../../features/circle/presentation/screens/members_list_screen.dart';
 import '../../features/stamps/presentation/screens/stamp_sheet_screen.dart';
@@ -193,7 +194,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final extra = state.extra as Map<String, dynamic>?;
           final circleId = extra?['circleId'] as String?;
-          return CreatePostScreen(circleId: circleId);
+          final initialContent = extra?['initialContent'] as String?;
+          final initialMediaItems = extra?['initialMediaItems'];
+          final sourcePostId = extra?['sourcePostId'] as String?;
+          return CreatePostScreen(
+            circleId: circleId,
+            initialContent: initialContent,
+            initialMediaItems: initialMediaItems is List<MediaItem>
+                ? initialMediaItems
+                : initialMediaItems is List
+                ? initialMediaItems.whereType<MediaItem>().toList()
+                : null,
+            sourcePostId: sourcePostId,
+          );
         },
       ),
 

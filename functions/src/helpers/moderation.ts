@@ -61,12 +61,12 @@ export async function moderateImage(
         console.log(`moderateImage: Raw response: ${responseText.substring(0, 200)}`);
 
         let jsonText = responseText;
-        // JSON部分を抽出
+        // JSON表現を抽出
         const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
         if (jsonMatch) {
             jsonText = jsonMatch[1];
         } else {
-            // ブレースで囲まれた部分を抽出
+            // ブレースで囲まれた表現を抽出
             const braceMatch = responseText.match(/\{[\s\S]*\}/);
             if (braceMatch) {
                 jsonText = braceMatch[0];
@@ -78,7 +78,7 @@ export async function moderateImage(
         return parsed;
     } catch (error) {
         console.error("moderateImage error:", error);
-        // Fail Closed: エラー時は不適切として扱う（安全第一）
+        // Fail Closed: エラー時は不適切として扱う（最悪のケース）
         return {
             isInappropriate: true,
             category: "dangerous",
@@ -95,14 +95,23 @@ export async function moderateMedia(
     aiFactory: AIProviderFactory,
     mediaItems: MediaItem[]
 ): Promise<{ passed: boolean; failedItem?: MediaItem; result?: MediaModerationResult }> {
-    for (const item of mediaItems) {
-        if (item.type === "image") {
-            const result = await moderateImage(aiFactory, item.url, item.mimeType || "image/jpeg");
-            if (result.isInappropriate && result.confidence >= 0.7) {
-                return { passed: false, failedItem: item, result };
+    const imageResults = await Promise.all(
+        mediaItems.map(async (item, index) => {
+            if (item.type !== "image") {
+                return null;
             }
-        }
-        // fileタイプはスキップ（PDFなどのモデレーションは複雑なため）
+            const result = await moderateImage(aiFactory, item.url, item.mimeType || "image/jpeg");
+            return { item, index, result };
+        })
+    );
+
+    const concerning = imageResults
+        .filter((entry): entry is { item: MediaItem; index: number; result: MediaModerationResult } => Boolean(entry))
+        .filter((entry) => entry.result.isInappropriate && entry.result.confidence >= 0.5)
+        .sort((a, b) => a.index - b.index)[0];
+
+    if (concerning) {
+        return { passed: false, failedItem: concerning.item, result: concerning.result };
     }
 
     return { passed: true };

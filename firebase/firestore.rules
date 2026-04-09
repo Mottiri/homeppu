@@ -123,12 +123,33 @@ service cloud.firestore {
 
     // Posts (created via Cloud Functions)
     match /posts/{postId} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && (
+        resource.data.isVisible == true ||
+        isOwner(resource.data.userId) ||
+        isAdmin()
+      );
       allow create: if false;
       allow update: if isAuthenticated() && (
         (isOwner(resource.data.userId) &&
          isNotBanned() &&
-         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['reactions', 'commentCount'])) ||
+         !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+           'reactions',
+           'commentCount',
+           'isVisible',
+           'moderationStatus',
+           'moderationReason',
+           'moderationCompletedAt',
+           'moderationAttemptId',
+           'ownerVisibleUntil',
+           'needsReview',
+           'needsReviewReason',
+           'moderationSideEffectsPending',
+           'moderationSideEffectsKind',
+           'publishSideEffectsPending',
+           'grantVirtueOnPublish',
+           'clientRequestId',
+           'mediaStoragePaths'
+         ])) ||
         (resource.data.circleId != null &&
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isPinned', 'isPinnedTop']) &&
          exists(/databases/$(database)/documents/circles/$(resource.data.circleId)) &&

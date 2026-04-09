@@ -13,6 +13,9 @@ export const CLOUD_TASK_FUNCTIONS = {
   executeAIPostGeneration: "executeAIPostGeneration",
   cleanupDeletedCircle: "cleanupDeletedCircle",
   executeCircleAIPost: "executeCircleAIPost",
+  executePostModeration: "executePostModeration",
+  checkPostModerationTimeout: "checkPostModerationTimeout",
+  cleanupRejectedPost: "cleanupRejectedPost",
 } as const;
 
 // サークル参加上限
