@@ -65,6 +65,8 @@ ios/Runner/GoogleService-Info*.plist
 # Claude Code
 tmpclaude-*/
 .claude/settings.local.json
+.gcloud/
+tmp_codex_campaign_review.txt
 docs/error/
 docs/code_audit/
 docs/現行アプリ要件定義_2026-03-16.md
