@@ -23,7 +23,6 @@ import '../../../../shared/widgets/tutorial_overlay.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
 import '../../../../shared/widgets/report_dialog.dart';
 import '../../../../shared/widgets/ad_banner.dart';
-import '../widgets/waiting_character_overlay.dart';
 
 /// 投稿作成画面
 class CreatePostScreen extends ConsumerStatefulWidget {
@@ -49,9 +48,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   final _mediaService = MediaService();
   final _postAdPolicyService = PostAdPolicyService();
   final _uuid = const Uuid();
-  final ValueNotifier<bool> _waitingCharacterVisible = ValueNotifier<bool>(
-    false,
-  );
   final GlobalKey _tutorialOverlayStackKey = GlobalKey();
   final GlobalKey _postButtonKey = GlobalKey();
   bool _isLoading = false;
@@ -83,18 +79,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
   @override
   void dispose() {
-    _waitingCharacterVisible.dispose();
     _contentController.dispose();
     super.dispose();
-  }
-
-  void _startWaitingCharacter() {
-    FocusScope.of(context).unfocus();
-    _waitingCharacterVisible.value = true;
-  }
-
-  void _stopWaitingCharacter() {
-    _waitingCharacterVisible.value = false;
   }
 
   void _resolvePhase4SpotlightRect() {
@@ -548,9 +534,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     if (kDebugMode) {
       debugPrint('[PostAd] shouldTryPostAd=$shouldTryPostAd');
     }
-    if (!shouldTryPostAd) {
-      _startWaitingCharacter();
-    }
 
     ModerationException? moderationError;
     String? generalErrorMessage;
@@ -663,7 +646,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       _isLoading = false;
       _isUploading = false;
     });
-    _stopWaitingCharacter();
 
     if (postCreated) {
       SnackBarHelper.showSuccess(context, AppMessages.success.postCreated);
@@ -804,10 +786,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                       ],
                     ),
                   ),
-                  ValueListenableBuilder<bool>(
-                    valueListenable: _waitingCharacterVisible,
-                    builder: (context, waitingVisible, _) {
-                      if (_isLoading || waitingVisible) {
+                  Builder(
+                    builder: (context) {
+                      if (_isLoading) {
                         return const SizedBox.shrink();
                       }
                       return const AdBanner(
@@ -1074,14 +1055,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                     },
                   ),
                 ),
-              ValueListenableBuilder<bool>(
-                valueListenable: _waitingCharacterVisible,
-                builder: (context, visible, child) {
-                  if (!visible) return const SizedBox.shrink();
-                  return child!;
-                },
-                child: const Positioned.fill(child: WaitingCharacterOverlay()),
-              ),
             ],
           ),
         ),

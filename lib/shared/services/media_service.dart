@@ -39,6 +39,13 @@ class MediaService {
   CollectionReference<Map<String, dynamic>> get _pendingMediaCollection =>
       _firestore.collection('pendingMedia');
 
+  String _describeError(Object error) {
+    if (error is FirebaseException) {
+      return 'FirebaseException(code=${error.code}, message=${error.message})';
+    }
+    return '${error.runtimeType}: $error';
+  }
+
   Future<List<XFile>> pickImages({int maxCount = 4}) async {
     final images = await _imagePicker.pickMultiImage(
       imageQuality: 85,
@@ -75,6 +82,11 @@ class MediaService {
     final extension = path.extension(filePath).toLowerCase();
     final uniqueFileName = '${_uuid.v4()}$extension';
     final storagePath = 'posts/$userId/images/$uniqueFileName';
+    debugPrint(
+      '[MediaService] uploadFile start '
+      'userId=$userId type=${type.name} filePath=$filePath '
+      'storagePath=$storagePath fileSize=$fileSize',
+    );
 
     final ref = _storage.ref().child(storagePath);
     final uploadTask = ref.putFile(
@@ -97,15 +109,31 @@ class MediaService {
 
     final snapshot = await uploadTask;
     final downloadUrl = await snapshot.ref.getDownloadURL();
+    debugPrint(
+      '[MediaService] uploadFile success '
+      'storagePath=$storagePath bytes=${snapshot.totalBytes}',
+    );
 
     try {
+      debugPrint(
+        '[MediaService] registerPendingMedia start '
+        'type=post_image ownerId=$userId storagePath=$storagePath',
+      );
       await registerPendingMedia(
         type: 'post_image',
         ownerId: userId,
         storagePath: storagePath,
       );
+      debugPrint(
+        '[MediaService] registerPendingMedia success '
+        'type=post_image storagePath=$storagePath',
+      );
     } catch (error, stackTrace) {
-      debugPrint('Failed to register pending post media: $error');
+      debugPrint(
+        '[MediaService] registerPendingMedia failed '
+        'type=post_image ownerId=$userId storagePath=$storagePath '
+        'error=${_describeError(error)}',
+      );
       debugPrint('$stackTrace');
       await deleteMediaByStoragePath(storagePath);
       rethrow;
@@ -160,6 +188,11 @@ class MediaService {
     final extension = path.extension(filePath).toLowerCase();
     final uniqueFileName = '${_uuid.v4()}$extension';
     final storagePath = 'circles/$circleId/$imageType/$uniqueFileName';
+    debugPrint(
+      '[MediaService] uploadCircleImage start '
+      'ownerId=$ownerId circleId=$circleId imageType=$imageType '
+      'filePath=$filePath storagePath=$storagePath fileSize=$fileSize',
+    );
 
     final ref = _storage.ref().child(storagePath);
     final uploadTask = ref.putFile(
@@ -179,16 +212,33 @@ class MediaService {
     final snapshot = await uploadTask;
     final downloadUrl = await snapshot.ref.getDownloadURL();
     final pendingType = imageType == 'icon' ? 'circle_icon' : 'circle_cover';
+    debugPrint(
+      '[MediaService] uploadCircleImage success '
+      'storagePath=$storagePath bytes=${snapshot.totalBytes}',
+    );
 
     try {
+      debugPrint(
+        '[MediaService] registerPendingMedia start '
+        'type=$pendingType ownerId=$ownerId circleId=$circleId '
+        'storagePath=$storagePath',
+      );
       await registerPendingMedia(
         type: pendingType,
         ownerId: ownerId,
         storagePath: storagePath,
         circleId: circleId,
       );
+      debugPrint(
+        '[MediaService] registerPendingMedia success '
+        'type=$pendingType storagePath=$storagePath',
+      );
     } catch (error, stackTrace) {
-      debugPrint('Failed to register pending circle media: $error');
+      debugPrint(
+        '[MediaService] registerPendingMedia failed '
+        'type=$pendingType ownerId=$ownerId circleId=$circleId '
+        'storagePath=$storagePath error=${_describeError(error)}',
+      );
       debugPrint('$stackTrace');
       await deleteMediaByStoragePath(storagePath);
       rethrow;
@@ -229,6 +279,11 @@ class MediaService {
     required String storagePath,
     String? circleId,
   }) async {
+    debugPrint(
+      '[MediaService] pendingMedia write '
+      'docId=${_pendingMediaDocId(storagePath)} type=$type ownerId=$ownerId '
+      'circleId=$circleId storagePath=$storagePath',
+    );
     await _pendingMediaCollection.doc(_pendingMediaDocId(storagePath)).set({
       'type': type,
       'ownerId': ownerId,

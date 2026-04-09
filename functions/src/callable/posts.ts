@@ -896,14 +896,6 @@ const createPostWithModerationSyncLegacy = onCall(
             let needsReview = false;
             let needsReviewReason = "";
 
-            // テスト用: 管理者の添付付き投稿は常にフラグを付ける
-            const userIsAdmin = await isAdmin(userId);
-            if (userIsAdmin && requestMediaItems.length > 0) {
-                needsReview = true;
-                needsReviewReason = MODERATION_MESSAGES.TEST_ADMIN_MEDIA;
-                console.log(`TEST FLAG: Admin post with media flagged for review`);
-            }
-
             // ===============================================
             // 0-1. テキストモデレーション（NGワード + AIモデレーション）
             // ===============================================
@@ -1201,8 +1193,6 @@ export const createPostWithModeration = onCall(
         }
 
         try {
-            await enforcePostRateLimits(userId);
-
             if (typeof content === "string" && [...content].length > 220) {
                 throw new HttpsError("invalid-argument", VALIDATION_ERRORS.INVALID_ARGUMENT);
             }
@@ -1222,6 +1212,10 @@ export const createPostWithModeration = onCall(
             const openaiKey = openaiApiKey.value() || "";
             if (!geminiKey && !openaiKey) {
                 throw new HttpsError("internal", SYSTEM_ERRORS.INTERNAL);
+            }
+
+            if (!normalizedSourcePostId) {
+                await enforcePostRateLimits(userId);
             }
 
             let processingPostRef: FirebaseFirestore.DocumentReference;
@@ -1491,12 +1485,6 @@ export const executePostModeration = onRequest(
 
             let needsReview = false;
             let needsReviewReason = "";
-
-            const userIsAdmin = await isAdmin(userId);
-            if (userIsAdmin && mediaItems.length > 0) {
-                needsReview = true;
-                needsReviewReason = MODERATION_MESSAGES.TEST_ADMIN_MEDIA;
-            }
 
             if (!needsReview && contentBody) {
                 try {

@@ -252,7 +252,6 @@ export const MODERATION_MESSAGES = {
     POST_REVIEW_TIMEOUT: "自動確認に時間がかかっているため、運営確認に切り替えました。",
     NG_WORD_USED: "NGワードが含まれているため投稿できません",
     INAPPROPRIATE_CONTENT_DETECTED: "不適切な内容が検出されました",
-    TEST_ADMIN_MEDIA: "【テスト】管理者の添付付き投稿",
 
     suggestionWithReason: (reason: string, suggestion: string) => `${reason}\n\n提案: ${suggestion}`,
     mediaBlockedSimple: (type: "video" | "image", category: string) =>

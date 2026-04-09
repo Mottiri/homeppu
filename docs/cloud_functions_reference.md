@@ -298,6 +298,7 @@ functions/src/
 - `rejected` では `post_rejected` 通知を送信し、通知タップで該当投稿詳細へ遷移できる。
 - 投稿詳細では NG 理由を確認し、そのまま編集・再投稿できる想定。
 - `rejected` 投稿からの再投稿は、既存の `postId` を再利用して `processing` へ戻す。`createdAt` は更新され、差し替え前の未使用メディアは削除する。
+- `rejected` 投稿からの再投稿は、短時間の投稿レート制限と 1 日の投稿回数上限には含めない。
 
 ### 関連データ
 - `users/{uid}.thanksStampCredits`
