@@ -67,6 +67,9 @@ tmpclaude-*/
 .claude/settings.local.json
 .gcloud/
 tmp_codex_campaign_review.txt
+deploy_log*.txt
+temp_ai_posts.ts
+functions/functions_list.json
 docs/error/
 docs/code_audit/
 docs/現行アプリ要件定義_2026-03-16.md

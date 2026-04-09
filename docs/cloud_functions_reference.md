@@ -48,7 +48,6 @@ functions/src/
 | `circles.ts` | サークル管理 | `checkGhostCircles`（毎日21:00。`nextGhostCheckAt` 到来分のみ処理。既存データには `scripts/backfill-circle-scheduling.js` を先に実行）、`evolveCircleAIs`（毎月1日10時）、`triggerEvolveCircleAIs`（手動トリガー用） |
 | `cleanup.ts` | クリーンアップ | `cleanupOrphanedMedia`（毎日3時。`pendingMedia` の期限切れ未確定メディアのみを対象に削除/解決）、`cleanupResolvedInquiries`、`cleanupReports`、`cleanupBannedUsers`（永久BAN 180日後に Auth を保持したままアプリデータ削除）、`cleanupUnverifiedUsers` |
 | `reminders.ts` | タスク/目標リマインダー通知 | `executeTaskReminder`, `executeGoalReminder`（Cloud Tasks HTTP） |
-| `ai-posts.ts` | AI投稿 | `scheduleAIPosts`（現在無効化中） |
 
 ### triggers/ - Firestoreトリガー
 
