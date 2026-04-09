@@ -1,6 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:flutter/foundation.dart';
 import '../../core/constants/app_constants.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/circle_model.dart';
@@ -29,124 +28,6 @@ class CircleService {
   // カテゴリ一覧（categoryIconsのキーから生成）
   static List<String> get categories => categoryIcons.keys.toList();
 
-  // サークル一覧を取得（Future版 - プル更新用）
-  // セキュリティルールに合わせてORクエリを使用
-  Future<List<CircleModel>> getPublicCircles({
-    String? category,
-    required String userId,
-  }) async {
-    // ORクエリ: 公開サークル(mix/humanOnly) OR 自分が作成したサークル
-    final snapshot = await _firestore
-        .collection('circles')
-        .where(
-          Filter.or(
-            Filter('aiMode', whereIn: ['mix', 'humanOnly']),
-            Filter('ownerId', isEqualTo: userId),
-          ),
-        )
-        .get();
-
-    var circles = snapshot.docs
-        .map((doc) => CircleModel.fromFirestore(doc))
-        .where((c) => !c.isDeleted) // ソフトデリート済みは除外
-        .toList();
-
-    // カテゴリフィルター
-    if (category != null && category != '全て') {
-      circles = circles.where((c) => c.category == category).toList();
-    }
-
-    // 作成日でソート（降順）
-    circles.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    return circles;
-  }
-
-  // サークル一覧を取得（ページネーション対応）
-  // セキュリティルールに合わせてORクエリを使用
-  // 管理者の場合は全サークルを取得
-  Future<({List<CircleModel> circles, DocumentSnapshot? lastDoc, bool hasMore})>
-  getPublicCirclesPaginated({
-    String? category,
-    required String userId,
-    bool isAdmin = false,
-    DocumentSnapshot? lastDocument,
-    int limit = 10,
-  }) async {
-    debugPrint(
-      'getPublicCirclesPaginated: userId=$userId, isAdmin=$isAdmin, category=$category',
-    );
-    try {
-      Query query;
-
-      // カテゴリフィルター（「全て」以外）
-      final hasCategory = category != null && category != '全て';
-
-      if (isAdmin) {
-        // 管理者は全サークルを取得
-        if (hasCategory) {
-          query = _firestore
-              .collection('circles')
-              .where('category', isEqualTo: category)
-              .orderBy('createdAt', descending: true)
-              .limit(limit + 1);
-        } else {
-          query = _firestore
-              .collection('circles')
-              .orderBy('createdAt', descending: true)
-              .limit(limit + 1);
-        }
-      } else {
-        // 一般ユーザー: 公開サークル(mix/humanOnly) OR 自分が作成したサークル
-        final visibilityFilter = Filter.or(
-          Filter('aiMode', whereIn: ['mix', 'humanOnly']),
-          Filter('ownerId', isEqualTo: userId),
-        );
-        final combinedFilter = hasCategory
-            ? Filter.and(
-                visibilityFilter,
-                Filter('category', isEqualTo: category),
-              )
-            : visibilityFilter;
-        query = _firestore
-            .collection('circles')
-            .where(combinedFilter)
-            .orderBy('createdAt', descending: true)
-            .limit(limit + 1);
-      }
-
-      if (lastDocument != null) {
-        query = query.startAfterDocument(lastDocument);
-      }
-
-      debugPrint('getPublicCirclesPaginated: クエリ実行中...');
-      final snapshot = await query.get();
-      debugPrint('getPublicCirclesPaginated: ${snapshot.docs.length}件取得');
-
-      // hasMoreの判定（limit+1件取得できたら次がある）
-      final hasMore = snapshot.docs.length > limit;
-      final docs = hasMore ? snapshot.docs.sublist(0, limit) : snapshot.docs;
-
-      var circles = docs
-          .map(
-            (doc) => CircleModel.fromFirestore(
-              doc as DocumentSnapshot<Map<String, dynamic>>,
-            ),
-          )
-          .where((c) => !c.isDeleted) // ソフトデリート済みは除外
-          .toList();
-
-      return (
-        circles: circles,
-        lastDoc: docs.isNotEmpty ? docs.last : null,
-        hasMore: hasMore,
-      );
-    } catch (e, stackTrace) {
-      debugPrint('getPublicCirclesPaginated エラー: $e');
-      debugPrint('スタックトレース: $stackTrace');
-      rethrow;
-    }
-  }
-
   // サークル検索（Cloud Functions callable経由）
   // queryが空の場合はブラウズモード（フィルター/ソートのみ）
   Future<({
@@ -160,6 +41,7 @@ class CircleService {
     required String userId,
     String? category,
     Map<String, dynamic>? cursor,
+    int limit = 20,
     bool joinedOnly = false,
     String? sortBy,
     bool? hasSpace,
@@ -170,7 +52,7 @@ class CircleService {
     final result = await callable.call({
       if (query != null && query.isNotEmpty) 'query': query,
       if (category != null && category != '全て') 'category': category,
-      'limit': 20,
+      'limit': limit,
       if (joinedOnly) 'joinedOnly': true,
       if (cursor != null) 'cursor': cursor,
       if (sortBy != null) 'sortBy': sortBy,

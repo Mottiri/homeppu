@@ -861,8 +861,13 @@ export const searchCircles = onCall(
     const userId = requireAuth(request, AUTH_ERRORS.UNAUTHENTICATED_ALT);
     logger.info("[searchCircles] auth OK", { userId });
 
-    await assertSubscriberOrTrial(userId);
-    logger.info("[searchCircles] subscriber/trial OK");
+    const userIsAdmin = await isAdmin(userId);
+    if (!userIsAdmin) {
+      await assertSubscriberOrTrial(userId);
+      logger.info("[searchCircles] subscriber/trial OK");
+    } else {
+      logger.info("[searchCircles] admin bypass", { userId });
+    }
 
     const { query, category, limit: requestLimit, cursor, joinedOnly,
       sortBy, hasSpace } = request.data;
@@ -999,7 +1004,8 @@ export const searchCircles = onCall(
     let publicQuery: FirebaseFirestore.Query = db.collection("circles")
       .where("isDeleted", "==", false);
 
-    // aiMode フィルタ（常にaiOnly除外、isPublicはJS-sideでフィルタ）
+    // 公開一覧は mix/humanOnly のみ。管理者も browse 条件は一般ユーザーと揃える。
+    // 管理者の差分は subscriber/trial bypass のみとし、index 爆発を避ける。
     publicQuery = publicQuery.where("aiMode", "in", ["mix", "humanOnly"]);
 
     // テキスト検索フィルタ（queryがある場合のみ）

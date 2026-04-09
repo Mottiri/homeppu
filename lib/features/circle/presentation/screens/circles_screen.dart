@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -51,7 +50,6 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   bool _isLoadingMore = false;
   bool _hasMore = true;
   String? _error;
-  DocumentSnapshot? _lastDocument;
   final ScrollController _scrollController = ScrollController();
   bool _isScrollable = false;
   bool _showScrollToTopFab = false;
@@ -200,19 +198,8 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     }
   }
 
-  /// フィルターまたはソートがアクティブか
-  bool get _isFilterOrSortActive =>
-      _selectedSort != _SortOption.newest || _filterHasSpace;
-
-  /// Callable browse経路を使うか（検索・フィルタ・ソートのいずれかがアクティブ）
-  bool get _isBrowseMode =>
-      _isFilterOrSortActive || _searchController.text.isNotEmpty;
-
   /// 現在の経路で次ページを取得可能か
-  bool get _useCallable => _isBrowseMode || _selectedTab == 1;
-  bool get _canLoadMore =>
-      _hasMore &&
-      (_useCallable ? _browseCursor != null : _lastDocument != null);
+  bool get _canLoadMore => _hasMore && _browseCursor != null;
 
   String _sortOptionToString(_SortOption option) => switch (option) {
     _SortOption.newest => 'newest',
@@ -269,7 +256,6 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
       _isLoadingMore = false;
       _error = null;
       _hasMore = true;
-      _lastDocument = null;
       _browseCursor = null;
       _privateOwnerResults = [];
     });
@@ -277,55 +263,34 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     try {
       final circleService = ref.read(circleServiceProvider);
 
-      if (_isBrowseMode || _selectedTab == 1) {
-        // フィルター/ソート/検索がアクティブ、または参加中タブ → callable経由
-        final result = await circleService.searchCircles(
-          _searchController.text.isNotEmpty ? _searchController.text : null,
-          userId: currentUser.uid,
-          category: _selectedCategory,
-          sortBy: _sortOptionToString(_selectedSort),
-          hasSpace: _filterHasSpace ? true : null,
-          joinedOnly: _selectedTab == 1,
+      final result = await circleService.searchCircles(
+        _searchController.text.isNotEmpty ? _searchController.text : null,
+        userId: currentUser.uid,
+        category: _selectedCategory,
+        sortBy: _sortOptionToString(_selectedSort),
+        hasSpace: _filterHasSpace ? true : null,
+        joinedOnly: _selectedTab == 1,
+        limit: 15,
+      );
+      if (generation != _loadGeneration) return; // 古いリクエストを破棄
+      setState(() {
+        final publicIds = result.circles.map((c) => c.id).toSet();
+        final merged = [
+          ...result.circles,
+          ...result.privateOwnerCircles.where((c) => !publicIds.contains(c.id)),
+        ];
+        _sortMergedCircles(merged);
+        _circles = merged;
+        _privateOwnerResults = result.privateOwnerCircles;
+        _browseCursor = result.nextCursor;
+        _hasMore = result.hasMore;
+        _isLoading = false;
+      });
+      if (result.joinedTruncated && mounted) {
+        SnackBarHelper.showInfo(
+          context,
+          AppMessages.circle.searchJoinedTruncated,
         );
-        if (generation != _loadGeneration) return; // 古いリクエストを破棄
-        setState(() {
-          // privateOwnerCircles（非公開サークル）をマージしてデデュプ・ソート順維持
-          final publicIds = result.circles.map((c) => c.id).toSet();
-          final merged = [
-            ...result.circles,
-            ...result.privateOwnerCircles.where((c) => !publicIds.contains(c.id)),
-          ];
-          // サーバーのソート順を再現（privateOwnerは分離されるため末尾に来る）
-          _sortMergedCircles(merged);
-          _circles = merged;
-          _privateOwnerResults = result.privateOwnerCircles;
-          _browseCursor = result.nextCursor;
-          _hasMore = result.hasMore;
-          _isLoading = false;
-        });
-        // 参加中200件上限で切り詰められた場合に通知
-        if (result.joinedTruncated && mounted) {
-          SnackBarHelper.showInfo(
-            context,
-            AppMessages.circle.searchJoinedTruncated,
-          );
-        }
-      } else {
-        // デフォルト表示 → Firestore直接クエリ（高速）
-        final isAdmin = ref.read(isAdminProvider).valueOrNull ?? false;
-        final result = await circleService.getPublicCirclesPaginated(
-          category: _selectedCategory,
-          userId: currentUser.uid,
-          isAdmin: isAdmin,
-          limit: 15,
-        );
-        if (generation != _loadGeneration) return; // 古いリクエストを破棄
-        setState(() {
-          _circles = result.circles;
-          _lastDocument = result.lastDoc;
-          _hasMore = result.hasMore;
-          _isLoading = false;
-        });
       }
       _updatePendingRequestListener();
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -351,18 +316,9 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     final currentUser = ref.read(currentUserProvider).valueOrNull;
     if (currentUser == null) return;
 
-    if (_useCallable) {
-      // callable mode（browse + 参加中タブ）
-      if (_browseCursor == null) {
-        debugPrint('[CirclesScreen] _loadMoreCircles SKIPPED (browseCursor is null)');
-        return;
-      }
-    } else {
-      // Firestore直接
-      if (_lastDocument == null) {
-        debugPrint('[CirclesScreen] _loadMoreCircles SKIPPED (lastDocument is null)');
-        return;
-      }
+    if (_browseCursor == null) {
+      debugPrint('[CirclesScreen] _loadMoreCircles SKIPPED (browseCursor is null)');
+      return;
     }
     debugPrint('[CirclesScreen] _loadMoreCircles EXECUTING (circles=${_circles.length})');
 
@@ -372,44 +328,27 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     try {
       final circleService = ref.read(circleServiceProvider);
 
-      if (_isBrowseMode || _selectedTab == 1) {
-        final result = await circleService.searchCircles(
-          _searchController.text.isNotEmpty ? _searchController.text : null,
-          userId: currentUser.uid,
-          category: _selectedCategory,
-          cursor: _browseCursor,
-          sortBy: _sortOptionToString(_selectedSort),
-          hasSpace: _filterHasSpace ? true : null,
-          joinedOnly: _selectedTab == 1,
-        );
-        if (generation != _loadGeneration) return; // 古いリクエストを破棄
-        setState(() {
-          final existingIds = _circles.map((c) => c.id).toSet();
-          final newCircles = [...result.circles, ...result.privateOwnerCircles]
-              .where((c) => !existingIds.contains(c.id));
-          _circles.addAll(newCircles);
-          _sortMergedCircles(_circles);
-          _browseCursor = result.nextCursor;
-          _hasMore = result.hasMore;
-          _isLoadingMore = false;
-        });
-      } else {
-        final isAdmin = ref.read(isAdminProvider).valueOrNull ?? false;
-        final result = await circleService.getPublicCirclesPaginated(
-          category: _selectedCategory,
-          userId: currentUser.uid,
-          isAdmin: isAdmin,
-          lastDocument: _lastDocument,
-          limit: 15,
-        );
-        if (generation != _loadGeneration) return; // 古いリクエストを破棄
-        setState(() {
-          _circles.addAll(result.circles);
-          _lastDocument = result.lastDoc;
-          _hasMore = result.hasMore;
-          _isLoadingMore = false;
-        });
-      }
+      final result = await circleService.searchCircles(
+        _searchController.text.isNotEmpty ? _searchController.text : null,
+        userId: currentUser.uid,
+        category: _selectedCategory,
+        cursor: _browseCursor,
+        sortBy: _sortOptionToString(_selectedSort),
+        hasSpace: _filterHasSpace ? true : null,
+        joinedOnly: _selectedTab == 1,
+        limit: 15,
+      );
+      if (generation != _loadGeneration) return; // 古いリクエストを破棄
+      setState(() {
+        final existingIds = _circles.map((c) => c.id).toSet();
+        final newCircles = [...result.circles, ...result.privateOwnerCircles]
+            .where((c) => !existingIds.contains(c.id));
+        _circles.addAll(newCircles);
+        _sortMergedCircles(_circles);
+        _browseCursor = result.nextCursor;
+        _hasMore = result.hasMore;
+        _isLoadingMore = false;
+      });
       _updatePendingRequestListener();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _updateScrollable();

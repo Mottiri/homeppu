@@ -34,7 +34,7 @@ functions/src/
 | `posts.ts` | 投稿作成 | `createPostWithRateLimit`, `createPostWithModeration` |
 | `comments.ts` | コメント・リアクション | `createCommentWithModeration`, `deleteComment`, `addUserReaction`, `removeUserReaction` |
 | `rewarded_reactions.ts` | リワード解放 | `grantRewardedReactionUnlock` |
-| `circles.ts` | サークル管理 | `deleteCircle`, `cleanupDeletedCircle`, `startCircleBrowseTrial`, `endCircleBrowseTrial`, `approveJoinRequest`, `rejectJoinRequest`, `sendJoinRequest`, `joinCircle`, `leaveCircle`, `searchCircles` |
+| `circles.ts` | サークル管理 | `deleteCircle`, `cleanupDeletedCircle`, `startCircleBrowseTrial`, `endCircleBrowseTrial`, `approveJoinRequest`, `rejectJoinRequest`, `sendJoinRequest`, `joinCircle`, `leaveCircle`, `searchCircles`（サークル一覧の browse/search/joined 共通入口） |
 | `tasks.ts` | タスク管理 | `createTask`, `getTasks` |
 | `reports.ts` | 通報機能 | `reportContent` |
 | `names.ts` | 名前管理 | `initializeNameParts`, `getNameParts`, `updateUserName` |
