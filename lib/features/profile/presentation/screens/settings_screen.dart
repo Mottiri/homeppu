@@ -1,10 +1,12 @@
-﻿// ignore_for_file: use_build_context_synchronously
+// ignore_for_file: use_build_context_synchronously
 
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -17,6 +19,7 @@ import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../core/utils/dialog_helper.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../shared/models/avatar_parts_model.dart';
+import '../../../../shared/models/user_model.dart';
 import '../../../../core/constants/avatar_assets.dart';
 import '../../../../shared/widgets/avatar_parts_widget.dart';
 import '../../../../shared/widgets/avatar_selector.dart';
@@ -73,6 +76,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   bool _hasChanges = false;
   bool _isUploadingHeader = false;
   bool _isUploadingProfileImage = false;
+  bool _allowPop = false;
   bool _isCompletingPhase1Tutorial = false;
   bool _isFinishedTutorialOverlayDismissed = false;
   bool _didAutoScrollToPrivacy = false;
@@ -87,6 +91,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   final GlobalKey _privacyOptionMixKey = GlobalKey();
   final GlobalKey _privacyOptionHumanKey = GlobalKey();
   Rect? _tutorialSpotlightRect;
+  final Map<String, String?> _imageModerationCache = {};
+  File? _pendingProfileImagePreviewFile;
+  File? _pendingHeaderImagePreviewFile;
+  File? _draftHeaderImageFile;
+  int? _draftHeaderImageIndex;
+  Map<String, int>? _draftHeaderColors;
+  bool _headerDirty = false;
+  String? _profileImageModerationKey;
+  String? _headerImageModerationKey;
 
   @override
   void initState() {
@@ -105,6 +118,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       _profileVisualMode = _parseProfileVisualMode(user.profileVisualMode);
       _profileImageUrl = user.profileImageUrl;
       _profileImageFile = null;
+      _pendingProfileImagePreviewFile = null;
+      _profileImageModerationKey = null;
+      _pendingHeaderImagePreviewFile = null;
+      _draftHeaderImageFile = null;
+      _draftHeaderImageIndex = null;
+      _draftHeaderColors = null;
+      _headerDirty = false;
+      _headerImageModerationKey = null;
+      _hasChanges = false;
+      _allowPop = false;
+      _imageModerationCache.clear();
       _tutorialSelectedMode = PrivacyMode.values.firstWhere(
         (m) => m.value == user.postMode,
         orElse: () => PrivacyMode.ai,
@@ -120,6 +144,118 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         return ProfileVisualMode.image;
       default:
         return ProfileVisualMode.icon;
+    }
+  }
+
+  String _buildModerationCacheKey(Uint8List bytes) {
+    return '${bytes.length}:${Object.hashAll(bytes)}';
+  }
+
+  Future<({String key, String? errorMessage})> _moderateSelectedImage(
+    File imageFile,
+  ) async {
+    final bytes = await imageFile.readAsBytes();
+    final cacheKey = _buildModerationCacheKey(bytes);
+    if (_imageModerationCache.containsKey(cacheKey)) {
+      return (key: cacheKey, errorMessage: _imageModerationCache[cacheKey]);
+    }
+
+    await NsfwDetectorService.instance.initialize();
+    final nsfwError = await NsfwDetectorService.instance.checkImageBytes(bytes);
+    if (nsfwError != null) {
+      _imageModerationCache[cacheKey] = nsfwError;
+      return (key: cacheKey, errorMessage: nsfwError);
+    }
+
+    final aiError = await ImageModerationService().moderateImage(imageFile);
+    _imageModerationCache[cacheKey] = aiError;
+    return (key: cacheKey, errorMessage: aiError);
+  }
+
+  bool _isApprovedModerationKey(String? key) {
+    return key != null &&
+        _imageModerationCache.containsKey(key) &&
+        _imageModerationCache[key] == null;
+  }
+
+  int _resolveHeaderIndex(UserModel? user) {
+    if (_headerDirty && _draftHeaderImageFile == null && _draftHeaderImageIndex != null) {
+      return _draftHeaderImageIndex!;
+    }
+    return user?.headerImageIndex ?? 0;
+  }
+
+  bool _shouldShowCustomHeader(UserModel? user) {
+    if (_pendingHeaderImagePreviewFile != null) return true;
+    if (_draftHeaderImageFile != null) return true;
+    if (_headerDirty) return false;
+    return user?.headerImageUrl != null;
+  }
+
+  Widget _buildModerationOverlay() {
+    return Container(
+      color: Colors.black.withValues(alpha: 0.45),
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(
+            width: 28,
+            height: 28,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.6,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              AppMessages.post.processingStatus,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<bool> _saveProfileEditsIfNeeded({bool showSuccess = false}) async {
+    if (!_hasChanges) return true;
+    return _saveChanges(showSuccess: showSuccess);
+  }
+
+  Future<void> _handleBackNavigation() async {
+    if (_isLoading) return;
+    final saved = await _saveProfileEditsIfNeeded();
+    if (!saved || !mounted) return;
+    setState(() => _allowPop = true);
+    context.pop();
+  }
+
+  Future<void> _pushRouteAfterAutosave(String route) async {
+    if (_isLoading) return;
+    final saved = await _saveProfileEditsIfNeeded();
+    if (!saved || !mounted) return;
+    context.push(route);
+  }
+
+  Future<void> _openNameEditScreen() async {
+    if (_isLoading) return;
+    final saved = await _saveProfileEditsIfNeeded();
+    if (!saved || !mounted) return;
+    final result = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const NameEditScreen()),
+    );
+    if (result == true) {
+      ref.invalidate(currentUserProvider);
     }
   }
 
@@ -168,64 +304,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     setState(() => _isUploadingHeader = true);
 
     try {
-      // 1. クライアント側NSFWチェック
-      await NsfwDetectorService.instance.initialize();
-      final nsfwResult = await NsfwDetectorService.instance.checkImage(
-        pickedFile.path,
-      );
-
-      if (nsfwResult != null) {
+      final selectedFile = File(pickedFile.path);
+      setState(() => _pendingHeaderImagePreviewFile = selectedFile);
+      final moderationResult = await _moderateSelectedImage(selectedFile);
+      if (moderationResult.errorMessage != null) {
         if (mounted) {
-          SnackBarHelper.showError(context, nsfwResult);
+          setState(() => _pendingHeaderImagePreviewFile = null);
+          SnackBarHelper.showError(context, moderationResult.errorMessage!);
         }
         return;
       }
 
-      // 2. Firebase Storageにアップロード
-      final storageRef = FirebaseStorage.instance
-          .ref()
-          .child('headers')
-          .child('${user.uid}.jpg');
-
-      final uploadTask = await storageRef.putFile(
-        File(pickedFile.path),
-        SettableMetadata(contentType: 'image/jpeg'),
+      final colors = await ColorExtractionService.extractColorsFromFileImage(
+        selectedFile,
       );
-
-      final downloadUrl = await uploadTask.ref.getDownloadURL();
-
-      // 3. 画像から色を抽出
-      final colors = await ColorExtractionService.extractColorsFromNetworkImage(
-        downloadUrl,
-      );
-
-      // 4. Firestoreを更新
-      final updateData = <String, dynamic>{
-        'headerImageUrl': downloadUrl,
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-
-      if (colors != null) {
-        updateData['headerPrimaryColor'] = colors['primary'];
-        updateData['headerSecondaryColor'] = colors['secondary'];
-      }
-
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .update(updateData);
-
-      // ユーザー情報を再取得
-      ref.invalidate(currentUserProvider);
 
       if (mounted) {
-        SnackBarHelper.showSuccess(
-          context,
-          AppMessages.profile.headerChangeSuccess,
-        );
+        setState(() {
+          _draftHeaderImageFile = selectedFile;
+          _draftHeaderImageIndex = _resolveHeaderIndex(user);
+          _draftHeaderColors = colors;
+          _headerImageModerationKey = moderationResult.key;
+          _pendingHeaderImagePreviewFile = null;
+          _headerDirty = true;
+          _hasChanges = true;
+        });
       }
     } catch (e) {
-      debugPrint('Error uploading header image: $e');
+      debugPrint('Error preparing header image: $e');
       if (mounted) {
         SnackBarHelper.showError(
           context,
@@ -234,7 +340,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       }
     } finally {
       if (mounted) {
-        setState(() => _isUploadingHeader = false);
+        setState(() {
+          _isUploadingHeader = false;
+          if (_draftHeaderImageFile != _pendingHeaderImagePreviewFile) {
+            _pendingHeaderImagePreviewFile = null;
+          }
+        });
       }
     }
   }
@@ -253,55 +364,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
     if (confirmed != true) return;
 
-    setState(() => _isUploadingHeader = true);
-
-    try {
-      // Storageから画像を削除（存在する場合）
-      if (user.headerImageUrl != null) {
-        try {
-          final storageRef = FirebaseStorage.instance
-              .ref()
-              .child('headers')
-              .child('${user.uid}.jpg');
-          await storageRef.delete();
-        } catch (_) {
-          // 削除失敗しても続行
-        }
-      }
-
-      // Firestoreを更新
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .update({
-            'headerImageUrl': FieldValue.delete(),
-            'headerPrimaryColor': FieldValue.delete(),
-            'headerSecondaryColor': FieldValue.delete(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
-
-      // ユーザー情報を再取得
-      ref.invalidate(currentUserProvider);
-
-      if (mounted) {
-        SnackBarHelper.showSuccess(
-          context,
-          AppMessages.profile.headerResetSuccess,
-        );
-      }
-    } catch (e) {
-      debugPrint('Error resetting header image: $e');
-      if (mounted) {
-        SnackBarHelper.showError(
-          context,
-          AppMessages.profile.headerResetFailed,
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isUploadingHeader = false);
-      }
-    }
+    setState(() {
+      _draftHeaderImageFile = null;
+      _draftHeaderImageIndex = _draftHeaderImageIndex ?? user.headerImageIndex ?? 0;
+      _draftHeaderColors = {
+        'primary': _defaultHeaderColors[_draftHeaderImageIndex!][0],
+        'secondary': _defaultHeaderColors[_draftHeaderImageIndex!][1],
+      };
+      _headerImageModerationKey = null;
+      _headerDirty = true;
+      _hasChanges = true;
+    });
   }
 
   // デフォルトヘッダー画像リスト
@@ -329,50 +402,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     final user = ref.read(currentUserProvider).valueOrNull;
     if (user == null || _isUploadingHeader) return;
 
-    setState(() => _isUploadingHeader = true);
-
-    try {
-      // カスタム画像があれば削除
-      if (user.headerImageUrl != null) {
-        try {
-          final storageRef = FirebaseStorage.instance
-              .ref()
-              .child('headers')
-              .child('${user.uid}.jpg');
-          await storageRef.delete();
-        } catch (_) {}
-      }
-
-      // Firestoreを更新
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .update({
-            'headerImageUrl': FieldValue.delete(),
-            'headerImageIndex': index,
-            'headerPrimaryColor': _defaultHeaderColors[index][0],
-            'headerSecondaryColor': _defaultHeaderColors[index][1],
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
-
-      ref.invalidate(currentUserProvider);
-
-      if (mounted) {
-        SnackBarHelper.showSuccess(
-          context,
-          AppMessages.profile.headerChangeSuccess,
-        );
-      }
-    } catch (e) {
-      debugPrint('Error selecting default header: $e');
-      if (mounted) {
-        SnackBarHelper.showError(context, AppMessages.profile.changeFailed);
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isUploadingHeader = false);
-      }
-    }
+    setState(() {
+      _draftHeaderImageFile = null;
+      _draftHeaderImageIndex = index;
+      _draftHeaderColors = {
+        'primary': _defaultHeaderColors[index][0],
+        'secondary': _defaultHeaderColors[index][1],
+      };
+      _headerImageModerationKey = null;
+      _headerDirty = true;
+      _hasChanges = true;
+    });
   }
 
   Future<void> _onProfileVisualModeSelected(ProfileVisualMode mode) async {
@@ -434,9 +474,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                             : () {
                                 setDialogState(() => isProcessing = true);
                                 Navigator.of(dialogContext).pop();
-                                Future.microtask(() {
+                                Future.microtask(() async {
                                   if (!rootContext.mounted) return;
-                                  rootContext.push('/premium');
+                                  await _pushRouteAfterAutosave('/premium');
                                 });
                               },
                         style: ElevatedButton.styleFrom(
@@ -527,11 +567,58 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     );
     if (cropped == null) return;
 
-    setState(() {
-      _profileVisualMode = ProfileVisualMode.image;
-      _profileImageFile = File(cropped.path);
-      _hasChanges = true;
-    });
+    setState(() => _isUploadingProfileImage = true);
+
+    try {
+      final selectedFile = File(cropped.path);
+      setState(() => _pendingProfileImagePreviewFile = selectedFile);
+      final moderationResult = await _moderateSelectedImage(selectedFile);
+      if (moderationResult.errorMessage != null) {
+        if (mounted) {
+          setState(() => _pendingProfileImagePreviewFile = null);
+          SnackBarHelper.showError(context, moderationResult.errorMessage!);
+        }
+        return;
+      }
+
+      if (mounted) {
+        setState(() {
+          _profileVisualMode = ProfileVisualMode.image;
+          _profileImageFile = selectedFile;
+          _profileImageModerationKey = moderationResult.key;
+          _pendingProfileImagePreviewFile = null;
+          _hasChanges = true;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error preparing profile image: $e');
+      if (mounted) {
+        SnackBarHelper.showError(context, AppMessages.error.general);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploadingProfileImage = false;
+          if (_profileImageFile != _pendingProfileImagePreviewFile) {
+            _pendingProfileImagePreviewFile = null;
+          }
+        });
+      }
+    }
+  }
+
+  Future<Map<String, String>> _uploadHeaderImage({
+    required String uid,
+    required File imageFile,
+  }) async {
+    final storagePath = 'headers/$uid.jpg';
+    final storageRef = FirebaseStorage.instance.ref().child(storagePath);
+    final uploadTask = await storageRef.putFile(
+      imageFile,
+      SettableMetadata(contentType: 'image/jpeg'),
+    );
+    final downloadUrl = await uploadTask.ref.getDownloadURL();
+    return {'url': downloadUrl, 'path': storagePath};
   }
 
   Future<Map<String, String>> _uploadProfileImage({
@@ -574,14 +661,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     }
   }
 
-  Future<void> _saveChanges() async {
+  Future<bool> _saveChanges({bool showSuccess = false}) async {
     final user = ref.read(currentUserProvider).valueOrNull;
-    if (user == null) return;
+    if (user == null || _isLoading) return false;
 
     setState(() => _isLoading = true);
 
     String? uploadedImagePathForRollback;
     String? uploadedImageUrlForRollback;
+    String? uploadedHeaderPathForRollback;
     try {
       final authService = ref.read(authServiceProvider);
       final previousMode = user.profileVisualMode;
@@ -593,15 +681,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       if (_profileVisualMode == ProfileVisualMode.image) {
         if (_profileImageFile != null) {
           setState(() => _isUploadingProfileImage = true);
-          final moderationService = ImageModerationService();
-          final moderationError = await moderationService.moderateImage(
-            _profileImageFile!,
-          );
-          if (moderationError != null) {
+          if (!_isApprovedModerationKey(_profileImageModerationKey)) {
             if (mounted) {
-              SnackBarHelper.showError(context, moderationError);
+              SnackBarHelper.showError(context, AppMessages.profile.changeFailed);
             }
-            return;
+            return false;
           }
 
           final uploaded = await _uploadProfileImage(
@@ -621,11 +705,50 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               AppMessages.profile.profileImageRequired,
             );
           }
-          return;
+          return false;
         }
       } else {
         nextImageUrl = null;
         nextImagePath = null;
+      }
+
+      String? nextHeaderUrl = user.headerImageUrl;
+      int? nextHeaderImageIndex = user.headerImageIndex;
+      Map<String, int>? nextHeaderColors = _draftHeaderColors;
+
+      if (_headerDirty) {
+        if (_draftHeaderImageFile != null) {
+          setState(() => _isUploadingHeader = true);
+          if (!_isApprovedModerationKey(_headerImageModerationKey)) {
+            if (mounted) {
+              SnackBarHelper.showError(
+                context,
+                AppMessages.profile.headerChangeFailed,
+              );
+            }
+            return false;
+          }
+
+          final uploadedHeader = await _uploadHeaderImage(
+            uid: user.uid,
+            imageFile: _draftHeaderImageFile!,
+          );
+          nextHeaderUrl = uploadedHeader['url'];
+          nextHeaderImageIndex = null;
+          uploadedHeaderPathForRollback = uploadedHeader['path'];
+          nextHeaderColors ??=
+              await ColorExtractionService.extractColorsFromFileImage(
+                _draftHeaderImageFile!,
+              );
+        } else {
+          nextHeaderUrl = null;
+          nextHeaderImageIndex =
+              _draftHeaderImageIndex ?? user.headerImageIndex ?? 0;
+          nextHeaderColors = {
+            'primary': _defaultHeaderColors[nextHeaderImageIndex][0],
+            'secondary': _defaultHeaderColors[nextHeaderImageIndex][1],
+          };
+        }
       }
 
       final profileExtraUpdates = <String, dynamic>{
@@ -642,10 +765,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         profileExtraUpdates['profileImageStoragePath'] = FieldValue.delete();
       }
 
-      // 名前は名前パーツ方式で変更するので、ここでは更新しない
+      if (_headerDirty) {
+        if (nextHeaderUrl != null && nextHeaderUrl.isNotEmpty) {
+          profileExtraUpdates['headerImageUrl'] = nextHeaderUrl;
+          profileExtraUpdates['headerImageIndex'] = FieldValue.delete();
+        } else {
+          profileExtraUpdates['headerImageUrl'] = FieldValue.delete();
+          profileExtraUpdates['headerImageIndex'] = nextHeaderImageIndex;
+        }
+        if (nextHeaderColors != null) {
+          profileExtraUpdates['headerPrimaryColor'] = nextHeaderColors['primary'];
+          profileExtraUpdates['headerSecondaryColor'] =
+              nextHeaderColors['secondary'];
+        }
+      }
+
       await authService.updateUserProfile(
         uid: user.uid,
-        displayName: user.displayName, // 現在の名前を維持
+        displayName: user.displayName,
         bio: _bioController.text.trim(),
         avatarIndex: _selectedAvatarIndex,
         avatarParts: _avatarPartsDirty ? _avatarParts : null,
@@ -669,30 +806,69 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         );
       }
 
+      final shouldDeletePersistedHeader =
+          _headerDirty &&
+          user.headerImageUrl != null &&
+          user.headerImageUrl!.isNotEmpty &&
+          (nextHeaderUrl == null || nextHeaderUrl.isEmpty);
+
+      if (shouldDeletePersistedHeader) {
+        try {
+          await FirebaseStorage.instance
+              .ref()
+              .child('headers/${user.uid}.jpg')
+              .delete();
+        } catch (_) {}
+      }
+
       if (mounted) {
-        SnackBarHelper.showSuccess(context, AppMessages.profile.savedFriendly);
         ref.invalidate(currentUserProvider);
         setState(() {
           _profileImageUrl = nextImageUrl;
           _profileImageFile = null;
+          _pendingProfileImagePreviewFile = null;
+          _profileImageModerationKey = null;
+          _pendingHeaderImagePreviewFile = null;
+          _draftHeaderImageFile = null;
+          _draftHeaderImageIndex = null;
+          _draftHeaderColors = null;
+          _headerImageModerationKey = null;
+          _headerDirty = false;
+          _avatarPartsDirty = false;
+          _allowPop = false;
           _isUploadingProfileImage = false;
+          _isUploadingHeader = false;
           _hasChanges = false;
         });
+        if (showSuccess) {
+          SnackBarHelper.showSuccess(context, AppMessages.profile.savedFriendly);
+        }
       }
+      return true;
     } catch (e) {
       debugPrint('Error saving changes: $e');
       await _deleteProfileImageFile(
         storagePath: uploadedImagePathForRollback,
         downloadUrl: uploadedImageUrlForRollback,
       );
+      if (uploadedHeaderPathForRollback != null) {
+        try {
+          await FirebaseStorage.instance
+              .ref()
+              .child(uploadedHeaderPathForRollback)
+              .delete();
+        } catch (_) {}
+      }
       if (mounted) {
         SnackBarHelper.showError(context, AppMessages.error.general);
       }
+      return false;
     } finally {
       if (mounted) {
         setState(() {
           _isLoading = false;
           _isUploadingProfileImage = false;
+          _isUploadingHeader = false;
         });
       }
     }
@@ -701,6 +877,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   Future<void> _logout() async {
     final confirmed = await DialogHelper.showLogoutConfirmDialog(context);
     if (confirmed == true) {
+      final saved = await _saveProfileEditsIfNeeded();
+      if (!saved) return;
       await ref.read(authServiceProvider).signOut();
     }
   }
@@ -883,26 +1061,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         leading: isPhase1Tutorial
             ? null
             : IconButton(
-                onPressed: () => context.pop(),
+                onPressed: _isLoading ? null : _handleBackNavigation,
                 icon: const Icon(Icons.arrow_back_rounded),
               ),
         title: Text(AppMessages.profile.settingsTitle),
-        actions: [
-          if (_hasChanges && !isPhase1Tutorial)
-            TextButton(
-              onPressed: _isLoading ? null : _saveChanges,
-              child: _isLoading
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppColors.primary,
-                      ),
-                    )
-                  : Text(AppMessages.label.save),
-            ),
-        ],
+        actions: const [],
       ),
       body: Container(
         decoration: const BoxDecoration(gradient: AppColors.warmGradient),
@@ -925,13 +1088,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                       children: [
                         Text(
                           AppMessages.profile.profileEditTitle,
-                          style: Theme.of(context).textTheme.titleMedium,
+                          style: GoogleFonts.zenMaruGothic(
+                            textStyle: Theme.of(context).textTheme.titleMedium,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                         const SizedBox(height: 20),
 
                         Text(
                           AppMessages.profile.profileVisualLabel,
-                          style: Theme.of(context).textTheme.labelLarge,
+                          style: GoogleFonts.zenMaruGothic(
+                            textStyle: Theme.of(context).textTheme.labelLarge,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         Row(
@@ -1030,13 +1199,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                         right: 0,
                                         bottom: 0,
                                         child: Container(
-                                          padding: const EdgeInsets.all(4),
-                                          decoration: const BoxDecoration(
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: BoxDecoration(
                                             color: AppColors.primary,
                                             shape: BoxShape.circle,
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: AppColors.primary
+                                                    .withValues(alpha: 0.4),
+                                                blurRadius: 8,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                            ],
                                           ),
                                           child: const Icon(
-                                            Icons.edit,
+                                            Icons.edit_rounded,
                                             size: 14,
                                             color: Colors.white,
                                           ),
@@ -1062,7 +1239,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 GestureDetector(
-                                  onTap: _pickProfileImage,
+                                  onTap: _isUploadingProfileImage
+                                      ? null
+                                      : _pickProfileImage,
                                   child: Container(
                                     width: 120,
                                     height: 120,
@@ -1078,14 +1257,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                       ),
                                     ),
                                     clipBehavior: Clip.antiAlias,
-                                    child: _profileImageFile != null
-                                        ? Image.file(
+                                    child: Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        if (_pendingProfileImagePreviewFile != null)
+                                          Image.file(
+                                            _pendingProfileImagePreviewFile!,
+                                            fit: BoxFit.cover,
+                                          )
+                                        else if (_profileImageFile != null)
+                                          Image.file(
                                             _profileImageFile!,
                                             fit: BoxFit.cover,
                                           )
-                                        : (_profileImageUrl != null &&
-                                              _profileImageUrl!.isNotEmpty)
-                                        ? Image.network(
+                                        else if (_profileImageUrl != null &&
+                                            _profileImageUrl!.isNotEmpty)
+                                          Image.network(
                                             _profileImageUrl!,
                                             fit: BoxFit.cover,
                                             errorBuilder:
@@ -1096,11 +1283,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                                       size: 42,
                                                     ),
                                           )
-                                        : const Icon(
+                                        else
+                                          const Icon(
                                             Icons.add_photo_alternate_outlined,
                                             color: AppColors.primary,
                                             size: 42,
                                           ),
+                                        if (_isUploadingProfileImage)
+                                          _buildModerationOverlay(),
+                                      ],
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(height: 8),
@@ -1120,7 +1312,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                         // ヘッダー画像
                         Text(
                           AppMessages.profile.headerImageLabel,
-                          style: Theme.of(context).textTheme.labelLarge,
+                          style: GoogleFonts.zenMaruGothic(
+                            textStyle: Theme.of(context).textTheme.labelLarge,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         Consumer(
@@ -1128,8 +1323,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                             final user = ref
                                 .watch(currentUserProvider)
                                 .valueOrNull;
-                            final hasCustomHeader =
-                                user?.headerImageUrl != null;
+                            final hasCustomHeader = _shouldShowCustomHeader(user);
+                            final effectiveHeaderIndex = _resolveHeaderIndex(user);
                             final isSubscriber = user?.isSubscriber ?? false;
 
                             return Column(
@@ -1150,43 +1345,51 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                         ),
                                       ),
                                       clipBehavior: Clip.antiAlias,
-                                      child: hasCustomHeader
-                                          ? Image.network(
-                                              user!.headerImageUrl!,
+                                      child: Stack(
+                                        fit: StackFit.expand,
+                                        children: [
+                                          if (_pendingHeaderImagePreviewFile != null)
+                                            Image.file(
+                                              _pendingHeaderImagePreviewFile!,
                                               fit: BoxFit.cover,
-                                              errorBuilder:
-                                                  (
-                                                    context,
-                                                    error,
-                                                    stackTrace,
-                                                  ) => Container(
-                                                    color:
-                                                        AppColors.primaryLight,
-                                                    child: const Center(
-                                                      child: Icon(
-                                                        Icons.image,
-                                                        size: 40,
-                                                        color:
-                                                            AppColors.primary,
-                                                      ),
-                                                    ),
-                                                  ),
                                             )
-                                          : Container(
-                                              color: AppColors.primaryLight
-                                                  .withValues(alpha: 0.3),
-                                              child: Center(
-                                                child: Text(
-                                                  AppMessages
-                                                      .profile
-                                                      .defaultHeaderLabel,
-                                                  style: TextStyle(
-                                                    color:
-                                                        AppColors.textSecondary,
-                                                  ),
-                                                ),
-                                              ),
+                                          else if (hasCustomHeader)
+                                            (_draftHeaderImageFile != null
+                                                ? Image.file(
+                                                    _draftHeaderImageFile!,
+                                                    fit: BoxFit.cover,
+                                                  )
+                                                : Image.network(
+                                                    user!.headerImageUrl!,
+                                                    fit: BoxFit.cover,
+                                                    errorBuilder:
+                                                        (
+                                                          context,
+                                                          error,
+                                                          stackTrace,
+                                                        ) => Container(
+                                                          color: AppColors
+                                                              .primaryLight,
+                                                          child: const Center(
+                                                            child: Icon(
+                                                              Icons.image,
+                                                              size: 40,
+                                                              color: AppColors
+                                                                  .primary,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                  ))
+                                          else
+                                            Image.asset(
+                                              _defaultHeaderImages[
+                                                  effectiveHeaderIndex],
+                                              fit: BoxFit.cover,
                                             ),
+                                          if (_isUploadingHeader)
+                                            _buildModerationOverlay(),
+                                        ],
+                                      ),
                                     ),
                                     // カスタム画像の場合は×ボタン表示
                                     if (hasCustomHeader)
@@ -1267,8 +1470,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                     itemBuilder: (context, index) {
                                       final isSelected =
                                           !hasCustomHeader &&
-                                          (user?.headerImageIndex ?? 0) ==
-                                              index;
+                                          effectiveHeaderIndex == index;
                                       return Padding(
                                         padding: EdgeInsets.only(
                                           right:
@@ -1329,7 +1531,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                         // 表示名（名前パーツ方式）
                         Text(
                           AppMessages.profile.nameLabel,
-                          style: Theme.of(context).textTheme.labelLarge,
+                          style: GoogleFonts.zenMaruGothic(
+                            textStyle: Theme.of(context).textTheme.labelLarge,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         Consumer(
@@ -1338,31 +1543,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                 .watch(currentUserProvider)
                                 .valueOrNull;
                             return InkWell(
-                              onTap: () async {
-                                final result = await Navigator.of(context)
-                                    .push<bool>(
-                                      MaterialPageRoute(
-                                        builder: (_) => const NameEditScreen(),
-                                      ),
-                                    );
-                                if (result == true) {
-                                  // 名前が変更された場合、ユーザー情報を再取得
-                                  ref.invalidate(currentUserProvider);
-                                }
-                              },
-                              borderRadius: BorderRadius.circular(12),
+                              onTap: _openNameEditScreen,
+                              borderRadius: BorderRadius.circular(18),
                               child: Container(
                                 width: double.infinity,
                                 padding: const EdgeInsets.all(16),
                                 decoration: BoxDecoration(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.surfaceContainerHighest,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: Theme.of(context).colorScheme.outline
-                                        .withValues(alpha: 0.3),
+                                  gradient: const LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      Color(0xFFFFF8F2),
+                                      Color(0xFFFFEFE5),
+                                    ],
                                   ),
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(
+                                    color: AppColors.primaryLight
+                                        .withValues(alpha: 0.5),
+                                    width: 1.5,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.primary
+                                          .withValues(alpha: 0.08),
+                                      blurRadius: 12,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
                                 ),
                                 child: Row(
                                   children: [
@@ -1376,25 +1584,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                                 AppMessages
                                                     .profile
                                                     .tapToSetName,
-                                            style: const TextStyle(
+                                            style: GoogleFonts.zenMaruGothic(
                                               fontSize: 18,
-                                              fontWeight: FontWeight.bold,
+                                              fontWeight: FontWeight.w700,
+                                              color: AppColors.textPrimary,
                                             ),
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
                                             AppMessages.profile.tapToChangeName,
-                                            style: TextStyle(
+                                            style: GoogleFonts.zenMaruGothic(
                                               fontSize: 12,
-                                              color: Colors.grey[600],
+                                              color: AppColors.textSecondary,
                                             ),
                                           ),
                                         ],
                                       ),
                                     ),
-                                    Icon(
-                                      Icons.chevron_right,
-                                      color: Colors.grey[600],
+                                    const Icon(
+                                      Icons.chevron_right_rounded,
+                                      color: AppColors.textSecondary,
                                     ),
                                   ],
                                 ),
@@ -1408,7 +1617,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                         // 自己紹介
                         Text(
                           AppMessages.profile.bioLabel,
-                          style: Theme.of(context).textTheme.labelLarge,
+                          style: GoogleFonts.zenMaruGothic(
+                            textStyle: Theme.of(context).textTheme.labelLarge,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         TextField(
@@ -1427,7 +1639,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
                 const SizedBox(height: 16),
 
-                // ?????
+                // プレミアム
                 Card(
                   child: ListTile(
                     leading: const Icon(
@@ -1437,7 +1649,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                     title: Text(AppMessages.profile.premiumTitle),
                     subtitle: Text(AppMessages.profile.premiumSubtitle),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: () => context.push('/premium'),
+                    onTap: () => _pushRouteAfterAutosave('/premium'),
                   ),
                 ),
 
@@ -1746,7 +1958,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                             );
                           },
                         ),
-                        onTap: () => context.push('/inquiry'),
+                        onTap: () => _pushRouteAfterAutosave('/inquiry'),
                       ),
                     ],
                   ),
@@ -1762,28 +1974,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                         leading: const Icon(Icons.info_outline),
                         title: Text(AppMessages.profile.aboutTitle),
                         trailing: const Icon(Icons.chevron_right),
-                        onTap: () => context.push('/about'),
+                        onTap: () => _pushRouteAfterAutosave('/about'),
                       ),
                       const Divider(height: 1),
                       ListTile(
                         leading: const Icon(Icons.help_outline),
                         title: Text(AppMessages.profile.helpTitle),
                         trailing: const Icon(Icons.chevron_right),
-                        onTap: () => context.push('/help'),
+                        onTap: () => _pushRouteAfterAutosave('/help'),
                       ),
                       const Divider(height: 1),
                       ListTile(
                         leading: const Icon(Icons.description_outlined),
                         title: Text(AppMessages.profile.termsTitle),
                         trailing: const Icon(Icons.chevron_right),
-                        onTap: () => context.push('/terms'),
+                        onTap: () => _pushRouteAfterAutosave('/terms'),
                       ),
                       const Divider(height: 1),
                       ListTile(
                         leading: const Icon(Icons.privacy_tip_outlined),
                         title: Text(AppMessages.profile.privacyPolicyTitle),
                         trailing: const Icon(Icons.chevron_right),
-                        onTap: () => context.push('/privacy'),
+                        onTap: () => _pushRouteAfterAutosave('/privacy'),
                       ),
                     ],
                   ),
@@ -1874,7 +2086,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         ),
       ),
     );
-    if (!isPhase1Tutorial) return page;
+    if (!isPhase1Tutorial) {
+      return PopScope(
+        canPop: _allowPop,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop) return;
+          _handleBackNavigation();
+        },
+        child: page,
+      );
+    }
     return PopScope(canPop: false, child: page);
   }
 }

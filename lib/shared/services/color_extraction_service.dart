@@ -1,8 +1,41 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:palette_generator/palette_generator.dart';
 
 /// 画像から色を抽出するサービス
 class ColorExtractionService {
+  static Future<Map<String, int>?> extractColorsFromFileImage(File imageFile) async {
+    try {
+      final paletteGenerator = await PaletteGenerator.fromImageProvider(
+        FileImage(imageFile),
+        size: const Size(200, 200),
+        maximumColorCount: 10,
+      );
+
+      final primaryColor =
+          paletteGenerator.dominantColor?.color ??
+          paletteGenerator.vibrantColor?.color ??
+          paletteGenerator.mutedColor?.color;
+
+      final secondaryColor =
+          paletteGenerator.vibrantColor?.color ??
+          paletteGenerator.lightVibrantColor?.color ??
+          paletteGenerator.mutedColor?.color ??
+          paletteGenerator.lightMutedColor?.color;
+
+      if (primaryColor == null) return null;
+
+      return {
+        'primary': primaryColor.toARGB32(),
+        'secondary': (secondaryColor ?? primaryColor).toARGB32(),
+      };
+    } catch (e) {
+      debugPrint('ColorExtractionService: Failed to extract file colors: $e');
+      return null;
+    }
+  }
+
   /// ネットワーク画像から色を抽出
   static Future<Map<String, int>?> extractColorsFromNetworkImage(
     String imageUrl,
