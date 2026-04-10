@@ -147,11 +147,14 @@ class AppTheme {
         unselectedItemColor: AppColors.textHint,
         type: BottomNavigationBarType.fixed,
         elevation: 8,
-        selectedLabelStyle: GoogleFonts.notoSansJp(
+        selectedLabelStyle: GoogleFonts.zenMaruGothic(
           fontSize: 12,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w700,
         ),
-        unselectedLabelStyle: GoogleFonts.notoSansJp(fontSize: 12),
+        unselectedLabelStyle: GoogleFonts.zenMaruGothic(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
       ),
 
       // SnackBar

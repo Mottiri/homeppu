@@ -1,4 +1,4 @@
-﻿/// アプリ内メッセージ定義
+/// アプリ内メッセージ定義
 ///
 /// 「ほめっぷ」のフレンドリーなトーンを全画面で統一するためのメッセージ集。
 ///
@@ -633,6 +633,16 @@ class _AuthMessages {
   String get registerNamePrefix => '前半';
   String get registerNameSuffix => '後半';
   String get registerNameNote => '※登録後も設定から変更できます';
+
+  // 3ステップ登録フロー
+  String get registerStep1Title => 'まずは見た目を選ぼう！';
+  String get registerStep1Subtitle => 'あなたの分身を作ろう✨';
+  String get registerStep2Title => 'なまえを選ぼう！';
+  String get registerStep2Subtitle => '組み合わせて自分だけの名前に🌈';
+  String get registerStep3Title => '最後にアカウント情報！';
+  String get registerStep3Subtitle => 'あと少しで完了だよ🎉';
+  String get registerNext => '次へ';
+  String get registerBack => '戻る';
 
   // メール認証
   String get verifyTitle => '認証メールを送信しました';

@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_messages.dart';
@@ -776,8 +777,8 @@ class _MainShellState extends ConsumerState<MainShell>
                                     isProfileTutorialActive,
                                 child: _NavItem(
                                   key: _homeNavKey,
-                                  icon: Icons.home_outlined,
-                                  activeIcon: Icons.home_rounded,
+                                  icon: Icons.cottage_outlined,
+                                  activeIcon: Icons.cottage_rounded,
                                   label: AppMessages.home.navLabel,
                                   isActive: currentIndex == 0,
                                   onTap: () {
@@ -801,8 +802,8 @@ class _MainShellState extends ConsumerState<MainShell>
                                     isProfileTutorialActive,
                                 child: _NavItem(
                                   key: _circleNavKey,
-                                  icon: Icons.groups_outlined,
-                                  activeIcon: Icons.groups_rounded,
+                                  icon: Icons.diversity_3_outlined,
+                                  activeIcon: Icons.diversity_3_rounded,
                                   label: AppMessages.circle.navLabel,
                                   isActive:
                                       currentIndex == 1 &&
@@ -934,9 +935,9 @@ class _MainShellState extends ConsumerState<MainShell>
                                     isProfileTutorialActive,
                                 child: _NavItem(
                                   key: _stampNavKey,
-                                  icon: Icons.collections_bookmark_outlined,
+                                  icon: Icons.auto_awesome_outlined,
                                   activeIcon:
-                                      Icons.collections_bookmark_rounded,
+                                      Icons.auto_awesome_rounded,
                                   label: AppMessages.stamp.navLabel,
                                   isActive: currentIndex == 2,
                                   onTap: () => context.go('/stamps'),
@@ -949,8 +950,8 @@ class _MainShellState extends ConsumerState<MainShell>
                                     isProfileTutorialActive,
                                 child: _NavItem(
                                   key: _myPageNavKey,
-                                  icon: Icons.person_outline,
-                                  activeIcon: Icons.person_rounded,
+                                  icon: Icons.face_outlined,
+                                  activeIcon: Icons.face_rounded,
                                   label: AppMessages.profile.navLabel,
                                   isActive: currentIndex == 3,
                                   onTap: () {
@@ -1123,54 +1124,73 @@ class _NavItem extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
-        width: 56,
+        width: 64,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Icon(
-                  isActive ? activeIcon : icon,
-                  color: isActive ? AppColors.primary : AppColors.textHint,
-                  size: isLoading ? 0 : 26,
-                ),
-                if (isLoading)
-                  SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        isActive ? AppColors.primary : AppColors.textHint,
-                      ),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOutCubic,
+              padding: EdgeInsets.symmetric(
+                horizontal: isActive ? 16 : 8,
+                vertical: isActive ? 6 : 4,
+              ),
+              decoration: BoxDecoration(
+                color: isActive
+                    ? AppColors.primaryLight.withValues(alpha: 0.4)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  AnimatedScale(
+                    scale: isActive ? 1.1 : 1.0,
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOutCubic,
+                    child: Icon(
+                      isActive ? activeIcon : icon,
+                      color: isActive ? AppColors.primary : AppColors.textHint,
+                      size: isLoading ? 0 : 24,
                     ),
                   ),
-                if (showLockBadge)
-                  Positioned(
-                    right: -6,
-                    top: -5,
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(
-                        Icons.lock_outline,
-                        size: 12,
-                        color: AppColors.textHint,
+                  if (isLoading)
+                    SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          isActive ? AppColors.primary : AppColors.textHint,
+                        ),
                       ),
                     ),
-                  ),
-              ],
+                  if (showLockBadge)
+                    Positioned(
+                      right: -6,
+                      top: -5,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.lock_outline,
+                          size: 12,
+                          color: AppColors.textHint,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Text(
               label,
-              style: TextStyle(
+              style: GoogleFonts.zenMaruGothic(
                 fontSize: 10,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
                 color: isActive ? AppColors.primary : AppColors.textHint,
               ),
             ),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_messages.dart';
 import '../../../../core/utils/snackbar_helper.dart';
@@ -22,8 +23,10 @@ class NameEditScreen extends ConsumerStatefulWidget {
   ConsumerState<NameEditScreen> createState() => _NameEditScreenState();
 }
 
-class _NameEditScreenState extends ConsumerState<NameEditScreen> {
+class _NameEditScreenState extends ConsumerState<NameEditScreen>
+    with SingleTickerProviderStateMixin {
   final _namePartsService = NamePartsService();
+  late final TabController _tabController;
   final _virtueShopService = VirtueShopService();
   bool _isOpeningLockedDialog = false;
   bool _isRefreshingVirtueConfig = false;
@@ -42,6 +45,7 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _loadNameParts();
     Future.microtask(() => ref.invalidate(virtueShopConfigProvider));
   }
@@ -133,6 +137,38 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
   }
 
   @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  /// カテゴリに対応する絵文字を返す
+  String _categoryIcon(String category) {
+    switch (category) {
+      case 'positive':
+        return '✨';
+      case 'relaxed':
+        return '🌸';
+      case 'effort':
+        return '💪';
+      case 'animal':
+        return '🐾';
+      case 'funny':
+        return '😄';
+      case 'legendary':
+        return '👑';
+      case 'nature':
+        return '🌿';
+      case 'food':
+        return '🍽️';
+      case 'occupation':
+        return '🎩';
+      default:
+        return '📝';
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     // 価格情報を事前に読み込む（ロックタップ時の待ち時間を短くする）
     ref.watch(virtueShopConfigProvider);
@@ -162,7 +198,10 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(_error!, style: const TextStyle(color: Colors.red)),
+                  Text(
+                    _error!,
+                    style: const TextStyle(color: AppColors.error),
+                  ),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: _loadNameParts,
@@ -173,51 +212,109 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
             )
           : Column(
               children: [
-                // プレビュー
+                // プレビュー（カード化）
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(24),
-                  color: Theme.of(context).colorScheme.primaryContainer,
+                  margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 20,
+                  ),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xFFFFF8F2),
+                        Color(0xFFFFEFE5),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                        blurRadius: 16,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                    border: Border.all(
+                      color: AppColors.primaryLight.withValues(alpha: 0.5),
+                      width: 1.5,
+                    ),
+                  ),
                   child: Column(
                     children: [
                       Text(
                         AppMessages.profile.previewLabel,
-                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                        style: GoogleFonts.zenMaruGothic(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                       const SizedBox(height: 8),
-                      Text(
-                        _previewName,
-                        style: const TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 250),
+                        child: Text(
+                          _previewName,
+                          key: ValueKey(_previewName),
+                          style: GoogleFonts.zenMaruGothic(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
 
-                // パーツ選択
-                Expanded(
-                  child: DefaultTabController(
-                    length: 2,
-                    child: Column(
-                      children: [
-                        TabBar(
-                          tabs: [
-                            Tab(text: AppMessages.profile.prefixTab),
-                            Tab(text: AppMessages.profile.suffixTab),
-                          ],
-                        ),
-                        Expanded(
-                          child: TabBarView(
-                            children: [
-                              _buildPartsList(_prefixes, true),
-                              _buildPartsList(_suffixes, false),
-                            ],
-                          ),
-                        ),
+                // ピル型セグメントコントロール
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: TabBar(
+                      controller: _tabController,
+                      indicator: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      indicatorSize: TabBarIndicatorSize.tab,
+                      dividerColor: Colors.transparent,
+                      labelColor: Colors.white,
+                      unselectedLabelColor: AppColors.textSecondary,
+                      labelStyle: GoogleFonts.zenMaruGothic(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      unselectedLabelStyle: GoogleFonts.zenMaruGothic(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      tabs: [
+                        Tab(text: AppMessages.profile.prefixTab),
+                        Tab(text: AppMessages.profile.suffixTab),
                       ],
                     ),
+                  ),
+                ),
+
+                // パーツ選択
+                Expanded(
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildPartsList(_prefixes, true),
+                      _buildPartsList(_suffixes, false),
+                    ],
                   ),
                 ),
               ],
@@ -259,19 +356,28 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text(
-                firstPart.categoryDisplayName,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[600],
-                ),
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Row(
+                children: [
+                  Text(
+                    _categoryIcon(firstPart.category),
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    firstPart.categoryDisplayName,
+                    style: GoogleFonts.zenMaruGothic(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
               ),
             ),
             Wrap(
               spacing: 8,
-              runSpacing: 8,
+              runSpacing: 10,
               children: categoryParts.map((part) {
                 final isSelected = isPrefix
                     ? _selectedPrefixId == part.id
@@ -313,29 +419,29 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
                 }
               });
             },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: isSelected
-              ? Theme.of(context).colorScheme.primary
+              ? AppColors.primary
               : isLocked
-              ? Colors.grey[200]
-              : Colors.white,
-          borderRadius: BorderRadius.circular(20),
+              ? AppColors.surfaceVariant.withValues(alpha: 0.7)
+              : AppColors.surface,
+          borderRadius: BorderRadius.circular(24),
           border: Border.all(
             color: isSelected
-                ? Theme.of(context).colorScheme.primary
+                ? AppColors.primary
                 : !part.isCommon
                 ? Color(part.rarityColor)
-                : Colors.grey[300]!,
+                : AppColors.textTertiary.withValues(alpha: 0.5),
             width: !part.isCommon ? 2 : 1,
           ),
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.primary.withValues(alpha: 0.3),
+                    color: AppColors.primary.withValues(alpha: 0.25),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -346,18 +452,23 @@ class _NameEditScreenState extends ConsumerState<NameEditScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (isLocked) ...[
-              Icon(Icons.lock, size: 14, color: Colors.grey[500]),
+              Icon(
+                Icons.lock_outline_rounded,
+                size: 14,
+                color: AppColors.textHint,
+              ),
               const SizedBox(width: 4),
             ],
             Text(
               part.text,
-              style: TextStyle(
+              style: GoogleFonts.zenMaruGothic(
+                fontSize: 14,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                 color: isSelected
                     ? Colors.white
                     : isLocked
-                    ? Colors.grey[500]
-                    : Colors.black87,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    ? AppColors.textHint
+                    : AppColors.textPrimary,
               ),
             ),
           ],
