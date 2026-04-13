@@ -30,7 +30,7 @@ import { ModerationResult } from "../types";
 import { getVirtuePolicy, grantVirtue, VIRTUE_ROUTE_KEYS } from "../helpers/virtue-policy";
 import { logAIProviderUsage } from "../helpers/ai-usage";
 
-const EPIC_REACTIONS = new Set(["rainbow", "hundred"]);
+const EPIC_REACTIONS = new Set(["rainbow", "hundred", "confetti"]);
 const EPIC_STAMP_SHEET_REACTIONS = new Set(["rainbow", "hundred", "confetti"]);
 const SETTINGS_COLLECTION = "settings";
 const VIRTUE_SHOP_SETTINGS_DOC = "virtueShop";

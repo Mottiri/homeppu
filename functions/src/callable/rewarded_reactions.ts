@@ -5,7 +5,7 @@ import { requireAuth } from "../helpers/auth";
 import { LOCATION } from "../config/constants";
 import { RESOURCE_ERRORS, VALIDATION_ERRORS } from "../config/messages";
 
-const EPIC_REACTIONS = new Set(["rainbow", "hundred"]);
+const EPIC_REACTIONS = new Set(["rainbow", "hundred", "confetti"]);
 const REWARDED_USES = 25;
 const REWARDED_HOURS = 24;
 
