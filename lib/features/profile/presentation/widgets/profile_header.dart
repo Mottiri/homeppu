@@ -87,7 +87,7 @@ class ProfileHeader extends StatelessWidget {
                 right: 8,
                 child: Row(
                   children: [
-                    if (adminAction != null) adminAction!,
+                    ?adminAction,
                     if (isOwnProfile && onOpenSettings != null)
                       IconButton(
                         key: settingsIconKey,

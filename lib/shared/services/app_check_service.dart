@@ -11,9 +11,9 @@ class AppCheckService {
 
     try {
       await FirebaseAppCheck.instance.activate(
-        androidProvider: kReleaseMode
-            ? AndroidProvider.playIntegrity
-            : AndroidProvider.debug,
+        providerAndroid: kReleaseMode
+            ? const AndroidPlayIntegrityProvider()
+            : const AndroidDebugProvider(),
       );
     } catch (error, stackTrace) {
       debugPrint('[AppCheck] Init failed: $error');

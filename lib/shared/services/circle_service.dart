@@ -50,12 +50,12 @@ class CircleService {
     final callable = functions.httpsCallable('searchCircles');
 
     final result = await callable.call({
-      if (query != null && query.isNotEmpty) 'query': query,
+      if (query?.isNotEmpty == true) 'query': query,
       if (category != null && category != '全て') 'category': category,
       'limit': limit,
       if (joinedOnly) 'joinedOnly': true,
-      if (cursor != null) 'cursor': cursor,
-      if (sortBy != null) 'sortBy': sortBy,
+      'cursor': ?cursor,
+      'sortBy': ?sortBy,
       if (hasSpace == true) 'hasSpace': true,
     });
 
@@ -143,7 +143,7 @@ class CircleService {
       'aiMode': aiMode.name,
       'goal': goal,
       'isPublic': isPublic,
-      if (rules != null) 'rules': rules,
+      'rules': ?rules,
     });
     final data = Map<String, dynamic>.from(result.data as Map);
     return data['circleId'] as String;

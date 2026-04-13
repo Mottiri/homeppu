@@ -288,7 +288,7 @@ class MediaService {
       'type': type,
       'ownerId': ownerId,
       'storagePath': storagePath,
-      if (circleId != null) 'circleId': circleId,
+      'circleId': ?circleId,
       'createdAt': FieldValue.serverTimestamp(),
     });
   }

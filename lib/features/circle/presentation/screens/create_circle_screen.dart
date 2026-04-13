@@ -217,11 +217,10 @@ class _CreateCircleScreenState extends ConsumerState<CreateCircleScreen>
         if (iconUrl != null || coverUrl != null) {
           attachAttempted = true;
           await circleService.updateCircle(circleId, {
-            if (iconUrl != null) 'iconImageUrl': iconUrl,
-            if (iconStoragePath != null) 'iconImageStoragePath': iconStoragePath,
-            if (coverUrl != null) 'coverImageUrl': coverUrl,
-            if (coverStoragePath != null)
-              'coverImageStoragePath': coverStoragePath,
+            'iconImageUrl': ?iconUrl,
+            'iconImageStoragePath': ?iconStoragePath,
+            'coverImageUrl': ?coverUrl,
+            'coverImageStoragePath': ?coverStoragePath,
           });
           await mediaService.resolvePendingStorageItems(uploadedImages);
         }

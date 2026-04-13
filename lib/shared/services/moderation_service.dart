@@ -134,8 +134,8 @@ class ModerationService {
         'postMode': postMode,
         'circleId': circleId,
         'mediaItems': mediaItems?.map((item) => item.toMap()).toList(),
-        if (clientRequestId != null) 'clientRequestId': clientRequestId,
-        if (sourcePostId != null) 'sourcePostId': sourcePostId,
+        'clientRequestId': ?clientRequestId,
+        'sourcePostId': ?sourcePostId,
       });
 
       return result.data['postId'] as String;
@@ -167,7 +167,7 @@ class ModerationService {
         'content': content,
         'userDisplayName': userDisplayName,
         'userAvatarIndex': userAvatarIndex,
-        if (clientRequestId != null) 'clientRequestId': clientRequestId,
+        'clientRequestId': ?clientRequestId,
       });
 
       return result.data['commentId'] as String;
