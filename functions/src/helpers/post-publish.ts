@@ -21,12 +21,9 @@ export async function schedulePublishedPostSideEffects(params: {
 }): Promise<void> {
     const { postId, postData } = params;
 
-    console.log(`=== schedulePublishedPostSideEffects: postId=${postId}, circleId=${postData.circleId}, postMode=${postData.postMode} ===`);
-
     const isCirclePost = postData.circleId && postData.circleId !== "" && postData.circleId !== null;
 
     if (postData.postMode === "human") {
-        console.log("Human mode post, skipping AI comments");
         return;
     }
 
@@ -36,10 +33,8 @@ export async function schedulePublishedPostSideEffects(params: {
     const mediaItems = postData.mediaItems as MediaItem[] | undefined;
 
     if (mediaItems && mediaItems.length > 0) {
-        console.log(`Analyzing ${mediaItems.length} media items for AI comment...`);
         try {
             mediaDescriptions = await analyzeMediaForComment(aiFactory, mediaItems);
-            console.log(`Media analysis complete: ${mediaDescriptions.length} descriptions`);
         } catch (error) {
             console.error("Media analysis failed:", error);
         }
@@ -54,13 +49,11 @@ export async function schedulePublishedPostSideEffects(params: {
     if (isCirclePost) {
         const circleDoc = await db.collection("circles").doc(postData.circleId).get();
         if (!circleDoc.exists) {
-            console.log(`Circle ${postData.circleId} not found, skipping AI comments`);
             return;
         }
 
         const circleData = circleDoc.data()!;
         if (circleData.aiMode === "humanOnly") {
-            console.log(`Circle ${postData.circleId} is humanOnly mode, skipping AI comments`);
             return;
         }
 
@@ -76,7 +69,6 @@ export async function schedulePublishedPostSideEffects(params: {
         }> || [];
 
         if (generatedAIs.length === 0) {
-            console.log(`No generated AIs for circle ${postData.circleId}, skipping AI comments`);
             return;
         }
 
@@ -109,15 +101,11 @@ export async function schedulePublishedPostSideEffects(params: {
                 bio: "",
             };
         });
-
-        console.log(`Using ${selectedPersonas.length} circle AIs for comments`);
     } else {
         const shuffledForComment = deterministicShuffle(AI_PERSONAS, postId);
         const commentCountHash = createHash("sha256").update(`${postId}-comment-count`).digest();
         const commentCount = (commentCountHash[0] % 5) + 1;
         selectedPersonas = shuffledForComment.slice(0, commentCount);
-
-        console.log(`Using ${selectedPersonas.length} general AIs for comments`);
     }
 
     const posterName = postData.userDisplayName || "投稿者";
@@ -178,24 +166,25 @@ export async function schedulePublishedPostSideEffects(params: {
         })
     );
 
-    commentResults.forEach((result, i) => {
-        const { persona, delay } = personaDelays[i];
+    let commentCreated = 0;
+    let commentDuplicates = 0;
+    let commentFailed = 0;
+    commentResults.forEach((result) => {
         if (result.status === "fulfilled") {
             const outcome = result.value.result;
             if (outcome === "duplicate_skipped") {
-                console.log(`Task for ${persona.name}: duplicate skipped`);
+                commentDuplicates++;
             } else {
-                console.log(`Task enqueued for ${persona.name}: delay=${delay}m`);
+                commentCreated++;
             }
         } else {
-            console.error(`Error enqueuing task for ${persona.name}:`, result.reason);
+            commentFailed++;
+            console.error("Error enqueuing comment task:", result.reason);
         }
     });
 
     const countHash = createHash("sha256").update(`${postId}-reaction-count`).digest();
     const reactionCount = Math.min((countHash[0] % 6) + 5, AI_PERSONAS.length);
-    console.log(`Scheduling ${reactionCount} reactions (burst)...`);
-
     const POSITIVE_REACTIONS = ["love", "praise", "cheer", "sparkles", "clap", "thumbsup", "smile", "flower", "fire", "nice"];
     const commentPersonaIds = new Set(selectedPersonas.map((p) => p.id));
     const nonCommentPersonas = AI_PERSONAS.filter((p) => !commentPersonaIds.has(p.id));
@@ -248,6 +237,8 @@ export async function schedulePublishedPostSideEffects(params: {
         }
     });
     console.log(
-        `Reaction tasks: ${reactionCreated} created, ${reactionDuplicates} duplicates skipped, ${reactionResults.length - reactionCreated - reactionDuplicates} failed`
+        `schedulePublishedPostSideEffects complete: postId=${postId} ` +
+        `comments={created:${commentCreated}, duplicates:${commentDuplicates}, failed:${commentFailed}} ` +
+        `reactions={created:${reactionCreated}, duplicates:${reactionDuplicates}, failed:${reactionResults.length - reactionCreated - reactionDuplicates}}`
     );
 }

@@ -58,9 +58,6 @@ export const checkGhostCircles = onSchedule(
         .orderBy("nextGhostCheckAt", "asc")
         .limit(200)
         .get();
-
-      console.log(`Checking ${circlesSnapshot.size} due circles...`);
-
       for (const circleDoc of circlesSnapshot.docs) {
         const circleId = circleDoc.id;
         const circleData = circleDoc.data();
@@ -91,9 +88,6 @@ export const checkGhostCircles = onSchedule(
           continue;
         }
 
-        const warningType = isGhost ? LABELS.WARNING_TYPE_GHOST : LABELS.WARNING_TYPE_ABANDONED;
-        console.log(`Found ${warningType} circle: ${circleName} (${circleId})`);
-
         if (!ghostWarningNotifiedAt) {
           if (typeof ownerId !== "string" || ownerId.length === 0) {
             await circleDoc.ref.update({
@@ -107,7 +101,6 @@ export const checkGhostCircles = onSchedule(
               ),
             });
             rescheduledCount++;
-            console.log(`Circle ${circleName} has no valid ownerId, started deletion grace period`);
             continue;
           }
 
@@ -124,7 +117,6 @@ export const checkGhostCircles = onSchedule(
               ),
             });
             rescheduledCount++;
-            console.log(`Owner ${ownerId} not found, started deletion grace period for ${circleName}`);
             continue;
           }
 
@@ -150,14 +142,11 @@ export const checkGhostCircles = onSchedule(
             ),
           });
 
-          console.log(`Sent warning notification to owner of ${circleName}`);
           notifiedCount++;
           continue;
         }
 
         if (ghostWarningNotifiedAt < deleteThreshold) {
-          console.log(`Deleting ghost circle: ${circleName} (notified at ${ghostWarningNotifiedAt.toISOString()})`);
-
           await circleDoc.ref.update({
             isDeleted: true,
             deletedAt: FieldValue.serverTimestamp(),
@@ -192,7 +181,6 @@ export const checkGhostCircles = onSchedule(
             }
           }
 
-          console.log(`Scheduled cleanup for ${circleName}`);
           deletedCount++;
           continue;
         }
@@ -207,10 +195,6 @@ export const checkGhostCircles = onSchedule(
           ),
         });
         rescheduledCount++;
-        console.log(
-          `Circle ${circleName} is waiting for deletion ` +
-          `(notified ${Math.floor((nowMs - ghostWarningNotifiedAt.getTime()) / (24 * 60 * 60 * 1000))} days ago)`
-        );
       }
 
       console.log(
@@ -250,17 +234,14 @@ export const evolveCircleAIs = functionsV1.region(LOCATION).runWith({
 
       const daysSinceLastGrowth = Math.floor((now.getTime() - lastGrowthAt.getTime()) / (1000 * 60 * 60 * 24));
       if (daysSinceLastGrowth < 30) {
-        console.log(`${userData.displayName}: Only ${daysSinceLastGrowth} days since last growth, skipping`);
         continue;
       }
 
       if (currentLevel >= 5) {
-        console.log(`${userData.displayName}: Already at max level (${currentLevel}), skipping`);
         continue;
       }
 
       if (Math.random() > 0.8) {
-        console.log(`${userData.displayName}: Unlucky this month, no growth`);
         continue;
       }
 
@@ -271,7 +252,6 @@ export const evolveCircleAIs = functionsV1.region(LOCATION).runWith({
         updatedAt: FieldValue.serverTimestamp(),
       });
 
-      console.log(`${userData.displayName}: Level up! ${currentLevel} -> ${newLevel}`);
       evolvedCount++;
     }
 

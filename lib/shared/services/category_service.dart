@@ -11,9 +11,7 @@ class CategoryService {
 
   // カテゴリ一覧取得
   Future<List<CategoryModel>> getCategories() async {
-    debugPrint('[CategoryService] getCategories called, userId=$_userId');
     if (_userId == null) {
-      debugPrint('[CategoryService] userId is null, returning empty list');
       return [];
     }
 
@@ -25,19 +23,11 @@ class CategoryService {
           .orderBy('order')
           .get();
 
-      debugPrint(
-        '[CategoryService] Got ${snapshot.docs.length} categories from Firestore',
-      );
 
       final categories = snapshot.docs
           .map((doc) => CategoryModel.fromFirestore(doc))
           .toList();
 
-      for (final cat in categories) {
-        debugPrint(
-          '[CategoryService] Category: ${cat.name} (id=${cat.id}, order=${cat.order})',
-        );
-      }
 
       return categories;
     } catch (e) {
@@ -48,11 +38,7 @@ class CategoryService {
 
   // カテゴリ追加
   Future<CategoryModel?> addCategory(String name) async {
-    debugPrint(
-      '[CategoryService] addCategory called, name=$name, userId=$_userId',
-    );
     if (_userId == null) {
-      debugPrint('[CategoryService] userId is null, returning null');
       return null;
     }
 
@@ -70,7 +56,6 @@ class CategoryService {
       if (snapshot.docs.isNotEmpty) {
         nextOrder = (snapshot.docs.first.data()['order'] as int) + 1;
       }
-      debugPrint('[CategoryService] Next order: $nextOrder');
 
       final newCategoryRef = _firestore
           .collection('users')
@@ -87,9 +72,6 @@ class CategoryService {
       );
 
       await newCategoryRef.set(category.toMap());
-      debugPrint(
-        '[CategoryService] Category created successfully: ${category.id}',
-      );
       return category;
     } catch (e) {
       debugPrint('[CategoryService] Error adding category: $e');

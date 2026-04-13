@@ -123,7 +123,6 @@ export async function moderateText(ctx: ModerationContext): Promise<TextModerati
     const responseText = result.text.trim();
     rawResponseText = responseText;
     logAIProviderUsage(`${ctx.type}_text_moderation`, result, { userId: ctx.userId });
-    console.log(`moderateText(${ctx.type}): Raw response: ${responseText.substring(0, 500)}`);
 
     const jsonText = extractJson(responseText);
     const modResult = JSON.parse(jsonText) as ModerationResult;
@@ -181,7 +180,7 @@ export async function moderateText(ctx: ModerationContext): Promise<TextModerati
     }
 
     // Fail Open
-    console.log(`Moderation failed for ${ctx.type}, allowing (fail-open)`);
+    console.warn(`Moderation failed for ${ctx.type}, allowing (fail-open)`);
     return { blocked: false, flagged: false };
   }
 }

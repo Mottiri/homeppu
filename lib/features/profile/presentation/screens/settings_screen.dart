@@ -908,18 +908,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   void _maybeAutoScrollToPrivacyCard() {
     if (_didAutoScrollToPrivacy) return;
-    debugPrint(
-      '[TUTORIAL_SCROLL] schedule auto-scroll '
-      'didAuto=$_didAutoScrollToPrivacy retry=$_privacyCardResolveRetryCount',
-    );
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted || _didAutoScrollToPrivacy) return;
       final targetContext = _privacyCardKey.currentContext;
       if (targetContext == null) {
-        debugPrint(
-          '[TUTORIAL_SCROLL] target context not ready '
-          'retry=$_privacyCardResolveRetryCount/12',
-        );
         if (_privacyCardResolveRetryCount < 12) {
           _privacyCardResolveRetryCount++;
           await Future.delayed(const Duration(milliseconds: 120));
@@ -927,30 +919,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         }
         return;
       }
-      debugPrint('[TUTORIAL_SCROLL] target context resolved');
       _didAutoScrollToPrivacy = true;
-      try {
-        debugPrint(
-          '[TUTORIAL_SCROLL] ensureVisible start '
-          'offset=${_settingsScrollController.hasClients ? _settingsScrollController.offset.toStringAsFixed(1) : 'n/a'}',
-        );
-      } catch (_) {
-        debugPrint('[TUTORIAL_SCROLL] ensureVisible start offset=unavailable');
-      }
       await Scrollable.ensureVisible(
         targetContext,
         duration: const Duration(milliseconds: 380),
         curve: Curves.easeOutCubic,
         alignment: 0.08,
       );
-      try {
-        debugPrint(
-          '[TUTORIAL_SCROLL] ensureVisible done '
-          'offset=${_settingsScrollController.hasClients ? _settingsScrollController.offset.toStringAsFixed(1) : 'n/a'}',
-        );
-      } catch (_) {
-        debugPrint('[TUTORIAL_SCROLL] ensureVisible done offset=unavailable');
-      }
       await _resolveSpotlightRectForStep(ref.read(tutorialPhase1Provider));
       if (mounted) {
         setState(() {});
@@ -983,7 +958,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       targetKey,
       ancestorKey: _tutorialOverlayStackKey,
     );
-    debugPrint('[TUTORIAL_SCROLL] resolved rect(step=$step): $rect');
     if (!mounted) return;
     setState(() => _tutorialSpotlightRect = rect);
   }
@@ -1000,9 +974,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   Widget build(BuildContext context) {
     final tutorialStep = ref.watch(tutorialPhase1Provider);
     if (_lastTutorialStep != tutorialStep) {
-      debugPrint(
-        '[TUTORIAL_SCROLL] step changed $_lastTutorialStep -> $tutorialStep',
-      );
       _lastTutorialStep = tutorialStep;
       if (tutorialStep == TutorialPhase1Step.settingsScroll) {
         _didAutoScrollToPrivacy = false;
@@ -1010,7 +981,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         _tutorialSpotlightRect = null;
         _isFinishedTutorialOverlayDismissed = false;
         _setTutorialPrivacyExpanded(false);
-        debugPrint('[TUTORIAL_SCROLL] reset auto-scroll state for settingsScroll');
       } else if (tutorialStep == TutorialPhase1Step.explainAI ||
           tutorialStep == TutorialPhase1Step.explainMix ||
           tutorialStep == TutorialPhase1Step.explainHuman ||

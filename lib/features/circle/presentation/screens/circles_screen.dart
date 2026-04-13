@@ -74,7 +74,6 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   @override
   void initState() {
     super.initState();
-    debugPrint('[CirclesScreen] initState called');
     _scrollController.addListener(_onScroll);
   }
 
@@ -83,13 +82,10 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    debugPrint('[CirclesScreen] didChangeDependencies called (initialLoadDone=$_initialLoadDone)');
     // 初回のみロード（didChangeDependencies は MediaQuery 等の変更でも呼ばれるため）
     if (!_initialLoadDone) {
       _initialLoadDone = true;
       _loadCircles();
-    } else {
-      debugPrint('[CirclesScreen] didChangeDependencies SKIPPED (not first call)');
     }
   }
 
@@ -245,7 +241,6 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   }
 
   Future<void> _loadCircles() async {
-    debugPrint('[CirclesScreen] _loadCircles called (stack: ${StackTrace.current.toString().split('\n').take(5).join(' | ')})');
     final currentUser = ref.read(currentUserProvider).valueOrNull;
     if (currentUser == null) return;
 
@@ -296,9 +291,8 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _updateScrollable();
       });
-    } catch (e, stackTrace) {
+    } catch (e) {
       debugPrint('CirclesScreen._loadCircles エラー: $e');
-      debugPrint('スタックトレース: $stackTrace');
       if (generation != _loadGeneration) return; // 古いリクエストの失敗を無視
       setState(() {
         _error = e.toString();
@@ -309,7 +303,6 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
 
   Future<void> _loadMoreCircles() async {
     if (_isLoadingMore || !_hasMore) {
-      debugPrint('[CirclesScreen] _loadMoreCircles SKIPPED (isLoadingMore=$_isLoadingMore, hasMore=$_hasMore)');
       return;
     }
 
@@ -317,10 +310,8 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
     if (currentUser == null) return;
 
     if (_browseCursor == null) {
-      debugPrint('[CirclesScreen] _loadMoreCircles SKIPPED (browseCursor is null)');
       return;
     }
-    debugPrint('[CirclesScreen] _loadMoreCircles EXECUTING (circles=${_circles.length})');
 
     final generation = _loadGeneration;
     setState(() => _isLoadingMore = true);
@@ -476,7 +467,6 @@ class _CirclesScreenState extends ConsumerState<CirclesScreen> {
   }
 
   void _scrollToTop() {
-    debugPrint('[CirclesScreen] _scrollToTop called (stack: ${StackTrace.current.toString().split('\n').take(3).join(' | ')})');
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
         0,

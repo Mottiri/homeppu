@@ -206,14 +206,7 @@ async function enforcePostRateLimits(userId: string): Promise<void> {
         const baseDailyCount = Number.isFinite(rawDailyCount) ? Math.max(0, Math.trunc(rawDailyCount)) : 0;
         const currentDailyCount = prevDateKey === currentDateKey ? baseDailyCount : 0;
 
-        console.log(
-            `[POST_RATE] user=${userId} withinWindow=${withinWindow} ` +
-            `rateCount=${rateCount} nextRateCount=${nextRateCount} ` +
-            `dateKey=${currentDateKey} prevDateKey=${prevDateKey} dailyCount=${currentDailyCount}`
-        );
-
         if (nextRateCount >= POSTS_PER_MINUTE_LIMIT) {
-            console.log(`[POST_RATE] blocked minute limit user=${userId}`);
             throw new HttpsError(
                 "resource-exhausted",
                 VALIDATION_ERRORS.RATE_LIMITED_PER_MINUTE
@@ -221,7 +214,6 @@ async function enforcePostRateLimits(userId: string): Promise<void> {
         }
 
         if (currentDailyCount >= POSTS_DAILY_LIMIT) {
-            console.log(`[POST_RATE] blocked daily limit user=${userId} dailyCount=${currentDailyCount}`);
             throw new HttpsError(
                 "resource-exhausted",
                 VALIDATION_ERRORS.RATE_LIMITED_DAILY_15
@@ -235,10 +227,6 @@ async function enforcePostRateLimits(userId: string): Promise<void> {
             postDailyCount: currentDailyCount + 1,
             updatedAt: FieldValue.serverTimestamp(),
         });
-        console.log(
-            `[POST_RATE] updated user=${userId} postRateCount=${nextRateCount + 1} ` +
-            `postDailyCount=${currentDailyCount + 1}`
-        );
     });
 }
 
@@ -815,8 +803,6 @@ export const createPostWithModeration = onCall(
         enforceAppCheck: true,
     },
     async (request) => {
-        console.log("=== createPostWithModeration START ===");
-
         const userId = requireAuth(request);
         const {
             content,
@@ -1021,7 +1007,6 @@ export const createPostWithModeration = onCall(
                 await markPostRequestSucceeded(postRequestRef, processingPostRef.id);
             }
 
-            console.log(`=== createPostWithModeration ACCEPTED: postId=${processingPostRef.id} ===`);
             return { success: true, postId: processingPostRef.id };
         } catch (error) {
             if (!moderationTasksScheduled &&

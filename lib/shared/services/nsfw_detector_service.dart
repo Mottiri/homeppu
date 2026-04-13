@@ -24,7 +24,6 @@ class NsfwDetectorService {
     try {
       _detector = await NsfwDetector.load(); // threshold: 0.7 がデフォルト
       _isInitialized = true;
-      debugPrint('NsfwDetectorService: Initialized successfully');
     } catch (e) {
       debugPrint('NsfwDetectorService: Failed to initialize - $e');
       // 初期化失敗しても続行（Cloud Functionsで二重チェックするため）
@@ -36,28 +35,21 @@ class NsfwDetectorService {
   /// Returns: エラーメッセージ（NSFWの場合）、または null（安全な場合）
   Future<String?> checkImage(String imagePath) async {
     if (!_isInitialized || _detector == null) {
-      debugPrint('NsfwDetectorService: Not initialized, skipping check');
       return null; // 初期化されていない場合はスキップ
     }
 
     try {
       final file = File(imagePath);
       if (!await file.exists()) {
-        debugPrint('NsfwDetectorService: File not found');
         return null;
       }
 
-      debugPrint('NsfwDetectorService: Checking image: $imagePath');
       final result = await _detector!.detectNSFWFromFile(file);
 
       if (result == null) {
-        debugPrint('NsfwDetectorService: Result is null');
         return null;
       }
 
-      debugPrint(
-        'NsfwDetectorService: Result - isNsfw=${result.isNsfw}, score=${result.score}',
-      );
 
       // NSFW判定されたらブロック
       if (result.isNsfw) {
@@ -79,16 +71,12 @@ class NsfwDetectorService {
     }
 
     try {
-      debugPrint('NsfwDetectorService: Checking image bytes');
       final result = await _detector!.detectNSFWFromBytes(bytes);
 
       if (result == null) {
         return null;
       }
 
-      debugPrint(
-        'NsfwDetectorService: Result - isNsfw=${result.isNsfw}, score=${result.score}',
-      );
 
       if (result.isNsfw) {
         return '不適切な画像が検出されました。別の画像を選んでください。';

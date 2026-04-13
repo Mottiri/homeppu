@@ -298,7 +298,6 @@ async function createCircleAIPost(params: {
 }): Promise<"posted" | "skipped-empty" | "already-posted"> {
   const beginResult = await beginAIPostRequest(params.target.circleId, params.requestId);
   if (beginResult.kind === "succeeded") {
-    console.log(`AI post request already succeeded: ${params.requestId}`);
     return "already-posted";
   }
 
@@ -310,12 +309,10 @@ async function createCircleAIPost(params: {
       requestRef: beginResult.ref,
       postId: postRef.id,
     });
-    console.log(`Recovered AI post request finalization: ${params.requestId}`);
     return "already-posted";
   }
 
   const recentPostContents = await getRecentCirclePosts(params.target.circleId);
-  console.log(`Found ${recentPostContents.length} recent posts for deduplication`);
 
   const prompt = getCircleAIPostPrompt(
     params.ai.name,
@@ -330,7 +327,6 @@ async function createCircleAIPost(params: {
   const postContent = sanitizeGeneratedPost(result.text);
 
   if (!postContent) {
-    console.log(`Empty post generated for circle ${params.target.circleId}`);
     await beginResult.ref.delete().catch(() => undefined);
     return "skipped-empty";
   }
@@ -355,7 +351,6 @@ async function createCircleAIPost(params: {
     postId: postRef.id,
   });
 
-  console.log(`Created AI post in circle ${params.target.circleName}: ${postContent.substring(0, 50)}...`);
   return "posted";
 }
 
@@ -421,9 +416,9 @@ export const generateCircleAIPosts = functionsV1.region(LOCATION).runWith({
       limit: MAX_CIRCLES_PER_RUN * 4,
       dueOnly: true,
     });
-    console.log(`Loaded ${targets.length} due circles for scheduler`);
 
     let scheduledCount = 0;
+    let duplicateSkippedCount = 0;
     for (const target of targets) {
       if (scheduledCount >= MAX_CIRCLES_PER_RUN) break;
 
@@ -451,10 +446,9 @@ export const generateCircleAIPosts = functionsV1.region(LOCATION).runWith({
           taskId: `circle-ai-post-${target.circleId}`,
         });
 
-        console.log(
-          `Scheduled post for ${target.circleName} at ${scheduleTime.toISOString()} ` +
-          `(delay: ${delayMinutes}min, result: ${enqueueResult.result}, requestId: ${taskPayload.requestId})`
-        );
+        if (enqueueResult.result === "duplicate_skipped") {
+          duplicateSkippedCount++;
+        }
         scheduledCount++;
       } catch (error) {
         await rescheduleCircleAIPost(
@@ -465,7 +459,10 @@ export const generateCircleAIPosts = functionsV1.region(LOCATION).runWith({
       }
     }
 
-    console.log(`=== generateCircleAIPosts COMPLETE: scheduled=${scheduledCount} ===`);
+    console.log(
+      `=== generateCircleAIPosts COMPLETE: scheduled=${scheduledCount}, ` +
+      `duplicateSkipped=${duplicateSkippedCount} ===`
+    );
   } catch (error) {
     console.error("=== generateCircleAIPosts ERROR:", error);
   }
@@ -494,11 +491,8 @@ export const executeCircleAIPost = functionsV1.region(LOCATION).runWith({
       requestId,
     } = request.body;
 
-    console.log(`Executing AI post for circle ${circleId} by ${aiName}`);
-
     const target = await loadTargetCircleForExecution(circleId);
     if (!target) {
-      console.log(`Circle ${circleId} is deleted or not found, skipping AI post`);
       response.status(200).send("Circle deleted, skipping");
       return;
     }
@@ -507,7 +501,6 @@ export const executeCircleAIPost = functionsV1.region(LOCATION).runWith({
     today.setHours(0, 0, 0, 0);
     const todayTimestamp = Timestamp.fromDate(today);
     if (!await hasAIPostCapacityToday(circleId, todayTimestamp)) {
-      console.log(`Circle ${circleId} already reached today's AI post limit, skipping`);
       response.status(200).send("Circle reached daily limit");
       return;
     }
@@ -556,8 +549,6 @@ export const triggerCircleAIPosts = onCall(
       throw new HttpsError("permission-denied", AUTH_ERRORS.ADMIN_REQUIRED);
     }
 
-    console.log("=== triggerCircleAIPosts START ===");
-
     const geminiKey = geminiApiKey.value() || "";
     const openaiKey = openaiApiKey.value() || "";
     if (!geminiKey && !openaiKey) {
@@ -576,7 +567,6 @@ export const triggerCircleAIPosts = onCall(
         limit: MAX_CIRCLES_PER_RUN * 4,
         dueOnly: false,
       });
-      console.log(`Loaded ${targets.length} circles for manual trigger`);
 
       let totalPosts = 0;
       for (const target of targets) {

@@ -59,9 +59,6 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
   int _commentScrollRetryCount = 0;
   String? _tutorialTargetCommentId;
   bool _tutorialScrollFallback = false;
-  bool? _lastLoggedPhase2OverlayVisible;
-  bool? _lastLoggedHasTutorialTarget;
-  int? _lastLoggedCommentCount;
   String? _shownRejectedDialogSignature;
   bool _hideCommentComposer = false;
   bool _didSchedulePostExit = false;
@@ -214,11 +211,6 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         (c) => c.id == _tutorialTargetCommentId,
       );
       if (!idStillExists) {
-        debugPrint(
-          '[TUTORIAL_PHASE2] target ID '
-          '$_tutorialTargetCommentId disappeared, '
-          're-selecting',
-        );
         final replacement = comments
             .cast<CommentModel?>()
             .firstWhere(
@@ -231,10 +223,6 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         _commentScrollRetryCount = 0;
         _tutorialCommentRect = null;
         _tutorialScrollFallback = false;
-        debugPrint(
-          '[TUTORIAL_PHASE2] re-selected target: '
-          '$_tutorialTargetCommentId',
-        );
       }
     }
 
@@ -250,10 +238,6 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
       if (firstNonOwner != null) {
         _tutorialTargetCommentId =
             firstNonOwner.id;
-        debugPrint(
-          '[TUTORIAL_PHASE2] fixed target ID: '
-          '$_tutorialTargetCommentId',
-        );
       }
     }
 
@@ -267,21 +251,6 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         : -1;
     final hasTutorialTarget = tutorialTargetIndex >= 0;
     final commentCount = comments.length;
-    if (_lastLoggedCommentCount != commentCount ||
-        _lastLoggedHasTutorialTarget !=
-            hasTutorialTarget) {
-      debugPrint(
-        '[TUTORIAL_PHASE2] comments=$commentCount '
-        'hasTarget=$hasTutorialTarget '
-        'targetIndex=$tutorialTargetIndex '
-        'targetId=$_tutorialTargetCommentId '
-        'step=$tutorialStep '
-        'isOwnPost=$isOwnPost',
-      );
-      _lastLoggedCommentCount = commentCount;
-      _lastLoggedHasTutorialTarget =
-          hasTutorialTarget;
-    }
 
     // e) 処理順序の制御: 自動スクロール → rect解決を統合
     // フォールバック時はrect解決・overlay表示をスキップ
@@ -317,10 +286,6 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         hasTutorialTarget &&
         commentCount > 200 &&
         !_tutorialScrollFallback) {
-      debugPrint(
-        '[TUTORIAL_PHASE2] fallback activated: '
-        'comments=$commentCount > 200',
-      );
       WidgetsBinding.instance
           .addPostFrameCallback((_) {
         if (!mounted) return;
@@ -620,42 +585,26 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
   }
 
   Future<void> _resolveTutorialCommentRect() async {
-    debugPrint('[TUTORIAL_PHASE2] resolve rect requested');
     final rect = await resolveRectWithRetry(
       _tutorialTargetCommentKey,
       coordinateSpaceKey: _tutorialOverlayCoordinateKey,
     );
-    debugPrint('[TUTORIAL_PHASE2] resolve rect result: $rect');
     if (!mounted) return;
     if (_isRectNearlyEqual(rect, _tutorialCommentRect)) return;
-    debugPrint(
-      '[TUTORIAL_PHASE2] update rect: old=$_tutorialCommentRect new=$rect',
-    );
     setState(() => _tutorialCommentRect = rect);
   }
 
   void _maybeAutoScrollToComment() {
     if (_didAutoScrollToComment) return;
-    debugPrint(
-      '[TUTORIAL_PHASE2] schedule auto-scroll '
-      'didAuto=$_didAutoScrollToComment retry=$_commentScrollRetryCount',
-    );
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted || _didAutoScrollToComment) return;
       final targetContext = _tutorialTargetCommentKey.currentContext;
       if (targetContext == null) {
-        debugPrint(
-          '[TUTORIAL_PHASE2] target context not ready '
-          'retry=$_commentScrollRetryCount/12',
-        );
         if (_commentScrollRetryCount < 12) {
           _commentScrollRetryCount++;
           await Future.delayed(const Duration(milliseconds: 120));
           if (mounted) setState(() {});
         } else {
-          debugPrint(
-            '[TUTORIAL_PHASE2] fallback activated: retry limit reached',
-          );
           if (mounted) {
             setState(() {
               _tutorialScrollFallback = true;
@@ -665,7 +614,6 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         }
         return;
       }
-      debugPrint('[TUTORIAL_PHASE2] target context resolved');
       _didAutoScrollToComment = true;
       await Scrollable.ensureVisible(
         targetContext,
@@ -674,7 +622,6 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         alignment: 0.08,
       );
       if (!mounted) return;
-      debugPrint('[TUTORIAL_PHASE2] ensureVisible done');
       await _resolveTutorialCommentRect();
       if (mounted) {
         setState(() {});
@@ -688,9 +635,6 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     final currentUser = ref.watch(currentUserProvider).valueOrNull;
     final tutorialStep = ref.watch(tutorialPhase2Provider);
     if (_lastLoggedPhase2Step != tutorialStep) {
-      debugPrint(
-        '[TUTORIAL_PHASE2] step changed: $_lastLoggedPhase2Step -> $tutorialStep',
-      );
       _lastLoggedPhase2Step = tutorialStep;
       // g) ステップ変更時のリセット
       if (tutorialStep != TutorialPhase2Step.commentLongPress) {
@@ -1011,24 +955,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                               onMaskTap: () {},
                             ),
                           ),
-                        Builder(
-                          builder: (context) {
-                            final overlayVisible = isOwnPost &&
-                                tutorialStep ==
-                                    TutorialPhase2Step.commentLongPress &&
-                                _tutorialCommentRect != null;
-                            if (_lastLoggedPhase2OverlayVisible !=
-                                overlayVisible) {
-                              debugPrint(
-                                '[TUTORIAL_PHASE2] overlayVisible=$overlayVisible '
-                                'step=$tutorialStep rect=$_tutorialCommentRect',
-                              );
-                              _lastLoggedPhase2OverlayVisible =
-                                  overlayVisible;
-                            }
-                            return const SizedBox.shrink();
-                          },
-                        ),
+                        const SizedBox.shrink(),
                       ],
                     );
                   },

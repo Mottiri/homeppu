@@ -6,7 +6,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import * as admin from "firebase-admin";
 import { AI_MODELS } from "../config/constants";
-import { summarizeErrorForLog, summarizeTextForLog } from "../helpers/logging";
+import { summarizeErrorForLog } from "../helpers/logging";
 
 // ===============================================
 // Types & Interfaces
@@ -70,16 +70,6 @@ export class GeminiProvider implements AIProvider {
 
         // デバッグ: Geminiのレスポンス詳細をログ出力
         const candidate = response.candidates?.[0];
-        console.log("[GEMINI DEBUG]", JSON.stringify({
-            finishReason: candidate?.finishReason,
-            contentSummary: summarizeTextForLog(text),
-            usage: {
-                promptTokenCount: response.usageMetadata?.promptTokenCount,
-                candidatesTokenCount: response.usageMetadata?.candidatesTokenCount,
-                totalTokenCount: response.usageMetadata?.totalTokenCount,
-            },
-            safetyRatingCount: candidate?.safetyRatings?.length || 0,
-        }));
 
         // finish_reasonがMAX_TOKENSの場合は警告
         if (candidate?.finishReason === "MAX_TOKENS") {
@@ -170,17 +160,6 @@ export class OpenAIProvider implements AIProvider {
         }
 
         const data = await response.json() as { choices: Array<{ message: { content: string }, finish_reason?: string }>, usage?: { prompt_tokens: number, completion_tokens: number } };
-
-        // Debug: Log the full response to analyze empty comments
-        console.log("[OPENAI DEBUG]", JSON.stringify({
-            hasChoices: !!data.choices?.length,
-            finishReason: data.choices?.[0]?.finish_reason,
-            contentSummary: summarizeTextForLog(data.choices?.[0]?.message?.content || ""),
-            usage: {
-                promptTokens: data.usage?.prompt_tokens,
-                completionTokens: data.usage?.completion_tokens,
-            },
-        }));
 
         return data.choices[0]?.message?.content || "";
     }

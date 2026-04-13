@@ -27,15 +27,12 @@ export const onCircleCreated = onDocumentCreated(
   async (event) => {
     const snapshot = event.data;
     if (!snapshot) {
-      console.log("No document data");
       return;
     }
 
     const circleData = snapshot.data();
     const circleId = event.params.circleId;
 
-    console.log(`=== onCircleCreated: ${circleId} ===`);
-    console.log(`Circle name: ${circleData.name}, AI mode: ${circleData.aiMode}`);
 
     // nameTokens を補完（createCircle callable経由なら既にセット済み、直接書き込みの場合のみ必要）
     try {
@@ -44,7 +41,6 @@ export const onCircleCreated = onDocumentCreated(
         const nameTokens = generateNameTokens(circleData.name || "");
         if (nameTokens.length > 0) {
           await db.collection("circles").doc(circleId).update({ nameTokens });
-          console.log(`Set ${nameTokens.length} nameTokens for circle ${circleId}`);
         }
       }
     } catch (tokenError) {
@@ -54,7 +50,6 @@ export const onCircleCreated = onDocumentCreated(
 
     // humanOnlyモードの場合はAIを生成しないが、hasSpaceは設定する
     if (circleData.aiMode === "humanOnly") {
-      console.log(`Circle ${circleId} is humanOnly mode, skipping AI generation`);
       const maxMembers: number = circleData.maxMembers ?? 20;
       const currentMemberIds = circleData.memberIds || [];
       await db.collection("circles").doc(circleId).update({
@@ -104,7 +99,6 @@ export const onCircleCreated = onDocumentCreated(
         });
 
         aiMemberIds.push(aiPersona.id);
-        console.log(`Generated AI ${i + 1}: ${aiPersona.name} (${aiPersona.id})`);
       }
 
       // バッチでAIユーザーを作成
@@ -125,9 +119,6 @@ export const onCircleCreated = onDocumentCreated(
         memberCount: updatedMemberIds.length,
         hasSpace: updatedMemberIds.length < maxMembers,
       });
-
-      console.log(`=== onCircleCreated SUCCESS: Added ${generatedAIs.length} AIs to ${circleId} ===`);
-
     } catch (error) {
       console.error(`=== onCircleCreated ERROR:`, error);
     }
@@ -148,30 +139,24 @@ export const onCircleUpdated = onDocumentUpdated(
     const circleId = event.params.circleId;
 
     if (!beforeData || !afterData) {
-      console.log("No document data");
       return;
     }
-
-    console.log(`=== onCircleUpdated START: ${circleId} ===`);
 
     try {
       // ===== 名前変更時のnameTokens更新 =====
       if (beforeData.name !== afterData.name) {
         const nameTokens = generateNameTokens(afterData.name || "");
         await db.collection("circles").doc(circleId).update({ nameTokens });
-        console.log(`Updated nameTokens for circle ${circleId}: ${nameTokens.length} tokens`);
       }
 
       // ===== 画像変更時の古い画像削除 =====
       // アイコン画像が変更された場合、古い画像を削除
       if (beforeData.iconImageUrl && beforeData.iconImageUrl !== afterData.iconImageUrl) {
-        console.log(`Icon image changed, deleting old: ${beforeData.iconImageUrl}`);
         await deleteStorageFileFromUrl(beforeData.iconImageUrl);
       }
 
       // カバー画像が変更された場合、古い画像を削除
       if (beforeData.coverImageUrl && beforeData.coverImageUrl !== afterData.coverImageUrl) {
-        console.log(`Cover image changed, deleting old: ${beforeData.coverImageUrl}`);
         await deleteStorageFileFromUrl(beforeData.coverImageUrl);
       }
 
@@ -213,11 +198,8 @@ export const onCircleUpdated = onDocumentUpdated(
 
       // AI情報やメンバー数など内部的な更新は通知しない
       if (changes.length === 0) {
-        console.log("No user-facing changes detected, skipping notification");
         return;
       }
-
-      console.log(`Changes detected: ${changes.join(", ")}`);
 
       // オーナー情報を取得
       const ownerId = afterData.ownerId;
@@ -259,9 +241,6 @@ export const onCircleUpdated = onDocumentUpdated(
           console.error(`Failed to notify member ${memberId}:`, notifyError);
         }
       }
-
-      console.log(`=== onCircleUpdated SUCCESS: Notified ${memberIds.length - 1} members ===`);
-
     } catch (error) {
       console.error(`=== onCircleUpdated ERROR:`, error);
     }

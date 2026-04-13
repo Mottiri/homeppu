@@ -48,17 +48,14 @@ export async function moderateImage(
     mimeType: string = "image/jpeg"
 ): Promise<MediaModerationResult> {
     try {
-        console.log(`moderateImage: Starting moderation for ${imageUrl.substring(0, 100)}...`);
         const imageBuffer = await downloadFile(imageUrl);
         const base64Image = imageBuffer.toString("base64");
-        console.log(`moderateImage: Downloaded image, size=${imageBuffer.length} bytes`);
 
         const prompt = IMAGE_MODERATION_PROMPT;
 
         const result = await aiFactory.generateWithImage(prompt, base64Image, mimeType);
         const responseText = result.text.trim();
         logAIProviderUsage("media_moderation_image", result, { mimeType });
-        console.log(`moderateImage: Raw response: ${responseText.substring(0, 200)}`);
 
         let jsonText = responseText;
         // JSON表現を抽出
@@ -74,7 +71,6 @@ export async function moderateImage(
         }
 
         const parsed = JSON.parse(jsonText) as MediaModerationResult;
-        console.log(`moderateImage: Parsed result: isInappropriate=${parsed.isInappropriate}, category=${parsed.category}, confidence=${parsed.confidence}`);
         return parsed;
     } catch (error) {
         console.error("moderateImage error:", error);

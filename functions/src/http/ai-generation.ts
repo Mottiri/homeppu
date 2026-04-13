@@ -18,7 +18,7 @@ import {
 } from "../ai/personas";
 import { getPostGenerationPrompt } from "../ai/prompts/post-generation";
 import { generateAICommentId, generateAIReactionId } from "../helpers/ai-keys";
-import { summarizeErrorForLog, summarizeTextForLog } from "../helpers/logging";
+import { summarizeErrorForLog } from "../helpers/logging";
 
 // TEMP DIVERSITY GUARD (2026-02-12)
 // Quick rollback: set this to false.
@@ -167,13 +167,6 @@ export const generateAICommentV1 = functionsV1.region(LOCATION).runWith({
             circleRules,
         } = request.body;
 
-        console.log("[AI COMMENT TASK]", JSON.stringify({
-            postId,
-            personaId,
-            isCirclePost: Boolean(isCirclePost),
-            mediaDescriptionCount: Array.isArray(mediaDescriptions) ? mediaDescriptions.length : 0,
-        }));
-
         // AIProviderFactory経由でテキスト生成
         const aiFactory = createAIProviderFactory();
 
@@ -183,7 +176,6 @@ export const generateAICommentV1 = functionsV1.region(LOCATION).runWith({
 
         if (!persona) {
             // サークルAIの場合、ペイロードからペルソナを構築
-            console.log(`Persona ${personaId} not in AI_PERSONAS, using payload data`);
 
             // ペイロードに personality が含まれていればそれを使用
             // 含まれていなければデフォルトを使用
@@ -215,7 +207,6 @@ export const generateAICommentV1 = functionsV1.region(LOCATION).runWith({
         let existingCommentsContext = "";
         let existingAICommentTexts: string[] = [];
         try {
-            console.log(`[DUPLICATE CHECK] Fetching existing AI comments for post: ${postId}`);
 
             // トップレベルのcommentsコレクションからpostIdでフィルタ
             const existingCommentsSnapshot = await db.collection("comments")
@@ -225,7 +216,6 @@ export const generateAICommentV1 = functionsV1.region(LOCATION).runWith({
                 .limit(10)
                 .get();
 
-            console.log(`[DUPLICATE CHECK] Query returned ${existingCommentsSnapshot.size} documents`);
 
             if (!existingCommentsSnapshot.empty) {
                 const existingComments = existingCommentsSnapshot.docs.map((doc, index) => {
@@ -242,13 +232,9 @@ export const generateAICommentV1 = functionsV1.region(LOCATION).runWith({
 ${existingComments.join("\n")}
 </existing_comments>
 `;
-                console.log(`[DUPLICATE CHECK] Added ${existingComments.length} comments to context for diversity`);
-            } else {
-                console.log(`[DUPLICATE CHECK] No existing AI comments found for post ${postId}`);
             }
         } catch (error) {
             console.error("[DUPLICATE CHECK] Error fetching existing comments:", summarizeErrorForLog(error));
-            console.log("Proceeding without diversity check");
         }
 
         // サークル投稿かどうかでプロンプトを分岐
@@ -297,15 +283,6 @@ ${existingCommentsContext}${mediaNote}
 `;
         }
 
-        console.log("[AI PROMPT DEBUG]", JSON.stringify({
-            postId,
-            personaId,
-            promptSummary: summarizeTextForLog(prompt),
-            existingAiCommentCount: existingAICommentTexts.length,
-            mediaDescriptionCount: Array.isArray(mediaDescriptions) ? mediaDescriptions.length : 0,
-            isCirclePost: Boolean(isCirclePost),
-        }));
-
         // TEMP DIVERSITY GUARD (2026-02-12)
         // Similar comments are retried with stronger diversity instructions.
         let commentText = "";
@@ -319,14 +296,6 @@ ${existingCommentsContext}${mediaNote}
             );
 
             const candidateText = aiResult.text?.trim() || "";
-            console.log("[AI COMMENT GENERATED]", JSON.stringify({
-                postId,
-                personaId,
-                attempt,
-                provider: aiResult.provider,
-                usedFallback: aiResult.usedFallback,
-                commentSummary: summarizeTextForLog(candidateText),
-            }));
 
             if (!ENABLE_TEMP_COMMENT_DIVERSITY_GUARD || commentsForSimilarityCheck.length === 0) {
                 commentText = candidateText;
@@ -336,8 +305,6 @@ ${existingCommentsContext}${mediaNote}
             const maxSimilarity = calcMaxSimilarity(candidateText, commentsForSimilarityCheck);
             const similarPrefix = hasSimilarPrefix(candidateText, commentsForSimilarityCheck);
             const tooSimilar = maxSimilarity >= TEMP_COMMENT_SIMILARITY_THRESHOLD || similarPrefix;
-
-            console.log(`[DIVERSITY GUARD] attempt=${attempt}, maxSimilarity=${maxSimilarity.toFixed(3)}, similarPrefix=${similarPrefix}`);
 
             if (!tooSimilar) {
                 commentText = candidateText;
@@ -359,7 +326,6 @@ ${existingCommentsContext}${mediaNote}
         }
 
         if (!commentText || commentText === "SKIP_COMMENT") {
-            console.log(`Skipping comment: ${commentText || "Empty"}`);
             response.status(200).send("Comment skipped");
             return;
         }
@@ -420,12 +386,6 @@ ${existingCommentsContext}${mediaNote}
             }
         });
 
-        console.log("[AI COMMENT POSTED]", JSON.stringify({
-            postId,
-            personaId: persona.id,
-            reactionType,
-            commentSummary: summarizeTextForLog(commentText),
-        }));
         response.status(200).send("Comment and reaction posted successfully");
 
     } catch (error) {
@@ -448,8 +408,6 @@ export const generateAIReactionV1 = functionsV1.region(LOCATION).https.onRequest
 
     try {
         const { postId, personaId, reactionType } = request.body;
-
-        console.log("[AI REACTION TASK]", JSON.stringify({ postId, personaId, reactionType }));
 
         const persona = AI_PERSONAS.find(p => p.id === personaId);
         if (!persona) {
@@ -479,11 +437,6 @@ export const generateAIReactionV1 = functionsV1.region(LOCATION).https.onRequest
             });
         });
 
-        console.log("[AI REACTION POSTED]", JSON.stringify({
-            postId,
-            personaId: persona.id,
-            reactionType,
-        }));
         response.status(200).send("Reaction posted successfully");
 
     } catch (error) {
@@ -509,8 +462,6 @@ export const executeAIPostGeneration = functionsV1.region(LOCATION).runWith({
 
     try {
         const { postId, personaId, postTimeIso } = request.body;
-        console.log("[AI POST TASK]", JSON.stringify({ postId, personaId, postTimeIso }));
-
         const aiFactory = createAIProviderFactory();
 
         // ペルソナ取得
@@ -532,13 +483,6 @@ export const executeAIPostGeneration = functionsV1.region(LOCATION).runWith({
         const prompt = getPostGenerationPrompt(persona, hours);
 
         const result = await aiFactory.generateText(prompt);
-        console.log("[AI POST GENERATED]", JSON.stringify({
-            personaId,
-            provider: result.provider,
-            usedFallback: result.usedFallback,
-            promptSummary: summarizeTextForLog(prompt),
-            contentSummary: summarizeTextForLog(result.text),
-        }));
         let content = result.text?.trim();
 
         // 生成失敗時はテンプレートからランダム選択
@@ -555,7 +499,6 @@ export const executeAIPostGeneration = functionsV1.region(LOCATION).runWith({
         const existing = await postRef.get();
         if (existing.exists) {
             // 投稿が既に存在 → 統計更新も含めてスキップ
-            console.log(`Post ${postId} already exists, skipped`);
             response.status(200).send("Post already exists, skipped");
             return;
         }
@@ -597,12 +540,6 @@ export const executeAIPostGeneration = functionsV1.region(LOCATION).runWith({
             });
         });
 
-        console.log("[AI POST CREATED]", JSON.stringify({
-            postId: postRef.id,
-            personaId: persona.id,
-            reactionTotal: totalReactions,
-            contentSummary: summarizeTextForLog(content),
-        }));
         response.status(200).json({ success: true, postId: postRef.id });
     } catch (error) {
         console.error("Error in executeAIPostGeneration:", summarizeErrorForLog(error));

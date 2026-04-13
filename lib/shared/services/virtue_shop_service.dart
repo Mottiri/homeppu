@@ -1,4 +1,5 @@
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/foundation.dart';
 import '../../core/constants/app_constants.dart';
 
 class VirtueShopConfig {
@@ -85,16 +86,14 @@ class VirtueShopService {
       });
     } on FirebaseFunctionsException catch (e) {
       // Keep UI message generic, but expose structured details for diagnosis.
-      // ignore: avoid_print
-      print(
+      debugPrint(
         '[VirtueShopService] purchaseVirtueItem failed: '
         'itemType=$itemType itemId=$itemId '
         'code=${e.code} message=${e.message} details=${e.details}',
       );
       rethrow;
     } catch (e) {
-      // ignore: avoid_print
-      print(
+      debugPrint(
         '[VirtueShopService] purchaseVirtueItem unexpected error: '
         'itemType=$itemType itemId=$itemId error=$e',
       );

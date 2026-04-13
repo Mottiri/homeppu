@@ -109,9 +109,6 @@ export const cleanupOrphanedMedia = onSchedule(
             await doc.ref.delete();
             historyDeleted++;
         }
-        if (historyDeleted > 0) {
-            console.log(`Deleted ${historyDeleted} old circleAIPostHistory documents`);
-        }
 
         // AI投稿履歴のクリーンアップ（2日以上前の履歴を削除）
         const oldAIHistorySnapshot = await db.collection("aiPostHistory")
@@ -123,13 +120,11 @@ export const cleanupOrphanedMedia = onSchedule(
             await doc.ref.delete();
             aiHistoryDeleted++;
         }
-        if (aiHistoryDeleted > 0) {
-            console.log(`Deleted ${aiHistoryDeleted} old aiPostHistory documents`);
-        }
 
         console.log(
             `=== cleanupOrphanedMedia COMPLETE: checked=${checkedCount}, ` +
-            `deleted=${deletedCount}, resolved=${resolvedCount} ===`
+            `deleted=${deletedCount}, resolved=${resolvedCount}, ` +
+            `circleAiHistoryDeleted=${historyDeleted}, aiHistoryDeleted=${aiHistoryDeleted} ===`
         );
     }
 );
@@ -157,7 +152,9 @@ export const cleanupResolvedInquiries = onSchedule(
             .where("status", "==", "resolved")
             .get();
 
-        console.log(`Found ${inquiriesSnapshot.size} resolved inquiries`);
+        let warnedCount = 0;
+        let deletedCount = 0;
+        let skippedCount = 0;
 
         for (const doc of inquiriesSnapshot.docs) {
             const inquiry = doc.data();
@@ -165,25 +162,31 @@ export const cleanupResolvedInquiries = onSchedule(
             const resolvedAt = inquiry.resolvedAt?.toDate?.();
 
             if (!resolvedAt) {
-                console.log(`Inquiry ${inquiryId} has no resolvedAt, skipping`);
+                skippedCount++;
                 continue;
             }
 
             // 7日以上経過 → 削除
             if (resolvedAt <= sevenDaysAgo) {
-                console.log(`Deleting inquiry ${inquiryId} (resolved at ${resolvedAt})`);
                 await deleteInquiryWithArchive(inquiryId, inquiry);
+                deletedCount++;
                 continue;
             }
 
             // 6日以上経過 & 7日未満 → 削除予告通知
             if (resolvedAt <= sixDaysAgo && resolvedAt > sevenDaysAgo) {
-                console.log(`Sending deletion warning for inquiry ${inquiryId}`);
                 await sendDeletionWarning(inquiryId, inquiry);
+                warnedCount++;
+                continue;
             }
+
+            skippedCount++;
         }
 
-        console.log("=== cleanupResolvedInquiries completed ===");
+        console.log(
+            `=== cleanupResolvedInquiries completed: scanned=${inquiriesSnapshot.size}, ` +
+            `warned=${warnedCount}, deleted=${deletedCount}, skipped=${skippedCount} ===`
+        );
     }
 );
 
@@ -241,16 +244,12 @@ async function deleteInquiryWithArchive(
             expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
         });
 
-        console.log(`Archived inquiry ${inquiryId}`);
-
         // 4. メッセージサブコレクションを削除
         const batch = db.batch();
         messagesSnapshot.docs.forEach((msgDoc) => {
             batch.delete(msgDoc.ref);
         });
         await batch.commit();
-
-        console.log(`Deleted ${messagesSnapshot.size} messages for inquiry ${inquiryId}`);
 
         // 5. Storage画像を削除（存在する場合）
         for (const msgDoc of messagesSnapshot.docs) {
@@ -262,8 +261,6 @@ async function deleteInquiryWithArchive(
 
         // 6. 問い合わせ本体を削除
         await inquiryRef.delete();
-        console.log(`Deleted inquiry ${inquiryId}`);
-
     } catch (error) {
         console.error(`Error deleting inquiry ${inquiryId}:`, error);
     }
@@ -291,7 +288,6 @@ async function sendDeletionWarning(
             createdAt: now,
         });
 
-        console.log(`Sent deletion warning to user ${userId} for inquiry ${inquiryId}`);
     } catch (error) {
         console.error(`Error sending deletion warning for inquiry ${inquiryId}:`, error);
     }
@@ -331,17 +327,8 @@ export const cleanupReports = onSchedule(
                 .where("createdAt", "<", cutoffTimestamp)
                 .get();
 
-            console.log(
-                `Found ${reviewedSnapshot.size} reviewed and ${dismissedSnapshot.size} dismissed reports to delete.`
-            );
-
             // 削除対象のドキュメントを結合
             const allDocs = [...reviewedSnapshot.docs, ...dismissedSnapshot.docs];
-
-            if (allDocs.length === 0) {
-                console.log("No reports to delete.");
-                return;
-            }
 
             // バッチ処理で削除（500件ずつ）
             const MAX_BATCH_SIZE = 500;
@@ -358,10 +345,12 @@ export const cleanupReports = onSchedule(
                 });
                 await batch.commit();
                 deletedCount += chunk.length;
-                console.log(`Deleted batch of ${chunk.length} reports.`);
             }
 
-            console.log(`Cleanup completed. Total deleted: ${deletedCount}`);
+            console.log(
+                `cleanupReports complete: reviewed=${reviewedSnapshot.size}, ` +
+                `dismissed=${dismissedSnapshot.size}, deleted=${deletedCount}`
+            );
         } catch (error) {
             console.error("Error in cleanupReports:", error);
         }
@@ -716,8 +705,6 @@ async function cleanupBannedUserAppData(
     const userId = userDoc.id;
     const userData = userDoc.data();
 
-    console.log(`cleanupBannedUserAppData START: ${userId}`);
-
     await disableBannedAuthUser(userId);
 
     if (typeof userData.profileImageStoragePath === "string" && userData.profileImageStoragePath.length > 0) {
@@ -780,13 +767,6 @@ export const cleanupBannedUsers = onSchedule(
             .where("permanentBanScheduledDeletionAt", "<=", now)
             .limit(20)
             .get();
-
-        if (snapshot.empty) {
-            console.log("No users to delete");
-            return;
-        }
-
-        console.log(`Found ${snapshot.size} users to scheduled delete`);
 
         for (const doc of snapshot.docs) {
             try {
