@@ -66,12 +66,21 @@ node scripts/register-avatar-parts.js
 node scripts/register-avatar-parts.js --rare-cost 100
 ```
 
+### 整合チェック
+
+```bash
+npm run check:avatar-parts-sync
+```
+
+- `lib/core/constants/avatar_assets.dart` と `functions/src/config/avatar-parts.ts` のレア度定義差分を検出する
+- 差分がある場合は commit しない
+
 ### 自動更新される対象
 
 | 対象 | 内容 |
 |------|------|
 | `lib/core/constants/avatar_assets.dart` | パーツIDリスト・レア度マップ・アセット名マップ |
-| `functions/src/callable/virtue_shop.ts` | サーバー側レア度マップ |
+| `functions/src/config/avatar-parts.ts` | Functions 共通レア度マップ（購入判定・サブスク解除時フォールバックで共有） |
 | Firestore `settings/virtueShop` | レア度別価格（`--no-firestore` で省略可） |
 
 ---
@@ -315,7 +324,7 @@ node scripts/sync-name-parts.js --delete
 | 変更内容 | 必要な対応 |
 |---------|-----------|
 | Firestoreのみ更新（価格変更等） | デプロイ不要 |
-| `virtue_shop.ts` が更新された | Functionsデプロイ必須 |
+| `avatar-parts.ts` が更新された | Functionsデプロイ必須 |
 | Dart定数ファイルが更新された | アプリ再ビルド |
 | アセットのみ追加（定数変更なし） | アプリ再ビルド |
 | 名前パーツ追加・変更・削除 | デプロイ不要（Firestore即反映） |
@@ -324,13 +333,15 @@ node scripts/sync-name-parts.js --delete
 
 ```bash
 npm --prefix functions run build
-firebase deploy --only "functions:default:getVirtueShopConfig,functions:default:purchaseVirtueItem" --project positive-sns
+firebase deploy --only "functions:default:getVirtueShopConfig,functions:default:purchaseVirtueItem,functions:default:onUserUpdated" --project positive-sns
 ```
 
 ## 反映確認
 
 1. スクリプト実行後、`git diff --name-only` で変更ファイルを確認
-2. アプリを再起動して新規アセットが表示されることを確認
-3. 徳ショップでレア度・価格が正しいことを確認（アバター/リアクション）
-4. スタンプシート追加時は、シート切替・スタンプ押印・アーカイブ表示を確認
-5. 名前パーツ追加時は、名前編集画面で新パーツが表示されることを確認（アプリ再起動で反映）
+2. `npm run check:avatar-parts-sync` が成功することを確認
+3. アプリを再起動して新規アセットが表示されることを確認
+4. 徳ショップでレア度・価格が正しいことを確認（アバター/リアクション）
+5. サブスク解除時に Epic パーツが common fallback に戻ることを確認
+6. スタンプシート追加時は、シート切替・スタンプ押印・アーカイブ表示を確認
+7. 名前パーツ追加時は、名前編集画面で新パーツが表示されることを確認（アプリ再起動で反映）

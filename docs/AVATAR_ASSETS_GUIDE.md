@@ -41,25 +41,35 @@ node functions/scripts/register-avatar-parts.js
 node functions/scripts/register-avatar-parts.js --rare-cost 100
 ```
 
+## 整合チェック
+
+```bash
+npm run check:avatar-parts-sync
+```
+
+- `lib/core/constants/avatar_assets.dart` と `functions/src/config/avatar-parts.ts` のレア度定義差分を検出する
+- 差分がある場合は commit しない
+
 ## 自動更新される対象
 - `lib/core/constants/avatar_assets.dart`
   - `hairIds` / `eyebrowsIds` / `eyesIds` / `mouthIds`
   - `partRarity`
   - `partAssetNameById`
-- `functions/src/callable/virtue_shop.ts`
+- `functions/src/config/avatar-parts.ts`
   - `AVATAR_PART_RARITY`
+  - `isEpicAvatarPart`
 - Firestore: `settings/virtueShop`
   - `avatarPartCostsByRarity`（`--no-firestore` 指定時は更新しない）
 
 ## デプロイ要否
 - Firestoreのみ更新（価格だけ変更）:
   - デプロイ不要
-- `functions/src/callable/virtue_shop.ts` が更新された:
+- `functions/src/config/avatar-parts.ts` が更新された:
   - Functionsデプロイ必須
   - 手順:
   ```bash
   npm --prefix functions run build
-  firebase deploy --only "functions:default:getVirtueShopConfig,functions:default:purchaseVirtueItem" --project positive-sns
+  firebase deploy --only "functions:default:getVirtueShopConfig,functions:default:purchaseVirtueItem,functions:default:onUserUpdated" --project positive-sns
   ```
   - PowerShellでは `--only` の値をダブルクォートで囲む
 - `lib/core/constants/avatar_assets.dart` が更新された:
@@ -69,6 +79,11 @@ node functions/scripts/register-avatar-parts.js --rare-cost 100
 ```bash
 git diff --name-only
 ```
+
+確認項目:
+- `npm run check:avatar-parts-sync` が成功する
+- 徳ショップでレア度・価格が正しい
+- サブスク解除時に Epic パーツが common fallback に戻る
 
 ## 互換コマンド
 既存の以下コマンドも新スクリプトへ委譲されます:

@@ -1,5 +1,6 @@
 {
   "scripts": {
+    "check:avatar-parts-sync": "node scripts/check-avatar-parts-sync.js",
     "check:mojibake": "node scripts/check-mojibake.js",
     "setup:hooks": "git config core.hooksPath .githooks"
   },

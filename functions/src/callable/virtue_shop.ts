@@ -11,6 +11,7 @@ import { requireAuth } from "../helpers/auth";
 import { COLLECTIONS } from "../config/collections";
 import { LOCATION } from "../config/constants";
 import { VIRTUE_MESSAGES } from "../config/messages";
+import { AVATAR_PART_RARITY } from "../config/avatar-parts";
 
 type VirtueShopConfig = {
     namePartCostsByRarity: Record<string, number>;
@@ -21,73 +22,6 @@ type VirtueShopConfig = {
 };
 
 const SETTINGS_DOC_ID = "virtueShop";
-
-const AVATAR_PART_RARITY: Record<string, string> = {
-    // hair
-    hair_01: "common",
-    hair_02: "common",
-    hair_03: "epic",
-    hair_04: "rare",
-    hair_05: "common",
-    hair_06: "common",
-    hair_07: "rare",
-    hair_08: "rare",
-    hair_09: "rare",
-    hair_10: "epic",
-    hair_11: "epic",
-    hair_12: "epic",
-    hair_13: "epic",
-    hair_14: "epic",
-    hair_15: "epic",
-    hair_16: "rare",
-    // eyebrows
-    eyebrows_01: "common",
-    eyebrows_02: "common",
-    eyebrows_03: "common",
-    eyebrows_04: "epic",
-    eyebrows_05: "rare",
-    eyebrows_06: "rare",
-    eyebrows_07: "epic",
-    eyebrows_08: "epic",
-    eyebrows_09: "epic",
-    eyebrows_10: "epic",
-    eyebrows_11: "epic",
-    eyebrows_12: "epic",
-    eyebrows_13: "epic",
-    eyebrows_14: "rare",
-    eyebrows_15: "rare",
-    eyebrows_16: "epic",
-    eyebrows_17: "epic",
-    eyebrows_18: "rare",
-    eyebrows_19: "rare",
-    eyebrows_20: "rare",
-    eyebrows_21: "rare",
-    // eyes
-    eyes_01: "common",
-    eyes_02: "common",
-    eyes_03: "epic",
-    eyes_04: "rare",
-    eyes_05: "rare",
-    eyes_06: "rare",
-    eyes_07: "rare",
-    eyes_08: "common",
-    eyes_09: "common",
-    eyes_10: "common",
-    eyes_11: "rare",
-    eyes_12: "epic",
-    eyes_13: "epic",
-    eyes_14: "epic",
-    eyes_15: "epic",
-    eyes_16: "epic",
-    // mouth
-    mouth_01: "common",
-    mouth_02: "common",
-    mouth_03: "epic",
-    mouth_04: "rare",
-    mouth_05: "rare",
-    mouth_06: "common",
-    mouth_07: "rare",
-};
 
 function toNumberMap(value: unknown): Record<string, number> {
     if (!value || typeof value !== "object") return {};

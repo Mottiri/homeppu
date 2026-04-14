@@ -2,6 +2,7 @@
   "name": "homeppu-functions",
   "description": "ほめっぷ Cloud Functions",
   "scripts": {
+    "check:avatar-parts-sync": "node ../scripts/check-avatar-parts-sync.js",
     "lint": "eslint --ext .ts src",
     "build": "tsc",
     "build:watch": "tsc --watch",

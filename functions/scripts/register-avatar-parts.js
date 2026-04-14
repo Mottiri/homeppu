@@ -216,7 +216,9 @@ function replaceAvatarPathHelpers(content) {
 }
 
 function buildTsRarityMap(groupedEntries) {
-  const lines = ["const AVATAR_PART_RARITY: Record<string, string> = {"];
+  const lines = [
+    'export const AVATAR_PART_RARITY: Record<string, "common" | "rare" | "epic"> = {',
+  ];
   for (const group of groupedEntries) {
     lines.push(`    // ${group.part}`);
     for (const entry of group.entries) {
@@ -230,9 +232,9 @@ function buildTsRarityMap(groupedEntries) {
 function replaceTsRarityMap(content, groupedEntries) {
   const replacement = buildTsRarityMap(groupedEntries);
   const pattern =
-    /const AVATAR_PART_RARITY: Record<string, string> = \{[\s\S]*?\n\};/;
+    /export const AVATAR_PART_RARITY: Record<string, "common" \| "rare" \| "epic"> = \{[\s\S]*?\n\};/;
   if (!pattern.test(content)) {
-    throw new Error("AVATAR_PART_RARITY block not found in virtue_shop.ts");
+    throw new Error("AVATAR_PART_RARITY block not found in avatar-parts.ts");
   }
   return content.replace(pattern, replacement);
 }
@@ -340,12 +342,12 @@ async function main() {
     "constants",
     "avatar_assets.dart"
   );
-  const virtueShopPath = path.resolve(
+  const avatarPartConfigPath = path.resolve(
     rootDir,
     "functions",
     "src",
-    "callable",
-    "virtue_shop.ts"
+    "config",
+    "avatar-parts.ts"
   );
 
   if (!fs.existsSync(avatarsDir)) {
@@ -354,8 +356,8 @@ async function main() {
   if (!fs.existsSync(avatarAssetsPath)) {
     throw new Error(`avatar_assets.dart not found: ${avatarAssetsPath}`);
   }
-  if (!fs.existsSync(virtueShopPath)) {
-    throw new Error(`virtue_shop.ts not found: ${virtueShopPath}`);
+  if (!fs.existsSync(avatarPartConfigPath)) {
+    throw new Error(`avatar-parts.ts not found: ${avatarPartConfigPath}`);
   }
 
   const avatarAssetsContent = fs.readFileSync(avatarAssetsPath, "utf-8");
@@ -524,9 +526,9 @@ async function main() {
   );
   nextAvatarAssetsContent = replaceAvatarPathHelpers(nextAvatarAssetsContent);
 
-  const virtueShopContent = fs.readFileSync(virtueShopPath, "utf-8");
-  const nextVirtueShopContent = replaceTsRarityMap(
-    virtueShopContent,
+  const avatarPartConfigContent = fs.readFileSync(avatarPartConfigPath, "utf-8");
+  const nextAvatarPartConfigContent = replaceTsRarityMap(
+    avatarPartConfigContent,
     groupedRarityEntries
   );
 
@@ -549,10 +551,10 @@ async function main() {
   }
 
   fs.writeFileSync(avatarAssetsPath, nextAvatarAssetsContent, "utf-8");
-  fs.writeFileSync(virtueShopPath, nextVirtueShopContent, "utf-8");
+  fs.writeFileSync(avatarPartConfigPath, nextAvatarPartConfigContent, "utf-8");
 
   console.log("avatar_assets.dart updated.");
-  console.log("virtue_shop.ts updated.");
+  console.log("avatar-parts.ts updated.");
   console.log("=== Summary ===");
   console.log(`Added: ${addedIds.length}`);
   if (addedIds.length) console.log(`- ${addedIds.join(", ")}`);

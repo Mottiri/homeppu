@@ -5,6 +5,7 @@ import { LOCATION } from "../config/constants";
 import { buildPublicUserData } from "../helpers/public-users";
 import { COLLECTIONS } from "../config/collections";
 import { deleteStorageFileFromUrl } from "../helpers/storage";
+import { isEpicAvatarPart } from "../config/avatar-parts";
 
 const SUBSCRIPTION_FALLBACK_DOC_ID = "subscriptionFallback";
 const DEFAULT_SUBSCRIPTION_FALLBACK = {
@@ -17,29 +18,6 @@ const DEFAULT_SUBSCRIPTION_FALLBACK = {
     mouthId: "mouth_01",
     eyebrowsId: "eyebrows_01",
   },
-};
-
-const AVATAR_PART_RARITY: Record<string, string> = {
-  hair_01: "common",
-  hair_02: "common",
-  hair_03: "epic",
-  hair_04: "rare",
-  eyebrows_01: "common",
-  eyebrows_02: "common",
-  eyebrows_03: "common",
-  eyebrows_04: "epic",
-  eyebrows_05: "rare",
-  eyebrows_06: "rare",
-  eyes_01: "common",
-  eyes_02: "common",
-  eyes_03: "epic",
-  eyes_04: "rare",
-  eyes_05: "rare",
-  mouth_01: "common",
-  mouth_02: "common",
-  mouth_03: "epic",
-  mouth_04: "rare",
-  mouth_05: "rare",
 };
 
 type SubscriptionFallbackConfig = typeof DEFAULT_SUBSCRIPTION_FALLBACK;
@@ -229,16 +207,16 @@ async function applySubscriptionFallbackIfNeeded(
   if (eyebrows) currentAvatarParts.eyebrowsId = eyebrows;
 
   const avatarUpdates: Record<string, string> = {};
-  if (hair && AVATAR_PART_RARITY[hair] === "epic") {
+  if (isEpicAvatarPart(hair)) {
     avatarUpdates.hairId = fallback.avatarParts.hairId;
   }
-  if (eyes && AVATAR_PART_RARITY[eyes] === "epic") {
+  if (isEpicAvatarPart(eyes)) {
     avatarUpdates.eyesId = fallback.avatarParts.eyesId;
   }
-  if (mouth && AVATAR_PART_RARITY[mouth] === "epic") {
+  if (isEpicAvatarPart(mouth)) {
     avatarUpdates.mouthId = fallback.avatarParts.mouthId;
   }
-  if (eyebrows && AVATAR_PART_RARITY[eyebrows] === "epic") {
+  if (isEpicAvatarPart(eyebrows)) {
     avatarUpdates.eyebrowsId = fallback.avatarParts.eyebrowsId;
   }
 
@@ -427,11 +405,11 @@ export const onUserUpdated = onDocumentUpdated(
     let publicSource = afterData;
     let requiresRefresh = false;
 
-    if (wasSubscriber && !isSubscriber) {
-      // 購読→非購読への遷移時のみフォールバック処理を実行
-      // 元々非購読者やcallable-404による更新では画像削除しない
+    if (!isSubscriber) {
+      // 非サブスクでは subscription 限定状態を常に自己修復する。
+      // スタンプシートの払い戻しだけは downgrade 時に限定する。
       const appliedSubscriptionFallback = await applySubscriptionFallbackIfNeeded(userId, afterData, {
-        forceStampSheetFallback: true,
+        forceStampSheetFallback: wasSubscriber && !isSubscriber,
       });
       const appliedProfileImageFallback = await applyProfileImageSubscriptionFallbackIfNeeded(
         userId,
