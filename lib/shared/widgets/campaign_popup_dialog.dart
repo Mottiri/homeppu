@@ -35,6 +35,7 @@ class _CampaignDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
     final theme = Theme.of(context).textTheme;
+    final imagePath = campaign.imagePath?.trim();
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
@@ -82,13 +83,13 @@ class _CampaignDialog extends StatelessWidget {
                     const SizedBox(height: 16),
 
                     // キャンペーン画像
-                    if (campaign.imagePath != null)
+                    if (imagePath != null)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 16),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(12),
                           child: Image.asset(
-                            campaign.imagePath!,
+                            imagePath,
                             width: double.infinity,
                             fit: BoxFit.contain,
                             errorBuilder: (_, e, s) =>

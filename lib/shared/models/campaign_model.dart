@@ -42,6 +42,17 @@ class CampaignModel {
     final footerNoteRaw = map['footerNote'];
     if (footerNoteRaw != null && footerNoteRaw is! String) return null;
 
+    final imagePath = switch (imagePathRaw) {
+      final String value when value.trim().isEmpty => null,
+      final String value => value.trim(),
+      _ => null,
+    };
+    final footerNote = switch (footerNoteRaw) {
+      final String value when value.trim().isEmpty => null,
+      final String value => value,
+      _ => null,
+    };
+
     // UTC → JST(+9h) 変換。_nowJst() と同じ基準で比較するため。
     final startDateJst =
         startDate.toDate().toUtc().add(const Duration(hours: 9));
@@ -52,8 +63,8 @@ class CampaignModel {
       id: id,
       title: title,
       body: body,
-      imagePath: imagePathRaw as String?,
-      footerNote: footerNoteRaw as String?,
+      imagePath: imagePath,
+      footerNote: footerNote,
       startDate: startDateJst,
       endDate: endDateJst,
       isActive: isActive,
